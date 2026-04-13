@@ -262,7 +262,7 @@ SOURCE_METHOD=$CHOICE_RESULT
 REPO_URL=""
 USB_PATH=""
 if [ "$SOURCE_METHOD" -eq 0 ]; then
-  ask_input "GitHub repo URL" "https://github.com/yourusername/agent-os.git"
+  ask_input "GitHub repo URL" "https://github.com/BigY0shi/agent-os.git"
   REPO_URL="$INPUT_RESULT"
 elif [ "$SOURCE_METHOD" -eq 2 ]; then
   ask_input "USB mount path" "/media/${PI_USER}/USB"
