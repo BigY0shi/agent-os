@@ -1,0 +1,731 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;700&family=Fira+Code:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   CSS Variables - Dark Theme (Default)
+   ============================================================================ */
+:root,
+[data-theme="dark"] {
+  --bg-base: #09090B;
+  --bg-surface: #111113;
+  --bg-elevated: #1A1A1D;
+  --bg-overlay: #222225;
+  --border-subtle: #1E1E22;
+  --border-default: #2A2A2F;
+  --border-strong: #3A3A40;
+  --text-primary: #EDEDEF;
+  --text-secondary: #A1A1AA;
+  --text-tertiary: #63637A;
+  --accent: #FF6B00;
+  --accent-dim: rgba(255, 107, 0, 0.15);
+  --accent-glow: rgba(255, 107, 0, 0.35);
+  --green: #34D399;
+  --green-dim: rgba(52, 211, 153, 0.15);
+  --amber: #FBBF24;
+  --amber-dim: rgba(251, 191, 36, 0.15);
+  --red: #F87171;
+  --red-dim: rgba(248, 113, 113, 0.15);
+  --blue: #60A5FA;
+  --blue-dim: rgba(96, 165, 250, 0.15);
+  --purple: #A78BFA;
+  --purple-dim: rgba(167, 139, 250, 0.15);
+}
+
+/* ============================================================================
+   Light Theme
+   ============================================================================ */
+[data-theme="light"] {
+  --bg-base: #FFFFFF;
+  --bg-surface: #F9F9FB;
+  --bg-elevated: #F3F3F6;
+  --bg-overlay: #EEEEEF;
+  --border-subtle: #E8E8EC;
+  --border-default: #E0E0E6;
+  --border-strong: #D4D4DA;
+  --text-primary: #1A1A1C;
+  --text-secondary: #4A4A52;
+  --text-tertiary: #7A7A8C;
+  --accent: #FF6B00;
+  --accent-dim: rgba(255, 107, 0, 0.08);
+  --accent-glow: rgba(255, 107, 0, 0.2);
+  --green: #10B981;
+  --green-dim: rgba(16, 185, 129, 0.1);
+  --amber: #F59E0B;
+  --amber-dim: rgba(245, 158, 11, 0.1);
+  --red: #EF4444;
+  --red-dim: rgba(239, 68, 68, 0.1);
+  --blue: #3B82F6;
+  --blue-dim: rgba(59, 130, 246, 0.1);
+  --purple: #8B5CF6;
+  --purple-dim: rgba(139, 92, 246, 0.1);
+}
+
+/* ============================================================================
+   Base Styles
+   ============================================================================ */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply antialiased;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 400;
+}
+
+/* ============================================================================
+   Typography Base
+   ============================================================================ */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-bold;
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+code, pre {
+  font-family: 'Fira Code', monospace;
+}
+
+a {
+  @apply transition-colors duration-200;
+  color: var(--accent);
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* ============================================================================
+   Selection & Custom Scrollbar
+   ============================================================================ */
+::selection {
+  background-color: var(--accent);
+  color: var(--bg-base);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
+::-webkit-scrollbar-corner { background: var(--bg-base); }
+
+* {
+  scrollbar-color: var(--border-strong) var(--bg-base);
+  scrollbar-width: thin;
+}
+
+/* ============================================================================
+   Animations
+   ============================================================================ */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes slide-in-from-top {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rotate-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Utility Classes
+   ============================================================================ */
+
+/* Card Styles */
+.card {
+  @apply rounded-lg px-4 py-3;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  transition: all 0.2s ease;
+}
+
+.card-hover {
+  @apply rounded-lg px-4 py-3;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+
+.card-active {
+  @apply rounded-lg px-4 py-3;
+  background-color: var(--bg-surface);
+  border: 1px solid rgba(255, 107, 0, 0.3);
+  box-shadow: 0 0 12px var(--accent-glow);
+  transition: all 0.2s ease;
+}
+
+/* Badge Styles */
+.badge {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-green {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--green-dim);
+  color: var(--green);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-amber {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--amber-dim);
+  color: var(--amber);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-red {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--red-dim);
+  color: var(--red);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-blue {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--blue-dim);
+  color: var(--blue);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-purple {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--purple-dim);
+  color: var(--purple);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-orange {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: var(--accent-dim);
+  color: var(--accent);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.badge-gray {
+  @apply inline-block px-2 py-1 rounded-full text-xs font-medium uppercase tracking-wide;
+  background-color: transparent;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-default);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Status Dot Styles */
+.status-dot {
+  @apply inline-block rounded-full;
+  width: 8px;
+  height: 8px;
+}
+
+.status-active {
+  @apply inline-block rounded-full;
+  width: 8px;
+  height: 8px;
+  background-color: var(--green);
+  box-shadow: 0 0 8px var(--green);
+}
+
+.status-running {
+  @apply inline-block rounded-full;
+  width: 8px;
+  height: 8px;
+  background-color: var(--amber);
+  animation: pulse-glow 2s infinite;
+}
+
+.status-idle {
+  @apply inline-block rounded-full;
+  width: 8px;
+  height: 8px;
+  background-color: var(--text-tertiary);
+}
+
+.status-error {
+  @apply inline-block rounded-full;
+  width: 8px;
+  height: 8px;
+  background-color: var(--red);
+  box-shadow: 0 0 8px var(--red);
+}
+
+.status-scheduled {
+  @apply inline-block rounded-full;
+  width: 8px;
+  height: 8px;
+  background-color: var(--blue);
+}
+
+/* Form Styles */
+.input-field {
+  @apply w-full px-3 py-2 rounded-md transition-all duration-200;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.input-field::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input-field:disabled {
+  background-color: var(--bg-surface);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.select-field {
+  @apply w-full px-3 py-2 rounded-md transition-all duration-200;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23FF6B00' d='M10.293 3.293L6 7.586 1.707 3.293A1 1 0 00.293 4.707l5 5a1 1 0 001.414 0l5-5a1 1 0 10-1.414-1.414z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+}
+
+.select-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+/* Button Styles */
+.btn-accent {
+  @apply inline-block px-4 py-2 rounded-md font-medium uppercase tracking-wide transition-all duration-200;
+  background-color: var(--accent);
+  color: var(--bg-base);
+  font-family: 'Space Grotesk', sans-serif;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-accent:hover:not(:disabled) {
+  opacity: 0.9;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.btn-accent:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-accent:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-default {
+  @apply inline-block px-4 py-2 rounded-md font-medium uppercase tracking-wide transition-all duration-200;
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  font-family: 'Space Grotesk', sans-serif;
+  cursor: pointer;
+}
+
+.btn-default:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+
+.btn-default:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-default:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  @apply inline-block px-4 py-2 rounded-md font-medium uppercase tracking-wide transition-all duration-200;
+  background-color: var(--red-dim);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-family: 'Space Grotesk', sans-serif;
+  cursor: pointer;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: rgba(248, 113, 113, 0.25);
+}
+
+.btn-ghost {
+  @apply inline-block px-4 py-2 rounded-md font-medium uppercase tracking-wide transition-all duration-200;
+  background-color: transparent;
+  color: var(--text-primary);
+  border: none;
+  font-family: 'Space Grotesk', sans-serif;
+  cursor: pointer;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--bg-elevated);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Navigation Styles */
+.nav-link {
+  @apply block px-3 py-2 rounded-md text-sm transition-all duration-200;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.nav-link-active {
+  @apply block px-3 py-2 rounded-md text-sm transition-all duration-200;
+  color: var(--accent);
+  background-color: var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(0.75rem - 3px);
+  text-decoration: none;
+}
+
+/* Typography Utilities */
+.mono {
+  font-family: 'Fira Code', monospace;
+}
+
+.label {
+  @apply block text-xs font-bold uppercase tracking-widest;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text-secondary);
+}
+
+.kpi-value {
+  @apply block;
+  font-family: 'Fira Code', monospace;
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.section-header {
+  @apply flex items-center gap-2 text-xs font-bold uppercase tracking-widest mb-4;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text-secondary);
+}
+
+.section-header::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background-color: var(--accent);
+  border-radius: 1px;
+}
+
+/* Modal Styles */
+.modal-backdrop {
+  @apply fixed inset-0 z-40;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.modal-body {
+  @apply rounded-lg shadow-2xl;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  animation: slide-in-from-top 0.3s ease;
+}
+
+/* Table Styles */
+.data-table {
+  @apply w-full border-collapse;
+}
+
+.data-table thead {
+  background-color: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.data-table th {
+  @apply px-4 py-3 text-left text-xs font-bold uppercase tracking-widest;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text-secondary);
+}
+
+.data-table td {
+  @apply px-4 py-3 text-sm;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.data-table tbody tr {
+  @apply transition-colors duration-200;
+}
+
+.data-table tbody tr:hover {
+  background-color: var(--bg-overlay);
+}
+
+/* Toast Notification */
+.toast {
+  @apply fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  animation: slide-in-from-top 0.3s ease;
+  z-index: 50;
+}
+
+.toast-success {
+  border-color: var(--green);
+  background-color: var(--green-dim);
+}
+
+.toast-error {
+  border-color: var(--red);
+  background-color: var(--red-dim);
+}
+
+.toast-warning {
+  border-color: var(--amber);
+  background-color: var(--amber-dim);
+}
+
+.toast-info {
+  border-color: var(--blue);
+  background-color: var(--blue-dim);
+}
+
+/* Progress Bar */
+.progress-bar {
+  @apply w-full h-2 rounded-full overflow-hidden;
+  background-color: var(--bg-surface);
+}
+
+.progress-fill {
+  @apply h-full transition-all duration-500 rounded-full;
+  background-color: var(--accent);
+}
+
+/* Kanban Card */
+.kanban-card {
+  @apply rounded-lg px-4 py-3;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-left: 4px solid var(--accent);
+  transition: all 0.2s ease;
+}
+
+.kanban-card.kanban-priority-high {
+  border-left-color: var(--red);
+}
+
+.kanban-card.kanban-priority-medium {
+  border-left-color: var(--amber);
+}
+
+.kanban-card.kanban-priority-low {
+  border-left-color: var(--blue);
+}
+
+.kanban-card.kanban-status-completed {
+  border-left-color: var(--green);
+}
+
+/* Feedback Buttons */
+.feedback-btn {
+  @apply inline-flex items-center justify-center rounded-full transition-all duration-200;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-default);
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.feedback-btn:hover {
+  border-color: var(--border-strong);
+  background-color: var(--bg-elevated);
+}
+
+.feedback-btn-up {
+  @apply inline-flex items-center justify-center rounded-full transition-all duration-200;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--green);
+  background-color: var(--green-dim);
+  color: var(--green);
+  cursor: pointer;
+}
+
+.feedback-btn-down {
+  @apply inline-flex items-center justify-center rounded-full transition-all duration-200;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--red);
+  background-color: var(--red-dim);
+  color: var(--red);
+  cursor: pointer;
+}
+
+/* Skeleton Loading Animation */
+.skeleton {
+  @apply rounded-md;
+  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-elevated) 50%, var(--bg-surface) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+.skeleton-text {
+  @apply rounded-md h-4 mb-2;
+  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-elevated) 50%, var(--bg-surface) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+.skeleton-avatar {
+  @apply rounded-full;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-elevated) 50%, var(--bg-surface) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+.skeleton-card {
+  @apply rounded-lg px-4 py-3 h-48;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  animation: shimmer 2s infinite;
+}
+
+/* ============================================================================
+   Touch / Tablet Optimization (Raspberry Pi Tablet)
+   ============================================================================ */
+
+/* Ensure minimum touch targets (48px per WCAG) */
+@media (pointer: coarse) {
+  button, a, select, .card-hover, .kanban-card, .nav-link, .nav-link-active {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  select, input, textarea {
+    font-size: 16px !important; /* Prevent zoom on iOS/mobile */
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+
+  .btn-accent, .btn-default, .btn-danger, .btn-ghost {
+    padding: 14px 20px;
+    font-size: 15px;
+  }
+
+  /* Larger status dots for touch */
+  .status-active, .status-running, .status-idle, .status-error, .status-scheduled {
+    width: 12px;
+    height: 12px;
+  }
+
+  /* Make hover actions always visible on touch */
+  .group-hover\:opacity-100 {
+    opacity: 1 !important;
+  }
+
+  /* Wider scrollbar for touch */
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+}
+
+/* Pi Tablet landscape (typical 7-10" touch screen at 1024x600 or 1280x800) */
+@media (max-width: 1024px) and (pointer: coarse) {
+  /* Stack two-column layouts */
+  .grid-cols-3 { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Larger cards for easier tapping */
+  .card, .card-hover, .kanban-card {
+    padding: 16px;
+  }
+
+  /* Ensure modals don't overflow */
+  .max-w-2xl { max-width: 95vw; }
+  .max-w-lg { max-width: 95vw; }
+}
+
+/* Pi Tablet portrait or small screen */
+@media (max-width: 640px) and (pointer: coarse) {
+  .grid-cols-2, .grid-cols-3 { grid-template-columns: 1fr !important; }
+
+  /* Full-width nav */
+  nav { width: 100%; }
+}
+
+/* Kiosk mode — hide scrollbar and cursor in fullscreen */
+@media (display-mode: fullscreen) {
+  ::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
+  body { cursor: none; overflow: hidden; }
+}
+
+/* ============================================================================
+   Responsive Utilities
+   ============================================================================ */
+@media (max-width: 768px) {
+  .toast {
+    @apply left-4 right-4 bottom-4;
+  }
+
+  .modal-body {
+    @apply mx-4;
+  }
+}
+
+/* ============================================================================
+   Print Styles
+   ============================================================================ */
+@media print {
+  body {
+    background-color: white;
+    color: black;
+  }
+
+  .modal-backdrop,
+  .toast {
+    display: none;
+  }
+}
