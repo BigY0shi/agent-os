@@ -122,11 +122,11 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
       </div>
 
       {/* Mobile Bottom Nav */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-14 bg-surface-950 border-t border-surface-600/30 z-40">
-        <div className="flex items-center justify-around h-full px-4">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface-950 border-t border-surface-600/30 z-40">
+        <div className="flex items-stretch h-full">
           <Link
             href="/"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[56px] rounded-md transition-all ${
               isActive('/') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -135,7 +135,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/agents"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[56px] rounded-md transition-all ${
               isActive('/agents') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -144,7 +144,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/pipeline"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[56px] rounded-md transition-all ${
               isActive('/pipeline') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -153,7 +153,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/skills"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[56px] rounded-md transition-all ${
               isActive('/skills') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -162,7 +162,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/analytics"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center flex-1 h-full min-w-[56px] rounded-md transition-all ${
               isActive('/analytics') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >

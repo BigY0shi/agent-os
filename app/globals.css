@@ -731,6 +731,21 @@ input, textarea, [contenteditable="true"], code, pre, .mono, .kpi-value {
   user-select: text;
 }
 
+/* Interactive elements: no tap delay, no long-press menu, no drag-image */
+a, button, [role="button"], .btn-accent, .btn-default, .btn-danger, .btn-ghost,
+.nav-link, .nav-link-active, .card-hover, .kanban-card, label, select {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+  cursor: pointer;
+}
+
+/* Force scrollbar to always be visible so users see they can scroll */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* Hide scrollbars visually only when actually in fullscreen kiosk */
 @media (display-mode: fullscreen), (display-mode: standalone) {
   ::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
