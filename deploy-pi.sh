@@ -46,7 +46,7 @@ print_error() { echo -e "${RED}  ✗${NC} $1"; }
 print_progress() { echo -e "${DIM}  ⏳ $1...${NC}"; }
 
 # --- Configuration ---
-PI_USER="${PI_USER:-pi}"
+PI_USER="${PI_USER:-$(whoami)}"
 APP_DIR="/home/${PI_USER}/agent-os"
 APP_PORT="${APP_PORT:-3000}"
 NODE_VERSION="20"
@@ -150,8 +150,18 @@ install_node() {
   fi
 
   print_progress "Installing Node.js ${NODE_VERSION}"
-  curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash - &>/dev/null
-  sudo apt-get install -y -qq nodejs
+  if curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -; then
+    sudo apt-get install -y nodejs
+  else
+    print_warn "nodesource setup failed — falling back to nvm"
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    # shellcheck disable=SC1090
+    export NVM_DIR="$HOME/.nvm"
+    source "${NVM_DIR}/nvm.sh"
+    nvm install "${NODE_VERSION}"
+    nvm use "${NODE_VERSION}"
+    nvm alias default "${NODE_VERSION}"
+  fi
   print_step "Node.js $(node -v) installed"
   print_step "npm $(npm -v)"
 }
@@ -183,11 +193,14 @@ setup_app() {
   fi
 
   print_progress "Installing dependencies"
-  npm ci --production 2>/dev/null || npm install --production
+  npm ci 2>/dev/null || npm install
   print_step "Dependencies installed"
 
   print_progress "Building Next.js app (this takes 2-5 min on Pi)"
-  npx next build 2>&1 | tail -1
+  if ! npx next build; then
+    print_error "Build failed — see output above"
+    exit 1
+  fi
   print_step "Production build complete"
 
   # Ensure data directory exists
