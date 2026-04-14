@@ -695,45 +695,46 @@ a:hover {
   nav { width: 100%; }
 }
 
-/* Kiosk mode — hide scrollbar visually but allow touch scrolling */
-@media (display-mode: fullscreen) {
-  ::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
-  * { scrollbar-width: none; }
-  html, body {
-    overflow-y: auto;
-    overflow-x: hidden;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
-  }
+/* ============================================================================
+   Kiosk / Touch — applied unconditionally so touchscreen + Chromium kiosk
+   always get scroll + no-selection behavior, regardless of how the touch
+   driver reports itself (pointer:coarse vs. fine).
+   ============================================================================ */
+html, body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  height: auto;
+  min-height: 100%;
 }
 
-/* ============================================================================
-   Touch scroll + no accidental text selection on tap
-   ============================================================================ */
-@media (pointer: coarse) {
-  html, body {
-    touch-action: pan-y;
-    -webkit-overflow-scrolling: touch;
-  }
+/* Prevent tap-to-highlight everywhere except real input surfaces */
+body, .card, .card-hover, .card-active, .kanban-card,
+.btn-accent, .btn-default, .btn-danger, .btn-ghost,
+.nav-link, .nav-link-active, .badge, .label, .section-header,
+header, nav, main, aside, footer, section, article,
+h1, h2, h3, h4, h5, h6, p, span, div, a, button, li, ul, ol {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
 
-  /* Prevent text highlighting on tap/hold anywhere that isn't an input */
-  body, .card, .card-hover, .card-active, .kanban-card,
-  .btn-accent, .btn-default, .btn-danger, .btn-ghost,
-  .nav-link, .nav-link-active, .badge, .label, .section-header,
-  h1, h2, h3, h4, h5, h6, p, span, div, a, button, li {
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-  }
+/* Always allow selection inside true text-input surfaces */
+input, textarea, [contenteditable="true"], code, pre, .mono, .kpi-value {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
 
-  /* Allow selection in actual text fields */
-  input, textarea, [contenteditable="true"], code, pre, .mono, .kpi-value {
-    -webkit-user-select: text;
-    user-select: text;
-  }
+/* Hide scrollbars visually only when actually in fullscreen kiosk */
+@media (display-mode: fullscreen), (display-mode: standalone) {
+  ::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+  * { scrollbar-width: none; }
 }
 
 /* ============================================================================

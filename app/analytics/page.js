@@ -159,7 +159,7 @@ export default function AnalyticsPage() {
             <h3 className="text-[#a0a0a0] text-sm font-medium">Total Spend</h3>
             <DollarSign className="w-5 h-5" color="#FF6B00" />
           </div>
-          <p className="text-3xl font-bold text-white">${kpis.totalSpend || 0}</p>
+          <p className="text-3xl font-bold text-white">${Math.round(kpis.totalSpend || 0).toLocaleString()}</p>
         </div>
 
         {/* Outputs Generated */}

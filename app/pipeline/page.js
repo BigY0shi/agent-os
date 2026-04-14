@@ -174,7 +174,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-3 text-gray-500" />
           <input
@@ -224,7 +224,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Kanban Columns */}
-      <div className="flex gap-6 overflow-x-auto pb-4">
+      <div className="flex gap-6 overflow-x-auto pb-4 -mx-4 px-4 lg:-mx-6 lg:px-6">
         {COLUMNS.map((column) => (
           <div key={column} className="flex-shrink-0 w-80">
             {/* Column Header */}
