@@ -695,11 +695,45 @@ a:hover {
   nav { width: 100%; }
 }
 
-/* Kiosk mode — hide scrollbar and cursor in fullscreen */
+/* Kiosk mode — hide scrollbar visually but allow touch scrolling */
 @media (display-mode: fullscreen) {
-  ::-webkit-scrollbar { display: none; }
+  ::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
   * { scrollbar-width: none; }
-  body { cursor: none; overflow: hidden; }
+  html, body {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* ============================================================================
+   Touch scroll + no accidental text selection on tap
+   ============================================================================ */
+@media (pointer: coarse) {
+  html, body {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent text highlighting on tap/hold anywhere that isn't an input */
+  body, .card, .card-hover, .card-active, .kanban-card,
+  .btn-accent, .btn-default, .btn-danger, .btn-ghost,
+  .nav-link, .nav-link-active, .badge, .label, .section-header,
+  h1, h2, h3, h4, h5, h6, p, span, div, a, button, li {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  /* Allow selection in actual text fields */
+  input, textarea, [contenteditable="true"], code, pre, .mono, .kpi-value {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }
 
 /* ============================================================================
