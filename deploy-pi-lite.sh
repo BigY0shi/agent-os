@@ -398,12 +398,15 @@ esac
 
 # Install dependencies
 print_progress "Installing npm dependencies"
-npm ci --production 2>/dev/null || npm install --production
+npm ci 2>/dev/null || npm install
 print_step "Dependencies installed"
 
 # Build
 print_progress "Building Next.js production bundle (this takes 2-5 min on Pi)"
-npx next build 2>&1 | tail -1
+if ! npx next build; then
+  print_error "Build failed — see output above"
+  exit 1
+fi
 print_step "Production build complete"
 
 # Ensure data directory
