@@ -417,7 +417,7 @@ STATEOF
 echo "Updating Agent-OS..."
 cd ${APP_DIR}
 git pull 2>/dev/null || echo "Not a git repo — skipping pull"
-npm ci --production 2>/dev/null || npm install --production
+npm ci 2>/dev/null || npm install
 npx next build
 sudo systemctl restart agent-os
 echo "Update complete! Dashboard restarting..."

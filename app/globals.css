@@ -744,8 +744,7 @@ body {
    driver reports itself (pointer:coarse vs. fine).
    ============================================================================ */
 html, body {
-  overflow-x: clip;                   /* clip, not hidden — hidden creates a scroll
-                                         context that kills touch-scroll in webkit  */
+  overflow-x: hidden;
   overflow-y: auto;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;

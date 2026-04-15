@@ -14,7 +14,7 @@ export default function RootLayout({ children }) {
         <Sidebar />
 
         {/* Main Content — no flex, just margin-offset for the fixed sidebar */}
-        <main className="ml-0 lg:ml-[220px] min-h-screen pb-14 lg:pb-0 overflow-x-clip">
+        <main className="ml-0 lg:ml-[220px] min-h-screen pb-14 lg:pb-0 overflow-x-hidden">
           <div className="p-4 lg:p-6 max-w-[1400px] mx-auto">
             {children}
           </div>

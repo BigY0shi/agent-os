@@ -5,9 +5,11 @@ import { X } from 'lucide-react';
 export default function Modal({
   isOpen,
   onClose,
+  onSubmit,
   title,
   children,
   size = 'md',
+  submitLabel = 'Save',
 }) {
   if (!isOpen) return null;
 
@@ -48,9 +50,27 @@ export default function Modal({
           )}
 
           {/* Body */}
-          <div className="px-6 py-4 max-h-[75vh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+          <div className="px-6 py-4 max-h-[60vh] overflow-y-scroll overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
             {children}
           </div>
+
+          {/* Footer */}
+          {onSubmit && (
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-surface-700/50">
+              <button
+                onClick={onClose}
+                className="btn-default"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onSubmit}
+                className="btn-accent"
+              >
+                {submitLabel}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
