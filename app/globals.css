@@ -107,15 +107,59 @@ a:hover {
   color: var(--bg-base);
 }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: var(--bg-base); }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { opacity: 0.8; }
-::-webkit-scrollbar-corner { background: var(--bg-base); }
+/* ============================================================================
+   Always-visible, touch-friendly scrollbar
+   Uses overflow: scroll (not auto) so the bar shows even when content fits.
+   ============================================================================ */
+html {
+  overflow-y: scroll !important;   /* always reserve space for vertical bar */
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--accent) var(--bg-elevated);
+  scrollbar-width: auto;            /* Firefox: use "auto" (thick) not "thin" */
+}
 
-* {
-  scrollbar-color: var(--border-strong) var(--bg-base);
-  scrollbar-width: thin;
+body {
+  overflow-y: auto;
+}
+
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+  background: var(--bg-elevated);
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-elevated);
+  border-left: 1px solid var(--border-default);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border: 3px solid var(--bg-elevated);
+  border-radius: 8px;
+  min-height: 48px;                 /* big enough to tap-drag */
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: #FF8A2E;              /* lighter orange on press */
+}
+::-webkit-scrollbar-corner {
+  background: var(--bg-elevated);
+}
+
+/* Inner scroll containers (kanban columns, modals, tables) */
+*::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 7px;
+  min-height: 40px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  background-clip: padding-box;
 }
 
 /* ============================================================================
@@ -668,8 +712,7 @@ a:hover {
     opacity: 1 !important;
   }
 
-  /* Wider scrollbar for touch */
-  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  /* Scrollbar sizing is handled globally; no override needed here */
 }
 
 /* Pi Tablet landscape (typical 7-10" touch screen at 1024x600 or 1280x800) */
@@ -739,17 +782,6 @@ a, button, [role="button"], .btn-accent, .btn-default, .btn-danger, .btn-ghost,
   -webkit-user-drag: none;
   user-drag: none;
   cursor: pointer;
-}
-
-/* Force scrollbar to always be visible so users see they can scroll */
-html {
-  scrollbar-gutter: stable;
-}
-
-/* Hide scrollbars visually only when actually in fullscreen kiosk */
-@media (display-mode: fullscreen), (display-mode: standalone) {
-  ::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
-  * { scrollbar-width: none; }
 }
 
 /* ============================================================================
