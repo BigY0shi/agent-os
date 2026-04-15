@@ -744,13 +744,33 @@ body {
    driver reports itself (pointer:coarse vs. fine).
    ============================================================================ */
 html, body {
-  overflow-x: hidden;
+  overflow-x: clip;                   /* clip, not hidden — hidden creates a scroll
+                                         context that kills touch-scroll in webkit  */
   overflow-y: auto;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   height: auto;
   min-height: 100%;
+}
+
+/* Any Tailwind overflow-y-auto / overflow-y-scroll container must allow
+   vertical touch panning. Without this, nested scrollable areas are dead
+   on the Pi Official Touch Display.                                       */
+[class*="overflow-y-auto"],
+[class*="overflow-y-scroll"],
+[style*="overflow-y: auto"],
+[style*="overflow-y: scroll"] {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
+}
+
+/* Same for horizontal scroll containers (kanban board, tables) */
+[class*="overflow-x-auto"],
+[class*="overflow-x-scroll"] {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 /* Prevent tap-to-highlight everywhere except real input surfaces */

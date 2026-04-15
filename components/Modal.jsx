@@ -48,7 +48,7 @@ export default function Modal({
           )}
 
           {/* Body */}
-          <div className="px-6 py-4">
+          <div className="px-6 py-4 max-h-[75vh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
             {children}
           </div>
         </div>

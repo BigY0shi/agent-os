@@ -224,7 +224,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Kanban Columns */}
-      <div className="flex gap-6 overflow-x-auto pb-4 -mx-4 px-4 lg:-mx-6 lg:px-6">
+      <div className="flex gap-6 overflow-x-auto pb-4 -mx-4 px-4 lg:-mx-6 lg:px-6" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}>
         {COLUMNS.map((column) => (
           <div key={column} className="flex-shrink-0 w-80">
             {/* Column Header */}
@@ -234,7 +234,7 @@ export default function PipelinePage() {
             </div>
 
             {/* Card Container */}
-            <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
               {tasksByStatus[column].map((task) => (
                 <div
                   key={task.id}

@@ -323,7 +323,7 @@ CURSOREOF
 Type=Application
 Name=Agent-OS Kiosk
 Comment=Launch Agent-OS dashboard in kiosk mode
-Exec=bash -c 'for i in \$(seq 1 60); do curl -s -o /dev/null http://localhost:${APP_PORT} && break; sleep 2; done; ${CHROMIUM_BIN} --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-component-update --kiosk --incognito --no-first-run --disable-pinch --overscroll-history-navigation=0 --touch-events=enabled --enable-touch-drag-drop --disable-translate --disable-features=TranslateUI --disable-background-networking --disable-sync --disable-default-apps --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 --start-fullscreen --window-position=0,0 http://localhost:${APP_PORT}'
+Exec=bash -c 'for i in \$(seq 1 60); do curl -s -o /dev/null http://localhost:${APP_PORT} && break; sleep 2; done; ${CHROMIUM_BIN} --noerrdialogs --disable-infobars --disable-session-crashed-bubble --disable-component-update --kiosk --incognito --no-first-run --overscroll-history-navigation=0 --touch-events=enabled --enable-touch-drag-drop --disable-translate --enable-features=OverlayScrollbar --disable-features=TranslateUI,TouchTextEditingRedesign --disable-touch-adjustment --force-device-scale-factor=1 --disable-background-networking --disable-sync --disable-default-apps --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 --start-fullscreen --window-position=0,0 http://localhost:${APP_PORT}'
 X-GNOME-Autostart-enabled=true
 KIOSKEOF
   print_step "Kiosk autostart configured"
@@ -339,6 +339,8 @@ for i in \$(seq 1 60); do
 done
 
 ${CHROMIUM_BIN} \\
+  --ozone-platform=wayland \\
+  --enable-features=UseOzonePlatform,OverlayScrollbar \\
   --noerrdialogs \\
   --disable-infobars \\
   --disable-session-crashed-bubble \\
@@ -346,11 +348,9 @@ ${CHROMIUM_BIN} \\
   --kiosk \\
   --incognito \\
   --no-first-run \\
-  --disable-pinch \\
   --overscroll-history-navigation=0 \\
   --touch-events=enabled \\
   --enable-touch-drag-drop \\
-  --enable-features=OverlayScrollbar \\
   --disable-features=TranslateUI,TouchTextEditingRedesign \\
   --disable-touch-adjustment \\
   --force-device-scale-factor=1 \\

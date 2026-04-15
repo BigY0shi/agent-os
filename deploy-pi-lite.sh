@@ -552,12 +552,14 @@ ${CHROMIUM_BIN} \\
   --disable-component-update \\
   --incognito \\
   --no-first-run \\
-  --disable-pinch \\
   --overscroll-history-navigation=0 \\
   --touch-events=enabled \\
   --enable-touch-drag-drop \\
+  --enable-features=OverlayScrollbar \\
+  --disable-features=TranslateUI,TouchTextEditingRedesign \\
+  --disable-touch-adjustment \\
+  --force-device-scale-factor=1 \\
   --disable-translate \\
-  --disable-features=TranslateUI \\
   --check-for-update-interval=31536000 \\
   --disable-background-networking \\
   --disable-sync \\
