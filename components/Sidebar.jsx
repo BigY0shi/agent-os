@@ -12,6 +12,8 @@ import {
   Inbox,
   BarChart3,
   Settings,
+  Brain,
+  Workflow,
 } from 'lucide-react';
 
 export default function Sidebar({ pendingApprovalsCount = 0 }) {
@@ -91,6 +93,8 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
           <SectionLabel>Build</SectionLabel>
           <div className="space-y-1">
             <NavLink href="/skills" icon={Wrench} label="Skills & Tools" />
+            <NavLink href="/memory" icon={Brain} label="Memory OS" />
+            <NavLink href="/pipelines" icon={Workflow} label="Pipelines" />
           </div>
 
           {/* Content */}
@@ -123,10 +127,10 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
       {/* Mobile Bottom Nav */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 h-14 bg-surface-950 border-t border-surface-600/30 z-40">
-        <div className="flex items-center justify-around h-full px-4">
+        <div className="flex items-center justify-start gap-1 h-full px-2 overflow-x-auto">
           <Link
             href="/"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
               isActive('/') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -135,7 +139,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/agents"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
               isActive('/agents') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -144,7 +148,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/pipeline"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
               isActive('/pipeline') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -153,7 +157,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
 
           <Link
             href="/skills"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
               isActive('/skills') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
@@ -161,8 +165,26 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
           </Link>
 
           <Link
+            href="/memory"
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
+              isActive('/memory') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
+            }`}
+          >
+            <Brain size={20} />
+          </Link>
+
+          <Link
+            href="/pipelines"
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
+              isActive('/pipelines') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
+            }`}
+          >
+            <Workflow size={20} />
+          </Link>
+
+          <Link
             href="/analytics"
-            className={`flex flex-col items-center justify-center w-12 h-12 rounded-md transition-all ${
+            className={`flex flex-col items-center justify-center min-w-[3rem] h-12 rounded-md transition-all shrink-0 ${
               isActive('/analytics') ? 'text-[#FF6B00] bg-[#FF6B00]/5' : 'text-surface-400 hover:text-surface-300'
             }`}
           >
