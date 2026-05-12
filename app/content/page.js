@@ -291,6 +291,7 @@ export default function ContentPage() {
       {/* Approval Modal */}
       {showApprovalModal && selectedItem && (
         <Modal
+          isOpen={showApprovalModal}
           onClose={() => setShowApprovalModal(false)}
           title="Approve Content"
         >

@@ -2,10 +2,10 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeRead } from '@/lib/authz';
 
 export async function GET(request) {
-  const gate = requireRole(request, 'operator');
+  const gate = authorizeRead(request, 'operator', { allowAnonymousViewer: false });
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }

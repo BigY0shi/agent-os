@@ -290,6 +290,7 @@ export default function PipelinePage() {
       {/* Task Modal */}
       {showModal && (
         <Modal
+          isOpen={showModal}
           title={editingTask ? 'Edit Task' : 'New Task'}
           onClose={() => setShowModal(false)}
           onSubmit={saveTask}

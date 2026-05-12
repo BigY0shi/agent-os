@@ -182,13 +182,17 @@ setup_app() {
     exit 1
   fi
 
-  print_progress "Installing dependencies"
-  npm ci --production 2>/dev/null || npm install --production
+  print_progress "Installing dependencies (incl. devDependencies for build)"
+  npm ci 2>/dev/null || npm install
   print_step "Dependencies installed"
 
   print_progress "Building Next.js app (this takes 2-5 min on Pi)"
   npx next build 2>&1 | tail -1
   print_step "Production build complete"
+
+  print_progress "Pruning devDependencies for smaller runtime footprint"
+  npm prune --omit=dev 2>/dev/null || true
+  print_step "Prune complete (optional)"
 
   # Ensure data directory exists
   mkdir -p data
@@ -218,6 +222,8 @@ Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=${APP_PORT}
+# Set API auth in a drop-in, e.g. /etc/systemd/system/agent-os.service.d/override.conf:
+#   Environment=AGENT_OS_API_KEYS={"your-secret-token":"operator"}
 
 # Hardening
 NoNewPrivileges=true
@@ -401,8 +407,9 @@ STATEOF
 echo "Updating Agent-OS..."
 cd ${APP_DIR}
 git pull 2>/dev/null || echo "Not a git repo — skipping pull"
-npm ci --production 2>/dev/null || npm install --production
+npm ci 2>/dev/null || npm install
 npx next build
+npm prune --omit=dev 2>/dev/null || true
 sudo systemctl restart agent-os
 echo "Update complete! Dashboard restarting..."
 sleep 3

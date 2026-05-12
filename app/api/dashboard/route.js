@@ -2,6 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { getDb } from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { authorizeRead } from '@/lib/authz';
+import { jsonAuthError } from '@/lib/httpAuth';
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -29,6 +31,9 @@ function formatDate(date) {
 }
 
 export async function GET(request) {
+  const gate = authorizeRead(request, 'viewer');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const db = await getDb();
 

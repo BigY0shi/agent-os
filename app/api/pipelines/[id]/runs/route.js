@@ -2,11 +2,11 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeRead, authorizeWrite } from '@/lib/authz';
 import { appendAuditLog } from '@/lib/audit';
 
 export async function GET(request, { params }) {
-  const gate = requireRole(request, 'viewer');
+  const gate = authorizeRead(request, 'viewer');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
-  const gate = requireRole(request, 'agent-runtime');
+  const gate = authorizeWrite(request, 'agent-runtime');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }

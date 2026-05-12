@@ -2,12 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeRead, authorizeWrite } from '@/lib/authz';
 import { appendAuditLog } from '@/lib/audit';
 import { validatePipelineDefinition } from '@/lib/pipelineValidate';
 
 export async function GET(request, { params }) {
-  const gate = requireRole(request, 'viewer');
+  const gate = authorizeRead(request, 'viewer');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -30,7 +30,7 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
-  const gate = requireRole(request, 'operator');
+  const gate = authorizeWrite(request, 'operator');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -82,7 +82,7 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const gate = requireRole(request, 'operator');
+  const gate = authorizeWrite(request, 'operator');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }

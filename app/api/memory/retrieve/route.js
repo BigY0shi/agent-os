@@ -2,11 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeRead } from '@/lib/authz';
 import { appendAuditLog } from '@/lib/audit';
+import { filterMemoryRowsForReader } from '@/lib/memoryVisibility';
 
 export async function POST(request) {
-  const gate = requireRole(request, 'viewer');
+  const gate = authorizeRead(request, 'viewer');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -40,6 +41,7 @@ export async function POST(request) {
     params.push(limit);
 
     const rows = db.prepare(sql).all(...params);
+    const hits = filterMemoryRowsForReader(rows || [], gate.ctx);
 
     const created_at = new Date().toISOString();
     db.prepare(
@@ -50,10 +52,10 @@ export async function POST(request) {
       actor: gate.ctx.actor,
       action: 'memory.retrieve',
       resource_type: 'memory',
-      meta: { query, hits: rows.length },
+      meta: { query, hits: hits.length },
     });
 
-    return NextResponse.json({ query, hits: rows });
+    return NextResponse.json({ query, hits });
   } catch (error) {
     console.error('POST /api/memory/retrieve error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

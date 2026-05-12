@@ -2,11 +2,17 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { authorizeRead, authorizeWrite, roleMeets } from '@/lib/authz';
+import { jsonAuthError } from '@/lib/httpAuth';
+import { sanitizeMcpServer, sanitizeMcpServerList } from '@/lib/mcpRedact';
 
 // Unified route for skills, tools, and MCP servers
 // Use ?resource=tools or ?resource=mcp-servers to switch resource type
 
 export async function GET(request) {
+  const gate = authorizeRead(request, 'viewer');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const resource = searchParams.get('resource');
@@ -34,14 +40,19 @@ export async function GET(request) {
     // --- MCP Servers ---
     if (resource === 'mcp-servers') {
       const status = searchParams.get('status');
+      const includeSecrets =
+        searchParams.get('include_secrets') === '1' && roleMeets(gate.ctx.role, 'operator');
       let query = 'SELECT * FROM mcp_servers WHERE 1=1';
       const params = [];
 
-      if (status) { query += ' AND status = ?'; params.push(status); }
+      if (status) {
+        query += ' AND status = ?';
+        params.push(status);
+      }
 
       query += ' ORDER BY created_at DESC';
       const servers = db.prepare(query).all(...params);
-      return NextResponse.json(servers);
+      return NextResponse.json(sanitizeMcpServerList(servers, includeSecrets));
     }
 
     // --- Skills (default) ---
@@ -72,6 +83,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const resource = searchParams.get('resource');
@@ -108,9 +122,24 @@ export async function POST(request) {
         'INSERT INTO mcp_servers (name, description, status, transport, command, args, env, tools_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(name, description, status, transport, command, typeof args === 'string' ? args : JSON.stringify(args), typeof env === 'string' ? env : JSON.stringify(env), 0, now);
 
-      return NextResponse.json({
-        id: result.lastInsertRowid, name, description, status, transport, command, args, env, tools_count: 0, created_at: now
-      }, { status: 201 });
+      return NextResponse.json(
+        sanitizeMcpServer(
+          {
+            id: result.lastInsertRowid,
+            name,
+            description,
+            status,
+            transport,
+            command,
+            args,
+            env,
+            tools_count: 0,
+            created_at: now,
+          },
+          false
+        ),
+        { status: 201 }
+      );
     }
 
     // --- Skills (default) ---
@@ -143,6 +172,9 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -196,7 +228,7 @@ export async function PUT(request) {
       db.prepare(`UPDATE mcp_servers SET ${updates.join(', ')} WHERE id = ?`).run(...values);
 
       const updated = db.prepare('SELECT * FROM mcp_servers WHERE id = ?').get(id);
-      return NextResponse.json(updated);
+      return NextResponse.json(sanitizeMcpServer(updated, false));
     }
 
     // --- Skills (default) ---
@@ -232,6 +264,9 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

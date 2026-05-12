@@ -2,13 +2,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeWrite } from '@/lib/authz';
 import { appendAuditLog } from '@/lib/audit';
 
 const STATUSES = ['queued', 'running', 'succeeded', 'failed', 'cancelled'];
 
 export async function PATCH(request, { params }) {
-  const gate = requireRole(request, 'agent-runtime');
+  const gate = authorizeWrite(request, 'agent-runtime');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }

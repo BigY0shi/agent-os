@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeRead, authorizeWrite, roleMeets } from '@/lib/authz';
 import { appendAuditLog } from '@/lib/audit';
+import { filterMemoryRowsForReader } from '@/lib/memoryVisibility';
 
 const LAYERS = ['working', 'mid', 'long', 'artifact'];
 const SENS = ['public', 'internal', 'confidential'];
@@ -16,7 +17,7 @@ function logMemoryAccess(db, { memory_id, actor, action, meta }) {
 }
 
 export async function GET(request) {
-  const gate = requireRole(request, 'viewer');
+  const gate = authorizeRead(request, 'viewer');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -45,15 +46,16 @@ export async function GET(request) {
       params.push(team_id);
     }
     if (q) {
-      sql += ' AND (title LIKE ? OR content LIKE ?)';
+      sql += ' AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)';
       const like = `%${q}%`;
-      params.push(like, like);
+      params.push(like, like, like);
     }
 
     sql += ' ORDER BY updated_at DESC, id DESC LIMIT 500';
 
     const rows = db.prepare(sql).all(...params);
-    return NextResponse.json(rows || []);
+    const filtered = filterMemoryRowsForReader(rows || [], gate.ctx);
+    return NextResponse.json(filtered);
   } catch (error) {
     console.error('GET /api/memory error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -61,7 +63,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const gate = requireRole(request, 'agent-runtime');
+  const gate = authorizeWrite(request, 'agent-runtime');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -85,6 +87,9 @@ export async function POST(request) {
     }
     if (!SENS.includes(sensitivity)) {
       return NextResponse.json({ error: 'invalid sensitivity' }, { status: 400 });
+    }
+    if (sensitivity === 'confidential' && !roleMeets(gate.ctx.role, 'operator')) {
+      return NextResponse.json({ error: 'confidential memory requires operator role' }, { status: 403 });
     }
 
     const now = new Date().toISOString();

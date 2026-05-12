@@ -397,14 +397,17 @@ case $SOURCE_METHOD in
 esac
 
 # Install dependencies
-print_progress "Installing npm dependencies"
-npm ci --production 2>/dev/null || npm install --production
+print_progress "Installing npm dependencies (incl. devDependencies for build)"
+npm ci 2>/dev/null || npm install
 print_step "Dependencies installed"
 
 # Build
 print_progress "Building Next.js production bundle (this takes 2-5 min on Pi)"
 npx next build 2>&1 | tail -1
 print_step "Production build complete"
+
+print_progress "Pruning devDependencies (optional)"
+npm prune --omit=dev 2>/dev/null || true
 
 # Ensure data directory
 mkdir -p data
@@ -598,6 +601,7 @@ Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=PORT=${APP_PORT}
+# Optional: Environment=AGENT_OS_API_KEYS={"token":"operator"}  (use systemd drop-in)
 
 # Hardening
 NoNewPrivileges=true
@@ -692,8 +696,9 @@ cat > "/home/${PI_USER}/agent-os-update.sh" << UPDATEEOF
 echo "Updating Agent-OS..."
 cd ${APP_DIR}
 git pull 2>/dev/null || echo "Not a git repo — skipping pull"
-npm ci --production 2>/dev/null || npm install --production
+npm ci 2>/dev/null || npm install
 npx next build
+npm prune --omit=dev 2>/dev/null || true
 sudo systemctl restart agent-os
 echo "Update complete! Dashboard restarting..."
 sleep 3

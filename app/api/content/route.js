@@ -2,8 +2,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { authorizeRead, authorizeWrite } from '@/lib/authz';
+import { jsonAuthError } from '@/lib/httpAuth';
 
 export async function GET(request) {
+  const gate = authorizeRead(request, 'viewer');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
@@ -31,6 +36,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const body = await request.json();
     const db = await getDb();
@@ -69,6 +77,9 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -118,6 +129,9 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

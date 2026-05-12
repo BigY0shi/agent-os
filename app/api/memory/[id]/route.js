@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { requireRole } from '@/lib/authz';
+import { authorizeRead, authorizeWrite, roleMeets } from '@/lib/authz';
 import { appendAuditLog } from '@/lib/audit';
+import { memoryRowVisibleToReader } from '@/lib/memoryVisibility';
 
 const LAYERS = ['working', 'mid', 'long', 'artifact'];
 const SENS = ['public', 'internal', 'confidential'];
@@ -16,7 +17,7 @@ function logMemoryAccess(db, { memory_id, actor, action, meta }) {
 }
 
 export async function GET(request, { params }) {
-  const gate = requireRole(request, 'viewer');
+  const gate = authorizeRead(request, 'viewer');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -29,7 +30,8 @@ export async function GET(request, { params }) {
     }
 
     const row = db.prepare('SELECT * FROM memory_entries WHERE id = ?').get(id);
-    if (!row) {
+    const visible = memoryRowVisibleToReader(row, gate.ctx);
+    if (!visible) {
       return NextResponse.json({ error: 'not found' }, { status: 404 });
     }
 
@@ -46,7 +48,7 @@ export async function GET(request, { params }) {
       resource_id: id,
     });
 
-    return NextResponse.json(row);
+    return NextResponse.json(visible);
   } catch (error) {
     console.error('GET /api/memory/[id] error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -54,7 +56,7 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
-  const gate = requireRole(request, 'agent-runtime');
+  const gate = authorizeWrite(request, 'agent-runtime');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -67,22 +69,24 @@ export async function PUT(request, { params }) {
     }
 
     const existing = db.prepare('SELECT * FROM memory_entries WHERE id = ?').get(id);
-    if (!existing) {
+    const visible = memoryRowVisibleToReader(existing, gate.ctx);
+    if (!visible) {
       return NextResponse.json({ error: 'not found' }, { status: 404 });
     }
 
     const body = await request.json();
     const now = new Date().toISOString();
 
-    const layer = body.layer ?? existing.layer;
+    const operator = roleMeets(gate.ctx.role, 'operator');
+    const layer = operator && body.layer !== undefined ? body.layer : existing.layer;
     const title = body.title ?? existing.title;
     const content = body.content ?? existing.content;
     const tags = body.tags != null ? (typeof body.tags === 'string' ? body.tags : JSON.stringify(body.tags)) : existing.tags;
     const agent_id = body.agent_id !== undefined ? (body.agent_id == null ? null : Number(body.agent_id)) : existing.agent_id;
     const team_id = body.team_id !== undefined ? body.team_id : existing.team_id;
-    const sensitivity = body.sensitivity ?? existing.sensitivity;
     const embedding_ref = body.embedding_ref !== undefined ? body.embedding_ref : existing.embedding_ref;
-    const status = body.status ?? existing.status;
+    const sensitivity = operator && body.sensitivity !== undefined ? body.sensitivity : existing.sensitivity;
+    const status = operator && body.status !== undefined ? body.status : existing.status;
 
     if (!LAYERS.includes(layer)) {
       return NextResponse.json({ error: 'invalid layer' }, { status: 400 });
@@ -113,7 +117,7 @@ export async function PUT(request, { params }) {
 
 /** Promote layer: body { targetLayer: 'mid'|'long' } — requires operator+ */
 export async function PATCH(request, { params }) {
-  const gate = requireRole(request, 'operator');
+  const gate = authorizeWrite(request, 'operator');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
@@ -154,7 +158,7 @@ export async function PATCH(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
-  const gate = requireRole(request, 'operator');
+  const gate = authorizeWrite(request, 'operator');
   if (!gate.ok) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }

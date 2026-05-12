@@ -2,10 +2,19 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { authorizeRead, authorizeWrite, roleMeets } from '@/lib/authz';
+import { jsonAuthError } from '@/lib/httpAuth';
+import { sanitizeMcpServer, sanitizeMcpServerList } from '@/lib/mcpRedact';
 
 export async function GET(request) {
+  const gate = authorizeRead(request, 'viewer');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const db = await getDb();
+    const { searchParams } = new URL(request.url);
+    const includeSecrets =
+      searchParams.get('include_secrets') === '1' && roleMeets(gate.ctx.role, 'operator');
 
     const servers = db
       .prepare(
@@ -27,7 +36,7 @@ export async function GET(request) {
       )
       .all();
 
-    return NextResponse.json(servers);
+    return NextResponse.json(sanitizeMcpServerList(servers, includeSecrets));
   } catch (error) {
     console.error('MCP servers GET error:', error);
     return NextResponse.json(
@@ -38,6 +47,9 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const db = await getDb();
     const body = await request.json();
@@ -72,18 +84,21 @@ export async function POST(request) {
       .run(name, description, status, transport, command, typeof args === 'string' ? args : JSON.stringify(args), typeof env === 'string' ? env : JSON.stringify(env), tools_count, now);
 
     return NextResponse.json(
-      {
-        id: result.lastInsertRowid,
-        name,
-        description,
-        status,
-        transport,
-        command,
-        args,
-        env,
-        tools_count,
-        created_at: now,
-      },
+      sanitizeMcpServer(
+        {
+          id: result.lastInsertRowid,
+          name,
+          description,
+          status,
+          transport,
+          command,
+          args,
+          env,
+          tools_count,
+          created_at: now,
+        },
+        false
+      ),
       { status: 201 }
     );
   } catch (error) {
@@ -96,6 +111,9 @@ export async function POST(request) {
 }
 
 export async function PUT(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const serverId = searchParams.get('id');
@@ -184,17 +202,8 @@ export async function PUT(request) {
     const query = `UPDATE mcp_servers SET ${updates.join(', ')} WHERE id = ?`;
     db.prepare(query).run(...values);
 
-    return NextResponse.json({
-      id: serverId,
-      name,
-      description,
-      transport,
-      command,
-      args,
-      env,
-      status,
-      tools_count,
-    });
+    const updated = db.prepare('SELECT * FROM mcp_servers WHERE id = ?').get(serverId);
+    return NextResponse.json(sanitizeMcpServer(updated, false));
   } catch (error) {
     console.error('MCP servers PUT error:', error);
     return NextResponse.json(
@@ -205,6 +214,9 @@ export async function PUT(request) {
 }
 
 export async function DELETE(request) {
+  const gate = authorizeWrite(request, 'operator');
+  if (!gate.ok) return jsonAuthError(gate);
+
   try {
     const { searchParams } = new URL(request.url);
     const serverId = searchParams.get('id');
