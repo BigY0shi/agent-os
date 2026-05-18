@@ -62,10 +62,13 @@ memory:
 ```
 
 ```bash
-# ~/.hermes/.env
+# ~/.hermes/.env (on Hermes LXC, e.g. 192.168.0.168)
 HONCHO_API_KEY=...
-# If self-hosted Honcho LXC, point client at your API base URL per Honcho deploy docs
+# Self-hosted Honcho LXC: API base is set in honcho client config — discover with:
+hermes honcho status
 ```
+
+Paste the API base URL into Agent OS **Settings → Harness → Honcho** once you have the Honcho LXC IP/port.
 
 CLI: `hermes honcho status`, `hermes memory setup`.
 

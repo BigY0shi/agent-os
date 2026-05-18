@@ -33,7 +33,7 @@ This documents **Yoshi's production layout**: agent runtimes in **LXC containers
 | **[Hermes Workspace](https://github.com/outsourc-e/hermes-workspace)** | Full operator app (chat, terminal, Conductor, Kanban, skills UI) | **`:3000`** UI, **`:8642`** gateway | Day-to-day Hermes operations |
 | **Nous `hermes dashboard`** | CLI/bundled dashboard from Hermes Agent package | **`:9119`** | Not the primary UI in this stack |
 
-When you say “Hermes on localhost:3000”, that is **Hermes Workspace** (often via SSH port-forward or Proxmox console proxy). Agent OS should **link out** to that UI and integrate via the **gateway**, not duplicate chat/memory/terminal.
+When you use **Hermes Workspace** on LAN (e.g. `http://192.168.0.168:3000`) or via SSH port-forward to `localhost:3000`, that is the full app—not the Nous CLI dashboard on `:9119`. Agent OS should **link out** to that UI and integrate via the **gateway**, not duplicate chat/memory/terminal.
 
 **Hermes Kanban** (`~/.hermes/kanban.db` inside the Hermes LXC) is separate from Agent OS **`/pipeline`** (lifecycle stages). Treat them as different boards unless you build an explicit sync adapter.
 
@@ -67,11 +67,21 @@ See [HONCHO.md](./HONCHO.md) for how this relates to Agent OS `memory_entries` a
 
 ## Configuration (today)
 
-1. **Settings → Harness** — set LAN URLs (defaults use `localhost` when port-forwarded):
-   - Hermes Workspace UI: `http://localhost:3000`
-   - Hermes gateway: `http://localhost:8642`
-   - OpenClaw gateway: `http://localhost:18789`
-   - Honcho API base: your LXC URL (or `https://api.honcho.dev` if cloud)
+1. **Settings → Harness** — set LAN URLs (example Hermes LXC: `192.168.0.168`):
+   - Hermes Workspace UI: `http://192.168.0.168:3000`
+   - Hermes gateway: `http://192.168.0.168:8642`
+   - OpenClaw gateway: your OpenClaw LXC IP + `:18789`
+   - Honcho API base: Honcho LXC URL (see below) or `https://api.honcho.dev` if cloud
+
+### Finding Honcho URL (from Hermes LXC)
+
+```bash
+hermes honcho status          # connection + config summary
+grep -i honcho ~/.hermes/.env # HONCHO_API_KEY; API base may be in honcho.json
+cat ~/.honcho/config.json 2>/dev/null || cat "$HERMES_HOME/honcho.json"
+```
+
+Self-hosted Honcho often exposes an HTTP API on a fixed port (check your LXC compose/systemd). Use that base URL in Agent OS **Settings → Harness → Honcho**.
 2. **Agents → Framework** — choose **Hermes Workspace** for agents deployed to that LXC.
 3. **Memory explorer** — Agent OS SQLite memory is the **control-plane catalog**; Honcho holds **runtime session memory** until a sync bridge exists.
 

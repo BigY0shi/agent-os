@@ -39,8 +39,8 @@ export default function SettingsPage() {
     'hermes-workspace': {
       enabled: true,
       apiKey: '',
-      endpoint: 'http://localhost:3000',
-      gatewayUrl: 'http://localhost:8642',
+      endpoint: 'http://192.168.0.168:3000',
+      gatewayUrl: 'http://192.168.0.168:8642',
     },
     openclaw: {
       enabled: false,
@@ -61,7 +61,7 @@ export default function SettingsPage() {
       label: 'Hermes Workspace',
       hint: 'Full operator UI (:3000) + gateway (:8642). Not the Nous hermes dashboard (:9119).',
       endpointLabel: 'Workspace UI URL',
-      endpointPlaceholder: 'http://localhost:3000',
+      endpointPlaceholder: 'http://192.168.0.168:3000',
       showGateway: true,
     },
     openclaw: {
