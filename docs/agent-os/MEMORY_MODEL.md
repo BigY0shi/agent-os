@@ -2,6 +2,8 @@
 
 Cross-agent memory is modeled in layers similar to hierarchical memory systems (e.g. [BAI-LAB/MemoryOS](https://github.com/BAI-LAB/MemoryOS), [MemTensor/MemOS](https://github.com/MemTensor/MemOS)). v1 persists in SQLite; embeddings/vector backends are optional adapters.
 
+**Production note:** On Proxmox, **Honcho** (dedicated LXC) is the canonical runtime store for user modeling across Hermes and planned Claude/Codex/Gemini peers. Agent OS `memory_entries` remain the **fleet control-plane** catalog until an explicit Honcho sync bridge is implemented. See [HONCHO.md](./HONCHO.md) and [PROXMOX_RUNTIME_STACK.md](./PROXMOX_RUNTIME_STACK.md).
+
 ## Layers
 
 | Layer | Semantics | Typical TTL |

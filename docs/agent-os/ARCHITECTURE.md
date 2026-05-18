@@ -47,8 +47,14 @@ sequenceDiagram
 - Replacing host OS or shipping a C++/Rust microkernel distribution.
 - HA clustering for SQLite (see Phase C in roadmap: split services + Postgres/S3).
 
+## Deployment context (Proxmox)
+
+Agent runtimes (Hermes Workspace, OpenClaw) and **Honcho** run in separate LXCs; this app is the remote-aware control plane. See [PROXMOX_RUNTIME_STACK.md](./PROXMOX_RUNTIME_STACK.md).
+
 ## Related docs
 
+- [PROXMOX_RUNTIME_STACK.md](./PROXMOX_RUNTIME_STACK.md)
+- [HONCHO.md](./HONCHO.md)
 - [MEMORY_MODEL.md](./MEMORY_MODEL.md)
 - [SKILL_PIPELINE_SPEC.md](./SKILL_PIPELINE_SPEC.md)
 - [GOVERNANCE.md](./GOVERNANCE.md)

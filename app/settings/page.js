@@ -34,15 +34,86 @@ export default function SettingsPage() {
     sound: false,
   });
 
-  // Harness Config
+  // Harness Config — Proxmox LXCs; Hermes Workspace = full app on :3000 (not Nous dashboard :9119)
   const [harnesses, setHarnesses] = useState({
-    'claude-code': { enabled: true, apiKey: '', endpoint: '' },
+    'hermes-workspace': {
+      enabled: true,
+      apiKey: '',
+      endpoint: 'http://localhost:3000',
+      gatewayUrl: 'http://localhost:8642',
+    },
+    openclaw: {
+      enabled: false,
+      apiKey: '',
+      endpoint: '',
+      gatewayUrl: 'http://localhost:18789',
+    },
+    honcho: { enabled: true, apiKey: '', endpoint: '' },
+    'claude-code': { enabled: false, apiKey: '', endpoint: '' },
+    codex: { enabled: false, apiKey: '', endpoint: '' },
+    gemini: { enabled: false, apiKey: '', endpoint: '' },
     crewai: { enabled: false, apiKey: '', endpoint: '' },
-    autogen: { enabled: false, apiKey: '', endpoint: '' },
-    langchain: { enabled: false, apiKey: '', endpoint: '' },
-    'openai-assistants': { enabled: false, apiKey: '', endpoint: '' },
     custom: { enabled: false, apiKey: '', endpoint: '' },
   });
+
+  const HARNESS_META = {
+    'hermes-workspace': {
+      label: 'Hermes Workspace',
+      hint: 'Full operator UI (:3000) + gateway (:8642). Not the Nous hermes dashboard (:9119).',
+      endpointLabel: 'Workspace UI URL',
+      endpointPlaceholder: 'http://localhost:3000',
+      showGateway: true,
+    },
+    openclaw: {
+      label: 'OpenClaw',
+      hint: 'Gateway only—no workspace UI. Agent OS covers fleet orchestration.',
+      endpointLabel: 'Notes / docs URL (optional)',
+      endpointPlaceholder: 'https://docs.openclaw.dev',
+      showGateway: true,
+    },
+    honcho: {
+      label: 'Honcho (memory LXC)',
+      hint: 'Shared dialectic memory—Hermes connected; Claude/Codex/Gemini planned.',
+      endpointLabel: 'Honcho API base URL',
+      endpointPlaceholder: 'http://honcho.lxc:8000 or https://api.honcho.dev',
+      showGateway: false,
+    },
+    'claude-code': {
+      label: 'Claude Code',
+      hint: 'IDE/CLI harness—will share Honcho workspace when wired.',
+      endpointLabel: 'Endpoint (optional)',
+      endpointPlaceholder: '',
+      showGateway: false,
+    },
+    codex: {
+      label: 'Codex',
+      hint: 'Planned Honcho peer—configure when deployed.',
+      endpointLabel: 'Endpoint (optional)',
+      endpointPlaceholder: '',
+      showGateway: false,
+    },
+    gemini: {
+      label: 'Gemini',
+      hint: 'Planned Honcho peer—configure when deployed.',
+      endpointLabel: 'Endpoint (optional)',
+      endpointPlaceholder: '',
+      showGateway: false,
+    },
+    crewai: {
+      label: 'CrewAI (legacy)',
+      hint: 'Optional—primary stack is Hermes Workspace + OpenClaw on Proxmox.',
+      endpointLabel: 'Endpoint URL',
+      endpointPlaceholder: 'https://api.example.com',
+      showGateway: false,
+    },
+    custom: {
+      label: 'Custom harness',
+      hint: '',
+      endpointLabel: 'Endpoint URL',
+      endpointPlaceholder: 'https://api.example.com',
+      showGateway: false,
+    },
+  };
 
   const [showApiKey, setShowApiKey] = useState({});
 
@@ -612,10 +683,18 @@ export default function SettingsPage() {
               Harness Connections
             </div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-              Configure external agent harnesses and AI frameworks
+              Proxmox LXC runtimes over LAN (localhost when port-forwarded). See docs/agent-os/PROXMOX_RUNTIME_STACK.md.
             </div>
 
-            {Object.entries(harnesses).map(([harness, config]) => (
+            {Object.entries(harnesses).map(([harness, config]) => {
+              const meta = HARNESS_META[harness] || {
+                label: harness,
+                hint: '',
+                endpointLabel: 'Endpoint URL',
+                endpointPlaceholder: 'https://api.example.com',
+                showGateway: false,
+              };
+              return (
               <div key={harness} style={styles.harnessCard}>
                 <div style={styles.harnessHeader}>
                   <div style={styles.harnessTitleContainer}>
@@ -629,7 +708,7 @@ export default function SettingsPage() {
                         <ToggleLeft size={20} />
                       )}
                     </button>
-                    <span style={styles.harnessTitle}>{harness}</span>
+                    <span style={styles.harnessTitle}>{meta.label}</span>
                   </div>
                   <span
                     style={{
@@ -644,6 +723,11 @@ export default function SettingsPage() {
                     {config.enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
+                {meta.hint ? (
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: '0 0 0.75rem 2rem' }}>
+                    {meta.hint}
+                  </p>
+                ) : null}
 
                 {config.enabled && (
                   <>
@@ -673,7 +757,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div style={styles.formGroup}>
-                      <label style={styles.label}>Endpoint URL</label>
+                      <label style={styles.label}>{meta.endpointLabel}</label>
                       <input
                         type="text"
                         style={styles.input}
@@ -681,13 +765,29 @@ export default function SettingsPage() {
                         onChange={(e) =>
                           handleHarnessChange(harness, 'endpoint', e.target.value)
                         }
-                        placeholder="https://api.example.com"
+                        placeholder={meta.endpointPlaceholder}
                       />
                     </div>
+
+                    {meta.showGateway && (
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Gateway URL</label>
+                        <input
+                          type="text"
+                          style={styles.input}
+                          value={config.gatewayUrl || ''}
+                          onChange={(e) =>
+                            handleHarnessChange(harness, 'gatewayUrl', e.target.value)
+                          }
+                          placeholder="http://localhost:8642"
+                        />
+                      </div>
+                    )}
                   </>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
 

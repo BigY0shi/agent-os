@@ -26,11 +26,13 @@ Everything needed to scaffold, manage, and deploy agents from a touch-friendly d
 
 ## v1.1 — Agent Harness Integration
 
-Wire the dashboard to the actual agent runtimes running on Proxmox.
+Wire the dashboard to runtimes on **Proxmox LXCs** (see `docs/agent-os/PROXMOX_RUNTIME_STACK.md`).
 
-- [ ] CrewAI integration — push AGENT.md specs to CrewAI, pull run status back
-- [ ] OpenClaw integration — same bidirectional sync
-- [ ] Live agent status polling (heartbeat / WebSocket from harness → dashboard)
+- [ ] **Hermes Workspace** — UI `:3000`, gateway `:8642` (not Nous `hermes dashboard` `:9119`); link-out + bundle push
+- [ ] **OpenClaw** — gateway ~`:18789`; bidirectional spec sync
+- [ ] **Honcho** — memory LXC; optional bridge from `/api/memory` ↔ Honcho conclusions
+- [ ] Claude Code / Codex / Gemini — Honcho peers on same workspace
+- [ ] Live agent status polling (heartbeat from gateway → dashboard)
 - [ ] Run history per agent — log of executions, outputs, durations
 - [ ] Cost tracking tied to real API usage (OpenAI, Anthropic token metering)
 
@@ -77,10 +79,10 @@ Bring kiosk deployment forward to the current Pi OS release.
 
 ## v1.5 — New Harness Support
 
-Expand the framework ecosystem beyond CrewAI and OpenClaw.
+Expand optional adapters beyond the primary Proxmox stack.
 
 - [ ] NemoClaw harness adapter — NVIDIA NeMo-based agent orchestration
-- [ ] Hermes Agent harness adapter — Hermes function-calling agent runtime
+- [ ] CrewAI adapter (legacy) — only if still needed alongside Hermes/OpenClaw
 - [ ] LangChain adapter — LangGraph / LangSmith integration
 - [ ] AutoGen adapter — Microsoft AutoGen multi-agent sync
 - [ ] Generic harness SDK — documented interface for adding custom frameworks

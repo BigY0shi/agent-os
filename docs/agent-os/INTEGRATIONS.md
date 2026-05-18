@@ -6,7 +6,8 @@ Optional engines extend the control plane **without forking** core contracts.
 
 | Pattern | When to use |
 |---------|-------------|
-| **SQLite default** | Single-node, Pi, dev |
+| **SQLite default** | Single-node, Pi, dev — control-plane catalog & governance |
+| **Honcho (LXC)** | Dialectic user model for Hermes + multi-harness peers ([HONCHO.md](./HONCHO.md)) |
 | **Vector DB** | Semantic retrieval at scale (pgvector, Chroma, etc.) |
 | **MemoryOS-style MCP** | External long-term memory service ([BAI-LAB/MemoryOS](https://github.com/BAI-LAB/MemoryOS)) |
 
@@ -18,7 +19,15 @@ Integration approach:
 
 ## Harness runtimes
 
-See [../harness-sdk.md](../harness-sdk.md) for push/pull bundle format (CrewAI, OpenClaw, etc.).
+Production layout (Proxmox LXCs): [PROXMOX_RUNTIME_STACK.md](./PROXMOX_RUNTIME_STACK.md).
+
+| Runtime | Primary UI | Gateway | Notes |
+|---------|------------|---------|-------|
+| **Hermes Workspace** | `:3000` | `:8642` | Full app—not Nous `hermes dashboard` (`:9119`) |
+| **OpenClaw** | — | ~`:18789` | Agent OS fills orchestration/governance gap |
+| **Honcho** | Honcho dashboard / API | Honcho API | Shared memory; Hermes connected today |
+
+See [../harness-sdk.md](../harness-sdk.md) for push/pull bundle format (OpenClaw, Hermes skills, etc.).
 
 ## MCP
 

@@ -15,7 +15,7 @@ Agent-OS is a Next.js 14 dashboard for managing an AI agent workforce structured
 **Theme:** Dark mode with orange accent (#F97316)
 **Target deployment:** Raspberry Pi tablet (kiosk mode) + desktop browser
 
-The agents are used across **CrewAI**, **OpenClaw**, and planned future frameworks (Nemo Claw, Hermes Agent). These run on Yoshi's Proxmox cluster. The dashboard is NOT just a tracker — it's a scaffolding and refinement pipeline.
+The agents are used across **Hermes Workspace** (full app on `:3000`, gateway `:8642`), **OpenClaw**, and **Honcho** (shared memory LXC; Hermes connected, Claude/Codex/Gemini planned). Optional **CrewAI** remains legacy. All run on Yoshi's Proxmox cluster. The dashboard is NOT just a tracker — it's a scaffolding and refinement pipeline.
 
 ---
 

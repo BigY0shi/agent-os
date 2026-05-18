@@ -40,7 +40,8 @@ const FRAMEWORKS = [
   { id: 'autogen', label: 'AutoGen' },
   { id: 'openai-assistants', label: 'OpenAI Assistants' },
   { id: 'nemoclaw', label: 'Nemo Claw' },
-  { id: 'hermes-agent', label: 'Hermes Agent' },
+  { id: 'hermes-workspace', label: 'Hermes Workspace' },
+  { id: 'hermes-agent', label: 'Hermes Agent (legacy id)' },
   { id: 'custom', label: 'Custom' },
 ];
 
@@ -74,6 +75,7 @@ const getFrameworkColor = (fw) => {
     langchain: 'bg-cyan-900 text-cyan-200',
     'openai-assistants': 'bg-emerald-900 text-emerald-200',
     nemoclaw: 'bg-yellow-900 text-yellow-200',
+    'hermes-workspace': 'bg-rose-900 text-rose-200',
     'hermes-agent': 'bg-rose-900 text-rose-200',
     custom: 'bg-surface-700 text-surface-300',
   };
