@@ -73,9 +73,9 @@ export default function SettingsPage() {
     },
     honcho: {
       label: 'Honcho (memory LXC)',
-      hint: 'Shared dialectic memory—Hermes connected; Claude/Codex/Gemini planned.',
+      hint: 'Separate host from Hermes (192.168.0.168). Self-hosted API URL—find IP in Proxmox or via `hermes honcho status` on Hermes.',
       endpointLabel: 'Honcho API base URL',
-      endpointPlaceholder: 'http://honcho.lxc:8000 or https://api.honcho.dev',
+      endpointPlaceholder: 'http://192.168.0.x:<port>',
       showGateway: false,
     },
     'claude-code': {

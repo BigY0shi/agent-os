@@ -16,12 +16,11 @@ This documents **Yoshi's production layout**: agent runtimes in **LXC containers
 │ Proxmox host                                                      │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐ │
 │  │ LXC: Hermes      │  │ LXC: OpenClaw    │  │ LXC: Honcho       │ │
-│  │ Workspace        │  │                  │  │ (memory service)  │ │
-│  │ UI :3000         │  │ gateway ~:18789  │  │ API (self-hosted  │ │
-│  │ gateway ~:8642   │  │ no workspace UI  │  │  or honcho.dev)   │ │
+│  │ 192.168.0.168    │  │ (separate IP)    │  │ (separate IP)     │ │
+│  │ UI :3000         │  │ gateway ~:18789  │  │ self-hosted API   │ │
+│  │ gateway ~:8642   │  │ no workspace UI  │  │ NOT on Hermes host│ │
 │  └────────┬─────────┘  └──────────────────┘  └────────▲─────────┘ │
-│           │ already connected                         │           │
-│           └───────────────────────────────────────────┘           │
+│           │ HTTP over LAN to Honcho LXC only ──────────┘           │
 │  Planned: Claude Code, Codex, Gemini → same Honcho workspace/peers │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -73,15 +72,34 @@ See [HONCHO.md](./HONCHO.md) for how this relates to Agent OS `memory_entries` a
    - OpenClaw gateway: your OpenClaw LXC IP + `:18789`
    - Honcho API base: Honcho LXC URL (see below) or `https://api.honcho.dev` if cloud
 
-### Finding Honcho URL (from Hermes LXC)
+### Honcho on a **different** host than Hermes
+
+Hermes (`192.168.0.168`) talks to Honcho over the LAN. Agent OS needs the **Honcho LXC IP + API port**, not the Hermes IP.
+
+**1. Proxmox / router** — note the Honcho container’s LAN IP (distinct from `192.168.0.168`).
+
+**2. On the Honcho LXC** — find listen port:
 
 ```bash
-hermes honcho status          # connection + config summary
-grep -i honcho ~/.hermes/.env # HONCHO_API_KEY; API base may be in honcho.json
-cat ~/.honcho/config.json 2>/dev/null || cat "$HERMES_HOME/honcho.json"
+ss -tlnp | grep -E 'LISTEN.*:(8|3)[0-9]{3}'
+# or: docker compose ps / systemctl status honcho
 ```
 
-Self-hosted Honcho often exposes an HTTP API on a fixed port (check your LXC compose/systemd). Use that base URL in Agent OS **Settings → Harness → Honcho**.
+**3. On the Hermes LXC** — see what URL Hermes already uses:
+
+```bash
+hermes honcho status
+grep -iE 'honcho|base|url|host' ~/.hermes/.env ~/.honcho/config.json "$HERMES_HOME/honcho.json" 2>/dev/null
+```
+
+**4. Smoke test** from your Agent OS machine:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://<HONCHO_IP>:<PORT>/health
+# or try /docs /v1/ per your Honcho deploy
+```
+
+Put `http://<HONCHO_IP>:<PORT>` in Agent OS **Settings → Harness → Honcho** (API base URL). API keys stay in Hermes `~/.hermes/.env`, not in the dashboard unless you add a bridge later.
 2. **Agents → Framework** — choose **Hermes Workspace** for agents deployed to that LXC.
 3. **Memory explorer** — Agent OS SQLite memory is the **control-plane catalog**; Honcho holds **runtime session memory** until a sync bridge exists.
 

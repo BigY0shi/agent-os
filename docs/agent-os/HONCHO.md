@@ -1,6 +1,6 @@
 # Honcho integration
 
-Honcho is your **shared long-term memory service** on a dedicated Proxmox LXC. Hermes Workspace (Hermes Agent with `memory.provider: honcho`) is already connected. **Claude Code, Codex, and Gemini** are planned to use the same Honcho deployment so user modeling stays consistent across model providers.
+Honcho is your **shared long-term memory service** on a **dedicated Proxmox LXC** (self-hosted, **not** on the Hermes host at `192.168.0.168`). Hermes Workspace (`memory.provider: honcho`) reaches it over LAN. Agent OS only needs the Honcho **API base URL** for future health/sync—not the same IP as Hermes. **Claude Code, Codex, and Gemini** are planned to use the same Honcho deployment so user modeling stays consistent across model providers.
 
 ## What Honcho stores
 
