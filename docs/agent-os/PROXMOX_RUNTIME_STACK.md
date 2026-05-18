@@ -16,8 +16,8 @@ This documents **Yoshi's production layout**: agent runtimes in **LXC containers
 │ Proxmox host                                                      │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────────┐ │
 │  │ LXC: Hermes      │  │ LXC: OpenClaw    │  │ LXC: Honcho       │ │
-│  │ 192.168.0.168    │  │ (separate IP)    │  │ (separate IP)     │ │
-│  │ UI :3000         │  │ gateway ~:18789  │  │ self-hosted API   │ │
+│  │ 192.168.0.168    │  │ (separate IP)    │  │ 192.168.0.99      │ │
+│  │ UI :3000         │  │ gateway ~:18789  │  │ API :8000         │ │
 │  │ gateway ~:8642   │  │ no workspace UI  │  │ NOT on Hermes host│ │
 │  └────────┬─────────┘  └──────────────────┘  └────────▲─────────┘ │
 │           │ HTTP over LAN to Honcho LXC only ──────────┘           │
@@ -66,11 +66,11 @@ See [HONCHO.md](./HONCHO.md) for how this relates to Agent OS `memory_entries` a
 
 ## Configuration (today)
 
-1. **Settings → Harness** — set LAN URLs (example Hermes LXC: `192.168.0.168`):
+1. **Settings → Harness** — LAN URLs:
    - Hermes Workspace UI: `http://192.168.0.168:3000`
    - Hermes gateway: `http://192.168.0.168:8642`
+   - Honcho API base: `http://192.168.0.99:8000`
    - OpenClaw gateway: your OpenClaw LXC IP + `:18789`
-   - Honcho API base: Honcho LXC URL (see below) or `https://api.honcho.dev` if cloud
 
 ### Honcho on a **different** host than Hermes
 

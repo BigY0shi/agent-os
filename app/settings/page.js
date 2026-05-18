@@ -48,7 +48,11 @@ export default function SettingsPage() {
       endpoint: '',
       gatewayUrl: 'http://localhost:18789',
     },
-    honcho: { enabled: true, apiKey: '', endpoint: '' },
+    honcho: {
+      enabled: true,
+      apiKey: '',
+      endpoint: 'http://192.168.0.99:8000',
+    },
     'claude-code': { enabled: false, apiKey: '', endpoint: '' },
     codex: { enabled: false, apiKey: '', endpoint: '' },
     gemini: { enabled: false, apiKey: '', endpoint: '' },
@@ -73,9 +77,9 @@ export default function SettingsPage() {
     },
     honcho: {
       label: 'Honcho (memory LXC)',
-      hint: 'Separate host from Hermes (192.168.0.168). Self-hosted API URL—find IP in Proxmox or via `hermes honcho status` on Hermes.',
+      hint: 'Separate LXC from Hermes (.168). Hermes host "hermes" → workspace hermes, peer yoshi (see HONCHO.md).',
       endpointLabel: 'Honcho API base URL',
-      endpointPlaceholder: 'http://192.168.0.x:<port>',
+      endpointPlaceholder: 'http://192.168.0.99:8000',
       showGateway: false,
     },
     'claude-code': {

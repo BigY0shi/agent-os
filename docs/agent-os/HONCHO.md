@@ -1,6 +1,41 @@
 # Honcho integration
 
-Honcho is your **shared long-term memory service** on a **dedicated Proxmox LXC** (self-hosted, **not** on the Hermes host at `192.168.0.168`). Hermes Workspace (`memory.provider: honcho`) reaches it over LAN. Agent OS only needs the Honcho **API base URL** for future health/sync—not the same IP as Hermes. **Claude Code, Codex, and Gemini** are planned to use the same Honcho deployment so user modeling stays consistent across model providers.
+Honcho is your **shared long-term memory service** on a **dedicated Proxmox LXC** at **`192.168.0.99:8000`** (self-hosted, **not** on the Hermes host at `192.168.0.168`). Hermes Workspace (`memory.provider: honcho`) reaches it over LAN. Agent OS stores the **API base URL** in Settings → Harness for future health/sync. **Claude Code, Codex, and Gemini** are planned as additional `hosts` entries on the same Honcho deployment.
+
+## Your deployment (reference)
+
+| Host | IP | Role |
+|------|-----|------|
+| Hermes Workspace | `192.168.0.168` | UI `:3000`, gateway `:8642` |
+| Honcho API | `192.168.0.99` | API `:8000` |
+
+Hermes-side Honcho client config (from `~/.honcho/config.json` or `$HERMES_HOME/honcho.json`):
+
+```json
+{
+  "baseUrl": "http://192.168.0.99:8000",
+  "hosts": {
+    "hermes": {
+      "enabled": true,
+      "aiPeer": "hermes",
+      "workspace": "hermes",
+      "peerName": "yoshi"
+    }
+  },
+  "recallMode": "hybrid",
+  "dialecticCadence": 5,
+  "dialecticDepth": 1,
+  "contextCadence": 1
+}
+```
+
+| Field | Meaning for Agent OS |
+|-------|----------------------|
+| `workspace: "hermes"` | Honcho workspace id — future bridge should scope reads here |
+| `peerName: "yoshi"` | Human peer — canonical user model in Honcho |
+| `aiPeer: "hermes"` | Hermes agent peer — separate from future `claude` / `codex` / `gemini` AI peers |
+| `recallMode: "hybrid"` | Auto-inject context + Honcho tools available in Hermes |
+| `dialecticCadence: 5` | Dialectic LLM call at most every 5 turns (cost/latency tradeoff) |
 
 ## What Honcho stores
 
@@ -68,9 +103,14 @@ HONCHO_API_KEY=...
 hermes honcho status
 ```
 
-Paste the API base URL into Agent OS **Settings → Harness → Honcho** once you have the Honcho LXC IP/port.
+Agent OS default: **Settings → Harness → Honcho** → `http://192.168.0.99:8000`.
 
-CLI: `hermes honcho status`, `hermes memory setup`.
+```bash
+# From Agent OS machine or Pi
+curl -s -o /dev/null -w "%{http_code}\n" http://192.168.0.99:8000/health
+```
+
+CLI on Hermes LXC: `hermes honcho status`, `hermes memory setup`.
 
 **Multi-agent:** Honcho **peer** separation prevents cross-contamination when multiple Hermes profiles (or future harnesses) talk to the same human—map each Agent OS agent to a Honcho `peer_id` in future `runtime_instances` metadata.
 
