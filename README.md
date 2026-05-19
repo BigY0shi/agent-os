@@ -23,6 +23,16 @@ Set optional env for API auth (JSON map of token → role):
 
 `AGENT_OS_API_KEYS='{"your-secret":"operator"}'`
 
+Runtime health probes (LAN defaults; override on deploy):
+
+```bash
+AGENT_OS_HERMES_UI_URL=http://192.168.0.168:3000
+AGENT_OS_HERMES_GATEWAY_URL=http://192.168.0.168:8642
+AGENT_OS_HONCHO_URL=http://192.168.0.99:8000
+```
+
+`GET /api/runtimes/health` — also included on the home dashboard as status pills.
+
 ## Deploy
 
 See `deploy-pi.sh`, `ROADMAP.md`, and `HANDOFF.md`.

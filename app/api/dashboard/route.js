@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db';
 import { NextResponse } from 'next/server';
 import { authorizeRead } from '@/lib/authz';
 import { jsonAuthError } from '@/lib/httpAuth';
+import { checkRuntimes } from '@/lib/runtimeHealth';
 
 function startOfDay(date) {
   const d = new Date(date);
@@ -176,12 +177,20 @@ export async function GET(request) {
       total: parseFloat(totalSpend.toFixed(2)),
     };
 
+    let runtimes = null;
+    try {
+      runtimes = await checkRuntimes();
+    } catch (e) {
+      console.warn('Runtime health probe failed:', e?.message);
+    }
+
     return NextResponse.json({
       kpis,
       decisions,
       alerts,
       timeline,
       costs,
+      runtimes,
     });
   } catch (error) {
     console.error('Dashboard error:', error);

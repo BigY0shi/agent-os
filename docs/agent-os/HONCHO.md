@@ -106,9 +106,11 @@ hermes honcho status
 Agent OS default: **Settings → Harness → Honcho** → `http://192.168.0.99:8000`.
 
 ```bash
-# From Agent OS machine or Pi
+# From Agent OS machine or Pi — verified: HTTP 200 on /health
 curl -s -o /dev/null -w "%{http_code}\n" http://192.168.0.99:8000/health
 ```
+
+Agent OS home dashboard and `GET /api/runtimes/health` probe this URL automatically.
 
 CLI on Hermes LXC: `hermes honcho status`, `hermes memory setup`.
 

@@ -109,6 +109,36 @@ export default function Dashboard() {
         <div className="inline-block px-3 py-1 bg-surface-800 rounded text-xs font-mono text-orange-500 mt-4">
           Agent OS v2.0
         </div>
+        {!loading && data?.runtimes?.services && (
+          <div className="flex flex-wrap gap-2 mt-4">
+            {Object.values(data.runtimes.services)
+              .filter((s) => s.configured !== false)
+              .map((svc) => (
+                <a
+                  key={svc.id}
+                  href={svc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs border ${
+                    svc.ok
+                      ? 'border-green-700/50 bg-green-950/40 text-green-300'
+                      : 'border-red-700/50 bg-red-950/40 text-red-300'
+                  }`}
+                  title={
+                    svc.ok
+                      ? `HTTP ${svc.status} ${svc.path || ''} (${svc.latencyMs}ms)`
+                      : svc.error || 'Unreachable from Agent OS host'
+                  }
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${svc.ok ? 'bg-green-400' : 'bg-red-400'}`}
+                  />
+                  {svc.label}
+                  {svc.ok && svc.status ? ` · ${svc.status}` : ''}
+                </a>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* KPI Strip */}
