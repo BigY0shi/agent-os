@@ -14,6 +14,7 @@ import {
   Settings,
   Brain,
   Workflow,
+  ScrollText,
 } from 'lucide-react';
 
 export default function Sidebar({ pendingApprovalsCount = 0 }) {
@@ -80,6 +81,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
               label="Approvals"
               badge={pendingApprovalsCount > 0 ? pendingApprovalsCount : null}
             />
+            <NavLink href="/audit" icon={ScrollText} label="Audit" />
           </div>
 
           {/* Fleet */}

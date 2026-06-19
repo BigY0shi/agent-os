@@ -55,12 +55,12 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 
 ### Win gates ✅
 
-| Gate | Proof |
-|------|--------|
-| **W1.1 Attach** | Create a memory entry assigned to agent “Content Agent”; it appears only when filtering by that agent |
-| **W1.2 Agent view** | Open agent in `/agents` → see ≥1 attached memory with layer + title; click through to Memory OS |
-| **W1.3 Promote path** | Promote entry `working → mid → long` from UI; `promoted_at` updates; action visible in audit (after B4 or via API) |
-| **W1.4 Retrieve scope** | `POST /api/memory/retrieve` with `agent_id` returns agent-scoped + global (null agent) entries |
+| Gate | Proof | Status |
+|------|--------|--------|
+| **W1.1 Attach** | Create a memory entry assigned to agent “Content Agent”; it appears only when filtering by that agent | ✅ UI: agent picker + `agent_only` filter |
+| **W1.2 Agent view** | Open agent in `/agents` → see ≥1 attached memory with layer + title; click through to Memory OS | ✅ Memory tab + deep links |
+| **W1.3 Promote path** | Promote entry `working → mid → long` from UI; `promoted_at` updates; action visible in audit | ✅ Promote + `/audit` |
+| **W1.4 Retrieve scope** | `POST /api/memory/retrieve` with `agent_id` returns agent-scoped + global (null agent) entries | ✅ API + retrieve panel |
 
 **Estimate:** 1 milestone (~3–5 focused tasks)
 

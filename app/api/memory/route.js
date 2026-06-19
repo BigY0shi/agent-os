@@ -28,6 +28,9 @@ export async function GET(request) {
     const layer = searchParams.get('layer');
     const agent_id = searchParams.get('agent_id');
     const team_id = searchParams.get('team_id');
+    const sensitivity = searchParams.get('sensitivity');
+    const agent_only = searchParams.get('agent_only') === 'true';
+    const team_only = searchParams.get('team_only') === 'true';
     const q = searchParams.get('q');
 
     let sql = 'SELECT * FROM memory_entries WHERE status = \'active\'';
@@ -37,13 +40,27 @@ export async function GET(request) {
       sql += ' AND layer = ?';
       params.push(layer);
     }
+    if (sensitivity && SENS.includes(sensitivity)) {
+      sql += ' AND sensitivity = ?';
+      params.push(sensitivity);
+    }
     if (agent_id) {
-      sql += ' AND (agent_id = ? OR agent_id IS NULL)';
-      params.push(Number(agent_id));
+      if (agent_only) {
+        sql += ' AND agent_id = ?';
+        params.push(Number(agent_id));
+      } else {
+        sql += ' AND (agent_id = ? OR agent_id IS NULL)';
+        params.push(Number(agent_id));
+      }
     }
     if (team_id) {
-      sql += ' AND (team_id = ? OR team_id IS NULL)';
-      params.push(team_id);
+      if (team_only) {
+        sql += ' AND team_id = ?';
+        params.push(team_id);
+      } else {
+        sql += ' AND (team_id = ? OR team_id IS NULL)';
+        params.push(team_id);
+      }
     }
     if (q) {
       sql += ' AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)';

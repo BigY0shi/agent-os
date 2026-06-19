@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Plus,
   ChevronLeft,
@@ -19,6 +20,8 @@ import {
   Settings2,
   Database,
   Users,
+  Brain,
+  ExternalLink,
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
@@ -166,8 +169,36 @@ export default function AgentsPage() {
   // Export
   const [copied, setCopied] = useState(false);
 
+  // Agent memory context (Phase B1)
+  const [agentMemories, setAgentMemories] = useState([]);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+
+  const fetchAgentMemories = useCallback(async (agentId) => {
+    if (!agentId) return;
+    setMemoryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        agent_id: String(agentId),
+        agent_only: 'true',
+      });
+      const res = await fetch(`/api/memory?${params.toString()}`);
+      const data = await res.json();
+      setAgentMemories(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      setAgentMemories([]);
+    } finally {
+      setMemoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); }, []);
   useEffect(() => { if (selectedAgent) fetchOutputs(selectedAgent.id); }, [selectedAgent]);
+  useEffect(() => {
+    if (view === 'detail' && selectedAgent && detailTab === 'memory') {
+      fetchAgentMemories(selectedAgent.id);
+    }
+  }, [view, selectedAgent, detailTab, fetchAgentMemories]);
 
   const fetchAgents = async () => {
     try {
@@ -404,9 +435,9 @@ export default function AgentsPage() {
             </div>
           </div>
           <div className="flex border-t border-surface-800 max-w-7xl mx-auto">
-            {['outputs', 'performance', 'settings'].map((tab) => (
+            {['outputs', 'memory', 'performance', 'settings'].map((tab) => (
               <button key={tab} onClick={() => setDetailTab(tab)} className={`px-6 py-3 text-sm font-medium transition border-b-2 ${detailTab === tab ? 'border-orange-500 text-orange-500' : 'border-transparent text-surface-400 hover:text-surface-300'}`}>
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'memory' ? 'Memory' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -456,6 +487,64 @@ export default function AgentsPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* MEMORY TAB */}
+          {detailTab === 'memory' && (
+            <div className="space-y-4 max-w-3xl">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h3 className="text-surface-100 font-medium flex items-center gap-2">
+                    <Brain size={18} className="text-orange-500" /> Memory context
+                  </h3>
+                  <p className="text-surface-500 text-sm mt-1">
+                    Entries attached to this agent ({agent.memory_enabled ? 'memory enabled' : 'memory disabled in config'}).
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Link
+                    href={`/memory?agent_id=${agent.id}&agent_only=true`}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded bg-surface-800 hover:bg-surface-700 text-surface-300 text-sm"
+                  >
+                    <ExternalLink size={14} /> Open in Memory OS
+                  </Link>
+                  <Link
+                    href={`/memory?agent_id=${agent.id}`}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded bg-orange-600 hover:bg-orange-500 text-white text-sm"
+                  >
+                    <Plus size={14} /> Add memory
+                  </Link>
+                </div>
+              </div>
+
+              {memoryLoading ? (
+                <p className="text-surface-500 text-sm">Loading memory…</p>
+              ) : agentMemories.length === 0 ? (
+                <div className="card bg-surface-900 border border-surface-800 rounded-lg p-8 text-center text-surface-500">
+                  <Brain size={32} className="mx-auto mb-3 opacity-40" />
+                  <p>No memory entries attached to this agent yet.</p>
+                  <Link href={`/memory?agent_id=${agent.id}`} className="text-orange-400 underline text-sm mt-2 inline-block">
+                    Create one in Memory OS
+                  </Link>
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {agentMemories.map((m) => (
+                    <li key={m.id} className="card bg-surface-900 border border-surface-800 rounded-lg p-4">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="text-xs uppercase text-orange-400/90">{m.layer}</span>
+                        <span className="text-xs text-surface-500">{m.sensitivity}</span>
+                      </div>
+                      <h4 className="text-surface-100 font-medium">{m.title || 'Untitled'}</h4>
+                      <p className="text-surface-400 text-sm mt-1 line-clamp-3">{m.content}</p>
+                      <Link href={`/memory?agent_id=${agent.id}&agent_only=true`} className="text-xs text-orange-400 underline mt-2 inline-block">
+                        Edit in Memory OS
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
