@@ -9,6 +9,7 @@ Harness-agnostic command center for agent fleets: agents, skills, tools, memory,
 - [docs/agent-os/SKILL_PIPELINE_SPEC.md](docs/agent-os/SKILL_PIPELINE_SPEC.md) — pipeline JSON  
 - [docs/agent-os/GOVERNANCE.md](docs/agent-os/GOVERNANCE.md) — roles & API keys  
 - [docs/agent-os/INTEGRATIONS.md](docs/agent-os/INTEGRATIONS.md) — memory backends & harness adapters  
+- [docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md) — Phase B goals & win gates  
 - [docs/agent-os/PROXMOX_RUNTIME_STACK.md](docs/agent-os/PROXMOX_RUNTIME_STACK.md) — Hermes Workspace (:3000), OpenClaw, Honcho LXCs  
 - [docs/agent-os/HONCHO.md](docs/agent-os/HONCHO.md) — shared memory across harnesses  
 - [docs/harness-sdk.md](docs/harness-sdk.md) — runtime bundle format  

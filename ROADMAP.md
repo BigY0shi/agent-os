@@ -24,6 +24,19 @@ Everything needed to scaffold, manage, and deploy agents from a touch-friendly d
 
 ---
 
+## Phase B — Dashboard surfaces (next)
+
+See **[docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md)** for milestones, deliverables, and win gates.
+
+| Milestone | Focus |
+|-----------|--------|
+| **B1** | Memory attach to agents/teams + agent context panel |
+| **B2** | Multi-step pipeline builder + run console |
+| **B3** | Governance APIs + console (proposals, safety, goals, opinions) |
+| **B4** | Audit explorer + Phase B demo script |
+
+---
+
 ## v1.1 — Agent Harness Integration
 
 Wire the dashboard to runtimes on **Proxmox LXCs** (see `docs/agent-os/PROXMOX_RUNTIME_STACK.md`).
