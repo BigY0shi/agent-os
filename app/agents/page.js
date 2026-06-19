@@ -22,6 +22,7 @@ import {
   Users,
   Brain,
   ExternalLink,
+  Package,
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 
@@ -178,6 +179,9 @@ export default function AgentsPage() {
   const [memoryLoading, setMemoryLoading] = useState(false);
   const [agentGoals, setAgentGoals] = useState([]);
   const [agentOpinions, setAgentOpinions] = useState([]);
+  const [agentRuns, setAgentRuns] = useState([]);
+  const [runtimeInstance, setRuntimeInstance] = useState(null);
+  const [runtimeUrls, setRuntimeUrls] = useState({ hermesUi: 'http://192.168.0.168:3000', hermesGateway: 'http://192.168.0.168:8642' });
 
   const fetchAgentMemories = useCallback(async (agentId) => {
     if (!agentId) return;
@@ -215,7 +219,24 @@ export default function AgentsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); fetch('/api/model-providers').then(r => r.json()).then(d => setModelProviders(Array.isArray(d) ? d : [])).catch(() => {}); }, []);
+  const fetchAgentRuntime = useCallback(async (agentId) => {
+    if (!agentId) return;
+    try {
+      const [runsRes, rtRes] = await Promise.all([
+        fetch(`/api/agent-runs?agent_id=${agentId}&limit=20`),
+        fetch(`/api/runtimes/heartbeat?agent_id=${agentId}`),
+      ]);
+      const [runs, rt] = await Promise.all([runsRes.json(), rtRes.json()]);
+      setAgentRuns(Array.isArray(runs) ? runs : []);
+      setRuntimeInstance(Array.isArray(rt) && rt.length ? rt[0] : null);
+    } catch (e) {
+      console.error(e);
+      setAgentRuns([]);
+      setRuntimeInstance(null);
+    }
+  }, []);
+
+  useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); fetch('/api/model-providers').then(r => r.json()).then(d => setModelProviders(Array.isArray(d) ? d : [])).catch(() => {}); fetch('/api/runtimes/health').then(r => r.json()).then(d => { if (d?.endpoints) setRuntimeUrls({ hermesUi: d.endpoints.hermesUi, hermesGateway: d.endpoints.hermesGateway }); }).catch(() => {}); }, []);
   useEffect(() => { if (selectedAgent) fetchOutputs(selectedAgent.id); }, [selectedAgent]);
   useEffect(() => {
     if (view === 'detail' && selectedAgent && detailTab === 'memory') {
@@ -224,7 +245,10 @@ export default function AgentsPage() {
     if (view === 'detail' && selectedAgent && detailTab === 'governance') {
       fetchAgentGovernance(selectedAgent.id);
     }
-  }, [view, selectedAgent, detailTab, fetchAgentMemories, fetchAgentGovernance]);
+    if (view === 'detail' && selectedAgent && detailTab === 'runtime') {
+      fetchAgentRuntime(selectedAgent.id);
+    }
+  }, [view, selectedAgent, detailTab, fetchAgentMemories, fetchAgentGovernance, fetchAgentRuntime]);
 
   const fetchAgents = async () => {
     try {
@@ -376,6 +400,28 @@ export default function AgentsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleExportBundle = async (agent) => {
+    try {
+      const res = await fetch(`/api/harness/bundle?agent_id=${agent.id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bundle export failed');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${agent.name.toLowerCase().replace(/\s+/g, '-')}-bundle.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const isHermesAgent = (agent) => {
+    const fw = agent.framework || agent.harness;
+    return fw === 'hermes-workspace' || fw === 'hermes-agent';
+  };
+
   // ----- Multi-select helpers for tools/skills -----
   const toggleArrayItem = (field, id, formSetter, form) => {
     const current = (() => { try { return JSON.parse(form[field] || '[]'); } catch { return []; } })();
@@ -445,7 +491,15 @@ export default function AgentsPage() {
                   {agent.agent_type === 'manager' ? '👑 Manager' : '⚙️ Worker'}
                 </span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {isHermesAgent(agent) && (
+                  <a href={runtimeUrls.hermesUi} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-3 py-2 rounded bg-rose-900/40 hover:bg-rose-900/60 text-rose-200 transition text-sm">
+                    <ExternalLink size={14} /> Hermes Workspace
+                  </a>
+                )}
+                <button type="button" onClick={() => handleExportBundle(agent)} className="flex items-center gap-1 px-3 py-2 rounded bg-surface-800 hover:bg-surface-700 text-surface-300 hover:text-orange-500 transition text-sm">
+                  <Package size={14} /> Export bundle
+                </button>
                 <button onClick={() => handleExportMd(agent)} className="flex items-center gap-1 px-3 py-2 rounded bg-surface-800 hover:bg-surface-700 text-surface-300 hover:text-orange-500 transition text-sm">
                   <Download size={14} /> Export .md
                 </button>
@@ -461,9 +515,9 @@ export default function AgentsPage() {
             </div>
           </div>
           <div className="flex border-t border-surface-800 max-w-7xl mx-auto">
-            {['outputs', 'memory', 'governance', 'performance', 'settings'].map((tab) => (
+            {['outputs', 'memory', 'governance', 'runtime', 'performance', 'settings'].map((tab) => (
               <button key={tab} onClick={() => setDetailTab(tab)} className={`px-6 py-3 text-sm font-medium transition border-b-2 ${detailTab === tab ? 'border-orange-500 text-orange-500' : 'border-transparent text-surface-400 hover:text-surface-300'}`}>
-                {tab === 'memory' ? 'Memory' : tab === 'governance' ? 'Governance' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'memory' ? 'Memory' : tab === 'governance' ? 'Governance' : tab === 'runtime' ? 'Runtime' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -679,6 +733,58 @@ export default function AgentsPage() {
                   <dt className="text-surface-500">Model</dt>
                   <dd className="text-surface-200">{agent.model_id || '—'}</dd>
                 </dl>
+              </div>
+            </div>
+          )}
+
+          {/* RUNTIME TAB (v1.1) */}
+          {detailTab === 'runtime' && (
+            <div className="space-y-6 max-w-3xl">
+              <div className="card bg-surface-900 border border-surface-800 rounded-lg p-4">
+                <h3 className="text-surface-100 font-medium mb-3">Harness links</h3>
+                <div className="flex flex-wrap gap-2">
+                  {isHermesAgent(agent) ? (
+                    <>
+                      <a href={runtimeUrls.hermesUi} target="_blank" rel="noopener noreferrer" className="text-sm px-3 py-2 rounded bg-rose-900/40 text-rose-200 inline-flex items-center gap-1">
+                        <ExternalLink size={14} /> Workspace UI
+                      </a>
+                      <a href={runtimeUrls.hermesGateway} target="_blank" rel="noopener noreferrer" className="text-sm px-3 py-2 rounded bg-surface-800 text-surface-200 inline-flex items-center gap-1">
+                        <ExternalLink size={14} /> Gateway
+                      </a>
+                    </>
+                  ) : (
+                    <p className="text-surface-500 text-sm">Set framework to Hermes Workspace for link-out.</p>
+                  )}
+                </div>
+                {runtimeInstance && (
+                  <p className="text-xs text-surface-500 mt-3">
+                    Last heartbeat: {runtimeInstance.last_heartbeat_at ? new Date(runtimeInstance.last_heartbeat_at).toLocaleString() : '—'}
+                    {' · '}{runtimeInstance.last_status || 'unknown'}
+                  </p>
+                )}
+              </div>
+              <div>
+                <h3 className="text-surface-100 font-medium mb-2">Recent runs</h3>
+                {agentRuns.length === 0 ? (
+                  <p className="text-surface-500 text-sm">No runs reported. Harnesses POST to <code className="text-surface-400">/api/agent-runs</code>.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {agentRuns.map((r) => (
+                      <li key={r.id} className="card bg-surface-900 border border-surface-800 rounded p-3 text-sm">
+                        <div className="flex justify-between gap-2">
+                          <span className="text-surface-200">Run #{r.id}</span>
+                          <span className="text-xs uppercase text-orange-400/90">{r.status}</span>
+                        </div>
+                        <div className="text-xs text-surface-500 mt-1">
+                          {r.runtime_type || '—'}
+                          {r.duration_ms != null ? ` · ${r.duration_ms}ms` : ''}
+                          {r.cost_usd != null ? ` · $${r.cost_usd}` : ''}
+                        </div>
+                        {r.finished_at && <div className="text-xs text-surface-600 mt-1">{new Date(r.finished_at).toLocaleString()}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           )}

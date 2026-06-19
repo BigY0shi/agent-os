@@ -49,15 +49,15 @@ Start **Phase C** when at least one of:
 
 ## v1.1 — Agent Harness Integration
 
-Wire the dashboard to runtimes on **Proxmox LXCs** (see `docs/agent-os/PROXMOX_RUNTIME_STACK.md`).
+Wire the dashboard to runtimes on **Proxmox LXCs** (see `docs/agent-os/V1_1.md`, `PROXMOX_RUNTIME_STACK.md`).
 
-- [ ] **Hermes Workspace** — UI `:3000`, gateway `:8642` (not Nous `hermes dashboard` `:9119`); link-out + bundle push
+- [x] **Hermes Workspace** — UI `:3000`, gateway `:8642` link-out from Agents; bundle export API
 - [ ] **OpenClaw** — gateway ~`:18789`; bidirectional spec sync
-- [ ] **Honcho** — memory LXC; optional bridge from `/api/memory` ↔ Honcho conclusions
+- [x] **Honcho** — bridge `POST /api/honcho/sync` ↔ `memory_entries`; authenticated health probe
 - [ ] Claude Code / Codex / Gemini — Honcho peers on same workspace
-- [ ] Live agent status polling (heartbeat from gateway → dashboard)
-- [ ] Run history per agent — log of executions, outputs, durations
-- [ ] Cost tracking tied to real API usage (OpenAI, Anthropic token metering)
+- [x] Live agent status — `POST /api/runtimes/heartbeat` + Runtime tab
+- [x] Run history per agent — `agent_runs` table + `/api/agent-runs`
+- [x] Cost tracking hook — run `cost_usd` → `cost_entries`
 
 ---
 

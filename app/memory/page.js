@@ -54,6 +54,7 @@ function MemoryPageInner() {
 
   const [retrieveQ, setRetrieveQ] = useState('');
   const [retrieveHits, setRetrieveHits] = useState(null);
+  const [honchoSyncing, setHonchoSyncing] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -220,6 +221,25 @@ function MemoryPageInner() {
     load();
   };
 
+  const syncFromHoncho = async () => {
+    setHonchoSyncing(true);
+    try {
+      const res = await fetch('/api/honcho/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: filterAgent ? Number(filterAgent) : null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Honcho sync failed');
+      await load();
+      alert(`Honcho sync: ${data.created} new, ${data.updated} updated`);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setHonchoSyncing(false);
+    }
+  };
+
   const AgentTeamFields = ({ value, onChange, idPrefix = '' }) => (
     <div className="grid sm:grid-cols-2 gap-3">
       <label className="text-sm text-surface-300">
@@ -266,9 +286,13 @@ function MemoryPageInner() {
           <p className="text-surface-400 text-sm mt-1 max-w-2xl">
             Attach context to agents and teams. Promote working → mid → long.{' '}
             <Link href="/audit" className="text-orange-400 underline">Audit log</Link> records promote &amp; forget actions.
+            {' '}Pull Honcho conclusions into the <code className="text-surface-500">long</code> layer.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button type="button" onClick={syncFromHoncho} disabled={honchoSyncing} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-surface-800 text-surface-200 hover:bg-surface-700 border border-surface-600/40 disabled:opacity-50">
+            <RefreshCw size={16} className={honchoSyncing ? 'animate-spin' : ''} /> {honchoSyncing ? 'Syncing…' : 'Sync Honcho'}
+          </button>
           <button type="button" onClick={() => load()} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-surface-800 text-surface-200 hover:bg-surface-700 border border-surface-600/40">
             <RefreshCw size={16} /> Refresh
           </button>

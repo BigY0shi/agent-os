@@ -146,6 +146,8 @@ export default function SettingsPage() {
 
   const [modelProviders, setModelProviders] = useState([]);
   const [providersLoading, setProvidersLoading] = useState(false);
+  const [honchoStatus, setHonchoStatus] = useState(null);
+  const [honchoBusy, setHonchoBusy] = useState(false);
 
   useEffect(() => {
     if (activeTab !== 'models') return;
@@ -183,6 +185,50 @@ export default function SettingsPage() {
     const res = await fetch(`/api/model-providers/${id}`, { method: 'PATCH' });
     const data = await res.json();
     alert(data.ok ? `OK HTTP ${data.status} ${data.path || ''}` : data.error || 'Unreachable');
+  };
+
+  const testHoncho = async () => {
+    setHonchoBusy(true);
+    try {
+      const res = await fetch('/api/honcho/status');
+      const data = await res.json();
+      setHonchoStatus(data);
+      if (!res.ok) alert(data.error || 'Honcho status failed');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setHonchoBusy(false);
+    }
+  };
+
+  const syncHoncho = async () => {
+    setHonchoBusy(true);
+    try {
+      const res = await fetch('/api/honcho/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      alert(`Synced: ${data.created} created, ${data.updated} updated, ${data.skipped} skipped`);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setHonchoBusy(false);
+    }
+  };
+
+  const exportFleetBundle = async () => {
+    const res = await fetch('/api/harness/bundle');
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || 'Export failed');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'agent-os-fleet-bundle.json';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Handlers
@@ -731,7 +777,24 @@ export default function SettingsPage() {
             </div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
               Proxmox LXC runtimes over LAN (localhost when port-forwarded). See docs/agent-os/PROXMOX_RUNTIME_STACK.md.
+              Server-side URLs and Honcho API key use env: <code>AGENT_OS_HONCHO_URL</code>, <code>AGENT_OS_HONCHO_API_KEY</code>, <code>AGENT_OS_HERMES_UI_URL</code>.
             </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              <button type="button" style={styles.saveButton} onClick={exportFleetBundle}>Export fleet bundle</button>
+              <button type="button" style={{ ...styles.saveButton, backgroundColor: 'var(--surface-800)' }} onClick={testHoncho} disabled={honchoBusy}>
+                {honchoBusy ? 'Testing…' : 'Test Honcho API'}
+              </button>
+              <button type="button" style={{ ...styles.saveButton, backgroundColor: 'var(--surface-800)' }} onClick={syncHoncho} disabled={honchoBusy}>
+                Sync Honcho → Memory
+              </button>
+            </div>
+            {honchoStatus?.health && (
+              <p style={{ fontSize: '0.75rem', color: honchoStatus.health.ok ? 'var(--accent)' : 'var(--text-tertiary)', marginBottom: '1rem' }}>
+                Honcho: {honchoStatus.health.ok ? `OK (${honchoStatus.health.latencyMs}ms)` : honchoStatus.health.error || 'unreachable'}
+                {honchoStatus.config ? ` · workspace ${honchoStatus.config.workspace}` : ''}
+              </p>
+            )}
 
             {Object.entries(harnesses).map(([harness, config]) => {
               const meta = HARNESS_META[harness] || {

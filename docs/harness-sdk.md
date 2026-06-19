@@ -82,6 +82,15 @@ and after significant facts are learned:
 
 - `POST /api/memory` to persist with proper `layer` and `sensitivity`.
 
+## v1.1 runtime sync
+
+- **Bundle pull:** `GET /api/harness/bundle` or `?agent_id=1` — manifest + AGENT.md / SKILL.md / pipeline JSON files.
+- **Heartbeat:** `POST /api/runtimes/heartbeat` with `{ "agent_id", "runtime_type", "status" }`.
+- **Runs:** `POST /api/agent-runs`, `PATCH /api/agent-runs/:id` with `duration_ms`, `cost_usd`.
+- **Honcho:** operator `POST /api/honcho/sync` mirrors conclusions into `memory_entries` (`source: honcho`).
+
+See [docs/agent-os/V1_1.md](./agent-os/V1_1.md).
+
 ## Authentication
 
 When `AGENT_OS_API_KEYS` is set, harness workers must send `Authorization: Bearer <token>` or `x-api-key: <token>` and use a role of at least **`agent-runtime`** for memory writes and pipeline run mutations.

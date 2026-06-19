@@ -12,6 +12,7 @@ Harness-agnostic command center for agent fleets: agents, skills, tools, memory,
 - [docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md) — Phase B goals & win gates  
 - [docs/agent-os/PHASE_B_DEMO.md](docs/agent-os/PHASE_B_DEMO.md) — 10-minute operator walkthrough (Phase B exit)  
 - [docs/agent-os/MODEL_PROVIDERS.md](docs/agent-os/MODEL_PROVIDERS.md) — runtime vs API model providers (B3)  
+- [docs/agent-os/V1_1.md](docs/agent-os/V1_1.md) — Hermes / Honcho / harness integration (v1.1)  
 - [docs/agent-os/PROXMOX_RUNTIME_STACK.md](docs/agent-os/PROXMOX_RUNTIME_STACK.md) — Hermes Workspace (:3000), OpenClaw, Honcho LXCs  
 - [docs/agent-os/HONCHO.md](docs/agent-os/HONCHO.md) — shared memory across harnesses  
 - [docs/harness-sdk.md](docs/harness-sdk.md) — runtime bundle format  
@@ -33,9 +34,13 @@ Runtime health probes (LAN defaults; override on deploy):
 AGENT_OS_HERMES_UI_URL=http://192.168.0.168:3000
 AGENT_OS_HERMES_GATEWAY_URL=http://192.168.0.168:8642
 AGENT_OS_HONCHO_URL=http://192.168.0.99:8000
+AGENT_OS_HONCHO_API_KEY=local-dev
+AGENT_OS_HONCHO_WORKSPACE=hermes
 ```
 
 `GET /api/runtimes/health` — also included on the home dashboard as status pills.
+
+**v1.1 harness:** bundle export (`GET /api/harness/bundle`), Honcho sync (`POST /api/honcho/sync`), agent heartbeats (`POST /api/runtimes/heartbeat`). See [docs/agent-os/V1_1.md](docs/agent-os/V1_1.md).
 
 ## Deploy
 
