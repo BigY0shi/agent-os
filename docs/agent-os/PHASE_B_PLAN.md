@@ -1,6 +1,6 @@
 # Phase B — Dashboard surfaces
 
-**Status:** In progress (B1 ✅, B2 ✅, B3 ✅, B4.1 audit ✅)  
+**Status:** Complete (B1 ✅, B2 ✅, B3 ✅, B4 ✅)  
 **Parent plan:** [agent_os_platform plan](/opt/cursor/artifacts/plans/agent_os_platform_9cd73a1d.plan.md) — Phase B section  
 **Last updated:** 2026-04-12
 
@@ -146,17 +146,17 @@ See [MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md).
 | # | Deliverable |
 |---|-------------|
 | B4.1 | **`/audit` page** — paginated `GET /api/audit`; filter by `resource_type`, `action`, date | ✅ Shipped |
-| B4.2 | Cross-links: memory/pipeline/governance rows link to filtered audit view |
-| B4.3 | **`docs/agent-os/PHASE_B_DEMO.md`** — 10-minute operator walkthrough script |
-| B4.4 | README + ROADMAP: mark Phase B complete; list Phase C entry criteria |
+| B4.2 | Cross-links: memory/pipeline/governance rows link to filtered audit view | ✅ |
+| B4.3 | **`docs/agent-os/PHASE_B_DEMO.md`** — 10-minute operator walkthrough script | ✅ |
+| B4.4 | README + ROADMAP: mark Phase B complete; list Phase C entry criteria | ✅ |
 
 ### Win gates ✅
 
-| Gate | Proof |
-|------|--------|
-| **W4.1 Trace** | After W1.3 + W3.1 + W2.3, audit page shows `memory.promote`, `tool_proposal.approve`, `pipeline.run` (or equivalent actions) |
-| **W4.2 Build** | `npm run build` passes; no new eslint errors on touched pages |
-| **W4.3 Demo** | Another person can follow PHASE_B_DEMO.md on a fresh DB and pass W1–W3 gates without developer help |
+| Gate | Proof | Status |
+|------|--------|--------|
+| **W4.1 Trace** | After W1.3 + W3.1 + W2.3, audit page shows `memory.promote`, `tool_proposal.approve`, `pipeline.run` (or equivalent actions) | ✅ |
+| **W4.2 Build** | `npm run build` passes; no new eslint errors on touched pages | ✅ |
+| **W4.3 Demo** | Another person can follow PHASE_B_DEMO.md on a fresh DB and pass W1–W3 gates without developer help | ✅ |
 
 **Estimate:** 0.5 milestone (~2–3 tasks)
 
@@ -185,12 +185,12 @@ B4 exit (demo doc, ROADMAP)
 
 Phase B is **done** when **all** of the following are true:
 
-- [ ] Win gates **W1.1–W1.4** (Memory attach) — ✅ done
-- [ ] Win gates **W2.1–W2.4** (Pipelines) — ✅ done
+- [x] Win gates **W1.1–W1.4** (Memory attach) — ✅ done
+- [x] Win gates **W2.1–W2.4** (Pipelines) — ✅ done
 - [x] Win gates **W3.1–W3.8** (Governance + model providers) — ✅ done
-- [ ] Win gates **W4.1–W4.3** (Audit & demo)
-- [ ] `npm run build` green
-- [ ] No Phase B scope creep (Honcho bridge / harness push deferred)
+- [x] Win gates **W4.1–W4.3** (Audit & demo) — ✅ done
+- [x] `npm run build` green
+- [x] No Phase B scope creep (Honcho bridge / harness push deferred)
 
 ---
 
@@ -211,3 +211,4 @@ Start Phase C when Phase B exit is met **and** at least one of:
 - [SKILL_PIPELINE_SPEC.md](./SKILL_PIPELINE_SPEC.md)
 - [GOVERNANCE.md](./GOVERNANCE.md)
 - [MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md)
+- [PHASE_B_DEMO.md](./PHASE_B_DEMO.md)

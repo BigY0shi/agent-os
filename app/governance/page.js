@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Shield, Wrench, Target, Brain, Cpu, Check, X, Plus, RefreshCw } from 'lucide-react';
+import AuditLink from '@/components/AuditLink';
 
 const TABS = [
   { id: 'proposals', label: 'Tool proposals', icon: Wrench },
@@ -190,6 +191,8 @@ export default function GovernancePage() {
             <Link href="/approvals" className="text-orange-400 underline">All approvals</Link>
             {' · '}
             <Link href="/settings" className="text-orange-400 underline">Model providers</Link>
+            {' · '}
+            <AuditLink>Audit log</AuditLink>
           </p>
         </div>
         <button type="button" onClick={load} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-surface-800 text-surface-200 border border-surface-600/40">
@@ -224,6 +227,9 @@ export default function GovernancePage() {
                   <div>
                     <div className="font-medium text-surface-100">{p.name}</div>
                     <div className="text-xs text-surface-500 mt-1">risk: {p.risk_class} · {p.status} · agent: {p.agent_id ? agentName(p.agent_id) : 'fleet'}</div>
+                    <AuditLink resourceType="tool_proposal" resourceId={p.id} className="text-xs text-orange-400/80 underline mt-1 inline-block">
+                      Audit trail
+                    </AuditLink>
                   </div>
                   {p.status === 'submitted' && (
                     <div className="flex gap-2">
@@ -251,6 +257,9 @@ export default function GovernancePage() {
                   </div>
                   <p className="text-surface-200 mt-2">{s.message}</p>
                   {s.mitigation && <p className="text-xs text-surface-500 mt-2">Mitigation: {s.mitigation}</p>}
+                  <AuditLink resourceType="safety_event" resourceId={s.id} className="text-xs text-orange-400/80 underline mt-2 inline-block">
+                    Audit trail
+                  </AuditLink>
                 </div>
               ))}
             </div>
@@ -268,6 +277,9 @@ export default function GovernancePage() {
                     <li key={g.id} className="text-sm border border-surface-800 rounded p-3">
                       <div className="font-medium text-surface-100">{g.title}</div>
                       <div className="text-xs text-surface-500 mt-1">{agentName(g.agent_id)} · P{g.priority} · {g.status}</div>
+                      <AuditLink resourceType="agent_goal" resourceId={g.id} className="text-xs text-orange-400/80 underline mt-1 inline-block">
+                        Audit trail
+                      </AuditLink>
                       <div className="flex flex-wrap gap-2 mt-2">
                         <button type="button" onClick={() => updateGoal(g, { priority: (g.priority || 0) + 1 })} className="text-xs px-2 py-0.5 rounded bg-surface-800 text-surface-300">↑ priority</button>
                         <button type="button" onClick={() => updateGoal(g, { priority: Math.max(0, (g.priority || 0) - 1) })} className="text-xs px-2 py-0.5 rounded bg-surface-800 text-surface-300">↓ priority</button>
@@ -308,6 +320,9 @@ export default function GovernancePage() {
                     <div className="font-medium text-surface-100">{d.action}</div>
                     <div className="text-xs text-surface-500">{d.status} · {d.agent_name || agentName(d.agent_id)}</div>
                     <pre className="text-xs text-surface-600 mt-2 max-w-xl overflow-x-auto">{d.details}</pre>
+                    <AuditLink resourceType="decision" resourceId={d.id} className="text-xs text-orange-400/80 underline mt-1 inline-block">
+                      Audit trail
+                    </AuditLink>
                   </div>
                   {d.status === 'pending' && (
                     <div className="flex gap-2">

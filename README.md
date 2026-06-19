@@ -10,6 +10,7 @@ Harness-agnostic command center for agent fleets: agents, skills, tools, memory,
 - [docs/agent-os/GOVERNANCE.md](docs/agent-os/GOVERNANCE.md) — roles & API keys  
 - [docs/agent-os/INTEGRATIONS.md](docs/agent-os/INTEGRATIONS.md) — memory backends & harness adapters  
 - [docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md) — Phase B goals & win gates  
+- [docs/agent-os/PHASE_B_DEMO.md](docs/agent-os/PHASE_B_DEMO.md) — 10-minute operator walkthrough (Phase B exit)  
 - [docs/agent-os/MODEL_PROVIDERS.md](docs/agent-os/MODEL_PROVIDERS.md) — runtime vs API model providers (B3)  
 - [docs/agent-os/PROXMOX_RUNTIME_STACK.md](docs/agent-os/PROXMOX_RUNTIME_STACK.md) — Hermes Workspace (:3000), OpenClaw, Honcho LXCs  
 - [docs/agent-os/HONCHO.md](docs/agent-os/HONCHO.md) — shared memory across harnesses  

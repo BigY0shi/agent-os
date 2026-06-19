@@ -19,6 +19,7 @@ import {
   GitBranch,
 } from 'lucide-react';
 import Modal from '@/components/Modal';
+import AuditLink from '@/components/AuditLink';
 import { validatePipelineDefinition } from '@/lib/pipelineValidate';
 import {
   parsePipelineDefinition,
@@ -414,6 +415,12 @@ export default function PipelinesPage() {
                 <button type="button" onClick={() => setPanelTab('runs')} className={`px-3 py-1.5 text-sm rounded-md ${panelTab === 'runs' ? 'bg-[#FF6B00]/20 text-orange-300' : 'text-surface-400 hover:bg-surface-800'}`}>
                   Runs ({runs.length})
                 </button>
+                <AuditLink resourceType="pipeline" resourceId={selected.id} className="text-xs text-orange-400 underline">
+                  Pipeline audit
+                </AuditLink>
+                <AuditLink resourceType="pipeline_run" action="pipeline.run" className="text-xs text-orange-400/80 underline">
+                  All runs
+                </AuditLink>
                 <div className="ml-auto flex flex-wrap gap-2">
                   {panelTab === 'editor' && (
                     <>

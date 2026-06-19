@@ -24,16 +24,26 @@ Everything needed to scaffold, manage, and deploy agents from a touch-friendly d
 
 ---
 
-## Phase B — Dashboard surfaces (next)
+## Phase B — Dashboard surfaces ✅
 
-See **[docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md)** for milestones, deliverables, and win gates.
+**Status:** Complete (April 2026). Operator walkthrough: **[docs/agent-os/PHASE_B_DEMO.md](docs/agent-os/PHASE_B_DEMO.md)**.
 
-| Milestone | Focus |
-|-----------|--------|
-| **B1** | Memory attach to agents/teams + agent context panel |
-| **B2** | Multi-step pipeline builder + run console |
-| **B3** | Governance APIs + console + **model providers** (Ollama Cloud/local, CLI vs API split) |
-| **B4** | Audit explorer + Phase B demo script |
+| Milestone | Focus | Status |
+|-----------|--------|--------|
+| **B1** | Memory attach to agents/teams + agent context panel | ✅ |
+| **B2** | Multi-step pipeline builder + run console | ✅ |
+| **B3** | Governance APIs + console + model providers | ✅ |
+| **B4** | Audit explorer + cross-links + demo script | ✅ |
+
+See **[docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md)** for win gates.
+
+### Phase C entry criteria
+
+Start **Phase C** when at least one of:
+
+- SQLite write contention or Pi deploy needs a split memory reader service
+- Semantic retrieval requires a vector backend
+- Agent runtimes need MCP gateway parity with HTTP memory tools
 
 ---
 

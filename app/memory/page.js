@@ -17,6 +17,7 @@ import {
   Users,
 } from 'lucide-react';
 import Modal from '@/components/Modal';
+import AuditLink from '@/components/AuditLink';
 import { DEPARTMENTS, getDeptLabel } from '@/lib/departments';
 
 const LAYERS = ['working', 'mid', 'long', 'artifact'];
@@ -368,6 +369,9 @@ function MemoryPageInner() {
                       <button type="button" onClick={() => forget(m.id)} className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded bg-red-900/30 hover:bg-red-900/50 text-red-300">
                         <Trash2 size={12} /> Forget
                       </button>
+                      <AuditLink resourceType="memory" resourceId={m.id} className="text-[10px] text-orange-400/80 underline text-center">
+                        Audit
+                      </AuditLink>
                     </div>
                   </div>
                 </li>

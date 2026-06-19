@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ScrollText, RefreshCw, Filter } from 'lucide-react';
+import Link from 'next/link';
 
 function AuditPageInner() {
   const searchParams = useSearchParams();
@@ -51,6 +52,12 @@ function AuditPageInner() {
           </h1>
           <p className="text-surface-400 text-sm mt-1">
             Control-plane mutations and sensitive reads. Requires operator role when API keys are configured.
+            {' '}
+            <Link href="/memory" className="text-orange-400 underline">Memory</Link>
+            {' · '}
+            <Link href="/pipelines" className="text-orange-400 underline">Pipelines</Link>
+            {' · '}
+            <Link href="/governance" className="text-orange-400 underline">Governance</Link>
           </p>
         </div>
         <button type="button" onClick={load} className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-surface-800 text-surface-200 hover:bg-surface-700 border border-surface-600/40">
@@ -67,7 +74,12 @@ function AuditPageInner() {
             <option value="">All resource types</option>
             <option value="memory">memory</option>
             <option value="pipeline">pipeline</option>
+            <option value="pipeline_run">pipeline_run</option>
             <option value="agent">agent</option>
+            <option value="agent_goal">agent_goal</option>
+            <option value="tool_proposal">tool_proposal</option>
+            <option value="safety_event">safety_event</option>
+            <option value="model_provider">model_provider</option>
             <option value="decision">decision</option>
           </select>
           <input value={resourceId} onChange={(e) => setResourceId(e.target.value)} placeholder="Resource id" className="px-3 py-2 rounded-md bg-surface-950 border border-surface-600/40 text-surface-100 text-sm" />
