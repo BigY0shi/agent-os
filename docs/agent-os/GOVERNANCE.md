@@ -42,6 +42,34 @@ See [`CODE_REVIEW_REMEDIATION_PLAN.md`](../CODE_REVIEW_REMEDIATION_PLAN.md).
 
 Use `details` JSON for structured payloads: `{ "severity": "low|med|high", "scope": "repo:...", "evidence": ["memory:123"] }`.
 
+### `model_change` (Phase B3)
+
+When an agent switches inference backend or model id:
+
+```json
+{
+  "severity": "med",
+  "agent_id": 12,
+  "from_provider": "ollama-local",
+  "to_provider": "ollama-cloud",
+  "from_model": "qwen2.5:14b",
+  "to_model": "llama3.3",
+  "reason": "Higher quality needed for customer-facing draft"
+}
+```
+
+On **approve**: update agent `model_provider_id` + `model_id`; log `model.change` in audit. See [MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md).
+
+## Runtimes vs model providers
+
+| Layer | Agent OS field | Examples |
+|-------|----------------|----------|
+| Runtime (harness) | `framework` / harness Settings | Hermes Workspace, OpenClaw, Claude Code CLI |
+| Model provider | `model_provider_id` (B3) | Ollama Cloud, Ollama local, Anthropic, OpenAI |
+| Model id | `model_id` (B3) | `llama3.3`, `claude-sonnet-…` |
+
+Honcho is **not** a model provider — it is shared memory across runtimes.
+
 ## Tool lifecycle
 
 - `tool_proposals`: draft spec/code, risk class, tests checklist.

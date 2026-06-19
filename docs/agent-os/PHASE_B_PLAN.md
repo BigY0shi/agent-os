@@ -1,6 +1,6 @@
 # Phase B — Dashboard surfaces
 
-**Status:** Planned (post Phase A)  
+**Status:** In progress (B1 ✅, B4.1 audit ✅)  
 **Parent plan:** [agent_os_platform plan](/opt/cursor/artifacts/plans/agent_os_platform_9cd73a1d.plan.md) — Phase B section  
 **Last updated:** 2026-04-12
 
@@ -16,8 +16,9 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 | Pipelines | `/pipelines` single-step create; run list per pipeline; `lib/pipelineValidate.js` (DAG + cycle check) |
 | Governance data | SQLite tables: `tool_proposals`, `tool_releases`, `safety_events`, `agent_goals`, `agent_opinions`; extended `decisions.type` |
 | Governance UI | `/approvals` — **decisions only**; legacy type colors; no `tool_publish` / `infra_change` filters |
-| Audit | `GET /api/audit` — **no UI** |
-| Agents | `memory_enabled` toggle only — **no linked memory list** |
+| Audit | `GET /api/audit` + **`/audit` UI** ✅ |
+| Agents | Memory tab ✅; goals/opinions/model provider **pending B3** |
+| Model providers | **Not in schema** — folded into **B3** ([MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md)) |
 
 ---
 
@@ -25,7 +26,7 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 
 1. **Memory is fleet-aware** — operators attach entries to agents/teams and see context from the agent side.
 2. **Pipelines are composable** — multi-step (and optional DAG) builder with a usable run console.
-3. **Governance is actionable** — proposals, goals, safety events, and typed elevation requests have APIs + UI + audit trail.
+3. **Governance is actionable** — proposals, goals, safety events, typed elevation requests, **and runtime vs model provider registry** have APIs + UI + audit trail.
 
 ---
 
@@ -94,9 +95,11 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 
 ---
 
-## Milestone B3 — Governance console
+## Milestone B3 — Governance console + model providers
 
-**Goal:** Autonomy primitives in SQLite become **first-class operator workflows** (not schema-only).
+**Goal:** Autonomy primitives in SQLite become **first-class operator workflows**, with a clear split between **agent runtimes** (Hermes, OpenClaw, CLI harnesses) and **model providers** (Ollama Cloud/local, Anthropic, OpenAI, Google, etc.).
+
+See [MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md).
 
 ### Deliverables
 
@@ -107,11 +110,15 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 | | `app/api/safety-events/*` — list, mitigate/override |
 | | `app/api/agent-goals/*` — CRUD per agent |
 | | `app/api/agent-opinions/*` — CRUD; optional link to `evidence_memory_id` |
-| B3.2 | **`/governance` page** (or extend `/approvals` with tabs): Proposals · Safety · Goals & opinions |
+| B3.2 | **`/governance` page** (or extend `/approvals` with tabs): Proposals · Safety · Goals & opinions · **Model changes** |
 | B3.3 | **Approvals upgrade:** filter/badge for `tool_publish`, `infra_change`, `model_change`, `data_access`; severity in details JSON |
-| B3.4 | Agent detail: **Goals stack** + **Opinions** (read from new APIs) |
+| B3.4 | Agent detail: **Goals stack** + **Opinions** + **Runtime & model** (provider dropdown + `model_id`) |
 | B3.5 | Tool proposal flow: agent-runtime can POST proposal → operator approves → optional `tool_releases` row on approve |
 | B3.6 | All mutations → `appendAuditLog` with consistent `resource_type` |
+| B3.7 | **`model_providers` table** + `app/api/model-providers/*` — CRUD; seed Ollama Cloud, Ollama local, Anthropic, OpenAI, Google, openai-compatible |
+| B3.8 | **Agents migration:** `model_provider_id`, `model_id`; scaffold/edit forms; AGENT.md export includes runtime + model |
+| B3.9 | **Settings → Model providers** — base URL, default model, `api_key_env` name (no secrets in DB); separate from Harness URLs |
+| B3.10 | **`model_change` workflow:** decision → approve → update agent model fields → audit |
 
 ### Win gates ✅
 
@@ -122,8 +129,11 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 | **W3.3 Goals** | Add 2 goals to an agent, reorder by priority, mark one `done` — visible on agent + governance page |
 | **W3.4 Typed decision** | Create decision `type: tool_publish` → appears in approvals filter → approve/reject works |
 | **W3.5 Auth** | With `AGENT_OS_API_KEYS` set: viewer cannot approve; operator can |
+| **W3.6 Provider registry** | Add Ollama Cloud provider with base URL + default model; listed in Settings and API |
+| **W3.7 Agent model assign** | Assign agent: runtime `hermes-workspace` + provider `ollama-cloud` + model `llama3.3`; visible on agent detail + AGENT.md export |
+| **W3.8 Model change** | Submit `model_change` decision → operator approves → agent `model_id` updates; audit entry |
 
-**Estimate:** 1–2 milestones (~8–10 tasks)
+**Estimate:** 2 milestones (~10–14 tasks)
 
 ---
 
@@ -135,7 +145,7 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 
 | # | Deliverable |
 |---|-------------|
-| B4.1 | **`/audit` page** — paginated `GET /api/audit`; filter by `resource_type`, `action`, date |
+| B4.1 | **`/audit` page** — paginated `GET /api/audit`; filter by `resource_type`, `action`, date | ✅ Shipped |
 | B4.2 | Cross-links: memory/pipeline/governance rows link to filtered audit view |
 | B4.3 | **`docs/agent-os/PHASE_B_DEMO.md`** — 10-minute operator walkthrough script |
 | B4.4 | README + ROADMAP: mark Phase B complete; list Phase C entry criteria |
@@ -175,9 +185,9 @@ B4 exit (demo doc, ROADMAP)
 
 Phase B is **done** when **all** of the following are true:
 
-- [ ] Win gates **W1.1–W1.4** (Memory attach)
+- [ ] Win gates **W1.1–W1.4** (Memory attach) — ✅ done
 - [ ] Win gates **W2.1–W2.4** (Pipelines)
-- [ ] Win gates **W3.1–W3.5** (Governance)
+- [ ] Win gates **W3.1–W3.8** (Governance + model providers)
 - [ ] Win gates **W4.1–W4.3** (Audit & demo)
 - [ ] `npm run build` green
 - [ ] No Phase B scope creep (Honcho bridge / harness push deferred)
@@ -200,3 +210,4 @@ Start Phase C when Phase B exit is met **and** at least one of:
 - [MEMORY_MODEL.md](./MEMORY_MODEL.md)
 - [SKILL_PIPELINE_SPEC.md](./SKILL_PIPELINE_SPEC.md)
 - [GOVERNANCE.md](./GOVERNANCE.md)
+- [MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md)

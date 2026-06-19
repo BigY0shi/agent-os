@@ -32,7 +32,7 @@ See **[docs/agent-os/PHASE_B_PLAN.md](docs/agent-os/PHASE_B_PLAN.md)** for miles
 |-----------|--------|
 | **B1** | Memory attach to agents/teams + agent context panel |
 | **B2** | Multi-step pipeline builder + run console |
-| **B3** | Governance APIs + console (proposals, safety, goals, opinions) |
+| **B3** | Governance APIs + console + **model providers** (Ollama Cloud/local, CLI vs API split) |
 | **B4** | Audit explorer + Phase B demo script |
 
 ---
