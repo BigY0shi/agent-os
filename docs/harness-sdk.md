@@ -24,6 +24,8 @@ bundle/
     <pipeline-id>.json   # same shape as DB definition_json
 ```
 
+**Example bundle:** [docs/examples/bundle/](./examples/bundle/) — copy-ready layout aligned with dashboard exports.
+
 ### `manifest.json`
 
 ```json

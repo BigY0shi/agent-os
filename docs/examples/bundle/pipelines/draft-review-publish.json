@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "Draft → Review → Publish",
+  "nodes": [
+    {
+      "id": "draft",
+      "skillId": 1,
+      "skillName": "content-writing",
+      "inputs": { "topic": "{{run.input.topic}}", "tone": "{{run.input.tone}}" }
+    },
+    {
+      "id": "review",
+      "skillId": 2,
+      "skillName": "content-review",
+      "inputs": { "draft": "{{nodes.draft.output.draft}}" }
+    }
+  ],
+  "edges": [
+    { "from": "draft", "to": "review", "port": "default" }
+  ]
+}

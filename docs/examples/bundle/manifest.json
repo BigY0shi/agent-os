@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "generated_at": "2026-04-12T12:00:00.000Z",
+  "source": "agent-os-dashboard",
+  "agents": [
+    {
+      "id": 1,
+      "slug": "content-agent",
+      "path": "agents/content-agent/AGENT.md"
+    }
+  ],
+  "skills": [
+    {
+      "id": 1,
+      "slug": "content-writing",
+      "path": "skills/content-writing-SKILL.md"
+    }
+  ],
+  "pipelines": [
+    {
+      "id": 1,
+      "path": "pipelines/draft-review-publish.json"
+    }
+  ]
+}
