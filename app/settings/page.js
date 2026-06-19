@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Palette,
@@ -18,6 +18,7 @@ import {
   ToggleLeft,
   ToggleRight,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -142,6 +143,47 @@ export default function SettingsPage() {
   // Data & Storage
   const [storageUsage, setStorageUsage] = useState(45);
   const [databaseSize, setDatabaseSize] = useState('2.3 GB');
+
+  const [modelProviders, setModelProviders] = useState([]);
+  const [providersLoading, setProvidersLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'models') return;
+    setProvidersLoading(true);
+    fetch('/api/model-providers')
+      .then((r) => r.json())
+      .then((d) => setModelProviders(Array.isArray(d) ? d : []))
+      .catch(() => setModelProviders([]))
+      .finally(() => setProvidersLoading(false));
+  }, [activeTab]);
+
+  const updateProviderField = (id, field, value) => {
+    setModelProviders((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+  };
+
+  const saveProvider = async (p) => {
+    const res = await fetch(`/api/model-providers/${p.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: p.label,
+        base_url: p.base_url,
+        default_model: p.default_model,
+        api_key_env: p.api_key_env,
+        enabled: !!p.enabled,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Save failed');
+    }
+  };
+
+  const probeProvider = async (id) => {
+    const res = await fetch(`/api/model-providers/${id}`, { method: 'PATCH' });
+    const data = await res.json();
+    alert(data.ok ? `OK HTTP ${data.status} ${data.path || ''}` : data.error || 'Unreachable');
+  };
 
   // Handlers
   const handleHarnessChange = (harness, field, value) => {
@@ -530,6 +572,7 @@ export default function SettingsPage() {
         {[
           { id: 'general', label: 'General', icon: Settings },
           { id: 'harness', label: 'Harness Config', icon: Cpu },
+          { id: 'models', label: 'Model Providers', icon: Sparkles },
           { id: 'sections', label: 'Sections', icon: Palette },
           { id: 'integrations', label: 'API & Integrations', icon: Link2 },
           { id: 'data', label: 'Data & Storage', icon: Database },
@@ -792,6 +835,48 @@ export default function SettingsPage() {
               </div>
             );
             })}
+          </div>
+        )}
+
+        {/* Model Providers Tab (B3) */}
+        {activeTab === 'models' && (
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>
+              <Sparkles size={16} />
+              Model providers
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+              API inference backends (Ollama Cloud, local Ollama, Anthropic, etc.) — separate from harness runtimes.
+              Store <strong>env var names</strong> only, not secret values. See docs/agent-os/MODEL_PROVIDERS.md.
+            </div>
+            {providersLoading ? (
+              <p style={{ color: 'var(--text-secondary)' }}>Loading…</p>
+            ) : (
+              modelProviders.map((p) => (
+                <div key={p.id} style={{ ...styles.harnessCard, marginBottom: '1rem' }}>
+                  <div style={styles.harnessHeader}>
+                    <span style={styles.harnessTitle}>{p.label}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{p.slug} · {p.kind}</span>
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Base URL</label>
+                    <input style={styles.input} value={p.base_url || ''} onChange={(e) => updateProviderField(p.id, 'base_url', e.target.value)} placeholder="https://…" />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Default model</label>
+                    <input style={styles.input} value={p.default_model || ''} onChange={(e) => updateProviderField(p.id, 'default_model', e.target.value)} />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>API key env var</label>
+                    <input style={styles.input} value={p.api_key_env || ''} onChange={(e) => updateProviderField(p.id, 'api_key_env', e.target.value)} placeholder="OLLAMA_API_KEY" />
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button type="button" style={styles.saveButton} onClick={() => saveProvider(p)}>Save</button>
+                    <button type="button" style={{ ...styles.saveButton, backgroundColor: 'var(--surface-800)' }} onClick={() => probeProvider(p.id)}>Test connection</button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
 

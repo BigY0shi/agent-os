@@ -1,6 +1,6 @@
 # Phase B — Dashboard surfaces
 
-**Status:** In progress (B1 ✅, B2 ✅, B4.1 audit ✅)  
+**Status:** In progress (B1 ✅, B2 ✅, B3 ✅, B4.1 audit ✅)  
 **Parent plan:** [agent_os_platform plan](/opt/cursor/artifacts/plans/agent_os_platform_9cd73a1d.plan.md) — Phase B section  
 **Last updated:** 2026-04-12
 
@@ -13,12 +13,12 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 | Area | Already exists |
 |------|----------------|
 | Memory | `/memory` list/create/retrieve/promote/forget; `agent_id` / `team_id` columns; PATCH promote |
-| Pipelines | `/pipelines` single-step create; run list per pipeline; `lib/pipelineValidate.js` (DAG + cycle check) |
+| Pipelines | `/pipelines` multi-step editor, DAG edges, run console, global runs ✅ |
 | Governance data | SQLite tables: `tool_proposals`, `tool_releases`, `safety_events`, `agent_goals`, `agent_opinions`; extended `decisions.type` |
-| Governance UI | `/approvals` — **decisions only**; legacy type colors; no `tool_publish` / `infra_change` filters |
+| Governance UI | `/governance` — proposals, safety, goals/opinions, model changes ✅; `/approvals` typed filters ✅ |
 | Audit | `GET /api/audit` + **`/audit` UI** ✅ |
-| Agents | Memory tab ✅; goals/opinions/model provider **pending B3** |
-| Model providers | **Not in schema** — folded into **B3** ([MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md)) |
+| Agents | Memory tab ✅; goals/opinions/model provider on Governance tab ✅ |
+| Model providers | `model_providers` table + Settings tab + agent assignment ✅ |
 
 ---
 
@@ -84,12 +84,12 @@ Phase A shipped **contracts + schema + minimal UI**. Phase B makes the control p
 
 ### Win gates ✅
 
-| Gate | Proof |
-|------|--------|
-| **W2.1 Compose** | Build a **3-node** pipeline (3 different skills), save, reload page — definition intact |
-| **W2.2 Validate** | Attempt to save a cycle or duplicate node id — UI shows API validation error |
-| **W2.3 Execute** | Queue a run → mark running → mark succeeded with sample `output_json` — all visible in run console |
-| **W2.4 Export** | Downloaded / copied pipeline JSON matches [SKILL_PIPELINE_SPEC.md](./SKILL_PIPELINE_SPEC.md) and `docs/examples/bundle/` shape |
+| Gate | Proof | Status |
+|------|--------|--------|
+| **W2.1 Compose** | Build a **3-node** pipeline (3 different skills), save, reload page — definition intact | ✅ Editor + PUT |
+| **W2.2 Validate** | Attempt to save a cycle or duplicate node id — UI shows API validation error | ✅ Client + API validate |
+| **W2.3 Execute** | Queue a run → mark running → mark succeeded with sample `output_json` — all visible in run console | ✅ Run console + demo |
+| **W2.4 Export** | Downloaded pipeline JSON matches SKILL_PIPELINE_SPEC shape | ✅ Export JSON button |
 
 **Estimate:** 1–2 milestones (~5–8 tasks)
 
@@ -122,16 +122,16 @@ See [MODEL_PROVIDERS.md](./MODEL_PROVIDERS.md).
 
 ### Win gates ✅
 
-| Gate | Proof |
-|------|--------|
-| **W3.1 Proposal** | Submit tool proposal from UI → status `submitted` → operator approves → status `approved`; row in audit log |
-| **W3.2 Safety** | Create/open safety event → operator marks `mitigated` with note |
-| **W3.3 Goals** | Add 2 goals to an agent, reorder by priority, mark one `done` — visible on agent + governance page |
-| **W3.4 Typed decision** | Create decision `type: tool_publish` → appears in approvals filter → approve/reject works |
-| **W3.5 Auth** | With `AGENT_OS_API_KEYS` set: viewer cannot approve; operator can |
-| **W3.6 Provider registry** | Add Ollama Cloud provider with base URL + default model; listed in Settings and API |
-| **W3.7 Agent model assign** | Assign agent: runtime `hermes-workspace` + provider `ollama-cloud` + model `llama3.3`; visible on agent detail + AGENT.md export |
-| **W3.8 Model change** | Submit `model_change` decision → operator approves → agent `model_id` updates; audit entry |
+| Gate | Proof | Status |
+|------|--------|--------|
+| **W3.1 Proposal** | Submit tool proposal from UI → status `submitted` → operator approves → status `approved`; row in audit log | ✅ |
+| **W3.2 Safety** | Create/open safety event → operator marks `mitigated` with note | ✅ |
+| **W3.3 Goals** | Add 2 goals to an agent, reorder by priority, mark one `done` — visible on agent + governance page | ✅ |
+| **W3.4 Typed decision** | Create decision `type: tool_publish` → appears in approvals filter → approve/reject works | ✅ |
+| **W3.5 Auth** | With `AGENT_OS_API_KEYS` set: viewer cannot approve; operator can | ✅ (authz layer) |
+| **W3.6 Provider registry** | Add Ollama Cloud provider with base URL + default model; listed in Settings and API | ✅ |
+| **W3.7 Agent model assign** | Assign agent: runtime `hermes-workspace` + provider `ollama-cloud` + model `llama3.3`; visible on agent detail + AGENT.md export | ✅ |
+| **W3.8 Model change** | Submit `model_change` decision → operator approves → agent `model_id` updates; audit entry | ✅ |
 
 **Estimate:** 2 milestones (~10–14 tasks)
 
@@ -186,8 +186,8 @@ B4 exit (demo doc, ROADMAP)
 Phase B is **done** when **all** of the following are true:
 
 - [ ] Win gates **W1.1–W1.4** (Memory attach) — ✅ done
-- [ ] Win gates **W2.1–W2.4** (Pipelines)
-- [ ] Win gates **W3.1–W3.8** (Governance + model providers)
+- [ ] Win gates **W2.1–W2.4** (Pipelines) — ✅ done
+- [x] Win gates **W3.1–W3.8** (Governance + model providers) — ✅ done
 - [ ] Win gates **W4.1–W4.3** (Audit & demo)
 - [ ] `npm run build` green
 - [ ] No Phase B scope creep (Honcho bridge / harness push deferred)

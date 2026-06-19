@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { authorizeRead, authorizeWrite } from '@/lib/authz';
 import { jsonAuthError } from '@/lib/httpAuth';
+import { appendAuditLog } from '@/lib/audit';
+import { applyModelChangeApproval } from '@/lib/modelChange';
 
 export async function GET(request) {
   const gate = authorizeRead(request, 'viewer');
@@ -96,9 +98,31 @@ export async function PUT(request) {
     if (action === 'approve') {
       db.prepare('UPDATE decisions SET status = ?, resolved_at = ?, resolver = ? WHERE id = ?')
         .run('approved', now, body.resolver || 'Yoshi', id);
+
+      if (existing.type === 'model_change') {
+        const result = applyModelChangeApproval(db, existing, gate.ctx.actor);
+        if (!result.ok) {
+          return NextResponse.json({ error: result.error }, { status: 400 });
+        }
+      }
+
+      appendAuditLog(db, {
+        actor: gate.ctx.actor,
+        action: 'decision.approve',
+        resource_type: 'decision',
+        resource_id: id,
+        meta: { type: existing.type },
+      });
     } else if (action === 'reject') {
       db.prepare('UPDATE decisions SET status = ?, resolved_at = ?, resolver = ? WHERE id = ?')
         .run('rejected', now, body.resolver || 'Yoshi', id);
+      appendAuditLog(db, {
+        actor: gate.ctx.actor,
+        action: 'decision.reject',
+        resource_type: 'decision',
+        resource_id: id,
+        meta: { type: existing.type },
+      });
     } else {
       // Generic update
       const fields = ['agent_id', 'agent_name', 'section', 'action', 'type', 'status', 'details'];

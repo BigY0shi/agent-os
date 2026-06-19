@@ -124,6 +124,9 @@ ${skills.length > 0 ? skills.map(s => `- ${s.name}`).join('\n') : '_None assigne
 
 ## Configuration
 - **Memory:** ${agent.memory_enabled ? 'Enabled' : 'Disabled'}
+- **Runtime:** ${FRAMEWORKS.find(f => f.id === agent.framework)?.label || agent.framework || '—'}
+- **Model provider id:** ${agent.model_provider_id ?? '—'}
+- **Model id:** ${agent.model_id || '—'}
 - **Stage:** ${(agent.stage || 'ideate').charAt(0).toUpperCase() + (agent.stage || 'ideate').slice(1)}
 - **Status:** ${(agent.status || 'idle').charAt(0).toUpperCase() + (agent.status || 'idle').slice(1)}
 `;
@@ -135,6 +138,7 @@ export default function AgentsPage() {
   const [outputs, setOutputs] = useState([]);
   const [allTools, setAllTools] = useState([]);
   const [allSkills, setAllSkills] = useState([]);
+  const [modelProviders, setModelProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -172,6 +176,8 @@ export default function AgentsPage() {
   // Agent memory context (Phase B1)
   const [agentMemories, setAgentMemories] = useState([]);
   const [memoryLoading, setMemoryLoading] = useState(false);
+  const [agentGoals, setAgentGoals] = useState([]);
+  const [agentOpinions, setAgentOpinions] = useState([]);
 
   const fetchAgentMemories = useCallback(async (agentId) => {
     if (!agentId) return;
@@ -192,13 +198,33 @@ export default function AgentsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); }, []);
+  const fetchAgentGovernance = useCallback(async (agentId) => {
+    if (!agentId) return;
+    try {
+      const [gRes, oRes] = await Promise.all([
+        fetch(`/api/agent-goals?agent_id=${agentId}`),
+        fetch(`/api/agent-opinions?agent_id=${agentId}`),
+      ]);
+      const [g, o] = await Promise.all([gRes.json(), oRes.json()]);
+      setAgentGoals(Array.isArray(g) ? g : []);
+      setAgentOpinions(Array.isArray(o) ? o : []);
+    } catch (e) {
+      console.error(e);
+      setAgentGoals([]);
+      setAgentOpinions([]);
+    }
+  }, []);
+
+  useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); fetch('/api/model-providers').then(r => r.json()).then(d => setModelProviders(Array.isArray(d) ? d : [])).catch(() => {}); }, []);
   useEffect(() => { if (selectedAgent) fetchOutputs(selectedAgent.id); }, [selectedAgent]);
   useEffect(() => {
     if (view === 'detail' && selectedAgent && detailTab === 'memory') {
       fetchAgentMemories(selectedAgent.id);
     }
-  }, [view, selectedAgent, detailTab, fetchAgentMemories]);
+    if (view === 'detail' && selectedAgent && detailTab === 'governance') {
+      fetchAgentGovernance(selectedAgent.id);
+    }
+  }, [view, selectedAgent, detailTab, fetchAgentMemories, fetchAgentGovernance]);
 
   const fetchAgents = async () => {
     try {
@@ -435,9 +461,9 @@ export default function AgentsPage() {
             </div>
           </div>
           <div className="flex border-t border-surface-800 max-w-7xl mx-auto">
-            {['outputs', 'memory', 'performance', 'settings'].map((tab) => (
+            {['outputs', 'memory', 'governance', 'performance', 'settings'].map((tab) => (
               <button key={tab} onClick={() => setDetailTab(tab)} className={`px-6 py-3 text-sm font-medium transition border-b-2 ${detailTab === tab ? 'border-orange-500 text-orange-500' : 'border-transparent text-surface-400 hover:text-surface-300'}`}>
-                {tab === 'memory' ? 'Memory' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {tab === 'memory' ? 'Memory' : tab === 'governance' ? 'Governance' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -548,6 +574,115 @@ export default function AgentsPage() {
             </div>
           )}
 
+          {/* GOVERNANCE TAB */}
+          {detailTab === 'governance' && (
+            <div className="space-y-6 max-w-3xl">
+              <div className="flex justify-between items-center">
+                <h3 className="text-surface-100 font-medium">Goals & opinions</h3>
+                <Link href="/governance" className="text-xs text-orange-400 underline">Open governance console</Link>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm text-surface-400">Active goals</h4>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded bg-orange-600 text-white"
+                    onClick={async () => {
+                      const title = prompt('Goal title:');
+                      if (!title?.trim()) return;
+                      const priority = Number(prompt('Priority:', '10') || '10');
+                      await fetch('/api/agent-goals', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ agent_id: agent.id, title: title.trim(), priority }),
+                      });
+                      fetchAgentGovernance(agent.id);
+                    }}
+                  >
+                    + Add goal
+                  </button>
+                </div>
+                {agentGoals.length === 0 ? <p className="text-surface-500 text-sm">No goals.</p> : (
+                  <ul className="space-y-2">{agentGoals.map((g) => (
+                    <li key={g.id} className="card bg-surface-900 border border-surface-800 rounded p-3 text-sm">
+                      <div className="font-medium text-surface-100">{g.title}</div>
+                      <div className="text-surface-500 text-xs mt-1">P{g.priority} · {g.status}</div>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          type="button"
+                          className="text-xs px-2 py-0.5 rounded bg-surface-800 text-surface-300"
+                          onClick={async () => {
+                            await fetch(`/api/agent-goals/${g.id}`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ ...g, priority: (g.priority || 0) + 1 }),
+                            });
+                            fetchAgentGovernance(agent.id);
+                          }}
+                        >
+                          ↑
+                        </button>
+                        {g.status !== 'done' && (
+                          <button
+                            type="button"
+                            className="text-xs px-2 py-0.5 rounded bg-emerald-900/40 text-emerald-300"
+                            onClick={async () => {
+                              await fetch(`/api/agent-goals/${g.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ...g, status: 'done' }),
+                              });
+                              fetchAgentGovernance(agent.id);
+                            }}
+                          >
+                            Done
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}</ul>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm text-surface-400">Held opinions</h4>
+                  <button
+                    type="button"
+                    className="text-xs px-2 py-1 rounded bg-orange-600 text-white"
+                    onClick={async () => {
+                      const claim = prompt('Opinion claim:');
+                      if (!claim?.trim()) return;
+                      await fetch('/api/agent-opinions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ agent_id: agent.id, claim: claim.trim(), confidence: 0.8 }),
+                      });
+                      fetchAgentGovernance(agent.id);
+                    }}
+                  >
+                    + Add opinion
+                  </button>
+                </div>
+                {agentOpinions.length === 0 ? <p className="text-surface-500 text-sm">No opinions.</p> : (
+                  <ul className="space-y-2">{agentOpinions.map((o) => (
+                    <li key={o.id} className="card bg-surface-900 border border-surface-800 rounded p-3 text-sm text-surface-300">{o.claim}</li>
+                  ))}</ul>
+                )}
+              </div>
+              <div className="card bg-surface-900 border border-surface-800 rounded-lg p-4 text-sm">
+                <h4 className="text-surface-300 font-medium mb-2">Runtime & model</h4>
+                <dl className="grid grid-cols-2 gap-2 text-xs">
+                  <dt className="text-surface-500">Runtime</dt>
+                  <dd className="text-surface-200">{FRAMEWORKS.find(f => f.id === agent.framework)?.label || agent.framework || '—'}</dd>
+                  <dt className="text-surface-500">Provider</dt>
+                  <dd className="text-surface-200">{modelProviders.find(p => p.id === agent.model_provider_id)?.label || agent.model_provider_id || '—'}</dd>
+                  <dt className="text-surface-500">Model</dt>
+                  <dd className="text-surface-200">{agent.model_id || '—'}</dd>
+                </dl>
+              </div>
+            </div>
+          )}
+
           {/* PERFORMANCE TAB */}
           {detailTab === 'performance' && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -570,7 +705,7 @@ export default function AgentsPage() {
             <div className="max-w-3xl">
               {editMode ? (
                 <form onSubmit={handleUpdateAgent} className="space-y-5">
-                  {renderFormFields(editForm, setEditForm, allTools, allSkills, toggleArrayItem, isInArray)}
+                  {renderFormFields(editForm, setEditForm, allTools, allSkills, toggleArrayItem, isInArray, modelProviders)}
                   <div className="flex gap-3 pt-4">
                     <button type="submit" className="flex-1 px-6 py-2 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded transition">Save Changes</button>
                     <button type="button" onClick={() => setEditMode(false)} className="px-6 py-2 bg-surface-800 hover:bg-surface-700 text-surface-300 font-medium rounded transition">Cancel</button>
@@ -588,6 +723,8 @@ export default function AgentsPage() {
                     ['Goal', agent.goal || '—'],
                     ['Vibe', agent.vibe || '—'],
                     ['Framework', FRAMEWORKS.find(f => f.id === (agent.framework || agent.harness))?.label || agent.framework || agent.harness],
+                    ['Model provider', modelProviders.find(p => p.id === agent.model_provider_id)?.label || agent.model_provider_id || '—'],
+                    ['Model id', agent.model_id || '—'],
                     ['Agent Type', agent.agent_type === 'manager' ? 'Manager' : 'Worker'],
                     ['Memory', agent.memory_enabled ? 'Enabled' : 'Disabled'],
                     ['Stage', (agent.stage || 'ideate').charAt(0).toUpperCase() + (agent.stage || 'ideate').slice(1)],
@@ -718,7 +855,7 @@ export default function AgentsPage() {
       {/* ========== SCAFFOLD AGENT MODAL ========== */}
       <Modal isOpen={showScaffoldModal} onClose={() => setShowScaffoldModal(false)} title="Scaffold New Agent" size="2xl">
         <form onSubmit={handleScaffoldSubmit} className="space-y-5 max-h-[70vh] overflow-y-auto pr-2">
-          {renderFormFields(scaffoldForm, setScaffoldForm, allTools, allSkills, toggleArrayItem, isInArray)}
+          {renderFormFields(scaffoldForm, setScaffoldForm, allTools, allSkills, toggleArrayItem, isInArray, modelProviders)}
           <div className="flex gap-3 pt-4 sticky bottom-0 bg-surface-800 pb-2">
             <button type="submit" className="flex-1 px-6 py-3 bg-orange-600 hover:bg-orange-500 text-white font-semibold rounded transition">Create Agent</button>
             <button type="button" onClick={() => setShowScaffoldModal(false)} className="px-6 py-3 bg-surface-700 hover:bg-surface-600 text-surface-300 font-medium rounded transition">Cancel</button>
@@ -730,7 +867,7 @@ export default function AgentsPage() {
 }
 
 // ========== SHARED FORM FIELDS ==========
-function renderFormFields(form, setForm, allTools, allSkills, toggleArrayItem, isInArray) {
+function renderFormFields(form, setForm, allTools, allSkills, toggleArrayItem, isInArray, modelProviders = []) {
   const inputClass = "w-full bg-surface-900 border border-surface-700 rounded px-4 py-2.5 text-surface-200 focus:outline-none focus:border-orange-500 text-sm";
   const labelClass = "block text-sm font-semibold text-surface-200 mb-1";
 
@@ -790,11 +927,39 @@ function renderFormFields(form, setForm, allTools, allSkills, toggleArrayItem, i
 
       {/* Framework */}
       <div>
-        <label className={labelClass}>Framework</label>
-        <FieldHelper text="Which platform or framework will run this agent?" />
+        <label className={labelClass}>Runtime / Framework</label>
+        <FieldHelper text="Where this agent runs (Hermes Workspace, OpenClaw, CLI harness, etc.)" />
         <select value={form.framework || 'crewai'} onChange={(e) => setForm({ ...form, framework: e.target.value })} className={inputClass}>
           {FRAMEWORKS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
         </select>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className={labelClass}>Model provider</label>
+          <FieldHelper text="API backend (Ollama Cloud, Anthropic, etc.) — separate from runtime" />
+          <select
+            value={form.model_provider_id ?? ''}
+            onChange={(e) => setForm({ ...form, model_provider_id: e.target.value ? Number(e.target.value) : null })}
+            className={inputClass}
+          >
+            <option value="">— None / harness default —</option>
+            {modelProviders.map((p) => (
+              <option key={p.id} value={p.id}>{p.label} ({p.slug})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass}>Model id</label>
+          <FieldHelper text="e.g. llama3.3, claude-sonnet-…, gpt-4.1" />
+          <input
+            type="text"
+            value={form.model_id || ''}
+            onChange={(e) => setForm({ ...form, model_id: e.target.value })}
+            placeholder={modelProviders.find(p => p.id === form.model_provider_id)?.default_model || ''}
+            className={inputClass}
+          />
+        </div>
       </div>
 
       {/* Two columns: Tools + Skills */}

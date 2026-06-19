@@ -15,6 +15,7 @@ import {
   Brain,
   Workflow,
   ScrollText,
+  Shield,
 } from 'lucide-react';
 
 export default function Sidebar({ pendingApprovalsCount = 0 }) {
@@ -81,6 +82,7 @@ export default function Sidebar({ pendingApprovalsCount = 0 }) {
               label="Approvals"
               badge={pendingApprovalsCount > 0 ? pendingApprovalsCount : null}
             />
+            <NavLink href="/governance" icon={Shield} label="Governance" />
             <NavLink href="/audit" icon={ScrollText} label="Audit" />
           </div>
 

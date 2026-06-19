@@ -79,6 +79,8 @@ export async function POST(request) {
       stage = 'ideate',
       assigned_tools = '[]',
       assigned_skills = '[]',
+      model_provider_id = null,
+      model_id = null,
     } = body;
 
     // Validate required fields - name and department are required
@@ -93,8 +95,8 @@ export async function POST(request) {
     }
 
     const stmt = db.prepare(`
-      INSERT INTO agents (name, section, department, role, harness, framework, status, config, created_at, goal, vibe, system_prompt, memory_enabled, agent_type, stage, assigned_tools, assigned_skills)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (name, section, department, role, harness, framework, status, config, created_at, goal, vibe, system_prompt, memory_enabled, agent_type, stage, assigned_tools, assigned_skills, model_provider_id, model_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = stmt.run(
@@ -113,7 +115,9 @@ export async function POST(request) {
       agent_type,
       stage,
       typeof assigned_tools === 'string' ? assigned_tools : JSON.stringify(assigned_tools),
-      typeof assigned_skills === 'string' ? assigned_skills : JSON.stringify(assigned_skills)
+      typeof assigned_skills === 'string' ? assigned_skills : JSON.stringify(assigned_skills),
+      model_provider_id == null ? null : Number(model_provider_id),
+      model_id || null
     );
 
     const newAgent = db.prepare('SELECT * FROM agents WHERE id = ?').get(result.lastInsertRowid);
@@ -163,11 +167,13 @@ export async function PUT(request) {
       stage: body.stage !== undefined ? body.stage : currentAgent.stage,
       assigned_tools: body.assigned_tools !== undefined ? (typeof body.assigned_tools === 'string' ? body.assigned_tools : JSON.stringify(body.assigned_tools)) : currentAgent.assigned_tools,
       assigned_skills: body.assigned_skills !== undefined ? (typeof body.assigned_skills === 'string' ? body.assigned_skills : JSON.stringify(body.assigned_skills)) : currentAgent.assigned_skills,
+      model_provider_id: body.model_provider_id !== undefined ? (body.model_provider_id == null ? null : Number(body.model_provider_id)) : currentAgent.model_provider_id,
+      model_id: body.model_id !== undefined ? body.model_id : currentAgent.model_id,
     };
 
     const stmt = db.prepare(`
       UPDATE agents
-      SET name = ?, section = ?, department = ?, role = ?, harness = ?, framework = ?, status = ?, config = ?, goal = ?, vibe = ?, system_prompt = ?, memory_enabled = ?, agent_type = ?, stage = ?, assigned_tools = ?, assigned_skills = ?
+      SET name = ?, section = ?, department = ?, role = ?, harness = ?, framework = ?, status = ?, config = ?, goal = ?, vibe = ?, system_prompt = ?, memory_enabled = ?, agent_type = ?, stage = ?, assigned_tools = ?, assigned_skills = ?, model_provider_id = ?, model_id = ?
       WHERE id = ?
     `);
 
@@ -188,6 +194,8 @@ export async function PUT(request) {
       updates.stage,
       updates.assigned_tools,
       updates.assigned_skills,
+      updates.model_provider_id,
+      updates.model_id,
       id
     );
 

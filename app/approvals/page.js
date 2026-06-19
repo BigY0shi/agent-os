@@ -10,6 +10,10 @@ const TYPE_COLORS = {
   content: 'bg-purple-600',
   config: 'bg-green-600',
   outreach: 'bg-pink-600',
+  tool_publish: 'bg-orange-600',
+  infra_change: 'bg-cyan-600',
+  model_change: 'bg-violet-600',
+  data_access: 'bg-red-600',
 };
 
 export default function ApprovalsPage() {
@@ -105,6 +109,10 @@ export default function ApprovalsPage() {
             <option value="content">Content</option>
             <option value="config">Config</option>
             <option value="outreach">Outreach</option>
+            <option value="tool_publish">Tool publish</option>
+            <option value="infra_change">Infra change</option>
+            <option value="model_change">Model change</option>
+            <option value="data_access">Data access</option>
           </select>
 
           {/* Status Filter */}
