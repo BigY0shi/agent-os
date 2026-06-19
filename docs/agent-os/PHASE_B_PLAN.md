@@ -1,6 +1,6 @@
 # Phase B — Dashboard surfaces
 
-**Status:** In progress (B1 ✅, B4.1 audit ✅)  
+**Status:** In progress (B1 ✅, B2 ✅, B4.1 audit ✅)  
 **Parent plan:** [agent_os_platform plan](/opt/cursor/artifacts/plans/agent_os_platform_9cd73a1d.plan.md) — Phase B section  
 **Last updated:** 2026-04-12
 
