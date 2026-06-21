@@ -24,12 +24,27 @@ import {
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [runtimes, setRuntimes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [detailsDecision, setDetailsDecision] = useState(null);
 
   useEffect(() => {
     fetchDashboard();
+  }, []);
+
+  useEffect(() => {
+    const pollRuntimes = async () => {
+      try {
+        const res = await fetch('/api/runtimes/health');
+        if (res.ok) setRuntimes(await res.json());
+      } catch {
+        // ignore transient poll errors
+      }
+    };
+    pollRuntimes();
+    const id = setInterval(pollRuntimes, 30000);
+    return () => clearInterval(id);
   }, []);
 
   const fetchDashboard = async () => {
@@ -96,6 +111,8 @@ export default function Dashboard() {
     return colorMap[section] || colorMap.default;
   };
 
+  const runtimeServices = runtimes?.services || data?.runtimes?.services;
+
   return (
     <div className="min-h-screen bg-surface-950 text-white p-8">
       {/* Header */}
@@ -109,9 +126,9 @@ export default function Dashboard() {
         <div className="inline-block px-3 py-1 bg-surface-800 rounded text-xs font-mono text-orange-500 mt-4">
           Agent OS v2.0
         </div>
-        {!loading && data?.runtimes?.services && (
+        {!loading && runtimeServices && (
           <div className="flex flex-wrap gap-2 mt-4">
-            {Object.values(data.runtimes.services)
+            {Object.values(runtimeServices)
               .filter((s) => s.configured !== false)
               .map((svc) => (
                 <a
@@ -126,7 +143,7 @@ export default function Dashboard() {
                   }`}
                   title={
                     svc.ok
-                      ? `HTTP ${svc.status} ${svc.path || ''} (${svc.latencyMs}ms)`
+                      ? `HTTP ${svc.status} ${svc.path || ''} (${svc.latencyMs}ms) · refreshes every 30s`
                       : svc.error || 'Unreachable from Agent OS host'
                   }
                 >

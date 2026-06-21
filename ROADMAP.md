@@ -51,11 +51,11 @@ Start **Phase C** when at least one of:
 
 Wire the dashboard to runtimes on **Proxmox LXCs** (see `docs/agent-os/V1_1.md`, `PROXMOX_RUNTIME_STACK.md`).
 
-- [x] **Hermes Workspace** — UI `:3000`, gateway `:8642` link-out from Agents; bundle export API
-- [ ] **OpenClaw** — gateway ~`:18789`; bidirectional spec sync
-- [x] **Honcho** — bridge `POST /api/honcho/sync` ↔ `memory_entries`; authenticated health probe
-- [ ] Claude Code / Codex / Gemini — Honcho peers on same workspace
-- [x] Live agent status — `POST /api/runtimes/heartbeat` + Runtime tab
+- [x] **Hermes Workspace** — UI `:3000`, gateway `:8642` link-out; bundle export + HTTP push + pull script
+- [x] **OpenClaw** — gateway link-out + bundle push; status probe (`GET /api/openclaw/status`)
+- [x] **Honcho** — bridge sync + CLI peer registration (Claude/Codex/Gemini)
+- [x] Claude Code / Codex / Gemini — Honcho peers UI + `POST /api/honcho/peers`
+- [x] Live runtime health — dashboard polls every 30s
 - [x] Run history per agent — `agent_runs` table + `/api/agent-runs`
 - [x] Cost tracking hook — run `cost_usd` → `cost_entries`
 

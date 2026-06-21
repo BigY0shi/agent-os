@@ -148,6 +148,16 @@ export default function SettingsPage() {
   const [providersLoading, setProvidersLoading] = useState(false);
   const [honchoStatus, setHonchoStatus] = useState(null);
   const [honchoBusy, setHonchoBusy] = useState(false);
+  const [honchoPeers, setHonchoPeers] = useState(null);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'harness') return;
+    fetch('/api/honcho/peers')
+      .then((r) => r.json())
+      .then(setHonchoPeers)
+      .catch(() => setHonchoPeers(null));
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'models') return;
@@ -229,6 +239,47 @@ export default function SettingsPage() {
     a.download = 'agent-os-fleet-bundle.json';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const pushFleetBundle = async (target = 'hermes') => {
+    setPushBusy(true);
+    try {
+      const res = await fetch('/api/harness/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target }),
+      });
+      const data = await res.json();
+      if (data.pushed) {
+        alert(`Fleet bundle pushed to ${target}${data.gateway ? `: ${data.gateway}` : ''}`);
+      } else {
+        alert(`${data.fallback || data.error || 'Push failed'}\n\nOn Hermes LXC run:\n${data.deploy?.pullOnRuntime || ''}`);
+      }
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const registerHonchoPeer = async (slug) => {
+    setHonchoBusy(true);
+    try {
+      const res = await fetch('/api/honcho/peers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Register failed');
+      alert(`Registered Honcho peer: ${data.peer_id}`);
+      const peersRes = await fetch('/api/honcho/peers');
+      setHonchoPeers(await peersRes.json());
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setHonchoBusy(false);
+    }
   };
 
   // Handlers
@@ -782,6 +833,12 @@ export default function SettingsPage() {
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
               <button type="button" style={styles.saveButton} onClick={exportFleetBundle}>Export fleet bundle</button>
+              <button type="button" style={styles.saveButton} onClick={() => pushFleetBundle('hermes')} disabled={pushBusy}>
+                {pushBusy ? 'Pushing…' : 'Push to Hermes'}
+              </button>
+              <button type="button" style={{ ...styles.saveButton, backgroundColor: 'var(--surface-800)' }} onClick={() => pushFleetBundle('openclaw')} disabled={pushBusy}>
+                Push to OpenClaw
+              </button>
               <button type="button" style={{ ...styles.saveButton, backgroundColor: 'var(--surface-800)' }} onClick={testHoncho} disabled={honchoBusy}>
                 {honchoBusy ? 'Testing…' : 'Test Honcho API'}
               </button>
@@ -794,6 +851,34 @@ export default function SettingsPage() {
                 Honcho: {honchoStatus.health.ok ? `OK (${honchoStatus.health.latencyMs}ms)` : honchoStatus.health.error || 'unreachable'}
                 {honchoStatus.config ? ` · workspace ${honchoStatus.config.workspace}` : ''}
               </p>
+            )}
+
+            {honchoPeers?.hosts?.length > 0 && (
+              <div style={{ ...styles.harnessCard, marginBottom: '1.5rem' }}>
+                <div style={styles.harnessTitle}>Honcho CLI peers (Claude / Codex / Gemini)</div>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: '0.5rem 0 1rem' }}>
+                  Register AI peers on workspace <strong>{honchoPeers.workspace || 'hermes'}</strong> — same user peer ({honchoPeers.user_peer || 'yoshi'}) as Hermes.
+                </p>
+                {honchoPeers.hosts.map((h) => (
+                  <div key={h.slug} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <span style={{ fontWeight: 500 }}>{h.label}</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginLeft: '0.5rem' }}>
+                        ai_peer: {h.ai_peer}
+                        {h.registered_at ? ` · registered ${new Date(h.registered_at).toLocaleDateString()}` : ''}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      style={{ ...styles.saveButton, padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
+                      disabled={honchoBusy}
+                      onClick={() => registerHonchoPeer(h.slug)}
+                    >
+                      {h.enabled ? 'Re-register' : 'Register on Honcho'}
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
 
             {Object.entries(harnesses).map(([harness, config]) => {

@@ -181,7 +181,12 @@ export default function AgentsPage() {
   const [agentOpinions, setAgentOpinions] = useState([]);
   const [agentRuns, setAgentRuns] = useState([]);
   const [runtimeInstance, setRuntimeInstance] = useState(null);
-  const [runtimeUrls, setRuntimeUrls] = useState({ hermesUi: 'http://192.168.0.168:3000', hermesGateway: 'http://192.168.0.168:8642' });
+  const [runtimeUrls, setRuntimeUrls] = useState({
+    hermesUi: 'http://192.168.0.168:3000',
+    hermesGateway: 'http://192.168.0.168:8642',
+    openclaw: '',
+  });
+  const [pushBusy, setPushBusy] = useState(false);
 
   const fetchAgentMemories = useCallback(async (agentId) => {
     if (!agentId) return;
@@ -236,7 +241,7 @@ export default function AgentsPage() {
     }
   }, []);
 
-  useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); fetch('/api/model-providers').then(r => r.json()).then(d => setModelProviders(Array.isArray(d) ? d : [])).catch(() => {}); fetch('/api/runtimes/health').then(r => r.json()).then(d => { if (d?.endpoints) setRuntimeUrls({ hermesUi: d.endpoints.hermesUi, hermesGateway: d.endpoints.hermesGateway }); }).catch(() => {}); }, []);
+  useEffect(() => { fetchAgents(); fetchSections(); fetchToolsAndSkills(); fetch('/api/model-providers').then(r => r.json()).then(d => setModelProviders(Array.isArray(d) ? d : [])).catch(() => {}); fetch('/api/runtimes/health').then(r => r.json()).then(d => { if (d?.endpoints) setRuntimeUrls({ hermesUi: d.endpoints.hermesUi, hermesGateway: d.endpoints.hermesGateway, openclaw: d.endpoints.openclaw || '' }); }).catch(() => {}); }, []);
   useEffect(() => { if (selectedAgent) fetchOutputs(selectedAgent.id); }, [selectedAgent]);
   useEffect(() => {
     if (view === 'detail' && selectedAgent && detailTab === 'memory') {
@@ -422,6 +427,29 @@ export default function AgentsPage() {
     return fw === 'hermes-workspace' || fw === 'hermes-agent';
   };
 
+  const isOpenClawAgent = (agent) => (agent.framework || agent.harness) === 'openclaw';
+
+  const handlePushBundle = async (agent, target = 'hermes') => {
+    setPushBusy(true);
+    try {
+      const res = await fetch('/api/harness/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: agent.id, target }),
+      });
+      const data = await res.json();
+      if (data.pushed) {
+        alert(`Bundle pushed to ${target} gateway${data.gateway ? `: ${data.gateway}` : ''}`);
+      } else {
+        alert(`${data.fallback || data.error || 'Push failed'}\n\nPull on LXC:\n${data.deploy?.pullOnRuntime || ''}`);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
   // ----- Multi-select helpers for tools/skills -----
   const toggleArrayItem = (field, id, formSetter, form) => {
     const current = (() => { try { return JSON.parse(form[field] || '[]'); } catch { return []; } })();
@@ -500,6 +528,11 @@ export default function AgentsPage() {
                 <button type="button" onClick={() => handleExportBundle(agent)} className="flex items-center gap-1 px-3 py-2 rounded bg-surface-800 hover:bg-surface-700 text-surface-300 hover:text-orange-500 transition text-sm">
                   <Package size={14} /> Export bundle
                 </button>
+                {(isHermesAgent(agent) || isOpenClawAgent(agent)) && (
+                  <button type="button" disabled={pushBusy} onClick={() => handlePushBundle(agent, isOpenClawAgent(agent) ? 'openclaw' : 'hermes')} className="flex items-center gap-1 px-3 py-2 rounded bg-orange-900/40 hover:bg-orange-900/60 text-orange-200 transition text-sm disabled:opacity-50">
+                    <Package size={14} /> {pushBusy ? 'Pushing…' : 'Push bundle'}
+                  </button>
+                )}
                 <button onClick={() => handleExportMd(agent)} className="flex items-center gap-1 px-3 py-2 rounded bg-surface-800 hover:bg-surface-700 text-surface-300 hover:text-orange-500 transition text-sm">
                   <Download size={14} /> Export .md
                 </button>
@@ -751,9 +784,21 @@ export default function AgentsPage() {
                       <a href={runtimeUrls.hermesGateway} target="_blank" rel="noopener noreferrer" className="text-sm px-3 py-2 rounded bg-surface-800 text-surface-200 inline-flex items-center gap-1">
                         <ExternalLink size={14} /> Gateway
                       </a>
+                      <button type="button" disabled={pushBusy} onClick={() => handlePushBundle(agent, 'hermes')} className="text-sm px-3 py-2 rounded bg-orange-900/40 text-orange-200 inline-flex items-center gap-1 disabled:opacity-50">
+                        <Package size={14} /> Push to Hermes
+                      </button>
+                    </>
+                  ) : isOpenClawAgent(agent) && runtimeUrls.openclaw ? (
+                    <>
+                      <a href={runtimeUrls.openclaw} target="_blank" rel="noopener noreferrer" className="text-sm px-3 py-2 rounded bg-orange-900/40 text-orange-200 inline-flex items-center gap-1">
+                        <ExternalLink size={14} /> OpenClaw gateway
+                      </a>
+                      <button type="button" disabled={pushBusy} onClick={() => handlePushBundle(agent, 'openclaw')} className="text-sm px-3 py-2 rounded bg-orange-900/40 text-orange-200 inline-flex items-center gap-1 disabled:opacity-50">
+                        <Package size={14} /> Push to OpenClaw
+                      </button>
                     </>
                   ) : (
-                    <p className="text-surface-500 text-sm">Set framework to Hermes Workspace for link-out.</p>
+                    <p className="text-surface-500 text-sm">Set framework to Hermes Workspace or OpenClaw for link-out and push.</p>
                   )}
                 </div>
                 {runtimeInstance && (
