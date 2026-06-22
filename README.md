@@ -4,6 +4,7 @@ Harness-agnostic command center for agent fleets: agents, skills, tools, memory,
 
 ## Docs
 
+- [docs/agent-os/ECOSYSTEM_STANDUP.md](docs/agent-os/ECOSYSTEM_STANDUP.md) — **greenfield engineering spec** (topology, agent schema, phases, handoff)  
 - [docs/agent-os/ARCHITECTURE.md](docs/agent-os/ARCHITECTURE.md) — control plane layers & threat model  
 - [docs/agent-os/MEMORY_MODEL.md](docs/agent-os/MEMORY_MODEL.md) — shared memory layers  
 - [docs/agent-os/SKILL_PIPELINE_SPEC.md](docs/agent-os/SKILL_PIPELINE_SPEC.md) — pipeline JSON  
