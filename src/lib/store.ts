@@ -41,32 +41,26 @@ interface ClientAgentConfig {
   hasAuth: boolean;
 }
 
-/** Mock runtime numbers — replaced by real telemetry when the bridge is wired. */
-function seedRuntime(c: ClientAgentConfig, i: number): Agent {
-  const baseDate = Date.now() - (1 + i) * 3600_000;
-  const status: AgentStatus =
-    c.kind === "remote-http"
-      ? "idle"
-      : i === 0 || i === 1
-        ? "running"
-        : i === 2
-          ? "paused"
-          : i === 3
-            ? "idle"
-            : i === 4
-              ? "error"
-              : "completed";
+/**
+ * Honest runtime values. There is no live telemetry bridge yet, so we do NOT
+ * fabricate status/tokens/cost (the old version assigned them by array index —
+ * agent #4 was always "error", costs were a formula). Every configured agent is
+ * shown as idle with zeroed usage until a real /api/fleet/runtime feed exists.
+ * Auth state is surfaced separately via `hasAuth`.
+ */
+function seedRuntime(c: ClientAgentConfig): Agent {
+  const now = new Date().toISOString();
   return {
     ...c,
     cwd: c.cwd ?? undefined,
     gateway: c.gateway,
     hasAuth: c.hasAuth,
-    status,
-    tokensIn: 12_000 + i * 21_000,
-    tokensOut: 3_000 + i * 5_500,
-    costUsd: +(0.12 + i * 0.31).toFixed(2),
-    lastActivity: new Date(baseDate).toISOString(),
-    createdAt: new Date(baseDate - 86_400_000).toISOString(),
+    status: "idle" as AgentStatus,
+    tokensIn: 0,
+    tokensOut: 0,
+    costUsd: 0,
+    lastActivity: now,
+    createdAt: now,
   };
 }
 
@@ -105,7 +99,7 @@ export const useFleet = create<FleetState>((set, get) => ({
         agents: ClientAgentConfig[];
         meta: { sources: string[] };
       };
-      const agents = cfg.agents.map((c, i) => seedRuntime(c, i));
+      const agents = cfg.agents.map((c) => seedRuntime(c));
       set({
         agents,
         agentsLoaded: true,

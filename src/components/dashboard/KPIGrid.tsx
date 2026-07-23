@@ -13,62 +13,42 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { Sparkline } from "@/components/ui/Sparkline";
 import { cn } from "@/lib/cn";
+import { useFleet } from "@/lib/store";
 
 interface KPI {
   label: string;
   value: string;
-  delta: string;
-  positive: boolean;
+  note: string;
+  real: boolean;
   icon: ComponentType<{ className?: string }>;
-  data: number[];
-  accent: string;
 }
 
-const mockKPIs: KPI[] = [
-  {
-    label: "ACTIVE AGENTS",
-    value: "4 / 7",
-    delta: "3 online",
-    positive: true,
-    icon: Bot,
-    data: [2, 3, 3, 4, 3, 4, 4],
-    accent: "var(--color-neon)",
-  },
-  {
-    label: "TOTAL RUNS (24H)",
-    value: "142",
-    delta: "+18.4%",
-    positive: true,
-    icon: Cpu,
-    data: [90, 105, 115, 110, 125, 130, 142],
-    accent: "var(--color-neon)",
-  },
-  {
-    label: "AVG TURN TIME",
-    value: "4.8s",
-    delta: "-12.5%",
-    positive: true,
-    icon: Timer,
-    data: [6.1, 5.8, 5.5, 5.2, 5.0, 4.9, 4.8],
-    accent: "var(--color-neon)",
-  },
-  {
-    label: "EST. ACCRUED COST",
-    value: "$14.82",
-    delta: "+$3.10",
-    positive: false,
-    icon: DollarSign,
-    data: [4.2, 6.1, 8.5, 10.2, 11.8, 13.1, 14.82],
-    accent: "var(--color-warn)",
-  },
-];
-
 export function KPIGrid() {
+  const agentsCount = useFleet((s) => s.agents.length);
+  const activeCount = useFleet(
+    (s) => s.agents.filter((a) => a.status === "running").length,
+  );
+
+  // Honest KPIs. Only "active agents" has a real source today (the fleet store).
+  // Runs / turn-time / cost have no telemetry feed yet, so they read "—" instead
+  // of the old hardcoded "142 / 4.8s / $14.82" with invented sparklines.
+  const kpis: KPI[] = [
+    {
+      label: "ACTIVE AGENTS",
+      value: agentsCount ? `${activeCount} / ${agentsCount}` : "—",
+      note: agentsCount ? `${agentsCount} configured` : "no config loaded",
+      real: true,
+      icon: Bot,
+    },
+    { label: "RUNS (24H)", value: "—", note: "telemetry not wired", real: false, icon: Cpu },
+    { label: "AVG TURN TIME", value: "—", note: "telemetry not wired", real: false, icon: Timer },
+    { label: "EST. ACCRUED COST", value: "—", note: "telemetry not wired", real: false, icon: DollarSign },
+  ];
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {mockKPIs.map((kpi, idx) => {
+      {kpis.map((kpi) => {
         const Icon = kpi.icon;
         return (
           <GlassCard
@@ -77,48 +57,31 @@ export function KPIGrid() {
             interactive
             className="flex flex-col justify-between overflow-hidden"
           >
-            {/* aurora backing */}
-            <div className="absolute inset-0 -z-10 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-              <div
-                className="absolute -right-10 -top-10 h-32 w-32 rounded-full blur-2xl"
-                style={{
-                  background: `radial-gradient(circle, ${kpi.accent}20 0%, transparent 70%)`,
-                }}
-              />
-            </div>
-
             <div className="flex items-start justify-between">
               <div>
                 <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
                   {kpi.label}
                 </span>
-                <div className="mt-1 text-2xl font-semibold tracking-tight text-[var(--color-ink)]">
+                <div
+                  className={cn(
+                    "mt-1 text-2xl font-semibold tracking-tight",
+                    kpi.real
+                      ? "text-[var(--color-ink)]"
+                      : "text-[var(--color-ink-faint)]",
+                  )}
+                >
                   {kpi.value}
                 </div>
               </div>
-              <div className="rounded-lg border border-[var(--color-border-strong)] bg-[rgba(255,255,255,0.02)] p-2 text-[var(--color-ink-dim)] transition group-hover:border-[var(--color-neon)]/30 group-hover:text-[var(--color-neon)]">
+              <div className="rounded-lg border border-[var(--color-border-strong)] bg-[rgba(255,255,255,0.02)] p-2 text-[var(--color-ink-dim)]">
                 <Icon className="h-4 w-4" />
               </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-between gap-4">
-              <span
-                className={cn(
-                  "font-mono text-[11px]",
-                  kpi.positive
-                    ? "text-[var(--color-neon)]"
-                    : "text-[var(--color-warn)]",
-                )}
-              >
-                {kpi.delta}
+            <div className="mt-5">
+              <span className="font-mono text-[11px] text-[var(--color-ink-faint)]">
+                {kpi.note}
               </span>
-              <div className="h-7 w-24">
-                <Sparkline
-                  data={kpi.data}
-                  stroke={kpi.accent}
-                  fill={`${kpi.accent}12`}
-                />
-              </div>
             </div>
           </GlassCard>
         );

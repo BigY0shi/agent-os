@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { seedTimeline } from "@/lib/mock-data";
 import type { TimelineEvent } from "@/lib/types";
 import { cn } from "@/lib/cn";
 
@@ -36,48 +35,72 @@ function shortTime(iso: string) {
   return d.toLocaleTimeString("en-GB", { hour12: false });
 }
 
+interface ActivityEntry {
+  ts: number;
+  agent: string;
+  text: string;
+  level?: string;
+}
+
+function toLevel(l?: string): TimelineEvent["level"] {
+  return l === "err" ? "error" : l === "warn" ? "warn" : "info";
+}
+
 export function MiniTimeline() {
-  const [events, setEvents] = useState<TimelineEvent[]>(seedTimeline);
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setEvents((prev) => {
-        const cycled = [...prev];
-        // simulate a new event arriving
-        const next: TimelineEvent = {
-          id: `live_${Date.now()}`,
-          ts: new Date().toISOString(),
-          level: ["info", "success", "tool", "warn"][
-            Math.floor(Math.random() * 4)
-          ] as TimelineEvent["level"],
-          category: "agent",
-          agentName: ["Atlas", "Orion", "Vega", "Lyra"][
-            Math.floor(Math.random() * 4)
-          ],
-          title: [
-            "Read package.json",
-            "Edit lib/auth.ts",
-            "Bash(pnpm test --filter api)",
-            "Assistant turn (322 tok)",
-            "Grep('TODO', src/**)",
-          ][Math.floor(Math.random() * 5)],
-        };
-        return [next, ...cycled].slice(0, 8);
-      });
-    }, 3200);
-    return () => clearInterval(id);
+    let alive = true;
+    const load = async () => {
+      try {
+        // Real feed: /api/activity tails the actual openclaw + hermes agent logs.
+        const res = await fetch("/api/activity", { cache: "no-store" });
+        const j = await res.json();
+        if (!alive) return;
+        const entries: ActivityEntry[] = Array.isArray(j.entries) ? j.entries : [];
+        setEvents(
+          entries.slice(0, 8).map((e, i) => ({
+            id: `${e.agent}-${e.ts}-${i}`,
+            ts: new Date(e.ts).toISOString(),
+            level: toLevel(e.level),
+            category: "agent" as const,
+            agentName: e.agent,
+            title: e.text,
+          })),
+        );
+      } catch {
+        /* transient network error — keep the last good events */
+      } finally {
+        if (alive) setLoaded(true);
+      }
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, []);
+
+  const live = events.length > 0;
 
   return (
     <GlassCard hudCorners className="flex h-full flex-col">
       <SectionHeader
         eyebrow="MISSION TIMELINE"
         title="Live event stream"
-        hint="Newest first · auto-updating"
+        hint="Newest first · agent logs"
         right={
-          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-[var(--color-neon)]">
-            <Circle className="h-2 w-2 animate-pulse-dot fill-current" /> LIVE
-          </span>
+          live ? (
+            <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-[var(--color-neon)]">
+              <Circle className="h-2 w-2 animate-pulse-dot fill-current" /> LIVE
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-[var(--color-ink-faint)]">
+              <Circle className="h-2 w-2 fill-current" /> IDLE
+            </span>
+          )
         }
       />
 
@@ -130,6 +153,11 @@ export function MiniTimeline() {
             );
           })}
         </AnimatePresence>
+        {loaded && !live && (
+          <li className="relative flex items-start gap-3 py-2 pl-8 text-sm text-[var(--color-ink-faint)]">
+            No recent activity in the agent logs.
+          </li>
+        )}
       </ul>
     </GlassCard>
   );

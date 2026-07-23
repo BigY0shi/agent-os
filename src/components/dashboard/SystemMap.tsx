@@ -113,7 +113,7 @@ export function SystemMap() {
 function AgentNode({ agent, x, y }: { agent: Agent; x: number; y: number }) {
   return (
     <Link
-      href={`/agents/${agent.id}`}
+      href={`/${agent.id}`}
       className="group absolute -translate-x-1/2 -translate-y-1/2"
       style={{ left: `${x}%`, top: `${y}%` }}
       title={`${agent.name} · ${agent.role}`}

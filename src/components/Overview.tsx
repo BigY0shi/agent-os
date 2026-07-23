@@ -4,7 +4,7 @@ import { HeroGreeting } from "./dashboard/HeroGreeting";
 import { KPIGrid } from "./dashboard/KPIGrid";
 import { TelemetryPanel } from "./dashboard/TelemetryPanel";
 import { AssistantPanel } from "./dashboard/AssistantPanel";
-import { FleetSummary } from "./dashboard/FleetSummary";
+import { DealDeskSummary } from "./dashboard/DealDeskSummary";
 import { SystemMap } from "./dashboard/SystemMap";
 import { MiniTimeline } from "./dashboard/MiniTimeline";
 import { MissionStripe } from "./dashboard/MissionStripe";
@@ -22,7 +22,7 @@ export default function Overview() {
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_1fr_1.1fr]">
-        <FleetSummary />
+        <DealDeskSummary />
         <SystemMap />
         <MiniTimeline />
       </div>

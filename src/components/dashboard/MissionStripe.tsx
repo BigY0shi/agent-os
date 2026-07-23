@@ -2,14 +2,14 @@
 
 import { motion } from "framer-motion";
 
+// Honest static identity only. The old version showed a frozen fake UPTIME
+// ("07:42:14"), a fake BRIDGE version, and a fake BUILD tag — all removed.
 const items = [
-  { k: "OP", v: "COMMAND-CENTER" },
+  { k: "OP", v: "COMMAND CENTER" },
   { k: "PHASE", v: "RUNTIME" },
-  { k: "BRIDGE", v: "claude v2.1.89" },
-  { k: "REGION", v: "LOCAL · 127.0.0.1" },
+  { k: "BRIDGE", v: "claude · CLI" },
+  { k: "REGION", v: "LOCAL · LAN" },
   { k: "USERS", v: "1 · operator" },
-  { k: "UPTIME", v: "07:42:14" },
-  { k: "BUILD", v: "ccc-001-α" },
 ];
 
 export function MissionStripe() {

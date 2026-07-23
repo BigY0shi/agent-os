@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Sparkles, Wand2 } from "lucide-react";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFleet } from "@/lib/store";
 
 function getGreeting(d: Date) {
@@ -25,6 +26,7 @@ export function HeroGreeting({ name }: { name?: string }) {
     (s) => s.agents.filter((a) => a.kind === "remote-http").length,
   );
   const displayName = name ?? operator ?? "Operator";
+  const router = useRouter();
   const [greeting, setGreeting] = useState("Welcome");
   useEffect(() => {
     setGreeting(getGreeting(new Date()));
@@ -81,19 +83,18 @@ export function HeroGreeting({ name }: { name?: string }) {
             <span className="text-[var(--color-ink)]">, {displayName}.</span>
           </h1>
           <p className="text-[13px] text-[var(--color-ink-dim)]">
-            Bridge is online · {agentsCount} agents standing by ({activeCount}{" "}
-            active{remoteCount ? `, ${remoteCount} remote` : ""}) · all systems
-            nominal.
+            {agentsCount} agents configured · {activeCount} active
+            {remoteCount ? ` · ${remoteCount} remote` : ""}.
           </p>
         </div>
       </div>
 
       <div className="relative flex flex-wrap items-center gap-2">
-        <NeonButton>
+        <NeonButton onClick={() => router.push("/pipeline")}>
           <Wand2 className="h-3 w-3" /> Run plan
         </NeonButton>
-        <NeonButton variant="ghost">
-          <Sparkles className="h-3 w-3" /> New agent
+        <NeonButton variant="ghost" onClick={() => router.push("/claude")}>
+          <Sparkles className="h-3 w-3" /> Open chat
         </NeonButton>
       </div>
     </motion.div>
