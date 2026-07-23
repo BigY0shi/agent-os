@@ -1,0 +1,202 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - heading "Nimbus Notes" [level=1] [ref=e5]
+    - navigation [ref=e6]:
+      - button "Queue" [ref=e7] [cursor=pointer]
+      - button "Report" [ref=e8] [cursor=pointer]
+    - generic [ref=e9]:
+      - textbox "Stored locally in your browser only" [ref=e10]:
+        - /placeholder: auth token (if set)
+      - button "Simulate ticket" [ref=e11] [cursor=pointer]
+      - button "Run inbox" [ref=e12] [cursor=pointer]
+  - main [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]: pending 9
+        - generic [ref=e17]: review 3
+        - generic [ref=e18]: escalate 6
+        - generic [ref=e19]: auto-send 0
+      - generic [ref=e20]:
+        - article [ref=e21]:
+          - generic [ref=e22]:
+            - generic [ref=e23]: サービスの利用をキャンセルする
+            - generic [ref=e24]:
+              - generic [ref=e25]: escalate → human
+              - generic "How well the knowledge base matched this ticket (retrieval score 0.68)" [ref=e26]: "docs: strong"
+              - generic [ref=e27]: billing
+              - generic [ref=e28]: billing
+              - generic [ref=e29]: high
+              - generic [ref=e30]: negative
+          - generic [ref=e31]: Yoshi <riyoshi@wantanabe.com> · 6/30/2026, 8:01:02 AM
+          - group [ref=e32]:
+            - generic "Customer message" [ref=e33] [cursor=pointer]
+          - generic [ref=e34]: Draft reply (edit before sending)
+          - textbox [ref=e35]: "こんにちは、ご連絡いただきありがとうございます。お別れは残念ですが、最後までしっかりお手伝いさせてくださいね。まず、解約（サービスのキャンセル）の手順については、手元の情報に確実なご案内が見つからなかったため、チームに確認しています。分かり次第すぐにお知らせします。その間にひとつだけ安心していただきたいのは、ノートはいつでもエクスポートできて、データがロックインされることはない、という点です。設定 →データ →「すべてエクスポート」で、全ノートブックを含む.zipをダウンロードできます。詳しくはこちら: https://help.nimbusnotes.example/import-export 次のステップとして、解約のご案内をそのままお待ちいただくか、先にノートのバックアップを取りたいかだけ教えていただけますか？ Cheers, Nimbus Support"
+          - link "↳ Importing and exporting notes — https://help.nimbusnotes.example/import-export" [ref=e37] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/import-export
+          - generic [ref=e38]: Subscription cancellation requires billing action and presents retention opportunity.
+          - generic [ref=e39]:
+            - button "Send" [ref=e40] [cursor=pointer]
+            - button "Reset" [ref=e41] [cursor=pointer]
+            - button "Reject" [ref=e42] [cursor=pointer]
+        - article [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]: Como se dice?
+            - generic [ref=e46]:
+              - generic [ref=e47]: escalate → human
+              - generic "How well the knowledge base matched this ticket (retrieval score 0.64)" [ref=e48]: "docs: strong"
+              - generic [ref=e49]: billing
+              - generic [ref=e50]: billing
+          - generic [ref=e51]: Anotrher ONe <Yooooo@uhhuh.com> · 6/30/2026, 7:59:22 AM
+          - group [ref=e52]:
+            - generic "Customer message" [ref=e53] [cursor=pointer]
+          - generic [ref=e54]: Draft reply (edit before sending)
+          - textbox [ref=e55]: "¡Hola! ¡Qué alegría que te encante Nimbus Notes! 😊 Sobre descuentos o códigos promocionales para clientes existentes: no tengo esa información a mano, así que lo estoy consultando con el equipo y te confirmo en cuanto sepa algo. Mientras tanto, si quieres ver los planes y cómo cambiar entre facturación mensual o anual, puedes revisar aquí: https://help.nimbusnotes.example/billing. Como siguiente paso, dime si prefieres el plan mensual o anual y te ayudo con la configuración cuando tengamos respuesta sobre las promociones. ¡Gracias por tu paciencia! Cheers, Nimbus Support"
+          - link "↳ Plans and billing — https://help.nimbusnotes.example/billing" [ref=e57] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/billing
+          - generic [ref=e58]: Low confidence (0.3 < 0.4); not enough grounding to draft safely.
+          - generic [ref=e59]:
+            - button "Send" [ref=e60] [cursor=pointer]
+            - button "Reset" [ref=e61] [cursor=pointer]
+            - button "Reject" [ref=e62] [cursor=pointer]
+        - article [ref=e63]:
+          - generic [ref=e64]:
+            - generic [ref=e65]: "Re: Re: RE:"
+            - generic [ref=e66]:
+              - generic [ref=e67]: escalate → human
+              - generic "How well the knowledge base matched this ticket (retrieval score 0.74)" [ref=e68]: "docs: strong"
+              - generic [ref=e69]: account
+              - generic [ref=e70]: account
+          - generic [ref=e71]: Hot Man <man@manliness.com> · 6/30/2026, 7:55:20 AM
+          - group [ref=e72]:
+            - generic "Customer message" [ref=e73] [cursor=pointer]
+          - generic [ref=e74]: Draft reply (edit before sending)
+          - textbox [ref=e75]: Hi there, thanks for reaching out, and I'm sorry to hear you're thinking about leaving! I want to get this right for you, so I'm checking with the team on the exact steps to cancel and will follow up shortly. In the meantime, if you'd like to keep your notes, you can export everything from Settings > Data > Export all, which gives you a .zip of every notebook so you're never locked in (https://help.nimbusnotes.example/import-export). Would you like me to walk you through that export while we sort out the cancellation? Cheers, Nimbus Support
+          - link "↳ Importing and exporting notes — https://help.nimbusnotes.example/import-export" [ref=e77] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/import-export
+          - generic [ref=e78]: Category "account" always routes to a human.
+          - generic [ref=e79]:
+            - button "Send" [ref=e80] [cursor=pointer]
+            - button "Reset" [ref=e81] [cursor=pointer]
+            - button "Reject" [ref=e82] [cursor=pointer]
+        - article [ref=e83]:
+          - generic [ref=e84]:
+            - generic [ref=e85]: Warranty Claim
+            - generic [ref=e86]:
+              - generic [ref=e87]: escalate → human
+              - generic "How well the knowledge base matched this ticket (retrieval score 0.68)" [ref=e88]: "docs: strong"
+              - generic [ref=e89]: other
+              - generic [ref=e90]: general
+              - generic [ref=e91]: urgent
+              - generic [ref=e92]: negative
+          - generic [ref=e93]: Jackie <Herrera> · 6/30/2026, 7:50:27 AM
+          - group [ref=e94]:
+            - generic "Customer message" [ref=e95] [cursor=pointer]
+          - generic [ref=e96]: Draft reply (edit before sending)
+          - textbox [ref=e97]: "Hi there, I'm so sorry you're dealing with something this scary. I want to be honest with you: Nimbus Notes is a note-taking app, so we don't make any physical product or \"unit,\" and there's nothing on our side that could trap anyone. If your children are in real, immediate danger, please stop and call your local emergency services (911 in the US) right now — they're the fastest way to get help. If you reached us by mistake and were actually trying to contact another company, I'd be glad to point you in the right direction. And if there's something I can help you with in Nimbus Notes itself, I'm here for that too. I don't have anything in our help resources that covers a warranty claim, so I'm checking with the team to make sure you get pointed to the right place. Hang in there. Cheers, Nimbus Support"
+          - generic [ref=e99]: ⚠ no source cited — verify before sending
+          - generic [ref=e100]: Safety claim involving minors requires human review; likely misrouted (Nimbus Notes is a software note-taking app with no physical product) or potential fraud/prank.
+          - generic [ref=e101]:
+            - button "Send" [ref=e102] [cursor=pointer]
+            - button "Reset" [ref=e103] [cursor=pointer]
+            - button "Reject" [ref=e104] [cursor=pointer]
+        - article [ref=e105]:
+          - generic [ref=e106]:
+            - generic [ref=e107]: Organizing notes into notebooks
+            - generic [ref=e108]:
+              - generic "Draft send-readiness" [ref=e109]: review · 92%
+              - generic [ref=e110]: how-to
+              - generic [ref=e111]: general
+          - generic [ref=e112]: Alex Kim <alex@example.com> · 6/30/2026, 6:04:01 AM
+          - group [ref=e113]:
+            - generic "Customer message" [ref=e114] [cursor=pointer]
+          - generic [ref=e115]: Draft reply (edit before sending)
+          - textbox [ref=e116]: "Hi there! Happy to help you get organized. To group notes into notebooks, click New Notebook in the left sidebar, give it a name, then drag your notes into it. You can also add tags to any note from the tag field at the bottom of the editor, and then filter by tag from the sidebar to find them later. One handy extra: search (Ctrl+K) looks inside titles, body text, and tags too. Full steps are here: https://help.nimbusnotes.example/getting-started. Next step: try making one notebook and tagging a couple of notes, and let me know if anything trips you up! Cheers, Nimbus Support"
+          - link "↳ Getting started with Nimbus Notes — https://help.nimbusnotes.example/getting-started" [ref=e118] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/getting-started
+          - generic [ref=e119]: Grounded draft ready for review (confidence 0.92).
+          - generic [ref=e120]:
+            - button "Send" [ref=e121] [cursor=pointer]
+            - button "Reset" [ref=e122] [cursor=pointer]
+            - button "Reject" [ref=e123] [cursor=pointer]
+        - article [ref=e124]:
+          - generic [ref=e125]:
+            - generic [ref=e126]: Import from another app
+            - generic [ref=e127]:
+              - generic "Draft send-readiness" [ref=e128]: review · 95%
+              - generic [ref=e129]: how-to
+              - generic [ref=e130]: import-export
+          - generic [ref=e131]: Sam Rivera <sam@example.com> · 6/30/2026, 5:38:59 AM
+          - group [ref=e132]:
+            - generic "Customer message" [ref=e133] [cursor=pointer]
+          - generic [ref=e134]: Draft reply (edit before sending)
+          - textbox [ref=e135]: "Hi there, welcome to Nimbus Notes! Moving over your markdown files is easy. Just go to Settings, then Data, then Import, and upload your Markdown files (you can also upload a .zip exported from another app). Your imported notes will keep their titles and land in a notebook called Imported. Full steps are here: https://help.nimbusnotes.example/import-export. Next step: head to Settings > Data > Import and drop in your .md files. Let us know if you hit any snags! Cheers, Nimbus Support"
+          - link "↳ Importing and exporting notes — https://help.nimbusnotes.example/import-export" [ref=e137] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/import-export
+          - generic [ref=e138]: Grounded draft ready for review (confidence 0.95).
+          - generic [ref=e139]:
+            - button "Send" [ref=e140] [cursor=pointer]
+            - button "Reset" [ref=e141] [cursor=pointer]
+            - button "Reject" [ref=e142] [cursor=pointer]
+        - article [ref=e143]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: Offline desktop app for Linux?
+            - generic [ref=e146]:
+              - generic [ref=e147]: escalate → human
+              - generic "How well the knowledge base matched this ticket (retrieval score 0.73)" [ref=e148]: "docs: strong"
+              - generic [ref=e149]: feature-request
+              - generic [ref=e150]: feature-request
+          - generic [ref=e151]: Priya Shah <priya@example.com> · 6/30/2026, 3:52:06 AM
+          - group [ref=e152]:
+            - generic "Customer message" [ref=e153] [cursor=pointer]
+          - generic [ref=e154]: Draft reply (edit before sending)
+          - textbox [ref=e155]: "Hi there, thanks for reaching out, and great question! I want to give you an accurate answer, so I'm checking with our team on whether we offer a native offline desktop app for Linux. I don't have that detail confirmed in our help docs yet, so I'd rather not guess. In the meantime, if you'd like to get started or move notes around, our Getting started guide walks through the basics (https://help.nimbusnotes.example/getting-started). Next step: sit tight and I'll follow up as soon as I hear back from the team on Linux desktop support. Thanks for your patience! Cheers, Nimbus Support"
+          - link "↳ Getting started with Nimbus Notes — https://help.nimbusnotes.example/getting-started" [ref=e157] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/getting-started
+          - generic [ref=e158]: Low confidence (0.3 < 0.4); not enough grounding to draft safely.
+          - generic [ref=e159]:
+            - button "Send" [ref=e160] [cursor=pointer]
+            - button "Reset" [ref=e161] [cursor=pointer]
+            - button "Reject" [ref=e162] [cursor=pointer]
+        - article [ref=e163]:
+          - generic [ref=e164]:
+            - generic [ref=e165]: Refund for my Pro plan
+            - generic [ref=e166]:
+              - generic [ref=e167]: escalate → human
+              - generic "How well the knowledge base matched this ticket (retrieval score 1.00)" [ref=e168]: "docs: strong"
+              - generic [ref=e169]: billing
+              - generic [ref=e170]: billing
+          - generic [ref=e171]: Marcus Bell <marcus@example.com> · 6/30/2026, 3:52:06 AM
+          - group [ref=e172]:
+            - generic "Customer message" [ref=e173] [cursor=pointer]
+          - generic [ref=e174]: Draft reply (edit before sending)
+          - textbox [ref=e175]: "Hi there, thanks for reaching out, and no worries — these things happen! I want to get this sorted for you. I don't have our refund details in front of me, so I'm checking with the team on processing a refund back to your card and will follow up as soon as I hear back. In the meantime, if you'd like to manage your plan or grab a copy of your invoice, you can find both under Settings > Billing (https://help.nimbusnotes.example/billing). Next step: I'll confirm the refund process with the team and update you shortly. Hang tight! Cheers, Nimbus Support"
+          - link "↳ Plans and billing — https://help.nimbusnotes.example/billing" [ref=e177] [cursor=pointer]:
+            - /url: https://help.nimbusnotes.example/billing
+          - generic [ref=e178]: Matched sensitive phrase "refund".
+          - generic [ref=e179]:
+            - button "Send" [ref=e180] [cursor=pointer]
+            - button "Reset" [ref=e181] [cursor=pointer]
+            - button "Reject" [ref=e182] [cursor=pointer]
+        - article [ref=e183]:
+          - generic [ref=e184]:
+            - generic [ref=e185]: How do I export my notes to PDF?
+            - generic [ref=e186]:
+              - generic "Draft send-readiness" [ref=e187]: review · 93%
+              - generic [ref=e188]: how-to
+              - generic [ref=e189]: import-export
+          - generic [ref=e190]: Dana Lee <dana@example.com> · 6/30/2026, 3:52:06 AM
+          - group [ref=e191]:
+            - generic "Customer message" [ref=e192] [cursor=pointer]
+          - generic [ref=e193]: Draft reply (edit before sending)
+          - textbox [ref=e194]: "Hi there! Happy to help you get those notes to your accountant. Yes — you can export individual notes: open a note, click the three-dot menu in the top right, choose Export, and pick PDF (https://help.nimbusnotes.example/import-export). To send a whole notebook at once, right-click the notebook in the sidebar and choose Export notebook, which gives you a .zip of all its notes in the format you pick (https://help.nimbusnotes.example/import-export). One heads-up: PDF export is a Pro plan feature, so you'll need Pro to use it — you can upgrade under Settings > Plan (https://help.nimbusnotes.example/billing). Next step: try exporting a single note to PDF from that three-dot menu, and let me know if you'd like a hand with the notebook export! Cheers, Nimbus Support"
+          - generic [ref=e195]:
+            - link "↳ Importing and exporting notes — https://help.nimbusnotes.example/import-export" [ref=e196] [cursor=pointer]:
+              - /url: https://help.nimbusnotes.example/import-export
+            - link "↳ Plans and billing — https://help.nimbusnotes.example/billing" [ref=e197] [cursor=pointer]:
+              - /url: https://help.nimbusnotes.example/billing
+          - generic [ref=e198]: Grounded draft ready for review (confidence 0.93).
+          - generic [ref=e199]:
+            - button "Send" [ref=e200] [cursor=pointer]
+            - button "Reset" [ref=e201] [cursor=pointer]
+            - button "Reject" [ref=e202] [cursor=pointer]

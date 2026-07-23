@@ -1,0 +1,339 @@
+- generic [ref=e4]:
+  - link "Skip to Main Content" [ref=e5] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - complementary [ref=e10]:
+        - generic [ref=e11]:
+          - button "Open YoshiCorp workspace switcher" [ref=e12]:
+            - generic [ref=e13]:
+              - generic [ref=e14]:
+                - img [ref=e15]
+                - generic [ref=e16]: "Y"
+              - generic [ref=e17]: YoshiCorp
+            - img
+          - link "Open search" [ref=e18] [cursor=pointer]:
+            - /url: /LAU/search
+            - img
+          - button "Collapse sidebar" [expanded] [ref=e19]:
+            - img
+        - navigation [ref=e20]:
+          - generic [ref=e21]:
+            - button "New Task" [ref=e22]:
+              - img [ref=e23]
+              - generic [ref=e26]: New Task
+            - link "Dashboard 1 live" [ref=e558] [cursor=pointer]:
+              - /url: /LAU/dashboard
+              - img [ref=e29]
+              - generic [ref=e34]: Dashboard
+              - generic [ref=e563]: 1 live
+            - link "Inbox" [ref=e564] [cursor=pointer]:
+              - /url: /LAU/inbox
+              - img [ref=e37]
+              - generic [ref=e41]: Inbox
+          - generic [ref=e43]:
+            - generic [ref=e47]: Work
+            - generic [ref=e48]:
+              - link "Tasks" [ref=e49] [cursor=pointer]:
+                - /url: /LAU/issues
+                - img [ref=e51]
+                - generic [ref=e54]: Tasks
+              - link "Routines" [ref=e55] [cursor=pointer]:
+                - /url: /LAU/routines
+                - img [ref=e57]
+                - generic [ref=e62]: Routines
+              - link "Goals" [ref=e63] [cursor=pointer]:
+                - /url: /LAU/goals
+                - img [ref=e65]
+                - generic [ref=e69]: Goals
+              - link "Artifacts" [ref=e70] [cursor=pointer]:
+                - /url: /LAU/artifacts
+                - img [ref=e72]
+                - generic [ref=e76]: Artifacts
+          - generic [ref=e77]:
+            - generic [ref=e79]:
+              - button "Collapse Projects" [expanded] [ref=e80]:
+                - img [ref=e81]
+              - button "Projects section actions" [ref=e83]:
+                - generic [ref=e84]: Projects
+              - button "New project" [ref=e85]:
+                - img
+            - generic [ref=e87]:
+              - button "Onboarding Open actions for Onboarding" [ref=e89]:
+                - generic [ref=e91]:
+                  - link "Onboarding" [ref=e92] [cursor=pointer]:
+                    - /url: /LAU/projects/onboarding/issues
+                    - img [ref=e94]
+                    - generic [ref=e96]: Onboarding
+                  - button "Open actions for Onboarding":
+                    - img
+              - status [ref=e97]
+          - generic [ref=e98]:
+            - generic [ref=e100]:
+              - button "Collapse Agents" [expanded] [ref=e101]:
+                - img [ref=e102]
+              - button "Agents section actions" [ref=e104]:
+                - generic [ref=e105]: Agents
+              - button "New agent" [ref=e106]:
+                - img
+            - generic [ref=e109]:
+              - link "Alpha 1 live" [ref=e565] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs
+                - img [ref=e111]
+                - generic [ref=e114]: Alpha
+                - generic [ref=e570]: 1 live
+              - button "Open actions for Alpha":
+                - img
+          - generic [ref=e115]:
+            - generic [ref=e119]: Company
+            - generic [ref=e120]:
+              - link "Org" [ref=e121] [cursor=pointer]:
+                - /url: /LAU/org
+                - img [ref=e123]
+                - generic [ref=e128]: Org
+              - link "Skills" [ref=e129] [cursor=pointer]:
+                - /url: /LAU/skills
+                - img [ref=e131]
+                - generic [ref=e141]: Skills
+              - link "Costs" [ref=e142] [cursor=pointer]:
+                - /url: /LAU/costs
+                - img [ref=e144]
+                - generic [ref=e146]: Costs
+              - link "Activity" [ref=e147] [cursor=pointer]:
+                - /url: /LAU/activity
+                - img [ref=e149]
+                - generic [ref=e153]: Activity
+              - link "Settings" [ref=e154] [cursor=pointer]:
+                - /url: /LAU/company/settings
+                - img [ref=e156]
+                - generic [ref=e159]: Settings
+      - button "Open account menu" [ref=e161]:
+        - generic [ref=e163]: BO
+        - generic [ref=e164]: Board
+      - separator "Resize sidebar" [ref=e165]
+    - generic [ref=e166]:
+      - navigation "breadcrumb" [ref=e170]:
+        - list [ref=e171]:
+          - listitem [ref=e172]:
+            - link "Agents" [ref=e173] [cursor=pointer]:
+              - /url: /LAU/agents
+          - listitem [ref=e174]:
+            - img [ref=e175]
+          - listitem [ref=e177]:
+            - link "Alpha" [ref=e571] [cursor=pointer]:
+              - /url: /LAU/agents/alpha/dashboard
+          - listitem [ref=e572]:
+            - img [ref=e573]
+          - listitem [ref=e575]:
+            - link "Runs" [ref=e576] [cursor=pointer]:
+              - /url: /LAU/agents/alpha/runs
+          - listitem [ref=e577]:
+            - img [ref=e578]
+          - listitem [ref=e580]:
+            - link "Run c3bce33c" [disabled] [ref=e581]
+      - main [active] [ref=e180]:
+        - generic [ref=e181]:
+          - generic [ref=e182]:
+            - generic [ref=e183]:
+              - button [ref=e184]:
+                - img [ref=e185]
+              - generic [ref=e188]:
+                - heading "Alpha" [level=2] [ref=e189]
+                - paragraph [ref=e190]: CEO - Chief of Staff
+            - generic [ref=e191]:
+              - button "Assign Task" [ref=e192]:
+                - img
+                - generic [ref=e193]: Assign Task
+              - button "Run Heartbeat" [ref=e194]:
+                - img
+                - generic [ref=e195]: Run Heartbeat
+              - button "Pause" [ref=e555]:
+                - img
+                - generic [ref=e556]: Pause
+              - generic [ref=e199]: idle
+              - button "Open actions for Alpha" [ref=e200]:
+                - img
+          - generic [ref=e582]:
+            - generic [ref=e584]:
+              - link "c3bce33c On-demand just now" [ref=e585] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs
+                - generic [ref=e586]:
+                  - img [ref=e587]
+                  - generic [ref=e589]: c3bce33c
+                  - generic [ref=e590]: On-demand
+                  - generic [ref=e591]: just now
+              - 'link "edb140d0 Automation 2h ago Warning: Unknown toolsets: messaging, moa ⚠️ Normalized mod" [ref=e592] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/edb140d0-6f12-464a-baae-24fa1d193dc1
+                - generic [ref=e593]:
+                  - img [ref=e594]
+                  - generic [ref=e598]: edb140d0
+                  - generic [ref=e599]: Automation
+                  - generic [ref=e600]: 2h ago
+                - generic [ref=e601]: "Warning: Unknown toolsets: messaging, moa ⚠️ Normalized mod"
+              - link "bd218bba Automation 5h ago Verified the full board state. No action is needed this hear 34.0k tok" [ref=e602] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/bd218bba-e449-4807-9664-26cc69a6aa03
+                - generic [ref=e603]:
+                  - img [ref=e604]
+                  - generic [ref=e607]: bd218bba
+                  - generic [ref=e608]: Automation
+                  - generic [ref=e609]: 5h ago
+                - generic [ref=e610]: Verified the full board state. No action is needed this hear
+                - generic [ref=e612]: 34.0k tok
+              - 'link "72beb55e Automation 5h ago **LAU-5 disposition: `in_review`** The previous run timed o 7.0k tok" [ref=e613] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/72beb55e-e38c-4e45-9fcf-997eef7bf638
+                - generic [ref=e614]:
+                  - img [ref=e615]
+                  - generic [ref=e618]: 72beb55e
+                  - generic [ref=e619]: Automation
+                  - generic [ref=e620]: 5h ago
+                - generic [ref=e621]: "**LAU-5 disposition: `in_review`** The previous run timed o"
+                - generic [ref=e623]: 7.0k tok
+              - link "1c15415c Assignment 5h ago Timed out after 300s" [ref=e624] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/1c15415c-2d4c-4bf3-9108-14a1eb2f4a09
+                - generic [ref=e625]:
+                  - img [ref=e626]
+                  - generic [ref=e629]: 1c15415c
+                  - generic [ref=e630]: Assignment
+                  - generic [ref=e631]: 5h ago
+                - generic [ref=e632]: Timed out after 300s
+              - link "dc41c5e6 Automation 5h ago LAU-4 is now **done**. The previous run drafted and posted b 2.7k tok" [ref=e633] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/dc41c5e6-ae05-4440-87a2-b352af2094b8
+                - generic [ref=e634]:
+                  - img [ref=e635]
+                  - generic [ref=e638]: dc41c5e6
+                  - generic [ref=e639]: Automation
+                  - generic [ref=e640]: 5h ago
+                - generic [ref=e641]: LAU-4 is now **done**. The previous run drafted and posted b
+                - generic [ref=e643]: 2.7k tok
+              - 'link "cae98332 Assignment 5h ago LAU-4 is **done**. Here''s what happened this heartbeat: **C 7.9k tok" [ref=e644] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/cae98332-6de4-474b-8180-5733dabe9db9
+                - generic [ref=e645]:
+                  - img [ref=e646]
+                  - generic [ref=e649]: cae98332
+                  - generic [ref=e650]: Assignment
+                  - generic [ref=e651]: 5h ago
+                - generic [ref=e652]: "LAU-4 is **done**. Here's what happened this heartbeat: **C"
+                - generic [ref=e654]: 7.9k tok
+              - 'link "f878b715 Automation 6h ago LAU-2 is **done** (`completedAt: 2026-06-26T16:28:29Z`). T 839 tok" [ref=e655] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/f878b715-d31c-4655-b811-cdfe23ac1d5e
+                - generic [ref=e656]:
+                  - img [ref=e657]
+                  - generic [ref=e660]: f878b715
+                  - generic [ref=e661]: Automation
+                  - generic [ref=e662]: 6h ago
+                - generic [ref=e663]: "LAU-2 is **done** (`completedAt: 2026-06-26T16:28:29Z`). T"
+                - generic [ref=e665]: 839 tok
+              - 'link "1bd66ab8 Automation 6h ago LAU-2 is now **done**. Here''s what I did: - **Acknowledged* 3.7k tok" [ref=e666] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/1bd66ab8-adda-45f1-8e07-d663ccc06af8
+                - generic [ref=e667]:
+                  - img [ref=e668]
+                  - generic [ref=e671]: 1bd66ab8
+                  - generic [ref=e672]: Automation
+                  - generic [ref=e673]: 6h ago
+                - generic [ref=e674]: "LAU-2 is now **done**. Here's what I did: - **Acknowledged*"
+                - generic [ref=e676]: 3.7k tok
+              - link "0e3d0687 Automation 6h ago Cancelled by control plane" [ref=e677] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/0e3d0687-c156-4ec9-9368-c407b6c9f9d6
+                - generic [ref=e678]:
+                  - img [ref=e679]
+                  - generic [ref=e681]: 0e3d0687
+                  - generic [ref=e682]: Automation
+                  - generic [ref=e683]: 6h ago
+                - generic [ref=e684]: Cancelled by control plane
+              - link "8e0646dc Automation 6h ago Cancelled by control plane" [ref=e685] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/8e0646dc-669e-496a-b2a1-7bf98ded09e7
+                - generic [ref=e686]:
+                  - img [ref=e687]
+                  - generic [ref=e689]: 8e0646dc
+                  - generic [ref=e690]: Automation
+                  - generic [ref=e691]: 6h ago
+                - generic [ref=e692]: Cancelled by control plane
+              - link "b95b2c35 Assignment 6h ago Cancelled by control plane" [ref=e693] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/b95b2c35-46ee-43f6-8032-763603b1ba4d
+                - generic [ref=e694]:
+                  - img [ref=e695]
+                  - generic [ref=e697]: b95b2c35
+                  - generic [ref=e698]: Assignment
+                  - generic [ref=e699]: 6h ago
+                - generic [ref=e700]: Cancelled by control plane
+              - 'link "52b95db7 Automation 6h ago **LAU-1 disposition: `done`** (no new work needed — re-opene 349 tok" [ref=e701] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/52b95db7-8d06-4135-b3b9-de66132f65ce
+                - generic [ref=e702]:
+                  - img [ref=e703]
+                  - generic [ref=e706]: 52b95db7
+                  - generic [ref=e707]: Automation
+                  - generic [ref=e708]: 6h ago
+                - generic [ref=e709]: "**LAU-1 disposition: `done`** (no new work needed — re-opene"
+                - generic [ref=e711]: 349 tok
+              - 'link "4dd98296 Assignment 6h ago **LAU-1 disposition: `done`** Two things fixed this heartbe 1.6k tok" [ref=e712] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/4dd98296-6a59-4862-9eef-2321fdec3abe
+                - generic [ref=e713]:
+                  - img [ref=e714]
+                  - generic [ref=e717]: 4dd98296
+                  - generic [ref=e718]: Assignment
+                  - generic [ref=e719]: 6h ago
+                - generic [ref=e720]: "**LAU-1 disposition: `done`** Two things fixed this heartbe"
+                - generic [ref=e722]: 1.6k tok
+              - link "8e85d322 Automation 6h ago There's an issue with the selected model (claude-mythos-5)." [ref=e723] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/8e85d322-3243-4360-a29a-9b67a21cbbaf
+                - generic [ref=e724]:
+                  - img [ref=e725]
+                  - generic [ref=e729]: 8e85d322
+                  - generic [ref=e730]: Automation
+                  - generic [ref=e731]: 6h ago
+                - generic [ref=e732]: There's an issue with the selected model (claude-mythos-5).
+              - link "df663119 Automation 6h ago There's an issue with the selected model (claude-mythos-5)." [ref=e733] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/df663119-fa9a-4877-a3e9-c7658601038c
+                - generic [ref=e734]:
+                  - img [ref=e735]
+                  - generic [ref=e739]: df663119
+                  - generic [ref=e740]: Automation
+                  - generic [ref=e741]: 6h ago
+                - generic [ref=e742]: There's an issue with the selected model (claude-mythos-5).
+              - 'link "fa3d034b Assignment 6h ago **LAU-1 disposition: `in_progress`** Here''s what was delive 8.0k tok" [ref=e743] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/fa3d034b-ba27-45ab-ad28-2d8a60886509
+                - generic [ref=e744]:
+                  - img [ref=e745]
+                  - generic [ref=e748]: fa3d034b
+                  - generic [ref=e749]: Assignment
+                  - generic [ref=e750]: 6h ago
+                - generic [ref=e751]: "**LAU-1 disposition: `in_progress`** Here's what was delive"
+                - generic [ref=e753]: 8.0k tok
+              - link "ee4bd60e Automation 6h ago Cancelled due to agent pause" [ref=e754] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/runs/ee4bd60e-c799-4189-97de-68f3432bd471
+                - generic [ref=e755]:
+                  - img [ref=e756]
+                  - generic [ref=e758]: ee4bd60e
+                  - generic [ref=e759]: Automation
+                  - generic [ref=e760]: 6h ago
+                - generic [ref=e761]: Cancelled due to agent pause
+              - 'link "13e0cfee Automation 6h ago Warning: Unknown toolsets: messaging, moa ⚠️ Normalized mod" [ref=e762] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/13e0cfee-4535-4f9c-abe9-cc18f9a4436c
+                - generic [ref=e763]:
+                  - img [ref=e764]
+                  - generic [ref=e768]: 13e0cfee
+                  - generic [ref=e769]: Automation
+                  - generic [ref=e770]: 6h ago
+                - generic [ref=e771]: "Warning: Unknown toolsets: messaging, moa ⚠️ Normalized mod"
+              - 'link "ac852464 Assignment 6h ago Warning: Unknown toolsets: messaging, moa ⚠️ Normalized mod" [ref=e772] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/ac852464-28b1-488a-85cc-c10adf62ac1f
+                - generic [ref=e773]:
+                  - img [ref=e774]
+                  - generic [ref=e778]: ac852464
+                  - generic [ref=e779]: Assignment
+                  - generic [ref=e780]: 6h ago
+                - generic [ref=e781]: "Warning: Unknown toolsets: messaging, moa ⚠️ Normalized mod"
+            - generic [ref=e783]:
+              - generic [ref=e786]:
+                - generic [ref=e787]:
+                  - generic [ref=e788]: running
+                  - button "Cancel" [ref=e789]
+                - generic [ref=e791]: hermes local
+                - generic [ref=e792]:
+                  - generic [ref=e793]: 15:17:30
+                  - generic [ref=e794]: just now
+                  - generic [ref=e795]: "Duration: 0s"
+              - paragraph [ref=e796]: No log events.
+  - generic [ref=e552]:
+    - heading "Command Palette" [level=2] [ref=e553]
+    - paragraph [ref=e554]: Search for a command to run...

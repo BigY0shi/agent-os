@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dreaming Consolidation"
+  short_description: "Consolidate agent memory safely"
+  default_prompt: "Run a safe memory consolidation dream over recent sessions and the memory store."

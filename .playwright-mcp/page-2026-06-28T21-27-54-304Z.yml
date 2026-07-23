@@ -1,0 +1,196 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - link "Command Center Agentic OS · v0.2" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e8]
+        - generic [ref=e11]:
+          - generic [ref=e12]: Command Center
+          - generic [ref=e13]: Agentic OS · v0.2
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Workspace
+          - button "Customize sidebar — drag to reorder, hide items" [ref=e18]:
+            - img [ref=e19]
+        - navigation [ref=e20]:
+          - link "Mission Control" [ref=e22] [cursor=pointer]:
+            - /url: /
+            - img [ref=e24]
+            - generic [ref=e29]: Mission Control
+          - generic [ref=e30]:
+            - generic [ref=e31]: Agent Orchestration
+            - link "Paperclip" [ref=e32] [cursor=pointer]:
+              - /url: /paperclip
+              - img [ref=e34]
+              - generic [ref=e38]: Paperclip
+          - link "AI Agent Mastermind" [ref=e40] [cursor=pointer]:
+            - /url: /room
+            - img [ref=e42]
+            - generic [ref=e45]: AI Agent Mastermind
+          - link "Pipeline" [ref=e47] [cursor=pointer]:
+            - /url: /pipeline
+            - img [ref=e49]
+            - generic [ref=e53]: Pipeline
+          - link "Agent Kanban" [ref=e55] [cursor=pointer]:
+            - /url: /agent-kanban
+            - img [ref=e57]
+            - generic [ref=e62]: Agent Kanban
+          - generic [ref=e63]:
+            - generic [ref=e64]: Agents
+            - link "Claude Claude" [ref=e65] [cursor=pointer]:
+              - /url: /claude
+              - generic "Claude" [ref=e67]:
+                - img [ref=e68]
+              - generic [ref=e70]: Claude
+          - link "OpenClaw OpenClaw" [ref=e72] [cursor=pointer]:
+            - /url: /openclaw
+            - generic "OpenClaw" [ref=e74]:
+              - img [ref=e75]
+            - generic [ref=e79]: OpenClaw
+          - link "Hermes Hermes" [ref=e81] [cursor=pointer]:
+            - /url: /hermes
+            - generic "Hermes" [ref=e83]:
+              - img [ref=e84]
+            - generic [ref=e87]: Hermes
+          - link "Antigravity Antigravity" [ref=e89] [cursor=pointer]:
+            - /url: /antigravity
+            - generic "Antigravity" [ref=e91]:
+              - img [ref=e92]
+            - generic [ref=e96]: Antigravity
+          - link "Codex Codex" [ref=e98] [cursor=pointer]:
+            - /url: /codex
+            - generic "Codex" [ref=e100]:
+              - img [ref=e101]
+            - generic [ref=e109]: Codex
+          - link "Ollama Cloud" [ref=e111] [cursor=pointer]:
+            - /url: /ollama
+            - img [ref=e113]
+            - generic [ref=e115]: Ollama Cloud
+          - link "Free Claude Code Free Claude Code" [ref=e117] [cursor=pointer]:
+            - /url: /freeclaude
+            - generic "Free Claude Code" [ref=e119]:
+              - img [ref=e120]
+            - generic [ref=e128]: Free Claude Code
+          - link "Fusion" [ref=e130] [cursor=pointer]:
+            - /url: /fusion
+            - img [ref=e132]
+            - generic [ref=e137]: Fusion
+          - link "Sakana Fugu" [ref=e139] [cursor=pointer]:
+            - /url: /sakana
+            - img [ref=e141]
+            - generic [ref=e146]: Sakana Fugu
+          - link "Local" [ref=e148] [cursor=pointer]:
+            - /url: /local
+            - img [ref=e150]
+            - generic [ref=e153]: Local
+          - link "Local Engine" [ref=e155] [cursor=pointer]:
+            - /url: /engine
+            - img [ref=e157]
+            - generic [ref=e167]: Local Engine
+          - link "Cursor Cursor" [ref=e169] [cursor=pointer]:
+            - /url: /cursor
+            - generic "Cursor" [ref=e171]:
+              - img [ref=e172]
+            - generic [ref=e174]: Cursor
+          - link "Pi Pi" [ref=e176] [cursor=pointer]:
+            - /url: /pi
+            - generic "Pi" [ref=e178]:
+              - img [ref=e179]
+            - generic [ref=e181]: Pi
+          - generic [ref=e182]:
+            - generic [ref=e183]: Self
+            - link "Loop" [ref=e184] [cursor=pointer]:
+              - /url: /loop
+              - img [ref=e186]
+              - generic [ref=e191]: Loop
+          - link "SEO" [ref=e193] [cursor=pointer]:
+            - /url: /seo
+            - img [ref=e195]
+            - generic [ref=e198]: SEO
+          - link "Leads" [ref=e200] [cursor=pointer]:
+            - /url: /leads
+            - img [ref=e202]
+            - generic [ref=e207]: Leads
+          - link "Open Design" [ref=e209] [cursor=pointer]:
+            - /url: /opendesign
+            - img [ref=e211]
+            - generic [ref=e217]: Open Design
+          - link "Video" [ref=e219] [cursor=pointer]:
+            - /url: /video
+            - img [ref=e221]
+            - generic [ref=e223]: Video
+          - link "Music" [ref=e225] [cursor=pointer]:
+            - /url: /music
+            - img [ref=e227]
+            - generic [ref=e230]: Music
+          - link "Game Studio" [ref=e232] [cursor=pointer]:
+            - /url: /games
+            - img [ref=e234]
+            - generic [ref=e236]: Game Studio
+          - link "Thumbnails" [ref=e238] [cursor=pointer]:
+            - /url: /thumbnails
+            - img [ref=e240]
+            - generic [ref=e244]: Thumbnails
+          - link "Notebook" [ref=e246] [cursor=pointer]:
+            - /url: /notebook
+            - img [ref=e248]
+            - generic [ref=e250]: Notebook
+          - link "Kanban" [ref=e252] [cursor=pointer]:
+            - /url: /kanban
+            - img [ref=e254]
+            - generic [ref=e256]: Kanban
+          - link "Memory" [ref=e258] [cursor=pointer]:
+            - /url: /memory
+            - img [ref=e260]
+            - generic [ref=e268]: Memory
+          - link "Build Guide" [ref=e270] [cursor=pointer]:
+            - /url: /guide
+            - img [ref=e272]
+            - generic [ref=e275]: Build Guide
+          - link "Deal Desk" [ref=e277] [cursor=pointer]:
+            - /url: /deals
+            - img [ref=e281]
+            - generic [ref=e284]: Deal Desk
+      - generic [ref=e285]:
+        - generic [ref=e286]: Wired
+        - generic [ref=e287]:
+          - text: claude · codex · cursor · pi
+          - text: + Obsidian vault
+        - button "Sign out" [ref=e288]:
+          - img [ref=e289]
+          - text: Sign out
+    - main [ref=e292]:
+      - generic [ref=e293]:
+        - generic [ref=e294]:
+          - generic [ref=e295]:
+            - generic [ref=e296]:
+              - generic [ref=e297]: I.
+              - generic [ref=e299]: Mission Control
+            - heading "Mission Control" [level=1] [ref=e300]
+            - paragraph [ref=e301]: Status of every agent, every memory, every signal.
+            - generic [ref=e302]: 14:27·Local · Studio
+          - generic [ref=e303]:
+            - button "⌘K Command palette" [ref=e304]:
+              - generic [ref=e305]: ⌘K
+              - generic [ref=e306]: Command palette
+            - generic [ref=e313]: All systems
+        - generic [ref=e314]:
+          - generic [ref=e315]:
+            - img [ref=e317]
+            - heading "Deal Desk" [level=1] [ref=e320]
+            - generic [ref=e321]: 0 leads · 0 approved
+            - generic [ref=e322]:
+              - button "Enrich approved" [disabled] [ref=e323]:
+                - img [ref=e324]
+                - text: Enrich approved
+              - button "set cookie" [ref=e326]:
+                - img [ref=e327]
+                - generic [ref=e330]: set cookie
+              - button "Reload" [ref=e331]:
+                - img [ref=e332]
+                - text: Reload
+          - paragraph [ref=e337]: Upwork fast-wins — drag to move stages, open a card to review the pitch, approach, crash course, and notes before you bid.
+          - generic [ref=e340]:
+            - generic [ref=e342]: Parked / Denied
+            - generic [ref=e343]: "0"
+  - alert [ref=e345]

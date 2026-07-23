@@ -1,0 +1,4 @@
+[     147ms] [WARNING] [GTM4WP] Google Tag Manager container code placement set to OFF !!! @ https://wpml.org/faq/getting-your-tax-invoice-after-buying-wpml/:240
+[     147ms] [WARNING] [GTM4WP] Data layer codes are active but GTM container must be loaded using custom coding !!! @ https://wpml.org/faq/getting-your-tax-invoice-after-buying-wpml/:241
+[     732ms] [LOG] ConsentModeV2 {ads_data_redaction: false, defaultConsentMarketing: denied, defaultConsentStatistics: denied, defaultConsentPreferences: denied, url_passthrough: false} @ https://www.googletagmanager.com/gtm.js?id=GTM-5ZK3HXV:875
+[    1128ms] [LOG] opt-in @ https://cdn.wpml.org/wp-content/plugins/complianz-gdpr-premium/cookiebanner/js/complianz.min.js?ver=1782217891:0

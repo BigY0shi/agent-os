@@ -1,0 +1,644 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e5]:
+      - img [ref=e8]
+      - generic [ref=e10]:
+        - generic [ref=e11]: Triage Engine
+        - generic [ref=e12]: CS · Draft · Route
+    - navigation [ref=e13]:
+      - generic [ref=e14]: Workspace
+      - button "Queue 9" [ref=e15] [cursor=pointer]:
+        - img [ref=e17]
+        - text: Queue
+        - generic [ref=e19]: "9"
+      - button "Report" [ref=e20] [cursor=pointer]:
+        - img [ref=e22]
+        - text: Report
+      - generic "Knowledge base (docs the engine cites)" [ref=e24]:
+        - img [ref=e26]
+        - text: Knowledge
+      - button "Tuning" [ref=e28] [cursor=pointer]:
+        - img [ref=e30]
+        - text: Tuning
+    - generic [ref=e32]:
+      - generic [ref=e33]:
+        - generic [ref=e36]: Engine online
+        - generic [ref=e37]: last import · 2 hours ago
+        - generic [ref=e38]: Launchworks · retrieval on
+      - generic [ref=e39]:
+        - generic [ref=e40]: WP
+        - generic [ref=e41]:
+          - generic [ref=e42]: Support agent
+          - generic [ref=e43]: Support · WPML (OnTheGoSystems)
+      - textbox "Stored locally in your browser only" [ref=e44]:
+        - /placeholder: auth token
+      - button "Ambient FX on" [ref=e45] [cursor=pointer]:
+        - text: Ambient FX
+        - generic [ref=e47]: "on"
+  - main [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]:
+        - generic [ref=e53]: CS Triage & Draft Engine
+        - heading "Approval Queue" [level=1] [ref=e54]:
+          - text: Approval
+          - emphasis [ref=e55]: Queue
+        - generic [ref=e56]: WPML (OnTheGoSystems) · Launchworks · draft desk
+      - generic [ref=e57]:
+        - button "Simulate" [ref=e58] [cursor=pointer]:
+          - img [ref=e60]
+          - text: Simulate
+        - button "Run inbox" [ref=e62] [cursor=pointer]:
+          - img [ref=e64]
+          - text: Run inbox
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - generic [ref=e70]: Open
+            - img [ref=e73]
+          - generic [ref=e75]: "1"
+          - generic [ref=e76]:
+            - img [ref=e78]
+            - text: 10 total tickets
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - generic [ref=e82]: Urgent · go now
+            - img [ref=e85]
+          - generic [ref=e87]: "0"
+          - generic [ref=e89]: needs a human fast
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - generic [ref=e92]: Drafts ready
+            - img [ref=e95]
+          - generic [ref=e97]: "1"
+          - generic [ref=e99]: review & send
+        - generic [ref=e100]:
+          - generic [ref=e101]:
+            - generic [ref=e102]: Escalations
+            - img [ref=e105]
+          - generic [ref=e107]: "1"
+          - generic [ref=e109]: human handles
+        - generic [ref=e110]:
+          - generic [ref=e111]:
+            - generic [ref=e112]: Sent today
+            - img [ref=e115]
+          - generic [ref=e117]: "0"
+          - generic [ref=e118]:
+            - img [ref=e120]
+            - text: approved & delivered
+          - img [ref=e122]
+        - generic [ref=e124]:
+          - generic [ref=e125]:
+            - generic [ref=e126]: Deflection
+            - img [ref=e129]
+          - generic [ref=e131]: 9%
+          - generic [ref=e133]: auto-resolved by AI
+      - generic [ref=e134]:
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - generic [ref=e137]: Draft quality
+            - generic [ref=e138]: rolling
+          - generic [ref=e139]:
+            - generic [ref=e140]:
+              - img [ref=e141]
+              - generic [ref=e144]:
+                - generic [ref=e145]: 12%
+                - generic [ref=e146]: Avg conf
+            - generic [ref=e147]:
+              - generic [ref=e148]:
+                - generic [ref=e149]: Time saved
+                - generic [ref=e150]: 0.0 hrs
+              - generic [ref=e151]:
+                - generic [ref=e152]: Total handled
+                - generic [ref=e153]: "2"
+        - generic [ref=e154]:
+          - generic [ref=e155]:
+            - generic [ref=e156]: Top intents
+            - generic [ref=e157]: by volume
+          - generic [ref=e158]:
+            - generic [ref=e159]:
+              - generic [ref=e160]: feature-request
+              - generic [ref=e162]: "4"
+            - generic [ref=e163]:
+              - generic [ref=e164]: complaint
+              - generic [ref=e166]: "3"
+            - generic [ref=e167]:
+              - generic [ref=e168]: account
+              - generic [ref=e170]: "2"
+            - generic [ref=e171]:
+              - generic [ref=e172]: how-to
+              - generic [ref=e174]: "1"
+        - generic [ref=e175]:
+          - generic [ref=e176]:
+            - generic [ref=e177]: Route mix
+            - generic [ref=e178]: where mail goes
+          - img [ref=e179]
+          - generic [ref=e180]:
+            - generic [ref=e181]: Ready
+            - generic [ref=e183]: Escalated
+            - generic [ref=e185]: Sent
+        - generic [ref=e187]:
+          - generic [ref=e188]:
+            - generic [ref=e189]: Deflection rate
+            - generic [ref=e190]: this window
+          - generic [ref=e191]:
+            - generic [ref=e192]: 9%
+            - generic [ref=e193]: 50 of every 100 inbound tickets resolved by a reviewed AI draft — the rest routed to a human within seconds.
+      - generic [ref=e194]:
+        - generic [ref=e197]: Work surface
+        - generic [ref=e198]:
+          - generic [ref=e199] [cursor=pointer]: Urgent first
+          - generic [ref=e201] [cursor=pointer]: All
+          - generic [ref=e202] [cursor=pointer]: Needs you
+          - generic [ref=e203] [cursor=pointer]: Ready to send
+      - generic [ref=e204]:
+        - generic [ref=e205]:
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - img [ref=e210]
+              - heading "Needs you" [level=2] [ref=e212]
+              - generic [ref=e213]: "4"
+            - generic [ref=e214]: human handles
+          - generic [ref=e215]:
+            - article [ref=e216]:
+              - generic [ref=e217]:
+                - generic [ref=e218]:
+                  - generic [ref=e219]: Nothing translates, this is the worst
+                  - generic [ref=e220]: Greg Dawson · greg@example.com
+                - generic [ref=e221]: Urgent
+              - generic [ref=e223]:
+                - generic "How well the knowledge base matched (retrieval 1.00)" [ref=e224]:
+                  - generic [ref=e225]: docs
+                  - text: strong
+                - generic [ref=e226]:
+                  - generic [ref=e227]: intent
+                  - text: complaint
+                - generic [ref=e228]:
+                  - generic [ref=e229]: cat
+                  - text: translation
+                - generic [ref=e230]:
+                  - generic [ref=e231]: sentiment
+                  - text: negative
+                - generic [ref=e232]:
+                  - generic [ref=e233]: urgency
+                  - text: urgent
+                - generic [ref=e234]:
+                  - generic [ref=e235]: recv
+                  - text: 2d ago
+              - generic [ref=e236]: Customer is unable to translate content and is extremely frustrated.
+              - generic [ref=e237]:
+                - generic [ref=e238]: Confidence
+                - generic [ref=e240]: 94%
+              - group [ref=e241]:
+                - generic "Customer message" [ref=e242] [cursor=pointer]:
+                  - img [ref=e244]
+                  - text: Customer message
+              - generic [ref=e246]:
+                - generic [ref=e247]:
+                  - generic [ref=e248]: Draft reply
+                  - generic [ref=e249]: edit before sending
+                - textbox [ref=e250]: "It sounds like you're having trouble with translations not showing up. Let's check a few things: First, make sure WPML is installed and activated via Plugins > Add New. Then, confirm that the site has been registered with your site key. If these are correct, try running the setup wizard again from WPML > Translation Management. If it still doesn't work, let me know which post type you're trying to translate so I can help troubleshoot further. https://wpml.org/faq/install-wpml/ Best, WPML Support"
+              - generic [ref=e251]:
+                - generic [ref=e252]: Grounded in
+                - link "Installing WPML and getting started https://wpml.org/faq/install-wpml/" [ref=e253] [cursor=pointer]:
+                  - /url: https://wpml.org/faq/install-wpml/
+                  - img [ref=e254]
+                  - generic [ref=e256]: Installing WPML and getting started
+                  - generic [ref=e257]: https://wpml.org/faq/install-wpml/
+              - generic [ref=e258]:
+                - img [ref=e259]
+                - generic [ref=e261]: Routed to you — The customer is expressing frustration and anger about the plugin's functionality.
+              - generic [ref=e262]:
+                - button "I'll handle it" [ref=e263] [cursor=pointer]:
+                  - img [ref=e264]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=e266] [cursor=pointer]
+            - article [ref=e267]:
+              - generic [ref=e268]:
+                - generic [ref=e269]:
+                  - generic [ref=e270]: Fatal error after updating WPML
+                  - generic [ref=e271]: Diego Romero · diego@example.com
+                - generic [ref=e272]: Urgent
+              - generic [ref=e274]:
+                - generic "How well the knowledge base matched (retrieval 0.81)" [ref=e275]:
+                  - generic [ref=e276]: docs
+                  - text: strong
+                - generic [ref=e277]:
+                  - generic [ref=e278]: intent
+                  - text: complaint
+                - generic [ref=e279]:
+                  - generic [ref=e280]: cat
+                  - text: installation
+                - generic [ref=e281]:
+                  - generic [ref=e282]: sentiment
+                  - text: negative
+                - generic [ref=e283]:
+                  - generic [ref=e284]: urgency
+                  - text: urgent
+                - generic [ref=e285]:
+                  - generic [ref=e286]: recv
+                  - text: 2d ago
+              - generic [ref=e287]: The user is experiencing a fatal error after updating WPML, causing the front end to be down.
+              - generic [ref=e288]:
+                - generic [ref=e289]: Confidence
+                - generic [ref=e291]: 89%
+              - group [ref=e292]:
+                - generic "Customer message" [ref=e293] [cursor=pointer]:
+                  - img [ref=e295]
+                  - text: Customer message
+              - generic [ref=e297]:
+                - generic [ref=e298]:
+                  - generic [ref=e299]: Draft reply
+                  - generic [ref=e300]: edit before sending
+                - textbox [ref=e301]: "I'm sorry to hear about the error. Let's check the installation steps for Bricks theme to ensure everything is properly configured. Here's the relevant guide: https://wpml.org/faq/install-wpml/. If you're still experiencing issues, please let me know the exact error message and we can troubleshoot further. Best, WPML Support"
+              - generic [ref=e302]:
+                - generic [ref=e303]: Grounded in
+                - link "Installing WPML and getting started https://wpml.org/faq/install-wpml/" [ref=e304] [cursor=pointer]:
+                  - /url: https://wpml.org/faq/install-wpml/
+                  - img [ref=e305]
+                  - generic [ref=e307]: Installing WPML and getting started
+                  - generic [ref=e308]: https://wpml.org/faq/install-wpml/
+              - generic [ref=e309]:
+                - img [ref=e310]
+                - generic [ref=e312]: Routed to you — The site is live and experiencing a critical issue that requires immediate human intervention.
+              - generic [ref=e313]:
+                - button "I'll handle it" [ref=e314] [cursor=pointer]:
+                  - img [ref=e315]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=e317] [cursor=pointer]
+            - article [ref=e318]:
+              - generic [ref=e319]:
+                - generic [ref=e320]:
+                  - generic [ref=e321]: Where is...?
+                  - generic [ref=e322]: Don Yoshi · don@example.com
+                - generic [ref=e323]: Escalate
+              - generic [ref=e324]:
+                - generic "How well the knowledge base matched (retrieval 0.73)" [ref=e325]:
+                  - generic [ref=e326]: docs
+                  - text: strong
+                - generic [ref=e327]:
+                  - generic [ref=e328]: intent
+                  - text: account
+                - generic [ref=e329]:
+                  - generic [ref=e330]: sentiment
+                  - text: neutral
+                - generic [ref=e331]:
+                  - generic [ref=e332]: recv
+                  - text: 25m ago
+              - generic [ref=e333]: The customer is asking about canceling their account and the refund process.
+              - generic [ref=e334]:
+                - generic [ref=e335]: Confidence
+                - generic [ref=e337]: 22%
+              - group [ref=e338]:
+                - generic "Customer message" [ref=e339] [cursor=pointer]:
+                  - img [ref=e341]
+                  - text: Customer message
+              - generic [ref=e343]:
+                - generic [ref=e344]:
+                  - generic [ref=e345]: Draft reply
+                  - generic [ref=e346]: edit before sending
+                - textbox [ref=e347]: "You can cancel your account and request a refund directly through your wpml.org account. Here's how: https://wpml.org/faq/cancel-account-and-get-a-refund/. If you need assistance with the process, contact our support team for guidance. Thanks!"
+              - generic [ref=e349]:
+                - img [ref=e350]
+                - text: No source cited — verify before sending.
+              - generic [ref=e352]:
+                - img [ref=e353]
+                - generic [ref=e355]: Routed to you — Category "account" always routes to a human.
+              - generic [ref=e356]:
+                - button "I'll handle it" [ref=e357] [cursor=pointer]:
+                  - img [ref=e358]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=e360] [cursor=pointer]
+            - article [ref=e361]:
+              - generic [ref=e362]:
+                - generic [ref=e363]:
+                  - generic [ref=e364]: Is there a Figma plugin or offline desktop app?
+                  - generic [ref=e365]: Kofi Mensah · kofi@example.com
+                - generic [ref=e366]: Escalate
+              - generic [ref=e367]:
+                - generic "How well the knowledge base matched (retrieval 0.85)" [ref=e368]:
+                  - generic [ref=e369]: docs
+                  - text: strong
+                - generic [ref=e370]:
+                  - generic [ref=e371]: intent
+                  - text: feature-request
+                - generic [ref=e372]:
+                  - generic [ref=e373]: cat
+                  - text: custom-content
+                - generic [ref=e374]:
+                  - generic [ref=e375]: sentiment
+                  - text: neutral
+                - generic [ref=e376]:
+                  - generic [ref=e377]: recv
+                  - text: 2d ago
+              - generic [ref=e378]: Customer is asking if WPML offers a Figma plugin or a standalone desktop app for offline content translation and syncing with WordPress.
+              - generic [ref=e379]:
+                - generic [ref=e380]: Confidence
+                - generic [ref=e382]: 37%
+              - group [ref=e383]:
+                - generic "Customer message" [ref=e384] [cursor=pointer]:
+                  - img [ref=e386]
+                  - text: Customer message
+              - generic [ref=e388]:
+                - generic [ref=e389]:
+                  - generic [ref=e390]: Draft reply
+                  - generic [ref=e391]: edit before sending
+                - textbox [ref=e392]: I don't have information about Figma plugins or offline desktop apps for content translation. WPML supports translating pages, posts, custom post types, and WooCommerce stores through automatic AI translation, professional translators, or manual editing in the Advanced Translation Editor. For your design workflow, you might want to explore other tools that offer offline translation capabilities. Would you like guidance on setting up automatic AI translation for your site? https://wpml.org/faq/install-wpml/#installing-wpml-and-getting-started Best, WPML Support
+              - generic [ref=e393]:
+                - generic [ref=e394]: Grounded in
+                - link "Installing WPML and getting started https://wpml.org/faq/install-wpml/" [ref=e395] [cursor=pointer]:
+                  - /url: https://wpml.org/faq/install-wpml/
+                  - img [ref=e396]
+                  - generic [ref=e398]: Installing WPML and getting started
+                  - generic [ref=e399]: https://wpml.org/faq/install-wpml/
+                - link "Translating pages and posts with WPML https://wpml.org/documentation/automatic-translation/" [ref=e400] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/automatic-translation/
+                  - img [ref=e401]
+                  - generic [ref=e403]: Translating pages and posts with WPML
+                  - generic [ref=e404]: https://wpml.org/documentation/automatic-translation/
+              - generic [ref=e405]:
+                - img [ref=e406]
+                - generic [ref=e408]: Routed to you — Draft could not be grounded in the docs; routed to a human.
+              - generic [ref=e409]:
+                - button "I'll handle it" [ref=e410] [cursor=pointer]:
+                  - img [ref=e411]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=e413] [cursor=pointer]
+        - generic [ref=e414]:
+          - generic [ref=e415]:
+            - generic [ref=e416]:
+              - img [ref=e419]
+              - heading "Ready to send" [level=2] [ref=e421]
+              - generic [ref=e422]: "5"
+            - generic [ref=e423]: review & send
+          - generic [ref=e424]:
+            - article [ref=e425]:
+              - generic [ref=e426]:
+                - generic [ref=e427]:
+                  - generic [ref=e428]: I need a tax invoice for my WPML purchase
+                  - generic [ref=e429]: Hannah Schmidt · hannah@example.com
+                - generic [ref=e430]: Review
+              - generic [ref=e431]:
+                - generic [ref=e432]:
+                  - generic [ref=e433]: intent
+                  - text: account
+                - generic [ref=e434]:
+                  - generic [ref=e435]: cat
+                  - text: billing
+                - generic [ref=e436]:
+                  - generic [ref=e437]: sentiment
+                  - text: positive
+                - generic [ref=e438]:
+                  - generic [ref=e439]: recv
+                  - text: 3d ago
+              - generic [ref=e440]:
+                - generic [ref=e441]: Confidence
+                - generic [ref=e443]: 95%
+              - group [ref=e444]:
+                - generic "Customer message" [ref=e445] [cursor=pointer]:
+                  - img [ref=e447]
+                  - text: Customer message
+              - generic [ref=e449]:
+                - generic [ref=e450]:
+                  - generic [ref=e451]: Draft reply
+                  - generic [ref=e452]: edit before sending
+                - textbox [ref=e453]: Thanks for reaching out. To generate a tax invoice for your WPML purchase, log in to your account at https://wpml.org/faq/getting-your-tax-invoice-after-buying-wpml/. Find the order you want an invoice for and choose the option to generate or download it. You can also add company details or a VAT number on the invoice form before downloading. If you need to correct billing details on an invoice that was already issued, let us know the order and the details to change and we will help. To top up automatic translation credits, go to your wpml.org account and open the automatic translation or credits section at https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/. There you can see how many credits you have used this period and purchase more. If you run out, you can buy additional credit packs from your account at any time, and they are used after your monthly allowance. Let me know if you need anything else. Best, WPML Support
+              - generic [ref=e454]:
+                - generic [ref=e455]: Grounded in
+                - link "Getting your tax invoice after buying WPML https://wpml.org/faq/getting-your-tax-invoice-after-buying-wpml/" [ref=e456] [cursor=pointer]:
+                  - /url: https://wpml.org/faq/getting-your-tax-invoice-after-buying-wpml/
+                  - img [ref=e457]
+                  - generic [ref=e459]: Getting your tax invoice after buying WPML
+                  - generic [ref=e460]: https://wpml.org/faq/getting-your-tax-invoice-after-buying-wpml/
+                - link "Do automatic translations cost credits when I edit them https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/" [ref=e461] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/
+                  - img [ref=e462]
+                  - generic [ref=e464]: Do automatic translations cost credits when I edit them
+                  - generic [ref=e465]: https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/
+                - link "Translating pages and posts with WPML https://wpml.org/documentation/automatic-translation/" [ref=e466] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/automatic-translation/
+                  - img [ref=e467]
+                  - generic [ref=e469]: Translating pages and posts with WPML
+                  - generic [ref=e470]: https://wpml.org/documentation/automatic-translation/
+              - generic [ref=e471]:
+                - img [ref=e472]
+                - generic [ref=e474]: Grounded draft ready for review (confidence 0.95).
+              - generic [ref=e475]:
+                - button "Send" [ref=e476] [cursor=pointer]:
+                  - img [ref=e477]
+                  - text: Send
+                - button "Reset" [ref=e479] [cursor=pointer]
+                - button "Reject" [ref=e480] [cursor=pointer]:
+                  - img [ref=e481]
+                  - text: Reject
+            - article [ref=e483]:
+              - generic [ref=e484]:
+                - generic [ref=e485]:
+                  - generic [ref=e486]: How do I translate my WooCommerce store?
+                  - generic [ref=e487]: Liu Wei · liu@example.com
+                - generic [ref=e488]: Review
+              - generic [ref=e489]:
+                - generic [ref=e490]:
+                  - generic [ref=e491]: intent
+                  - text: feature-request
+                - generic [ref=e492]:
+                  - generic [ref=e493]: cat
+                  - text: woocommerce
+                - generic [ref=e494]:
+                  - generic [ref=e495]: sentiment
+                  - text: positive
+                - generic [ref=e496]:
+                  - generic [ref=e497]: recv
+                  - text: 3d ago
+              - generic [ref=e498]:
+                - generic [ref=e499]: Confidence
+                - generic [ref=e501]: 97%
+              - group [ref=e502]:
+                - generic "Customer message" [ref=e503] [cursor=pointer]:
+                  - img [ref=e505]
+                  - text: Customer message
+              - generic [ref=e507]:
+                - generic [ref=e508]:
+                  - generic [ref=e509]: Draft reply
+                  - generic [ref=e510]: edit before sending
+                - textbox [ref=e511]: "To translate your WooCommerce store with WPML, first install and activate WooCommerce Multilingual & Multicurrency from your WPML account. Then, go to WooCommerce Multilingual > Products and translate your products, including variations and attributes. For store pages like the shop, cart, and checkout, use WooCommerce Multilingual > Store Pages. To handle multiple currencies, enable the Multicurrency option in WooCommerce Multilingual and configure exchange rates and formatting. If specific parts are not translating, let us know whether it's product pages, the cart and checkout, or order emails, and we can direct you to the exact section. For more details, see this guide: https://wpml.org/documentation/related-projects/woocommerce-multilingual/how-to-translate-woocommerce/ Best, WPML Support"
+              - generic [ref=e512]:
+                - generic [ref=e513]: Grounded in
+                - link "WooCommerce product variations not translating https://wpml.org/documentation/related-projects/woocommerce-multilingual/how-to-translate-woocommerce/" [ref=e514] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/related-projects/woocommerce-multilingual/how-to-translate-woocommerce/
+                  - img [ref=e515]
+                  - generic [ref=e517]: WooCommerce product variations not translating
+                  - generic [ref=e518]: https://wpml.org/documentation/related-projects/woocommerce-multilingual/how-to-translate-woocommerce/
+              - generic [ref=e519]:
+                - img [ref=e520]
+                - generic [ref=e522]: Grounded draft ready for review (confidence 0.97).
+              - generic [ref=e523]:
+                - button "Send" [ref=e524] [cursor=pointer]:
+                  - img [ref=e525]
+                  - text: Send
+                - button "Reset" [ref=e527] [cursor=pointer]
+                - button "Reject" [ref=e528] [cursor=pointer]:
+                  - img [ref=e529]
+                  - text: Reject
+            - article [ref=e531]:
+              - generic [ref=e532]:
+                - generic [ref=e533]:
+                  - generic [ref=e534]: Can I translate custom post types and product categories?
+                  - generic [ref=e535]: Priya Nair · priya@example.com
+                - generic [ref=e536]: Review
+              - generic [ref=e537]:
+                - generic [ref=e538]:
+                  - generic [ref=e539]: intent
+                  - text: feature-request
+                - generic [ref=e540]:
+                  - generic [ref=e541]: cat
+                  - text: custom-content
+                - generic [ref=e542]:
+                  - generic [ref=e543]: sentiment
+                  - text: positive
+                - generic [ref=e544]:
+                  - generic [ref=e545]: recv
+                  - text: 3d ago
+              - generic [ref=e546]:
+                - generic [ref=e547]: Confidence
+                - generic [ref=e549]: 95%
+              - group [ref=e550]:
+                - generic "Customer message" [ref=e551] [cursor=pointer]:
+                  - img [ref=e553]
+                  - text: Customer message
+              - generic [ref=e555]:
+                - generic [ref=e556]:
+                  - generic [ref=e557]: Draft reply
+                  - generic [ref=e558]: edit before sending
+                - textbox [ref=e559]: Yes, WPML can translate both custom post types and product categories. For your custom post type (properties), go to WPML > Settings and set it to 'Translatable - use translation if available (or fallback to default language)' under the Post Types Translation section. Save and check the translation editor. For WooCommerce product categories, go to WPML > Taxonomy Translation and add translations for each term in your secondary languages. If they still don't appear, set them to 'Translatable' under WPML > Settings and save. Let me know if you need help with anything else. Best, WPML Support
+              - generic [ref=e560]:
+                - generic [ref=e561]: Grounded in
+                - link "Translating custom post types https://wpml.org/documentation/getting-started-guide/translating-custom-posts/" [ref=e562] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/getting-started-guide/translating-custom-posts/
+                  - img [ref=e563]
+                  - generic [ref=e565]: Translating custom post types
+                  - generic [ref=e566]: https://wpml.org/documentation/getting-started-guide/translating-custom-posts/
+                - link "Translating categories and custom taxonomies https://wpml.org/documentation/getting-started-guide/translating-post-categories-and-custom-taxonomies/" [ref=e567] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/getting-started-guide/translating-post-categories-and-custom-taxonomies/
+                  - img [ref=e568]
+                  - generic [ref=e570]: Translating categories and custom taxonomies
+                  - generic [ref=e571]: https://wpml.org/documentation/getting-started-guide/translating-post-categories-and-custom-taxonomies/
+              - generic [ref=e572]:
+                - img [ref=e573]
+                - generic [ref=e575]: Grounded draft ready for review (confidence 0.95).
+              - generic [ref=e576]:
+                - button "Send" [ref=e577] [cursor=pointer]:
+                  - img [ref=e578]
+                  - text: Send
+                - button "Reset" [ref=e580] [cursor=pointer]
+                - button "Reject" [ref=e581] [cursor=pointer]:
+                  - img [ref=e582]
+                  - text: Reject
+            - article [ref=e584]:
+              - generic [ref=e585]:
+                - generic [ref=e586]:
+                  - generic [ref=e587]: Translating my pages and posts
+                  - generic [ref=e588]: Tom Becker · tom@example.com
+                - generic [ref=e589]: Review
+              - generic [ref=e590]:
+                - generic [ref=e591]:
+                  - generic [ref=e592]: intent
+                  - text: feature-request
+                - generic [ref=e593]:
+                  - generic [ref=e594]: cat
+                  - text: translation
+                - generic [ref=e595]:
+                  - generic [ref=e596]: sentiment
+                  - text: positive
+                - generic [ref=e597]:
+                  - generic [ref=e598]: recv
+                  - text: 4d ago
+              - generic [ref=e599]:
+                - generic [ref=e600]: Confidence
+                - generic [ref=e602]: 92%
+              - group [ref=e603]:
+                - generic "Customer message" [ref=e604] [cursor=pointer]:
+                  - img [ref=e606]
+                  - text: Customer message
+              - generic [ref=e608]:
+                - generic [ref=e609]:
+                  - generic [ref=e610]: Draft reply
+                  - generic [ref=e611]: edit before sending
+                - textbox [ref=e612]: "WPML gives you three ways to translate your pages and posts: automatic AI translation (fastest), professional translation, or manual translation. For quick results with control, use automatic AI translation. To review and edit translations before publishing, go to WPML > Translation Management. If you need help with a specific post type or taxonomy, let me know the name and plugin used. Best, WPML Support"
+              - generic [ref=e613]:
+                - generic [ref=e614]: Grounded in
+                - link "Translating pages and posts with WPML https://wpml.org/documentation/automatic-translation/" [ref=e615] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/automatic-translation/
+                  - img [ref=e616]
+                  - generic [ref=e618]: Translating pages and posts with WPML
+                  - generic [ref=e619]: https://wpml.org/documentation/automatic-translation/
+                - link "Do automatic translations cost credits when I edit them https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/" [ref=e620] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/
+                  - img [ref=e621]
+                  - generic [ref=e623]: Do automatic translations cost credits when I edit them
+                  - generic [ref=e624]: https://wpml.org/documentation/automatic-translation/automatic-translation-pricing/
+              - generic [ref=e625]:
+                - img [ref=e626]
+                - generic [ref=e628]: Grounded draft ready for review (confidence 0.92).
+              - generic [ref=e629]:
+                - button "Send" [ref=e630] [cursor=pointer]:
+                  - img [ref=e631]
+                  - text: Send
+                - button "Reset" [ref=e633] [cursor=pointer]
+                - button "Reject" [ref=e634] [cursor=pointer]:
+                  - img [ref=e635]
+                  - text: Reject
+            - article [ref=e637]:
+              - generic [ref=e638]:
+                - generic [ref=e639]:
+                  - generic [ref=e640]: How do I install WPML and get started?
+                  - generic [ref=e641]: Maria Alvarez · maria@example.com
+                - generic [ref=e642]: Review
+              - generic [ref=e643]:
+                - generic [ref=e644]:
+                  - generic [ref=e645]: intent
+                  - text: how-to
+                - generic [ref=e646]:
+                  - generic [ref=e647]: cat
+                  - text: installation
+                - generic [ref=e648]:
+                  - generic [ref=e649]: sentiment
+                  - text: positive
+                - generic [ref=e650]:
+                  - generic [ref=e651]: recv
+                  - text: 4d ago
+              - generic [ref=e652]:
+                - generic [ref=e653]: Confidence
+                - generic [ref=e655]: 95%
+              - group [ref=e656]:
+                - generic "Customer message" [ref=e657] [cursor=pointer]:
+                  - img [ref=e659]
+                  - text: Customer message
+              - generic [ref=e661]:
+                - generic [ref=e662]:
+                  - generic [ref=e663]: Draft reply
+                  - generic [ref=e664]: edit before sending
+                - textbox [ref=e665]: Thanks for reaching out. WPML installs like any WordPress plugin. After purchasing, download the WPML plugin files from your wpml.org account or install them automatically from your WordPress dashboard using your site key. Once active, register your site with your site key so WPML can download the additional components it needs (String Translation, Translation Management, and so on). Run the setup wizard to choose your site's default language, add other languages, and place a language switcher in your header menu. If you see development-mode or registration notices, they usually mean the site key hasn't been registered yet. Registering from WPML > Support or completing the setup wizard clears them. Theme compatibility is handled automatically for most themes. If something specific to your theme does not translate, tell us the theme name and we can point you to the theme-specific guidance. See https://wpml.org/faq/install-wpml/ for more details. Best, WPML Support
+              - generic [ref=e666]:
+                - generic [ref=e667]: Grounded in
+                - link "Installing WPML and getting started https://wpml.org/faq/install-wpml/" [ref=e668] [cursor=pointer]:
+                  - /url: https://wpml.org/faq/install-wpml/
+                  - img [ref=e669]
+                  - generic [ref=e671]: Installing WPML and getting started
+                  - generic [ref=e672]: https://wpml.org/faq/install-wpml/
+                - link "Language switcher not showing in my menu https://wpml.org/documentation/getting-started-guide/language-setup/language-switcher-options/" [ref=e673] [cursor=pointer]:
+                  - /url: https://wpml.org/documentation/getting-started-guide/language-setup/language-switcher-options/
+                  - img [ref=e674]
+                  - generic [ref=e676]: Language switcher not showing in my menu
+                  - generic [ref=e677]: https://wpml.org/documentation/getting-started-guide/language-setup/language-switcher-options/
+              - generic [ref=e678]:
+                - img [ref=e679]
+                - generic [ref=e681]: Grounded draft ready for review (confidence 0.95).
+              - generic [ref=e682]:
+                - button "Send" [ref=e683] [cursor=pointer]:
+                  - img [ref=e684]
+                  - text: Send
+                - button "Reset" [ref=e686] [cursor=pointer]
+                - button "Reject" [ref=e687] [cursor=pointer]:
+                  - img [ref=e688]
+                  - text: Reject

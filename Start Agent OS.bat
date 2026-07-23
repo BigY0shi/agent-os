@@ -1,0 +1,44 @@
+@echo off
+cd /d "%~dp0"
+echo.
+echo   🚀  Starting your Agent OS on Windows...
+echo.
+
+:: 1 · Check Node.js
+where node >nul 2>nul
+if %errorlevel% neq 0 (
+  echo   ❌ Node.js is not installed.
+  echo      Opening the download page... Install the LTS version, then run this script again.
+  start https://nodejs.org
+  pause
+  exit /b 1
+)
+
+:: 2 · Start Paperclip in its own window (reuses the standalone bat — one source of truth)
+echo   📎 Launching Paperclip in a separate window...
+start "Paperclip Server" "%~dp0Start Paperclip Server.bat"
+
+:: 3 · Install Dependencies on First Run
+if not exist node_modules (
+  echo   📦 First run — installing dependencies...
+  call npm install --no-fund --no-audit
+)
+
+:: 4 · Build Dashboard on First Run
+if not exist .next (
+  echo   🔨 First run — building the dashboard...
+  call npm run build
+)
+
+echo   ✓ Dashboard ready
+echo.
+echo   ✅ Opening http://localhost:3737 in your browser.
+echo      Keep this window open while using the Agent OS.
+echo      (Paperclip runs in its own window — close that one to stop Paperclip.)
+echo      To stop: Close this window or press Ctrl+C.
+echo.
+
+:: Start browser after a brief delay
+start http://localhost:3737
+set PORT=3737
+call npm start

@@ -1,0 +1,217 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - link "Command Center Agentic OS · v0.2" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - img [ref=e8]
+      - generic [ref=e11]:
+        - generic [ref=e12]: Command Center
+        - generic [ref=e13]: Agentic OS · v0.2
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - generic [ref=e16]: Workspace
+        - button "Customize sidebar — drag to reorder, hide items" [ref=e18]:
+          - img [ref=e19]
+      - navigation [ref=e20]:
+        - link "Mission Control" [ref=e22] [cursor=pointer]:
+          - /url: /
+          - img [ref=e24]
+          - generic [ref=e29]: Mission Control
+        - generic [ref=e30]:
+          - generic [ref=e31]: Agent Orchestration
+          - link "Paperclip" [ref=e32] [cursor=pointer]:
+            - /url: /paperclip
+            - img [ref=e34]
+            - generic [ref=e38]: Paperclip
+        - link "AI Agent Mastermind" [ref=e40] [cursor=pointer]:
+          - /url: /room
+          - img [ref=e42]
+          - generic [ref=e45]: AI Agent Mastermind
+        - link "Pipeline" [ref=e47] [cursor=pointer]:
+          - /url: /pipeline
+          - img [ref=e49]
+          - generic [ref=e53]: Pipeline
+        - link "Agent Kanban" [ref=e55] [cursor=pointer]:
+          - /url: /agent-kanban
+          - img [ref=e57]
+          - generic [ref=e62]: Agent Kanban
+        - generic [ref=e63]:
+          - generic [ref=e64]: Agents
+          - link "Claude Claude" [ref=e65] [cursor=pointer]:
+            - /url: /claude
+            - generic "Claude" [ref=e67]:
+              - img [ref=e68]
+            - generic [ref=e70]: Claude
+        - link "OpenClaw OpenClaw" [ref=e72] [cursor=pointer]:
+          - /url: /openclaw
+          - generic "OpenClaw" [ref=e74]:
+            - img [ref=e75]
+          - generic [ref=e79]: OpenClaw
+        - link "Hermes Hermes" [ref=e81] [cursor=pointer]:
+          - /url: /hermes
+          - generic "Hermes" [ref=e83]:
+            - img [ref=e84]
+          - generic [ref=e87]: Hermes
+        - link "Antigravity Antigravity" [ref=e89] [cursor=pointer]:
+          - /url: /antigravity
+          - generic "Antigravity" [ref=e91]:
+            - img [ref=e92]
+          - generic [ref=e96]: Antigravity
+        - link "Codex Codex" [ref=e98] [cursor=pointer]:
+          - /url: /codex
+          - generic "Codex" [ref=e100]:
+            - img [ref=e101]
+          - generic [ref=e109]: Codex
+        - link "Cursor Cursor" [ref=e111] [cursor=pointer]:
+          - /url: /cursor
+          - generic "Cursor" [ref=e113]:
+            - img [ref=e114]
+          - generic [ref=e116]: Cursor
+        - link "Pi Pi" [ref=e118] [cursor=pointer]:
+          - /url: /pi
+          - generic "Pi" [ref=e120]:
+            - img [ref=e121]
+          - generic [ref=e123]: Pi
+        - link "Ollama Cloud" [ref=e125] [cursor=pointer]:
+          - /url: /ollama
+          - img [ref=e127]
+          - generic [ref=e129]: Ollama Cloud
+        - link "Free Claude Code Free Claude Code" [ref=e131] [cursor=pointer]:
+          - /url: /freeclaude
+          - generic "Free Claude Code" [ref=e133]:
+            - img [ref=e134]
+          - generic [ref=e142]: Free Claude Code
+        - link "Fusion" [ref=e144] [cursor=pointer]:
+          - /url: /fusion
+          - img [ref=e146]
+          - generic [ref=e151]: Fusion
+        - link "Sakana Fugu" [ref=e153] [cursor=pointer]:
+          - /url: /sakana
+          - img [ref=e155]
+          - generic [ref=e160]: Sakana Fugu
+        - link "Local" [ref=e162] [cursor=pointer]:
+          - /url: /local
+          - img [ref=e164]
+          - generic [ref=e167]: Local
+        - link "Local Engine" [ref=e169] [cursor=pointer]:
+          - /url: /engine
+          - img [ref=e171]
+          - generic [ref=e181]: Local Engine
+        - generic [ref=e182]:
+          - generic [ref=e183]: Self
+          - link "Loop" [ref=e184] [cursor=pointer]:
+            - /url: /loop
+            - img [ref=e188]
+            - generic [ref=e193]: Loop
+        - link "SEO" [ref=e195] [cursor=pointer]:
+          - /url: /seo
+          - img [ref=e197]
+          - generic [ref=e200]: SEO
+        - link "Leads" [ref=e202] [cursor=pointer]:
+          - /url: /leads
+          - img [ref=e204]
+          - generic [ref=e209]: Leads
+        - link "Open Design" [ref=e211] [cursor=pointer]:
+          - /url: /opendesign
+          - img [ref=e213]
+          - generic [ref=e219]: Open Design
+        - link "Video" [ref=e221] [cursor=pointer]:
+          - /url: /video
+          - img [ref=e223]
+          - generic [ref=e225]: Video
+        - link "Music" [ref=e227] [cursor=pointer]:
+          - /url: /music
+          - img [ref=e229]
+          - generic [ref=e232]: Music
+        - link "Game Studio" [ref=e234] [cursor=pointer]:
+          - /url: /games
+          - img [ref=e236]
+          - generic [ref=e238]: Game Studio
+        - link "Thumbnails" [ref=e240] [cursor=pointer]:
+          - /url: /thumbnails
+          - img [ref=e242]
+          - generic [ref=e246]: Thumbnails
+        - link "Notebook" [ref=e248] [cursor=pointer]:
+          - /url: /notebook
+          - img [ref=e250]
+          - generic [ref=e252]: Notebook
+        - link "Kanban" [ref=e254] [cursor=pointer]:
+          - /url: /kanban
+          - img [ref=e256]
+          - generic [ref=e258]: Kanban
+        - link "Memory" [ref=e260] [cursor=pointer]:
+          - /url: /memory
+          - img [ref=e262]
+          - generic [ref=e270]: Memory
+        - link "Build Guide" [ref=e272] [cursor=pointer]:
+          - /url: /guide
+          - img [ref=e274]
+          - generic [ref=e277]: Build Guide
+    - generic [ref=e278]:
+      - generic [ref=e279]: Wired
+      - generic [ref=e280]:
+        - text: claude · openclaw · hermes
+        - text: + Obsidian vault
+  - main [ref=e281]:
+    - generic [ref=e282]:
+      - generic [ref=e283]:
+        - generic [ref=e284]:
+          - generic [ref=e285]:
+            - generic [ref=e286]: X.
+            - generic [ref=e288]: Self · Loop
+          - heading "Loop Engineering" [level=1] [ref=e289]
+          - paragraph [ref=e290]: Define what 'done' looks like. A builder acts, Fusion verifies it adversarially, and it loops until the gate passes — you stop being the loop.
+          - generic [ref=e291]: ·Local · Studio
+        - generic [ref=e292]:
+          - button "⌘K Command palette" [ref=e293]:
+            - generic [ref=e294]: ⌘K
+            - generic [ref=e295]: Command palette
+          - generic [ref=e302]: All systems
+      - generic [ref=e304]:
+        - paragraph [ref=e305]: Stop being the loop. Define what done looks like, and the system runs the cycle itself — a builder acts, then a free judge (N2 by default — no per-token cost) grades it adversarially out of 100. It keeps fixing until the judge passes or progress stalls. The builder never grades its own homework.
+        - generic [ref=e306]:
+          - generic [ref=e307]:
+            - generic [ref=e308]: 1 Check state
+            - generic [ref=e309]: →
+          - generic [ref=e310]:
+            - generic [ref=e311]: 2 Decide
+            - generic [ref=e312]: →
+          - generic [ref=e313]:
+            - generic [ref=e314]: 3 Act
+            - generic [ref=e315]: →
+          - generic [ref=e316]:
+            - generic [ref=e317]: 4 Gather feedback
+            - generic [ref=e318]: →
+          - generic [ref=e320]: 5 Verify / terminate
+          - generic [ref=e321]: ↻ loops back until the gate passes
+        - generic [ref=e322]:
+          - generic [ref=e323]:
+            - img [ref=e324]
+            - text: Definition of done
+          - textbox "e.g. A single-file HTML ROI calculator — enter hours saved per week + hourly rate, show yearly $ saved, dark neon theme, big readable numbers, works on mobile. (Apps, tools, games, landing pages, or copy — anything. It builds it, the judge grades it, it loops until it passes.)" [ref=e328]
+          - generic [ref=e329]: Starting point · optional — leave blank to build from scratch
+          - textbox "Paste a draft to refine, or leave empty." [ref=e330]
+          - generic [ref=e331]:
+            - generic [ref=e332]:
+              - generic [ref=e333]: Builder
+              - combobox [ref=e334]:
+                - option "N2 ✦ · free (OpenRouter)" [selected]
+                - option "Step Flash ✦ · free (Nous Portal)"
+                - option "GLM 5.2 · cheap workhorse"
+                - option "Claude Opus 4.8 · premium"
+                - option "Kimi K2.7 · fast"
+            - generic [ref=e335]:
+              - generic [ref=e336]: Max rounds
+              - spinbutton [ref=e337]: "4"
+            - generic [ref=e338]:
+              - generic [ref=e339]:
+                - img [ref=e340]
+                - text: Judge
+              - combobox [ref=e342]:
+                - option "N2 ✦ · free" [selected]
+                - option "Local · free, offline"
+                - option "GLM 5.2 · cheap"
+                - option "Fusion council · premium (paid)"
+            - button "Run loop" [disabled] [ref=e344]:
+              - img [ref=e345]
+              - text: Run loop
+          - paragraph [ref=e348]: Loops are token-hungry by design — so both the builder and the judge default to free models (N2). Connect Nous Portal — run hermes portal — for more free models in both dropdowns. If the free judge ever throttles, it falls back to your local model. Results save to your vault under Agentic OS/Loops.

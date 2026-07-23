@@ -1,0 +1,606 @@
+- generic [ref=f12e2]:
+  - complementary [ref=f12e3]:
+    - generic [ref=f12e5]:
+      - img [ref=f12e8]
+      - generic [ref=f12e10]:
+        - generic [ref=f12e11]: Triage Engine
+        - generic [ref=f12e12]: CS · Draft · Route
+    - navigation [ref=f12e13]:
+      - generic [ref=f12e14]: Workspace
+      - button "Queue 9" [ref=f12e15] [cursor=pointer]:
+        - img [ref=f12e17]
+        - text: Queue
+        - generic [ref=f12e19]: "9"
+      - button "Report" [ref=f12e20] [cursor=pointer]:
+        - img [ref=f12e22]
+        - text: Report
+      - generic "Knowledge base (docs the engine cites)" [ref=f12e24]:
+        - img [ref=f12e26]
+        - text: Knowledge
+      - generic "Engine settings" [ref=f12e28]:
+        - img [ref=f12e30]
+        - text: Settings
+    - generic [ref=f12e32]:
+      - generic [ref=f12e33]:
+        - generic [ref=f12e36]: Engine online
+        - generic [ref=f12e37]: last import · 18 hours ago
+        - generic [ref=f12e38]: claude · retrieval on
+      - generic [ref=f12e39]:
+        - generic [ref=f12e40]: NI
+        - generic [ref=f12e41]:
+          - generic [ref=f12e42]: Support agent
+          - generic [ref=f12e43]: Support · Nimbus Notes
+      - textbox "Stored locally in your browser only" [ref=f12e44]:
+        - /placeholder: auth token
+  - main [ref=f12e45]:
+    - generic [ref=f12e46]:
+      - generic [ref=f12e47]:
+        - generic [ref=f12e50]: CS Triage & Draft Engine
+        - heading "Approval Queue" [level=1] [ref=f12e51]:
+          - text: Approval
+          - emphasis [ref=f12e52]: Queue
+        - generic [ref=f12e53]: Nimbus Notes · claude · draft desk
+      - generic [ref=f12e54]:
+        - button "Simulate" [ref=f12e55] [cursor=pointer]:
+          - img [ref=f12e57]
+          - text: Simulate
+        - button "Run inbox" [ref=f12e59] [cursor=pointer]:
+          - img [ref=f12e61]
+          - text: Run inbox
+    - generic [ref=f12e63]:
+      - generic [ref=f12e64]:
+        - generic [ref=f12e65]:
+          - generic [ref=f12e66]:
+            - generic [ref=f12e67]: Open
+            - img [ref=f12e70]
+          - generic [ref=f12e72]: "0"
+          - generic [ref=f12e73]:
+            - img [ref=f12e75]
+            - text: 9 total tickets
+        - generic [ref=f12e77]:
+          - generic [ref=f12e78]:
+            - generic [ref=f12e79]: Urgent · go now
+            - img [ref=f12e82]
+          - generic [ref=f12e84]: "0"
+          - generic [ref=f12e86]: needs a human fast
+        - generic [ref=f12e87]:
+          - generic [ref=f12e88]:
+            - generic [ref=f12e89]: Drafts ready
+            - img [ref=f12e92]
+          - generic [ref=f12e94]: "0"
+          - generic [ref=f12e96]: review & send
+        - generic [ref=f12e97]:
+          - generic [ref=f12e98]:
+            - generic [ref=f12e99]: Escalations
+            - img [ref=f12e102]
+          - generic [ref=f12e104]: "0"
+          - generic [ref=f12e106]: human handles
+        - generic [ref=f12e107]:
+          - generic [ref=f12e108]:
+            - generic [ref=f12e109]: Sent today
+            - img [ref=f12e112]
+          - generic [ref=f12e114]: "0"
+          - generic [ref=f12e115]:
+            - img [ref=f12e117]
+            - text: none sent yet today
+          - img [ref=f12e119]
+        - generic [ref=f12e121]:
+          - generic [ref=f12e122]:
+            - generic [ref=f12e123]: Deflection
+            - img [ref=f12e126]
+          - generic [ref=f12e128]: 0%
+          - generic [ref=f12e130]: auto-resolved by AI
+      - generic [ref=f12e131]:
+        - generic [ref=f12e132]:
+          - generic [ref=f12e133]:
+            - generic [ref=f12e134]: Draft quality
+            - generic [ref=f12e135]: rolling
+          - generic [ref=f12e136]:
+            - generic [ref=f12e137]:
+              - img [ref=f12e138]
+              - generic [ref=f12e141]:
+                - generic [ref=f12e142]: "0"
+                - generic [ref=f12e143]: Avg conf
+            - generic [ref=f12e144]:
+              - generic [ref=f12e145]:
+                - generic [ref=f12e146]: Time saved
+                - generic [ref=f12e147]: 0 hrs
+              - generic [ref=f12e148]:
+                - generic [ref=f12e149]: Total handled
+                - generic [ref=f12e150]: "0"
+        - generic [ref=f12e151]:
+          - generic [ref=f12e152]:
+            - generic [ref=f12e153]: Top intents
+            - generic [ref=f12e154]: by volume
+          - generic [ref=f12e155]:
+            - generic [ref=f12e156]:
+              - generic [ref=f12e157]: billing
+              - generic [ref=f12e159]: "3"
+            - generic [ref=f12e160]:
+              - generic [ref=f12e161]: how-to
+              - generic [ref=f12e163]: "3"
+            - generic [ref=f12e164]:
+              - generic [ref=f12e165]: feature-request
+              - generic [ref=f12e167]: "1"
+            - generic [ref=f12e168]:
+              - generic [ref=f12e169]: other
+              - generic [ref=f12e171]: "1"
+        - generic [ref=f12e172]:
+          - generic [ref=f12e173]:
+            - generic [ref=f12e174]: Route mix
+            - generic [ref=f12e175]: where mail goes
+          - img [ref=f12e176]
+          - generic [ref=f12e177]:
+            - generic [ref=f12e178]: Ready
+            - generic [ref=f12e180]: Escalated
+            - generic [ref=f12e182]: Sent
+        - generic [ref=f12e184]:
+          - generic [ref=f12e185]:
+            - generic [ref=f12e186]: Deflection rate
+            - generic [ref=f12e187]: this window
+          - generic [ref=f12e188]:
+            - generic [ref=f12e189]: 0%
+            - generic [ref=f12e190]: 33 of every 100 inbound tickets resolved by a reviewed AI draft — the rest routed to a human within seconds.
+      - generic [ref=f12e191]:
+        - generic [ref=f12e194]: Work surface
+        - generic [ref=f12e195]:
+          - generic [ref=f12e196] [cursor=pointer]: Urgent first
+          - generic [ref=f12e198] [cursor=pointer]: All
+          - generic [ref=f12e199] [cursor=pointer]: Needs you
+          - generic [ref=f12e200] [cursor=pointer]: Ready to send
+      - generic [ref=f12e201]:
+        - generic [ref=f12e202]:
+          - generic [ref=f12e203]:
+            - generic [ref=f12e204]:
+              - img [ref=f12e207]
+              - heading "Needs you" [level=2] [ref=f12e209]
+              - generic [ref=f12e210]: "6"
+            - generic [ref=f12e211]: human handles
+          - generic [ref=f12e212]:
+            - article [ref=f12e213]:
+              - generic [ref=f12e214]:
+                - generic [ref=f12e215]:
+                  - generic [ref=f12e216]: サービスの利用をキャンセルする
+                  - generic [ref=f12e217]: Yoshi · riyoshi@wantanabe.com
+                - generic [ref=f12e218]: Urgent
+              - generic [ref=f12e220]:
+                - generic "How well the knowledge base matched (retrieval 0.68)" [ref=f12e221]:
+                  - generic [ref=f12e222]: docs
+                  - text: strong
+                - generic [ref=f12e223]:
+                  - generic [ref=f12e224]: intent
+                  - text: billing
+                - generic [ref=f12e225]:
+                  - generic [ref=f12e226]: sentiment
+                  - text: negative
+                - generic [ref=f12e227]:
+                  - generic [ref=f12e228]: urgency
+                  - text: high
+                - generic [ref=f12e229]:
+                  - generic [ref=f12e230]: recv
+                  - text: 14h ago
+              - generic [ref=f12e231]: Customer requests instructions to cancel their subscription due to dissatisfaction with the app.
+              - generic [ref=f12e232]:
+                - generic [ref=f12e233]: Confidence
+                - generic [ref=f12e235]: 30%
+              - group [ref=f12e236]:
+                - generic "Customer message" [ref=f12e237] [cursor=pointer]:
+                  - img [ref=f12e239]
+                  - text: Customer message
+              - generic [ref=f12e241]:
+                - generic [ref=f12e242]:
+                  - generic [ref=f12e243]: Draft reply
+                  - generic [ref=f12e244]: edit before sending
+                - textbox [ref=f12e245]: "こんにちは、ご連絡いただきありがとうございます。お別れは残念ですが、最後までしっかりお手伝いさせてくださいね。まず、解約（サービスのキャンセル）の手順については、手元の情報に確実なご案内が見つからなかったため、チームに確認しています。分かり次第すぐにお知らせします。その間にひとつだけ安心していただきたいのは、ノートはいつでもエクスポートできて、データがロックインされることはない、という点です。設定 →データ →「すべてエクスポート」で、全ノートブックを含む.zipをダウンロードできます。詳しくはこちら: https://help.nimbusnotes.example/import-export 次のステップとして、解約のご案内をそのままお待ちいただくか、先にノートのバックアップを取りたいかだけ教えていただけますか？ Cheers, Nimbus Support"
+              - generic [ref=f12e246]:
+                - generic [ref=f12e247]: Grounded in
+                - link "Importing and exporting notes https://help.nimbusnotes.example/import-export" [ref=f12e248] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/import-export
+                  - img [ref=f12e249]
+                  - generic [ref=f12e251]: Importing and exporting notes
+                  - generic [ref=f12e252]: https://help.nimbusnotes.example/import-export
+              - generic [ref=f12e253]:
+                - img [ref=f12e254]
+                - generic [ref=f12e256]: Routed to you — Subscription cancellation requires billing action and presents retention opportunity.
+              - generic [ref=f12e257]:
+                - button "I'll handle it" [ref=f12e258] [cursor=pointer]:
+                  - img [ref=f12e259]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=f12e261] [cursor=pointer]
+            - article [ref=f12e262]:
+              - generic [ref=f12e263]:
+                - generic [ref=f12e264]:
+                  - generic [ref=f12e265]: Warranty Claim
+                  - generic [ref=f12e266]: Jackie · Herrera
+                - generic [ref=f12e267]: Urgent
+              - generic [ref=f12e269]:
+                - generic "How well the knowledge base matched (retrieval 0.68)" [ref=f12e270]:
+                  - generic [ref=f12e271]: docs
+                  - text: strong
+                - generic [ref=f12e272]:
+                  - generic [ref=f12e273]: intent
+                  - text: other
+                - generic [ref=f12e274]:
+                  - generic [ref=f12e275]: cat
+                  - text: general
+                - generic [ref=f12e276]:
+                  - generic [ref=f12e277]: sentiment
+                  - text: negative
+                - generic [ref=f12e278]:
+                  - generic [ref=f12e279]: urgency
+                  - text: urgent
+                - generic [ref=f12e280]:
+                  - generic [ref=f12e281]: recv
+                  - text: 14h ago
+              - generic [ref=f12e282]: Customer claims children are trapped inside a physical unit and requests emergency assistance.
+              - generic [ref=f12e283]:
+                - generic [ref=f12e284]: Confidence
+                - generic [ref=f12e286]: 30%
+              - group [ref=f12e287]:
+                - generic "Customer message" [ref=f12e288] [cursor=pointer]:
+                  - img [ref=f12e290]
+                  - text: Customer message
+              - generic [ref=f12e292]:
+                - generic [ref=f12e293]:
+                  - generic [ref=f12e294]: Draft reply
+                  - generic [ref=f12e295]: edit before sending
+                - textbox [ref=f12e296]: "Hi there, I'm so sorry you're dealing with something this scary. I want to be honest with you: Nimbus Notes is a note-taking app, so we don't make any physical product or \"unit,\" and there's nothing on our side that could trap anyone. If your children are in real, immediate danger, please stop and call your local emergency services (911 in the US) right now — they're the fastest way to get help. If you reached us by mistake and were actually trying to contact another company, I'd be glad to point you in the right direction. And if there's something I can help you with in Nimbus Notes itself, I'm here for that too. I don't have anything in our help resources that covers a warranty claim, so I'm checking with the team to make sure you get pointed to the right place. Hang in there. Cheers, Nimbus Support"
+              - generic [ref=f12e298]:
+                - img [ref=f12e299]
+                - text: No source cited — verify before sending.
+              - generic [ref=f12e301]:
+                - img [ref=f12e302]
+                - generic [ref=f12e304]: Routed to you — Safety claim involving minors requires human review; likely misrouted (Nimbus Notes is a software note-taking app with no physical product) or potential fraud/prank.
+              - generic [ref=f12e305]:
+                - button "I'll handle it" [ref=f12e306] [cursor=pointer]:
+                  - img [ref=f12e307]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=f12e309] [cursor=pointer]
+            - article [ref=f12e310]:
+              - generic [ref=f12e311]:
+                - generic [ref=f12e312]:
+                  - generic [ref=f12e313]: Como se dice?
+                  - generic [ref=f12e314]: Anotrher ONe · Yooooo@uhhuh.com
+                - generic [ref=f12e315]: Escalate
+              - generic [ref=f12e316]:
+                - generic "How well the knowledge base matched (retrieval 0.64)" [ref=f12e317]:
+                  - generic [ref=f12e318]: docs
+                  - text: strong
+                - generic [ref=f12e319]:
+                  - generic [ref=f12e320]: intent
+                  - text: billing
+                - generic [ref=f12e321]:
+                  - generic [ref=f12e322]: sentiment
+                  - text: positive
+                - generic [ref=f12e323]:
+                  - generic [ref=f12e324]: recv
+                  - text: 14h ago
+              - generic [ref=f12e325]: Existing customer loves the service and inquires about available discounts or promotional codes.
+              - generic [ref=f12e326]:
+                - generic [ref=f12e327]: Confidence
+                - generic [ref=f12e329]: 30%
+              - group [ref=f12e330]:
+                - generic "Customer message" [ref=f12e331] [cursor=pointer]:
+                  - img [ref=f12e333]
+                  - text: Customer message
+              - generic [ref=f12e335]:
+                - generic [ref=f12e336]:
+                  - generic [ref=f12e337]: Draft reply
+                  - generic [ref=f12e338]: edit before sending
+                - textbox [ref=f12e339]: "¡Hola! ¡Qué alegría que te encante Nimbus Notes! 😊 Sobre descuentos o códigos promocionales para clientes existentes: no tengo esa información a mano, así que lo estoy consultando con el equipo y te confirmo en cuanto sepa algo. Mientras tanto, si quieres ver los planes y cómo cambiar entre facturación mensual o anual, puedes revisar aquí: https://help.nimbusnotes.example/billing. Como siguiente paso, dime si prefieres el plan mensual o anual y te ayudo con la configuración cuando tengamos respuesta sobre las promociones. ¡Gracias por tu paciencia! Cheers, Nimbus Support"
+              - generic [ref=f12e340]:
+                - generic [ref=f12e341]: Grounded in
+                - link "Plans and billing https://help.nimbusnotes.example/billing" [ref=f12e342] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/billing
+                  - img [ref=f12e343]
+                  - generic [ref=f12e345]: Plans and billing
+                  - generic [ref=f12e346]: https://help.nimbusnotes.example/billing
+              - generic [ref=f12e347]:
+                - img [ref=f12e348]
+                - generic [ref=f12e350]: Routed to you — Low confidence (0.3 < 0.4); not enough grounding to draft safely.
+              - generic [ref=f12e351]:
+                - button "I'll handle it" [ref=f12e352] [cursor=pointer]:
+                  - img [ref=f12e353]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=f12e355] [cursor=pointer]
+            - article [ref=f12e356]:
+              - generic [ref=f12e357]:
+                - generic [ref=f12e358]:
+                  - generic [ref=f12e359]: "Re: Re: RE:"
+                  - generic [ref=f12e360]: Hot Man · man@manliness.com
+                - generic [ref=f12e361]: Escalate
+              - generic [ref=f12e362]:
+                - generic "How well the knowledge base matched (retrieval 0.74)" [ref=f12e363]:
+                  - generic [ref=f12e364]: docs
+                  - text: strong
+                - generic [ref=f12e365]:
+                  - generic [ref=f12e366]: intent
+                  - text: account
+                - generic [ref=f12e367]:
+                  - generic [ref=f12e368]: sentiment
+                  - text: neutral
+                - generic [ref=f12e369]:
+                  - generic [ref=f12e370]: recv
+                  - text: 14h ago
+              - generic [ref=f12e371]: Customer requests to cancel their Nimbus Notes subscription.
+              - generic [ref=f12e372]:
+                - generic [ref=f12e373]: Confidence
+                - generic [ref=f12e375]: 30%
+              - group [ref=f12e376]:
+                - generic "Customer message" [ref=f12e377] [cursor=pointer]:
+                  - img [ref=f12e379]
+                  - text: Customer message
+              - generic [ref=f12e381]:
+                - generic [ref=f12e382]:
+                  - generic [ref=f12e383]: Draft reply
+                  - generic [ref=f12e384]: edit before sending
+                - textbox [ref=f12e385]: Hi there, thanks for reaching out, and I'm sorry to hear you're thinking about leaving! I want to get this right for you, so I'm checking with the team on the exact steps to cancel and will follow up shortly. In the meantime, if you'd like to keep your notes, you can export everything from Settings > Data > Export all, which gives you a .zip of every notebook so you're never locked in (https://help.nimbusnotes.example/import-export). Would you like me to walk you through that export while we sort out the cancellation? Cheers, Nimbus Support
+              - generic [ref=f12e386]:
+                - generic [ref=f12e387]: Grounded in
+                - link "Importing and exporting notes https://help.nimbusnotes.example/import-export" [ref=f12e388] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/import-export
+                  - img [ref=f12e389]
+                  - generic [ref=f12e391]: Importing and exporting notes
+                  - generic [ref=f12e392]: https://help.nimbusnotes.example/import-export
+              - generic [ref=f12e393]:
+                - img [ref=f12e394]
+                - generic [ref=f12e396]: Routed to you — Category "account" always routes to a human.
+              - generic [ref=f12e397]:
+                - button "I'll handle it" [ref=f12e398] [cursor=pointer]:
+                  - img [ref=f12e399]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=f12e401] [cursor=pointer]
+            - article [ref=f12e402]:
+              - generic [ref=f12e403]:
+                - generic [ref=f12e404]:
+                  - generic [ref=f12e405]: Offline desktop app for Linux?
+                  - generic [ref=f12e406]: Priya Shah · priya@example.com
+                - generic [ref=f12e407]: Escalate
+              - generic [ref=f12e408]:
+                - generic "How well the knowledge base matched (retrieval 0.73)" [ref=f12e409]:
+                  - generic [ref=f12e410]: docs
+                  - text: strong
+                - generic [ref=f12e411]:
+                  - generic [ref=f12e412]: intent
+                  - text: feature-request
+                - generic [ref=f12e413]:
+                  - generic [ref=f12e414]: sentiment
+                  - text: positive
+                - generic [ref=f12e415]:
+                  - generic [ref=f12e416]: recv
+                  - text: 18h ago
+              - generic [ref=f12e417]: Customer requests a native offline desktop app for Linux to support their offline work needs.
+              - generic [ref=f12e418]:
+                - generic [ref=f12e419]: Confidence
+                - generic [ref=f12e421]: 30%
+              - group [ref=f12e422]:
+                - generic "Customer message" [ref=f12e423] [cursor=pointer]:
+                  - img [ref=f12e425]
+                  - text: Customer message
+              - generic [ref=f12e427]:
+                - generic [ref=f12e428]:
+                  - generic [ref=f12e429]: Draft reply
+                  - generic [ref=f12e430]: edit before sending
+                - textbox [ref=f12e431]: "Hi there, thanks for reaching out, and great question! I want to give you an accurate answer, so I'm checking with our team on whether we offer a native offline desktop app for Linux. I don't have that detail confirmed in our help docs yet, so I'd rather not guess. In the meantime, if you'd like to get started or move notes around, our Getting started guide walks through the basics (https://help.nimbusnotes.example/getting-started). Next step: sit tight and I'll follow up as soon as I hear back from the team on Linux desktop support. Thanks for your patience! Cheers, Nimbus Support"
+              - generic [ref=f12e432]:
+                - generic [ref=f12e433]: Grounded in
+                - link "Getting started with Nimbus Notes https://help.nimbusnotes.example/getting-started" [ref=f12e434] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/getting-started
+                  - img [ref=f12e435]
+                  - generic [ref=f12e437]: Getting started with Nimbus Notes
+                  - generic [ref=f12e438]: https://help.nimbusnotes.example/getting-started
+              - generic [ref=f12e439]:
+                - img [ref=f12e440]
+                - generic [ref=f12e442]: Routed to you — Low confidence (0.3 < 0.4); not enough grounding to draft safely.
+              - generic [ref=f12e443]:
+                - button "I'll handle it" [ref=f12e444] [cursor=pointer]:
+                  - img [ref=f12e445]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=f12e447] [cursor=pointer]
+            - article [ref=f12e448]:
+              - generic [ref=f12e449]:
+                - generic [ref=f12e450]:
+                  - generic [ref=f12e451]: Refund for my Pro plan
+                  - generic [ref=f12e452]: Marcus Bell · marcus@example.com
+                - generic [ref=f12e453]: Escalate
+              - generic [ref=f12e454]:
+                - generic "How well the knowledge base matched (retrieval 1.00)" [ref=f12e455]:
+                  - generic [ref=f12e456]: docs
+                  - text: strong
+                - generic [ref=f12e457]:
+                  - generic [ref=f12e458]: intent
+                  - text: billing
+                - generic [ref=f12e459]:
+                  - generic [ref=f12e460]: sentiment
+                  - text: neutral
+                - generic [ref=f12e461]:
+                  - generic [ref=f12e462]: recv
+                  - text: 18h ago
+              - generic [ref=f12e463]: Customer requests refund for Pro plan purchased by mistake yesterday.
+              - generic [ref=f12e464]:
+                - generic [ref=f12e465]: Confidence
+                - generic [ref=f12e467]: 28%
+              - group [ref=f12e468]:
+                - generic "Customer message" [ref=f12e469] [cursor=pointer]:
+                  - img [ref=f12e471]
+                  - text: Customer message
+              - generic [ref=f12e473]:
+                - generic [ref=f12e474]:
+                  - generic [ref=f12e475]: Draft reply
+                  - generic [ref=f12e476]: edit before sending
+                - textbox [ref=f12e477]: "Hi there, thanks for reaching out, and no worries — these things happen! I want to get this sorted for you. I don't have our refund details in front of me, so I'm checking with the team on processing a refund back to your card and will follow up as soon as I hear back. In the meantime, if you'd like to manage your plan or grab a copy of your invoice, you can find both under Settings > Billing (https://help.nimbusnotes.example/billing). Next step: I'll confirm the refund process with the team and update you shortly. Hang tight! Cheers, Nimbus Support"
+              - generic [ref=f12e478]:
+                - generic [ref=f12e479]: Grounded in
+                - link "Plans and billing https://help.nimbusnotes.example/billing" [ref=f12e480] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/billing
+                  - img [ref=f12e481]
+                  - generic [ref=f12e483]: Plans and billing
+                  - generic [ref=f12e484]: https://help.nimbusnotes.example/billing
+              - generic [ref=f12e485]:
+                - img [ref=f12e486]
+                - generic [ref=f12e488]: Routed to you — Matched sensitive phrase "refund".
+              - generic [ref=f12e489]:
+                - button "I'll handle it" [ref=f12e490] [cursor=pointer]:
+                  - img [ref=f12e491]
+                  - text: I'll handle it
+                - button "Dismiss" [ref=f12e493] [cursor=pointer]
+        - generic [ref=f12e494]:
+          - generic [ref=f12e495]:
+            - generic [ref=f12e496]:
+              - img [ref=f12e499]
+              - heading "Ready to send" [level=2] [ref=f12e501]
+              - generic [ref=f12e502]: "3"
+            - generic [ref=f12e503]: review & send
+          - generic [ref=f12e504]:
+            - article [ref=f12e505]:
+              - generic [ref=f12e506]:
+                - generic [ref=f12e507]:
+                  - generic [ref=f12e508]: Organizing notes into notebooks
+                  - generic [ref=f12e509]: Alex Kim · alex@example.com
+                - generic [ref=f12e510]: Review
+              - generic [ref=f12e511]:
+                - generic [ref=f12e512]:
+                  - generic [ref=f12e513]: intent
+                  - text: how-to
+                - generic [ref=f12e514]:
+                  - generic [ref=f12e515]: cat
+                  - text: general
+                - generic [ref=f12e516]:
+                  - generic [ref=f12e517]: sentiment
+                  - text: neutral
+                - generic [ref=f12e518]:
+                  - generic [ref=f12e519]: recv
+                  - text: 16h ago
+              - generic [ref=f12e520]:
+                - generic [ref=f12e521]: Confidence
+                - generic [ref=f12e523]: 92%
+              - group [ref=f12e524]:
+                - generic "Customer message" [ref=f12e525] [cursor=pointer]:
+                  - img [ref=f12e527]
+                  - text: Customer message
+              - generic [ref=f12e529]:
+                - generic [ref=f12e530]:
+                  - generic [ref=f12e531]: Draft reply
+                  - generic [ref=f12e532]: edit before sending
+                - textbox [ref=f12e533]: "Hi there! Happy to help you get organized. To group notes into notebooks, click New Notebook in the left sidebar, give it a name, then drag your notes into it. You can also add tags to any note from the tag field at the bottom of the editor, and then filter by tag from the sidebar to find them later. One handy extra: search (Ctrl+K) looks inside titles, body text, and tags too. Full steps are here: https://help.nimbusnotes.example/getting-started. Next step: try making one notebook and tagging a couple of notes, and let me know if anything trips you up! Cheers, Nimbus Support"
+              - generic [ref=f12e534]:
+                - generic [ref=f12e535]: Grounded in
+                - link "Getting started with Nimbus Notes https://help.nimbusnotes.example/getting-started" [ref=f12e536] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/getting-started
+                  - img [ref=f12e537]
+                  - generic [ref=f12e539]: Getting started with Nimbus Notes
+                  - generic [ref=f12e540]: https://help.nimbusnotes.example/getting-started
+              - generic [ref=f12e541]:
+                - img [ref=f12e542]
+                - generic [ref=f12e544]: Grounded draft ready for review (confidence 0.92).
+              - generic [ref=f12e545]:
+                - button "Send" [ref=f12e546] [cursor=pointer]:
+                  - img [ref=f12e547]
+                  - text: Send
+                - button "Reset" [ref=f12e549] [cursor=pointer]
+                - button "Reject" [ref=f12e550] [cursor=pointer]:
+                  - img [ref=f12e551]
+                  - text: Reject
+            - article [ref=f12e553]:
+              - generic [ref=f12e554]:
+                - generic [ref=f12e555]:
+                  - generic [ref=f12e556]: Import from another app
+                  - generic [ref=f12e557]: Sam Rivera · sam@example.com
+                - generic [ref=f12e558]: Review
+              - generic [ref=f12e559]:
+                - generic [ref=f12e560]:
+                  - generic [ref=f12e561]: intent
+                  - text: how-to
+                - generic [ref=f12e562]:
+                  - generic [ref=f12e563]: cat
+                  - text: import-export
+                - generic [ref=f12e564]:
+                  - generic [ref=f12e565]: sentiment
+                  - text: neutral
+                - generic [ref=f12e566]:
+                  - generic [ref=f12e567]: recv
+                  - text: 16h ago
+              - generic [ref=f12e568]:
+                - generic [ref=f12e569]: Confidence
+                - generic [ref=f12e571]: 95%
+              - group [ref=f12e572]:
+                - generic "Customer message" [ref=f12e573] [cursor=pointer]:
+                  - img [ref=f12e575]
+                  - text: Customer message
+              - generic [ref=f12e577]:
+                - generic [ref=f12e578]:
+                  - generic [ref=f12e579]: Draft reply
+                  - generic [ref=f12e580]: edit before sending
+                - textbox [ref=f12e581]: "Hi there, welcome to Nimbus Notes! Moving over your markdown files is easy. Just go to Settings, then Data, then Import, and upload your Markdown files (you can also upload a .zip exported from another app). Your imported notes will keep their titles and land in a notebook called Imported. Full steps are here: https://help.nimbusnotes.example/import-export. Next step: head to Settings > Data > Import and drop in your .md files. Let us know if you hit any snags! Cheers, Nimbus Support"
+              - generic [ref=f12e582]:
+                - generic [ref=f12e583]: Grounded in
+                - link "Importing and exporting notes https://help.nimbusnotes.example/import-export" [ref=f12e584] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/import-export
+                  - img [ref=f12e585]
+                  - generic [ref=f12e587]: Importing and exporting notes
+                  - generic [ref=f12e588]: https://help.nimbusnotes.example/import-export
+              - generic [ref=f12e589]:
+                - img [ref=f12e590]
+                - generic [ref=f12e592]: Grounded draft ready for review (confidence 0.95).
+              - generic [ref=f12e593]:
+                - button "Send" [ref=f12e594] [cursor=pointer]:
+                  - img [ref=f12e595]
+                  - text: Send
+                - button "Reset" [ref=f12e597] [cursor=pointer]
+                - button "Reject" [ref=f12e598] [cursor=pointer]:
+                  - img [ref=f12e599]
+                  - text: Reject
+            - article [ref=f12e601]:
+              - generic [ref=f12e602]:
+                - generic [ref=f12e603]:
+                  - generic [ref=f12e604]: How do I export my notes to PDF?
+                  - generic [ref=f12e605]: Dana Lee · dana@example.com
+                - generic [ref=f12e606]: Review
+              - generic [ref=f12e607]:
+                - generic [ref=f12e608]:
+                  - generic [ref=f12e609]: intent
+                  - text: how-to
+                - generic [ref=f12e610]:
+                  - generic [ref=f12e611]: cat
+                  - text: import-export
+                - generic [ref=f12e612]:
+                  - generic [ref=f12e613]: sentiment
+                  - text: neutral
+                - generic [ref=f12e614]:
+                  - generic [ref=f12e615]: recv
+                  - text: 18h ago
+              - generic [ref=f12e616]:
+                - generic [ref=f12e617]: Confidence
+                - generic [ref=f12e619]: 93%
+              - group [ref=f12e620]:
+                - generic "Customer message" [ref=f12e621] [cursor=pointer]:
+                  - img [ref=f12e623]
+                  - text: Customer message
+              - generic [ref=f12e625]:
+                - generic [ref=f12e626]:
+                  - generic [ref=f12e627]: Draft reply
+                  - generic [ref=f12e628]: edit before sending
+                - textbox [ref=f12e629]: "Hi there! Happy to help you get those notes to your accountant. Yes — you can export individual notes: open a note, click the three-dot menu in the top right, choose Export, and pick PDF (https://help.nimbusnotes.example/import-export). To send a whole notebook at once, right-click the notebook in the sidebar and choose Export notebook, which gives you a .zip of all its notes in the format you pick (https://help.nimbusnotes.example/import-export). One heads-up: PDF export is a Pro plan feature, so you'll need Pro to use it — you can upgrade under Settings > Plan (https://help.nimbusnotes.example/billing). Next step: try exporting a single note to PDF from that three-dot menu, and let me know if you'd like a hand with the notebook export! Cheers, Nimbus Support"
+              - generic [ref=f12e630]:
+                - generic [ref=f12e631]: Grounded in
+                - link "Importing and exporting notes https://help.nimbusnotes.example/import-export" [ref=f12e632] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/import-export
+                  - img [ref=f12e633]
+                  - generic [ref=f12e635]: Importing and exporting notes
+                  - generic [ref=f12e636]: https://help.nimbusnotes.example/import-export
+                - link "Plans and billing https://help.nimbusnotes.example/billing" [ref=f12e637] [cursor=pointer]:
+                  - /url: https://help.nimbusnotes.example/billing
+                  - img [ref=f12e638]
+                  - generic [ref=f12e640]: Plans and billing
+                  - generic [ref=f12e641]: https://help.nimbusnotes.example/billing
+              - generic [ref=f12e642]:
+                - img [ref=f12e643]
+                - generic [ref=f12e645]: Grounded draft ready for review (confidence 0.93).
+              - generic [ref=f12e646]:
+                - button "Send" [ref=f12e647] [cursor=pointer]:
+                  - img [ref=f12e648]
+                  - text: Send
+                - button "Reset" [ref=f12e650] [cursor=pointer]
+                - button "Reject" [ref=f12e651] [cursor=pointer]:
+                  - img [ref=f12e652]
+                  - text: Reject

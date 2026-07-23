@@ -1,0 +1,338 @@
+- generic [ref=e3]:
+  - link "Skip to Main Content" [ref=e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - generic [ref=e7]:
+      - complementary [ref=e9]:
+        - generic [ref=e10]:
+          - button "Open YoshiCorp workspace switcher" [ref=e164]:
+            - generic [ref=e12]:
+              - generic [ref=e165]:
+                - img [ref=e166]
+                - generic [ref=e167]: "Y"
+              - generic [ref=e13]: YoshiCorp
+            - img
+          - link "Open search" [ref=e14] [cursor=pointer]:
+            - /url: /LAU/search
+            - img
+          - button "Collapse sidebar" [expanded] [ref=e15]:
+            - img
+        - navigation [ref=e16]:
+          - generic [ref=e17]:
+            - button "New Task" [ref=e18]:
+              - img [ref=e19]
+              - generic [ref=e22]: New Task
+            - link "Dashboard" [ref=e23] [cursor=pointer]:
+              - /url: /LAU/dashboard
+              - img [ref=e25]
+              - generic [ref=e30]: Dashboard
+            - link "Inbox 1" [ref=e168] [cursor=pointer]:
+              - /url: /LAU/inbox
+              - img [ref=e33]
+              - generic [ref=e36]: Inbox
+              - generic [ref=e170]: "1"
+          - generic [ref=e37]:
+            - generic [ref=e41]: Work
+            - generic [ref=e42]:
+              - link "Tasks" [ref=e43] [cursor=pointer]:
+                - /url: /LAU/issues
+                - img [ref=e45]
+                - generic [ref=e48]: Tasks
+              - link "Routines" [ref=e49] [cursor=pointer]:
+                - /url: /LAU/routines
+                - img [ref=e51]
+                - generic [ref=e56]: Routines
+              - link "Goals" [ref=e57] [cursor=pointer]:
+                - /url: /LAU/goals
+                - img [ref=e59]
+                - generic [ref=e63]: Goals
+              - link "Artifacts" [ref=e64] [cursor=pointer]:
+                - /url: /LAU/artifacts
+                - img [ref=e66]
+                - generic [ref=e70]: Artifacts
+          - generic [ref=e71]:
+            - generic [ref=e73]:
+              - button "Collapse Projects" [expanded] [ref=e74]:
+                - img [ref=e75]
+              - button "Projects section actions" [ref=e77]:
+                - generic [ref=e78]: Projects
+              - button "New project" [ref=e79]:
+                - img
+            - generic [ref=e172]:
+              - button "Onboarding Open actions for Onboarding" [ref=e174]:
+                - generic [ref=e176]:
+                  - link "Onboarding" [ref=e177] [cursor=pointer]:
+                    - /url: /LAU/projects/onboarding/issues
+                    - img [ref=e179]
+                    - generic [ref=e181]: Onboarding
+                  - button "Open actions for Onboarding":
+                    - img
+              - status [ref=e80]
+          - generic [ref=e81]:
+            - generic [ref=e83]:
+              - button "Collapse Agents" [expanded] [ref=e84]:
+                - img [ref=e85]
+              - button "Agents section actions" [ref=e87]:
+                - generic [ref=e88]: Agents
+              - button "New agent" [ref=e89]:
+                - img
+            - generic [ref=e184]:
+              - link "Alpha" [ref=e185] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/configuration
+                - img [ref=e186]
+                - generic [ref=e189]: Alpha
+              - button "Open actions for Alpha":
+                - img
+          - generic [ref=e90]:
+            - generic [ref=e94]: Company
+            - generic [ref=e95]:
+              - link "Org" [ref=e96] [cursor=pointer]:
+                - /url: /LAU/org
+                - img [ref=e98]
+                - generic [ref=e103]: Org
+              - link "Skills" [ref=e104] [cursor=pointer]:
+                - /url: /LAU/skills
+                - img [ref=e106]
+                - generic [ref=e116]: Skills
+              - link "Costs" [ref=e117] [cursor=pointer]:
+                - /url: /LAU/costs
+                - img [ref=e119]
+                - generic [ref=e121]: Costs
+              - link "Activity" [ref=e122] [cursor=pointer]:
+                - /url: /LAU/activity
+                - img [ref=e124]
+                - generic [ref=e128]: Activity
+              - link "Settings" [ref=e129] [cursor=pointer]:
+                - /url: /LAU/company/settings
+                - img [ref=e131]
+                - generic [ref=e134]: Settings
+      - button "Open account menu" [ref=e136]:
+        - generic [ref=e138]: BO
+        - generic [ref=e139]: Board
+      - separator "Resize sidebar" [ref=e140]
+    - generic [ref=e141]:
+      - navigation "breadcrumb" [ref=e145]:
+        - list [ref=e146]:
+          - listitem [ref=e147]:
+            - link "Agents" [ref=e148] [cursor=pointer]:
+              - /url: /LAU/agents
+          - listitem [ref=e149]:
+            - img [ref=e150]
+          - listitem [ref=e152]:
+            - link "Alpha" [ref=e190] [cursor=pointer]:
+              - /url: /LAU/agents/alpha/dashboard
+          - listitem [ref=e154]:
+            - img [ref=e155]
+          - listitem [ref=e157]:
+            - link "Configuration" [disabled] [ref=e158]
+      - main [ref=e160]:
+        - generic [ref=e191]:
+          - generic [ref=e192]:
+            - generic [ref=e193]:
+              - button [ref=e194]:
+                - img [ref=e195]
+              - generic [ref=e198]:
+                - heading "Alpha" [level=2] [ref=e199]
+                - paragraph [ref=e200]: CEO - Chief of Staff
+            - generic [ref=e201]:
+              - button "Assign Task" [ref=e202]:
+                - img
+                - generic [ref=e203]: Assign Task
+              - button "Run Heartbeat" [ref=e204]:
+                - img
+                - generic [ref=e205]: Run Heartbeat
+              - button "Clear error and return agent to idle" [ref=e206]:
+                - img
+                - generic [ref=e207]: Clear error
+              - generic [ref=e209]: error
+              - button "Open actions for Alpha" [ref=e210]:
+                - img
+          - tablist [ref=e212]:
+            - tab "Dashboard" [ref=e213]
+            - tab "Instructions" [ref=e214]
+            - tab "Skills" [ref=e215]
+            - tab "Configuration" [selected] [ref=e216]
+            - tab "Runs" [ref=e217]
+            - tab "Budget" [ref=e218]
+          - generic [ref=e219]:
+            - generic [ref=e220]:
+              - generic [ref=e221]:
+                - generic [ref=e222]:
+                  - heading "Identity" [level=3] [ref=e223]
+                  - generic [ref=e224]:
+                    - generic [ref=e225]:
+                      - generic [ref=e226]:
+                        - generic [ref=e227]: Name
+                        - button [ref=e228]:
+                          - img [ref=e229]
+                      - textbox "Agent name" [ref=e232]: Alpha
+                    - generic [ref=e233]:
+                      - generic [ref=e234]:
+                        - generic [ref=e235]: Title
+                        - button [ref=e236]:
+                          - img [ref=e237]
+                      - textbox "e.g. VP of Engineering" [ref=e240]: Chief of Staff
+                    - generic [ref=e241]:
+                      - generic [ref=e242]:
+                        - generic [ref=e243]: Reports to
+                        - button [ref=e244]:
+                          - img [ref=e245]
+                      - button "Choose manager…" [ref=e248]:
+                        - img [ref=e249]
+                        - generic [ref=e252]: Choose manager…
+                    - generic [ref=e253]:
+                      - generic [ref=e254]:
+                        - generic [ref=e255]: Capabilities
+                        - button [ref=e256]:
+                          - img [ref=e257]
+                      - generic [ref=e262]:
+                        - textbox "editable markdown" [ref=e264]:
+                          - paragraph [ref=e265]
+                        - generic:
+                          - paragraph: Describe what this agent can do...
+                - generic [ref=e266]:
+                  - generic [ref=e267]:
+                    - heading "Adapter" [level=3] [ref=e268]
+                    - button "Test" [ref=e269]
+                  - generic [ref=e271]:
+                    - generic [ref=e272]:
+                      - generic [ref=e273]: Adapter type
+                      - button [ref=e274]:
+                        - img [ref=e275]
+                    - button "Hermes Agent (local)" [ref=e278]:
+                      - generic [ref=e280]: Hermes Agent (local)
+                      - img [ref=e281]
+                - generic [ref=e283]:
+                  - heading "Permissions & Configuration" [level=3] [ref=e284]
+                  - generic [ref=e285]:
+                    - generic [ref=e286]:
+                      - generic [ref=e287]:
+                        - generic [ref=e288]: Command
+                        - button [ref=e289]:
+                          - img [ref=e290]
+                      - textbox "hermes" [ref=e293]
+                    - generic [ref=e294]:
+                      - generic [ref=e295]:
+                        - generic [ref=e296]: Model
+                        - button [ref=e297]:
+                          - img [ref=e298]
+                      - button "kimi-k2.6" [ref=e301]:
+                        - generic [ref=e302]: kimi-k2.6
+                        - img [ref=e303]
+                    - generic [ref=e305]:
+                      - generic [ref=e306]:
+                        - generic [ref=e307]: Thinking effort
+                        - button [ref=e308]:
+                          - img [ref=e309]
+                      - button "Auto" [ref=e312]:
+                        - generic [ref=e313]: Auto
+                        - img [ref=e314]
+                    - generic [ref=e316]:
+                      - generic [ref=e317]:
+                        - generic [ref=e318]: Extra args (comma-separated)
+                        - button [ref=e319]:
+                          - img [ref=e320]
+                      - textbox "e.g. --verbose, --foo=bar" [ref=e323]
+                    - generic [ref=e324]:
+                      - generic [ref=e325]:
+                        - generic [ref=e326]: Environment variables
+                        - button [ref=e327]:
+                          - img [ref=e328]
+                      - generic [ref=e331]:
+                        - generic [ref=e332]:
+                          - textbox "KEY" [ref=e333]: OLLAMA_API_KEY
+                          - combobox "Binding mode" [ref=e334]:
+                            - generic: Plain
+                            - img
+                          - textbox "value" [ref=e335]: df3908496d0d4de4b4d2cf20fef12379.syOtgZNAfTvBpfDTs9KFij4l
+                          - button "Seal" [ref=e336]
+                          - button [ref=e422]:
+                            - img [ref=e423]
+                        - generic [ref=e426]:
+                          - textbox "KEY" [ref=e427]
+                          - combobox "Binding mode" [ref=e428]:
+                            - generic: Plain
+                            - img
+                          - textbox "value" [ref=e429]
+                          - button "Seal" [disabled] [ref=e430]
+                        - paragraph [ref=e337]: Set KEY to the env var name the process expects, for example GH_TOKEN. Choose Secret to resolve a stored value at run start. PAPERCLIP_* variables are injected automatically.
+                    - generic [ref=e338]:
+                      - generic [ref=e339]:
+                        - generic [ref=e340]: Timeout (sec)
+                        - button [ref=e341]:
+                          - img [ref=e342]
+                      - spinbutton [ref=e345]: "300"
+                    - generic [ref=e346]:
+                      - generic [ref=e347]:
+                        - generic [ref=e348]: Interrupt grace period (sec)
+                        - button [ref=e349]:
+                          - img [ref=e350]
+                      - spinbutton [ref=e353]: "15"
+                - generic [ref=e354]:
+                  - heading "Run Policy" [level=3] [ref=e355]:
+                    - img [ref=e356]
+                    - text: Run Policy
+                  - generic [ref=e358]:
+                    - generic [ref=e361]:
+                      - generic [ref=e362]:
+                        - generic [ref=e363]: Heartbeat on interval
+                        - button [ref=e364]:
+                          - img [ref=e365]
+                      - switch [ref=e368]
+                    - button "Advanced Run Policy" [ref=e370]:
+                      - img [ref=e371]
+                      - text: Advanced Run Policy
+              - generic [ref=e373]:
+                - heading "Trust" [level=3] [ref=e374]
+                - generic [ref=e375]:
+                  - generic [ref=e376]:
+                    - generic [ref=e377]:
+                      - generic [ref=e378]: Trust preset
+                      - button [ref=e379]:
+                        - img [ref=e380]
+                    - combobox [ref=e383]:
+                      - option "Standard" [selected]
+                      - option "Low-trust review"
+                  - paragraph [ref=e384]: Company-visible collaboration. This is the default for normal work.
+                  - paragraph [ref=e385]: Advanced permissions remain editable through the EE permissions extension when installed.
+              - generic [ref=e386]:
+                - heading "Permissions" [level=3] [ref=e387]
+                - generic [ref=e388]:
+                  - generic [ref=e389]:
+                    - generic [ref=e390]:
+                      - generic [ref=e391]: Can create new agents
+                      - paragraph [ref=e392]: Lets this agent create or hire agents and implicitly assign tasks.
+                    - switch [checked] [ref=e393]
+                  - generic [ref=e394]:
+                    - generic [ref=e395]:
+                      - generic [ref=e396]: Can assign tasks
+                      - paragraph [ref=e397]: Enabled automatically for CEO agents.
+                    - switch [checked] [disabled] [ref=e398]
+            - generic [ref=e399]:
+              - heading "API Keys" [level=3] [ref=e400]
+              - generic [ref=e401]:
+                - generic [ref=e402]:
+                  - heading "Create API Key" [level=3] [ref=e403]:
+                    - img [ref=e404]
+                    - text: Create API Key
+                  - paragraph [ref=e408]: API keys allow this agent to authenticate calls to the Paperclip server.
+                  - generic [ref=e409]:
+                    - textbox "Key name (e.g. production)" [ref=e410]
+                    - button "Create" [ref=e411]:
+                      - img
+                      - text: Create
+                - paragraph [ref=e412]: No active API keys.
+            - button "Configuration Revisions 13" [ref=e431]:
+              - img [ref=e415]
+              - text: Configuration Revisions
+              - generic [ref=e417]: "13"
+  - generic [ref=e161]:
+    - heading "Command Palette" [level=2] [ref=e162]
+    - paragraph [ref=e163]: Search for a command to run...
+  - complementary:
+    - list:
+      - listitem [ref=e432]:
+        - generic [ref=e433]:
+          - paragraph [ref=e436]: Agent saved
+          - button "Dismiss notification" [ref=e437]:
+            - img [ref=e438]

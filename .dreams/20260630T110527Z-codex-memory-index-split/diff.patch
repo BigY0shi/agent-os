@@ -1,0 +1,1941 @@
+--- live/MEMORY.md
++++ proposed/MEMORY.md
+@@ -1,466 +1,31 @@
+-# Task Group: cc-g2-win Windows/Android Claude Code app architecture and MVP bootstrap
+
++# Codex Memory Registry
+
+ 
+
+-scope: Reuse for scoping or extending the custom Even Realities G2 app at `C:\Users\Yoshi\.agent_even\cc-g2-win`, especially when the user wants a Windows backend + Android EvenHub app that stays separate from IRIS and uses full Claude Code invocation.
+
+-applies_to: cwd=C:\Users\Yoshi\.agent_even\cc-g2-win and related `C:\Users\Yoshi\.agent_even` work; reuse_rule=safe for follow-up work in this project family, but treat exact launcher behavior, QR state, and persistence status as checkout-specific unless revalidated
+
++This compact index routes agents to durable memory topics. Detailed task groups live in `topics/`; use targeted search and only open the relevant topic file for the current request.
+
+ 
+
+-## Task 1: Clarify the target platform and architecture for the G2 build
+
++## High-Use Topics
+
+ 
+
+-### rollout_summary_files
+
++- [cc-g2-win Windows/Android Claude Code app architecture and MVP bootstrap](topics/projects/cc-g2-win-architecture-mvp.md) - Windows + Android EvenHub target, Claude Code-only scope, faster-whisper, launcher and QR expectations.
+
++- [cc-g2-win backend runtime, reachability, and simulator verification](topics/projects/cc-g2-win-runtime-reachability.md) - Claude session UUID/stderr failures, stale runtime checks, EvenHub simulator, LAN/Tailscale reachability.
+
++- [cc-g2-win plugin UX, gesture handling, and HUD debugging](topics/projects/cc-g2-win-plugin-ux-hud.md) - Review-before-send, three-tap flow, transcript handoff, HUD rendering, gesture constraints.
+
++- [Even Terminal activation and IRIS desktop-agent architecture](topics/projects/agent-even-iris-architecture.md) - IRIS template adaptation, Even Terminal LAN routing, provider/refiner/memory architecture, note compression rules.
+
++- [Agentplus repo setup and ambient agent planning workflow](topics/projects/agentplus-cloud-planning.md) - Ambient-agent planning brief, git repo bootstrap, Claude cloud planning prerequisites and fallback.
+
++- [Finance-app startup, baseline creation, and blocked document-redesign follow-up](topics/projects/finance-app-startup-baseline.md) - Startup verification, README correction, known-good tag/branch baseline, auth-blocked doc redesign.
+
+ 
+
+-- rollout_summaries/2026-06-25T04-29-12-8SGC-g2_claude_code_windows_android_evenhub_architecture.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-0210-7b62-b638-75a6ae83294a.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-0210-7b62-b638-75a6ae83294a, success; platform correction from mac/iPhone reference app to Windows + Android EvenHub target)
+
++## Machine And Concept Topics
+
+ 
+
+-### keywords
+
++- [Windows startup and boot CPU investigation](topics/machine/windows-startup-cpu.md) - Startup inventory, boot-time ambiguity, live CPU context, Task Manager metric alignment.
+
++- [Windows 11 CPU spike and Explorer folder-open hang troubleshooting](topics/machine/windows-cpu-explorer-hangs.md) - Processor Utility alignment, HapticService CPU spike, Explorer hang and shell-extension evidence.
+
++- [Idea-mining sessions and military FPS concept shaping](topics/concepts/military-fps-idea-mining.md) - Portable skill export details and grounded-but-gamey tactical shooter concept direction.
+
+ 
+
+-- Even Realities G2, EvenHub, Windows, Android, claude-code-g2, Not quite a web app, hub.evenrealities.com/docs/get-started/overview, Whisper, ElevenLabs, self-hosted STT
+
++## Related Files
+
+ 
+
+-## Task 2: Build the first `cc-g2-win` MVP and stabilize the launcher expectations
+
++- `memory_summary.md` - short current summary injected into Codex contexts.
+
++- `raw_memories.md` - raw source material for memory generation; do not load unless explicitly needed.
+
++- `rollout_summaries/` - per-run evidence snippets; open only files cited by a relevant topic.
+
++- `skills/` - durable skill-specific memory and procedures.
+
+ 
+
+-### rollout_summary_files
+
++## Dream Notes
+
+ 
+
+-- rollout_summaries/2026-06-25T04-29-12-7vYY-cc_g2_win_mvp_devps1_qr_missing.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-0202-78d3-95e7-9423f7981e98.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-0202-78d3-95e7-9423f7981e98, partial; MVP backend/plugin build plus rewritten `dev.ps1`, but QR/persistence remained unresolved)
+
+-
+
+-### keywords
+
+-
+
+-- cc-g2-win, EvenHub, Claude Code only, faster-whisper, FastAPI, WebSocket, stream-json, dev.ps1, QR code missing, audio_end, keep Claude alive 15-20 minutes, syncing python deps
+
+-
+
+-## User preferences
+
+-
+
+-- When the user corrected the framing with "I have windows and an android" and "Not quite a web app" -> default future work on this project to Windows backend + Android EvenHub app, and read the EvenHub docs before proposing architecture. [Task 1]
+
+-- When the user said "This will be separate from the IRIS app, and will be claude code only" and "I want full claude code invocation" -> keep this project separate from IRIS and do not drift into multiprovider or lighter chat-only scope. [Task 2]
+
+-- When the user said "Let's use local faster-whisper. Especially if it doesn't take up much VRAM" -> prefer local STT over hosted credits for this build unless they explicitly override. [Task 2]
+
+-- When the user said "Your default is fine. Eventually I'll set up a tunnel but right now i Just need an MVP" -> default to LAN-first delivery for the first pass instead of prematurely optimizing for tunnel/cloud setup. [Task 2]
+
+-- When the user said "if the glasses lose connection, keep claude alive for 15-20 minutes" -> preserve the Claude session across short disconnects instead of resetting immediately. [Task 2]
+
+-- When the user asked "Where is the QR at? And is it supposed to shutdown right away?" -> if the walkthrough mentions QR or startup behavior, make sure the script actually does it before claiming the path is ready. [Task 2]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- The authoritative app shape here is: Windows backend plus Android EvenHub plugin, separate from IRIS, using full Claude Code invocation. [Task 1][Task 2]
+
+-- The EvenHub plugin facts used during the MVP build were: Android WebView app surface, 16 kHz PCM audio input, and text-only output via `textContainerUpgrade`. [Task 2]
+
+-- The project root is `C:\Users\Yoshi\.agent_even\cc-g2-win`, with `backend\` for FastAPI / faster-whisper / Claude CLI session handling and `plugin\` for the EvenHub UI/HUD. [Task 2]
+
+-- `dev.ps1` is the expected launcher entrypoint for this project, and the debug path for "syncing python deps" is to run `backend\.venv\Scripts\pip install -r requirements.txt` directly so real install errors appear. [Task 2]
+
+-- Related skill: skills/cc-g2-win-debug-loop/SKILL.md [Task 2]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: discussion drifts toward mac/iPhone or generic web-app patterns -> cause: overfitting to reference repos before confirming the user's platform -> fix: restate Windows + Android EvenHub constraints first, then map any reference repo back into that target. [Task 1]
+
+-- Symptom: the walkthrough promises QR sideloading but the user cannot find it -> cause: QR support was described before it actually existed -> fix: do not advertise QR readiness until the script visibly emits or serves it. [Task 2]
+
+-- Symptom: a quiet startup flow looks stuck on dependency sync -> cause: the wrapper hides the real pip output -> fix: run pip directly in `backend` before changing `.env` or rewriting config. [Task 2]
+
+-- Symptom: persistence questions appear late in the session -> cause: session/token/storage behavior was never made explicit -> fix: explain where session state, token, and project memory live in the first working walkthrough. [Task 2]
+
+-
+
+-# Task Group: cc-g2-win backend runtime, reachability, and simulator verification
+
+-
+
+-scope: Reuse for debugging live runtime mismatches in `cc-g2-win`, especially when the source tree looks correct but the phone/simulator still shows old behavior, Claude replies never arrive, or the chosen URL/QR path is not reachable.
+
+-applies_to: cwd=C:\Users\Yoshi\.agent_even\cc-g2-win and cwd=C:\Users\Yoshi\.agent_even; reuse_rule=safe for this project family and nearby EvenHub simulator work, but treat PIDs, ports, and network addresses as ephemeral and revalidate each run
+
+-
+
+-## Task 1: Fix the Claude no-reply path by switching to valid UUID session IDs and draining stderr
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-QcAv-even_realities_g2_claude_session_uuid_stderr_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-0189-7b92-9629-c12c5fdc7e27.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-0189-7b92-9629-c12c5fdc7e27, success; direct evidence for UUID requirement and stderr drain)
+
+-- rollout_summaries/2026-06-25T04-29-11-gTQi-cc_g2_win_claude_session_id_uuid_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffe3-7e63-b334-46f326fe18c6.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffe3-7e63-b334-46f326fe18c6, success; same backend failure pattern)
+
+-- rollout_summaries/2026-06-25T04-29-11-k5yy-cc_g2_win_fix_invalid_session_id_no_reply.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-001b-7b01-b54a-641b3d2d6237.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-001b-7b01-b54a-641b3d2d6237, success; same invalid-session diagnosis)
+
+-- rollout_summaries/2026-06-25T04-29-11-lvH6-cc_g2_win_claude_reply_fix_uuid_stderr.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffac-7072-abf4-29e57e404b34.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffac-7072-abf4-29e57e404b34, success; daily-log framing of the same fix)
+
+-- rollout_summaries/2026-06-25T04-29-11-sBtJ-cc_g2_invalid_session_id_claude_no_reply.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fffc-7e42-bec6-ca65ab260af2.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fffc-7e42-bec6-ca65ab260af2, success; same no-reply symptom from another pass)
+
+-
+
+-### keywords
+
+-
+
+-- session.py, invalid session id, Must be a valid UUID, stderr=PIPE, asyncio.create_subprocess_exec, Claude CLI, stream-json, no reply after transcription
+
+-
+
+-## Task 2: Debug stale runtime behavior when review-flow edits do not appear live
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-23xB-cc_g2_win_review_flow_and_stale_process_debug.md (cwd=\\?\C:\Users\Yoshi\.agent_even, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fff3-7110-a38f-e099217f4d7f.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fff3-7110-a38f-e099217f4d7f, partial; old auto-send behavior traced to stale process / stale served bundle)
+
+-- rollout_summaries/2026-06-25T04-29-11-9NQq-cc_g2_win_3tap_review_left_right_bubbles_stale_backend.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffaf-7d50-a2a9-7c918bab8862.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffaf-7d50-a2a9-7c918bab8862, partial; stale runtime after launch)
+
+-- rollout_summaries/2026-06-25T04-29-11-A8Lw-cc_g2_win_ux_redesign_stale_runtime_debug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffe3-7e63-b334-4709b673bc1e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffe3-7e63-b334-4709b673bc1e, partial; stale backend kept serving old behavior)
+
+-- rollout_summaries/2026-06-25T04-29-11-rrNh-cc_g2_win_review_flow_layout_and_stale_backend_debug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffd4-7403-9518-20feb24c8e23.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffd4-7403-9518-20feb24c8e23, partial; stale backend after review-flow redesign)
+
+-- rollout_summaries/2026-06-25T04-29-11-Ig4b-daily_memory_log_entry_for_cc_g2_win_simulator_blocker.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff8c-77b0-ba7e-5044f1f37503.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff8c-77b0-ba7e-5044f1f37503, success; Vite port collision note preserved for routing)
+
+-
+
+-### keywords
+
+-
+
+-- stale backend, cached bundle, PID 7636, port 8787, port 5173, review state false, sendPending true, Vite, PORT=8787, auto-send still happening
+
+-
+
+-## Task 3: Use the EvenHub simulator and fix layout/disconnect/reachability issues
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-Gq0p-even_hub_simulator_ui_overflow_and_disconnect_fix.md (cwd=\\?\C:\Users\Yoshi\.agent_even, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff45-7771-b6ba-a5086501ba51.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff45-7771-b6ba-a5086501ba51, partial; simulator path, width fix, websocket ping disable)
+
+-- rollout_summaries/2026-06-25T04-29-11-fTCc-cc_g2_win_hud_wrap_and_websocket_timeout_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff33-70d2-a5b1-928099796a84.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff33-70d2-a5b1-928099796a84, partial; same wrap + disconnect cluster from another pass)
+
+-- rollout_summaries/2026-06-25T04-29-11-jHHB-evenhub_right_alignment_simulator_setup.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffbe-7261-abcc-2979d64c9fd3.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffbe-7261-abcc-2979d64c9fd3, partial; simulator harness for alignment validation)
+
+-- rollout_summaries/2026-06-25T04-29-11-zuy6-cc_g2_win_right_align_and_even_dev_simulator_debug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffd3-73c2-854d-ced437fd9e92.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffd3-73c2-854d-ced437fd9e92, partial; hardware-free verification path)
+
+-- rollout_summaries/2026-06-25T04-29-12-pDM7-even_realities_plugin_qr_reachability_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01e8-7680-abd8-601913bd90db.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01e8-7680-abd8-601913bd90db, partial; plugin URL / QR payload / WSL-IP reachability)
+
+-
+
+-### keywords
+
+-
+
+-- even-dev, apps.json, APP_NAME=cc-g2, port 5173, GLASS_RESPONSE_WRAP_WIDTH = 38, ws_ping_interval=None, ws_ping_timeout=None, plugin URL only, backend URL, token, 172.22.32.1, Tailscale, ngrok
+
+-
+
+-## User preferences
+
+-
+
+-- When the user says the UI is stuck or asks "do you see where I provided the simulator" -> prefer checking the real simulator/UI path instead of only reading code or logs. [Task 2][Task 3]
+
+-- When the user reports "it already didn't work" after an edit -> verify the actual running process and served bundle, not just the on-disk files. [Task 2]
+
+-- When the user says "Try 5173 as the port" -> be ready to follow the app port the user names and confirm which service a port actually belongs to before debugging the wrong surface. [Task 3]
+
+-- When the user asks "I just need the plugin url as the qr code?" -> answer explicitly that the QR should contain only the plugin URL, with backend URL/token entered separately. [Task 3]
+
+-- When the user says the phone will not be on the same Wi-Fi and Tailscale is already installed -> pivot to Tailscale quickly instead of spending more time on unreachable local LAN URLs. [Task 3]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- `claude --session-id` must receive a real UUID; a shortened `uuid.uuid4().hex[:16]` fails with `Invalid session ID. Must be a valid UUID.` [Task 1]
+
+-- `backend\session.py` needs concurrent stderr drainage when using `asyncio.create_subprocess_exec(..., stderr=PIPE)` so CLI failures do not vanish behind a blank no-reply symptom. [Task 1]
+
+-- In stale-runtime cases, simple `backend: UP` / `plugin: UP` health checks were not enough; the useful proof was PID age, command line, and served bundle content such as `review state: False` even after a supposed review-flow patch. [Task 2]
+
+-- `C:\Users\Yoshi\.agent_even\even-dev` is the local EvenHub simulator workspace, and `apps.json` already maps `"cc-g2"` to `"../cc-g2-win/plugin"`. [Task 3]
+
+-- A working Even app in the repo used a glass wrap width of `38`, which became the concrete reference for shrinking `display.ts` from `COLS = 44`. [Task 3]
+
+-- The proven reconnect fix here was disabling uvicorn websocket ping timeouts in `backend\main.py`. [Task 3]
+
+-- A WSL address like `172.22.32.1` is the wrong interface for phone reachability in this workflow; use a routable LAN IP or Tailscale `100.x.x.x` instead. [Task 3]
+
+-- Related skill: skills/cc-g2-win-debug-loop/SKILL.md [Task 1][Task 2][Task 3]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: transcription succeeds but Claude never replies -> cause: invalid `--session-id` or hidden stderr in the subprocess layer -> fix: validate the CLI contract first, use a real UUID, and drain stderr before blaming STT or transport. [Task 1]
+
+-- Symptom: the user still sees old behavior after a source edit -> cause: stale backend process or cached plugin bundle -> fix: inspect the live PID/process age and prove what bundle is being served before editing more code. [Task 2]
+
+-- Symptom: the simulator opens but shows the wrong thing -> cause: port confusion between backend and plugin -> fix: point the simulator at the actual plugin app port (`5173`) and confirm `apps.json` mapping. [Task 3]
+
+-- Symptom: phone loads forever or cannot reach the plugin -> cause: launcher chose loopback, link-local, or WSL adapter IP -> fix: reject those interfaces early and switch to LAN/Tailscale. [Task 3]
+
+-- Symptom: disconnects keep breaking the flow -> cause: websocket ping handling at the server layer, not necessarily app heartbeat logic -> fix: inspect uvicorn websocket settings instead of only the app-level code. [Task 3]
+
+-
+
+-# Task Group: cc-g2-win plugin UX, gesture handling, and HUD debugging
+
+-
+
+-scope: Reuse for `plugin\src\main.ts` / `display.ts` work on `cc-g2-win`, especially when the user is steering recording flow, speaker alignment, hold-to-record behavior, or debugging why the HUD state and transcription handoff look wrong on-device.
+
+-applies_to: cwd=C:\Users\Yoshi\.agent_even\cc-g2-win and `plugin` subpaths; reuse_rule=safe for follow-up UX/debug work in this plugin, but treat exact SDK gesture support and live-device behavior as needing fresh verification
+
+-
+
+-## Task 1: Redesign recording flow for review-before-send and clearer speaker separation
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-VaZn-cc_g2_win_ux_redesign_review_flow_bubbles.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-0007-7c63-8465-5bdc6fc9061d.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-0007-7c63-8465-5bdc6fc9061d, partial; first redesign discussion without validation)
+
+-- rollout_summaries/2026-06-25T04-29-11-23xB-cc_g2_win_review_flow_and_stale_process_debug.md (cwd=\\?\C:\Users\Yoshi\.agent_even, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fff3-7110-a38f-e099217f4d7f.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fff3-7110-a38f-e099217f4d7f, partial; redesign intent plus user report that old auto-send persisted)
+
+-
+
+-### keywords
+
+-
+
+-- three taps instead of just two, cancel and rerecord, send after that, left side / right side, normal texting app, review state, main.ts, display.ts, audio_end
+
+-
+
+-## Task 2: Debug the transcription handoff when the app still says `!Nothing heard`
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-KrZY-even_realities_plugin_transcription_debug_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-01ba-7d53-9f6a-1e8aafed416e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-01ba-7d53-9f6a-1e8aafed416e, partial; `eventType` null/0 handling plus on-screen debug logging)
+
+-
+
+-### keywords
+
+-
+
+-- !Nothing heard, eventType 0, eventType null, chrome://inspect, index.html, on-screen debug box, transcription visible, downstream handoff
+
+-
+
+-## Task 3: Fix the HUD blanking bug and probe hold-to-record support
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-12-Vtfp-even_realities_hud_recording_display_bug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01db-7041-a331-66e9c61a0e67.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01db-7041-a331-66e9c61a0e67, success; HUD blanking fix and SDK-gesture limit note)
+
+-- rollout_summaries/2026-06-25T04-29-12-KHwt-recording_hud_debug_logging_tap_broke.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01ca-75b1-af88-bf24f7452799.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01ca-75b1-af88-bf24f7452799, partial; approved recording visual but taps stopped working)
+
+-
+
+-### keywords
+
+-
+
+-- hold to record, tap and hold to record, setState('listening'), Display.render(), empty _lines buffer, connection guard, status line, Listening..., tap does nothing, tap double-tap swipe
+
+-
+
+-## User preferences
+
+-
+
+-- When the user says "I don't like how you tap to record and then the next tap automatically sends" and asks for "three taps instead of just two" -> default to review-before-send with rerecord/cancel as first-class options. [Task 1]
+
+-- When the user says "it's hard to see where your replies begin and my transcription ends" and wants replies on the right and user text on the left "like a normal texting app" -> make turn boundaries visually explicit rather than relying on subtle headers. [Task 1]
+
+-- When the user says their other apps are "hold to record" or "It should be a tap and hold to record" -> treat hold-to-record as the desired UX, and if the SDK blocks it, surface that constraint explicitly instead of silently substituting tap-to-toggle. [Task 3]
+
+-- When the user says "that visual you sent is perfect" -> a strong on-screen recording indicator in the content area is a preferred default for this app. [Task 3]
+
+-- When the user rejects a remote-debug path with "nah it's not weorking" -> pivot quickly to in-app/on-screen logging instead of insisting on the same tooling. [Task 2]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- `plugin\src\main.ts` is the primary edit point for the recording state machine, review flow, connection guards, and event handling; `plugin\src\display.ts` controls the HUD rendering constraints. [Task 1][Task 3]
+
+-- On this Android/WebView path, `eventType` can be `0` or `null`; checking only for `undefined` misses real taps. [Task 2]
+
+-- A visible in-app debug element in `plugin\index.html` was a practical fallback when `chrome://inspect` was unavailable. [Task 2]
+
+-- The symptom "transcription appears on screen but the app still says `!Nothing heard`" means capture succeeded and the remaining bug is in the downstream heard-state propagation. [Task 2]
+
+-- The blank-HUD bug came from `setState('listening')` triggering `Display.render()` with an empty `_lines` buffer; keeping a persistent status line avoids a blank screen. [Task 3]
+
+-- The strongest approved recording-state visual was a larger "Listening..." style box in the content area, not just a tiny header/state label. [Task 3]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: the code change looks right but taps stop working -> cause: interaction was not revalidated after the UX change -> fix: immediately retest tap, double-tap, and any candidate hold behavior after each gesture/UI edit. [Task 3]
+
+-- Symptom: visible transcription is treated as proof the app is fixed -> cause: downstream handoff/state update was skipped -> fix: keep tracing past capture until the app leaves `!Nothing heard` and enters the intended heard/review path. [Task 2]
+
+-- Symptom: hold-to-record is assumed to work because the user wants it -> cause: UX preference was stronger than the proven SDK contract -> fix: instrument actual event output and treat hold support as open until the device logs confirm it. [Task 3]
+
+-- Symptom: recording/listening state blanks the HUD -> cause: render logic clears the line buffer on state changes -> fix: preserve at least a status line and guard empty-buffer renders. [Task 3]
+
+-
+
+-# Task Group: Even Terminal activation and IRIS desktop-agent architecture
+
+-
+
+-scope: Reuse for work in `C:\Users\Yoshi\.agent_even\agent_even`, especially when the user wants the IRIS Electron app treated as a template for a more autonomous desktop agent or needs Even Terminal network details for cross-device access.
+
+-applies_to: cwd=C:\Users\Yoshi\.agent_even and cwd=C:\Users\Yoshi\.agent_even\agent_even; reuse_rule=safe for follow-up architecture work in this repo family, but treat runtime/network specifics as machine-specific and revalidate before reuse
+
+-
+
+-## Task 1: Activate Even Terminal and surface the routable host address
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-YZsy-even_terminal_iris_agent_architecture_and_core_build.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff9c-7643-b382-b5f7a129285e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff9c-7643-b382-b5f7a129285e, success; Even Terminal activation plus working LAN IP)
+
+-- rollout_summaries/2026-06-25T04-29-11-vQ3s-even_terminal_activation_and_iris_agent_architecture.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff88-78f0-86eb-1529c2e37f1b.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff88-78f0-86eb-1529c2e37f1b, success; same activation + routing context)
+
+-
+
+-### keywords
+
+-
+
+-- Even Terminal, agent_even, port 3456, 192.168.0.94, localhost, 169.254.x.x, LAN IP, glasses polling
+
+-
+
+-## Task 2: Turn the IRIS template into a desktop-agent architecture with provider, memory, skill, and refiner layers
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-YZsy-even_terminal_iris_agent_architecture_and_core_build.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff9c-7643-b382-b5f7a129285e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff9c-7643-b382-b5f7a129285e, success; architecture doc plus 19-file scaffold)
+
+-- rollout_summaries/2026-06-25T04-29-11-hhvd-even_terminal_iris_agent_architecture_build.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-01aa-7dd2-b904-488879fe824e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-01aa-7dd2-b904-488879fe824e, success; same IRIS architecture family from another pass)
+
+-
+
+-### keywords
+
+-
+
+-- IRIS template, ARCHITECTURE_V2.md, kernel, providers, agent-loop, refiner, memory, skills, protocol, Claude Code, Codex, Gemini CLI, Copilot CLI, OpenAI, Anthropic, Ollama, Continual Harness
+
+-
+
+-## Task 3: Compress IRIS/G2 notes with maximum non-destructive compression
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-12-jjng-iris_g2_notes_max_compression.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01ea-7353-baeb-07e85afd89c6.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01ea-7353-baeb-07e85afd89c6, success; lossless-style note compression rules)
+
+-
+
+-### keywords
+
+-
+
+-- maximum non-destructive compression, ZERO information loss, No prose. Raw signal., Group entries by subject, Preserve ## timestamp | branch format, oldest to newest
+
+-
+
+-## User preferences
+
+-
+
+-- When the user asks for cross-device access and says "I can't use localhost from a different machine" -> surface the routable LAN IP, not just localhost or link-local addresses. [Task 1]
+
+-- When the user says the IRIS app is "a template" and wants "an app that can run on the even realities G2 glasses" -> adapt the template toward the new target instead of preserving unrelated subsystems. [Task 2]
+
+-- When the user says they want a desktop agent "similar to Hermes or OpenClaw" with "free range or autonomous nature" -> default to autonomous desktop-agent framing, not a narrow helper-tool framing. [Task 2]
+
+-- When the user says voice routing will not be handled by Even Terminal and mentions "11 Labs or Deepgram or Sonionics" -> do not assume voice is solved at the terminal layer; keep STT/TTS external. [Task 2]
+
+-- When the user interrupts with more repos/papers to review before coding -> pause and do the research pass before implementation. [Task 2]
+
+-- When the user asks for "maximum non-destructive compression" with "ZERO information loss" and "No prose. Raw signal." -> preserve all facts/relationships and compress by removing filler, not by turning notes into prose. [Task 3]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- Even Terminal was running as `agent_even` on port `3456`, and `192.168.0.94` was the working LAN IP in this session. [Task 1]
+
+-- The IRIS template repo is at `C:\Users\Yoshi\.agent_even\agent_even`, and the architecture plan was written to `docs\ARCHITECTURE_V2.md`. [Task 2]
+
+-- The new architecture split the app into `kernel`, `providers`, `agent`, `memory`, `skills`, `protocol`, and provider-agnostic `tools` layers, with provider stubs for Claude Code, Codex, Gemini CLI, Copilot CLI, OpenAI, Anthropic, and Ollama. [Task 2]
+
+-- The existing IRIS template already contained useful desktop-control primitives such as `@nut-tree-fork/nut-js`, `screenshot-desktop`, `tesseract.js`, `node-window-manager`, `ghost-control.ts`, `telekinesis.ts`, and `puppeteer`. [Task 2]
+
+-- The refiner design was explicitly tied to the Continual Harness idea: periodic CRUD updates to prompts, sub-agents, skills, and memory. [Task 2]
+
+-- For strict compression requests in this family, the right output shape is a raw shorthand note stream grouped by subject and kept oldest-to-newest within the preserved time format. [Task 3]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: the user cannot reach Even Terminal from another device -> cause: link-local or localhost address was surfaced instead of the routable LAN IP -> fix: distinguish `169.254.x.x` from real LAN addresses and push the routable address first. [Task 1]
+
+-- Symptom: implementation starts before the user finishes adding references and constraints -> cause: planning jumped ahead of the requested research pass -> fix: pause on interruptions and complete the repo/paper review before coding. [Task 2]
+
+-- Symptom: large structural scaffolds feel complete even though wiring was not proven -> cause: architecture was created without compile/run validation -> fix: follow scaffolding with explicit build/startup verification before calling the architecture integrated. [Task 2]
+
+-- Symptom: aggressive note compression drops causality -> cause: compressing by paraphrase rather than subtraction -> fix: preserve entities, verbs, and relationships, and only strip filler words. [Task 3]
+
+-
+
+-# Task Group: Agentplus repo setup and ambient agent planning workflow
+
+-
+
+-scope: Reuse for `C:\Users\Yoshi\agentplus` repo bootstrap, Claude cloud planning preparation, and the user's broader ambient-agent design brief when it is anchored to the `agentplus` workspace.
+
+-applies_to: cwd=C:\Users\Yoshi\agentplus; reuse_rule=safe for follow-up work in this checkout and similar Claude cloud-prep workflows, but treat repo contents, commit ids, and cloud-session state as project-specific unless revalidated
+
+-
+
+-## Task 1: Capture the initial ambient-agent design brief and the early `ultraplan` blocker
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-6aDM-agentic_presence_system_planning_interrupted.md (cwd=\\?\C:\Users\Yoshi\agentplus, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe80-7023-b1ca-0b3385f5bb1a.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd09-fe80-7023-b1ca-0b3385f5bb1a, uncertain; agentic-presence scoping interrupted before research/plan)
+
+-
+
+-### keywords
+
+-
+
+-- ambient agentic presence, autonomous collaborator, governor, orchestrator, agent layer, persistent memory, self-improvement, OpenAiry Docs, AgentOS, EverOS, MemOS, ultraplan, git repository required
+
+-
+
+-## Task 2: Create the `agentplus` repo and make it usable for Claude cloud planning
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-uXrO-agentplus_git_repo_claude_cloud_setup_and_ultraplan_timeout.md (cwd=\\?\C:\Users\Yoshi\agentplus, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7320-878f-fdecb41c4278.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd09-fe7f-7320-878f-fdecb41c4278, success; repo bootstrap plus GitHub/cloud prep)
+
+-
+
+-### keywords
+
+-
+
+-- agentplus, git init -b main, gh repo create, Claude GitHub App, README.md, PLANNING_FRAMEWORK.md, committed and pushed, ExitPlanMode never reached, remote container failed to start
+
+-
+
+-## User preferences
+
+-
+
+-- When the user describes a "true ambient, persistent, AI presence" and "as close to an autonomous collaborator as possible" -> treat the request as systems design, not a narrow feature ticket. [Task 1]
+
+-- When the user interrupts with "Before you get too in the weeds, I do have some stuff to add" -> pause early and invite the missing context before locking in architecture details. [Task 1]
+
+-- When the user says "Please research and analyze each of the github repositories mentioned" -> expect a research-heavy discovery phase before coding. [Task 1]
+
+-- When the user says "create a git repository for this folder/project please" -> handle repo bootstrap directly instead of just giving setup instructions. [Task 2]
+
+-- When the user says "The claude github app needs to be installed on the repo" -> treat that cloud wiring as part of done for this workflow. [Task 2]
+
+-- When the user asks to include the eventual planning framework and later says "yes please!" to saving project memory -> store the reusable planning structure and memory in-repo or project memory instead of leaving it only in chat. [Task 2]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- `agentplus/` started effectively empty except for `.remember` scaffolding, and `ultraplan` refused to launch there until the workspace became a git repository. [Task 1]
+
+-- `ultraplan` in this environment requires a git repository and will fail with `Cloud agents require a git repository (checked: C:\Users\Yoshi\agentplus). Initialize git or run from a git repository.` [Task 1]
+
+-- The repo bootstrap path that worked was `git init -b main`, `.gitignore` / `.gitattributes` cleanup, then `gh repo create agentplus --private --source=. --remote=origin --push`. [Task 2]
+
+-- Claude cloud sessions only see committed and pushed files; private visibility is fine once the Claude GitHub App is installed on the repo. [Task 2]
+
+-- `README.md` became the start-here map for future cloud agents, and `PLANNING_FRAMEWORK.md` stored the requested planning hierarchy in the repo itself. [Task 2]
+
+-- Persistent project memory for this repo was stored under `C:\Users\Yoshi\.claude\projects\C--Users-Yoshi-agentplus\memory\`. [Task 2]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: cloud planning commands fail immediately before any real planning starts -> cause: the workspace is not yet a git repo -> fix: check git initialization before invoking cloud-session commands. [Task 1]
+
+-- Symptom: the agent starts elaborating architecture before the user finishes the system brief -> cause: insufficient pause for added context -> fix: stop early, gather the extra constraints, then continue. [Task 1]
+
+-- Symptom: the repo is ready but `/ultraplan` still stalls -> cause: Claude cloud infra issues can remain after repo/setup correctness -> fix: once app install and pushed-input prerequisites are satisfied, pivot to a local planning workflow instead of re-debugging git forever. [Task 2]
+
+-
+
+-# Task Group: Finance-app startup, baseline creation, and blocked document-redesign follow-up
+
+-
+
+-scope: Reuse for `C:\Users\Yoshi\finance-app` startup verification, README corrections, clean-baseline tagging/branching, and the later novice-facing instruction-packet redesign request that was blocked by auth.
+
+-applies_to: cwd=C:\Users\Yoshi\finance-app; reuse_rule=safe for this checkout and closely related follow-up work, but treat the exact server command, ports, tags, and auth state as checkout-specific unless rechecked
+
+-
+
+-## Task 1: Verify the working startup path and correct the README
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-qur6-finance_app_startup_readme_baseline_and_doc_redesign_blocked.md (cwd=\\?\C:\Users\Yoshi\finance-app, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7050-bfd3-a18500fb8f2a.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fe7f-7050-bfd3-a18500fb8f2a, success; corrected docs to match actual app startup)
+
+-
+
+-### keywords
+
+-
+
+-- finance-app, uvicorn, 8765, 127.0.0.1, 0.0.0.0, README.md, full Python 3.11 path, backend/main.py, LAN reachability
+
+-
+
+-## Task 2: Create a known-good baseline before new iteration
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-qur6-finance_app_startup_readme_baseline_and_doc_redesign_blocked.md (cwd=\\?\C:\Users\Yoshi\finance-app, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7050-bfd3-a18500fb8f2a.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fe7f-7050-bfd3-a18500fb8f2a, success; commit + tag + branch + push baseline pattern)
+
+-
+
+-### keywords
+
+-
+
+-- v1.0-known-good, iterate, git tag -a, baseline, push origin main, push origin iterate, clean restore point
+
+-
+
+-## Task 3: Attempt the novice-facing instruction-packet redesign and capture the auth blocker
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-25T04-29-11-qur6-finance_app_startup_readme_baseline_and_doc_redesign_blocked.md (cwd=\\?\C:\Users\Yoshi\finance-app, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7050-bfd3-a18500fb8f2a.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fe7f-7050-bfd3-a18500fb8f2a, partial; redesign brief captured but auth blocked live edits)
+
+-
+
+-### keywords
+
+-
+
+-- instruction packet, infographic, novice user, AI prompts, second page, /login, 401 Invalid authentication credentials, docs redesign
+
+-
+
+-## User preferences
+
+-
+
+-- When the user says "start this program" or asks whether it is listening on `0.0.0.0` -> verify the real command and real binding instead of inferring from docs. [Task 1]
+
+-- When the discovered startup path differs from the README -> update the README in the same run, not just the verbal answer. [Task 1]
+
+-- When the user says "fork this project" in a local repo-iteration context -> clarify once if needed, but expect they may mean a clean tag/branch baseline rather than a GitHub fork. [Task 2]
+
+-- When the user asks for novice-facing docs with AI prompts "for every single line item" -> treat the deliverable as a real instruction packet plus companion prompt artifact, not a light copy edit. [Task 3]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- The working startup command used the full Python path on this machine and served the app on port `8765`. [Task 1]
+
+-- The verified binding answer here was explicit: local access on `127.0.0.1`, remote/LAN only if the app binds to `0.0.0.0`. [Task 1]
+
+-- The successful clean-baseline workflow was commit -> annotated tag `v1.0-known-good` -> branch `iterate` -> push both tag and branch. [Task 2]
+
+-- The later redesign task was blocked by auth at `/login` with `401 Invalid authentication credentials`, so the durable value from that pass is the brief, not code changes. [Task 3]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: README startup guidance does not match the working launch path -> cause: docs drift -> fix: verify the real command locally and patch the README immediately. [Task 1]
+
+-- Symptom: later experimentation needs an easy rollback point -> cause: no clean baseline before iterating -> fix: create a commit, annotated tag, and dedicated branch before the next round of edits. [Task 2]
+
+-- Symptom: document-redesign work cannot be validated in-app -> cause: auth failure at `/login` -> fix: treat `401 Invalid authentication credentials` as a hard blocker and avoid pretending the redesign was implemented. [Task 3]
+
+-
+
+-# Task Group: Windows startup and boot CPU investigation
+
+-
+
+-scope: Reuse for "what is running at startup?" and "why is CPU high right after boot?" questions on this Windows machine, especially when the user is asking about the current session rather than historical configuration alone.
+
+-applies_to: cwd=C:\Users\Yoshi\Documents\Codex and machine-level Windows context; reuse_rule=safe for this machine and similar live startup investigations, but treat measured process lists and counters as time-specific
+
+-
+
+-## Task 1: Investigate what starts with Windows and reconcile it with a current high-CPU complaint
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-04T20-03-55-iRHp-windows_startup_and_cpu_investigation.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\04\rollout-2026-06-04T13-03-54-01973bc8-d5ac-7e80-96ad-d5257da2795e.jsonl, updated_at=2026-06-04T20:03:55+00:00, thread_id=01973bc8-d5ac-7e80-96ad-d5257da2795e, success; startup inventory plus live CPU reconciliation)
+
+-
+
+-### keywords
+
+-
+
+-- StartupApproved, Win32_StartupCommand, LastBootUpTime, Fast Startup, Task Scheduler logon trigger, live CPU, Task Manager, Processor Utility
+
+-
+
+-## User preferences
+
+-
+
+-- When the user says the issue is happening "right now" after turning the machine on -> capture a short live trace immediately instead of only listing configured startup items. [Task 1]
+
+-- When the user asks what was in startup while also reporting high CPU -> do a combined startup-list + CPU-context investigation by default. [Task 1]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- `Win32_StartupCommand`, `HKCU/HKLM ...\Run`, Startup folder entries, `StartupApproved`, and Task Scheduler logon triggers were all relevant for a complete startup sweep on this machine. [Task 1]
+
+-- `Win32_OperatingSystem.LastBootUpTime` mattered because Fast Startup / resume can make "I just turned it on" ambiguous. [Task 1]
+
+-- Task Manager-aligned CPU reasoning on this machine benefited from `\\Processor Information(_Total)\\% Processor Utility` rather than raw cumulative process CPU alone. [Task 1]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: the startup list is correct but does not explain the user's live CPU complaint -> cause: configuration inventory and live activity were conflated -> fix: pair startup enumeration with a short real-time CPU/process sample. [Task 1]
+
+-- Symptom: "just turned it on" assumptions are wrong -> cause: Fast Startup or resume preserved session state -> fix: check `LastBootUpTime` before drawing boot-timing conclusions. [Task 1]
+
+-
+
+-# Task Group: Windows 11 CPU spike and Explorer folder-open hang troubleshooting
+
+-
+
+-scope: Reuse for live Windows troubleshooting on this machine when Task Manager disagrees with shell counters, CPU seems abnormally high, or opening folders / Explorer hangs are part of the complaint.
+
+-applies_to: cwd=C:\Users\Yoshi\Documents\Codex and machine-level Windows context; reuse_rule=safe for similar live investigations on this machine, but treat exact hot processes and shell-extension evidence as time-specific unless rechecked
+
+-
+
+-## Task 1: Reconcile high CPU readings and identify the live offender
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-04T01-40-57-OQX4-windows_cpu_spike_hapticservice_explorer_hangs.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\03\rollout-2026-06-03T18-40-56-019736d7-fd0a-7ba0-a992-f278c87fc054.jsonl, updated_at=2026-06-04T01:40:57+00:00, thread_id=019736d7-fd0a-7ba0-a992-f278c87fc054, success; utility-counter alignment and HapticService culprit)
+
+-
+
+-### keywords
+
+-
+
+-- Processor Utility, HapticService, svchost.exe, Task Manager mismatch, Get-Counter, live sampling
+
+-
+
+-## Task 2: Investigate Explorer hangs when opening folders
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-06-04T01-40-57-OQX4-windows_cpu_spike_hapticservice_explorer_hangs.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\03\rollout-2026-06-03T18-40-56-019736d7-fd0a-7ba0-a992-f278c87fc054.jsonl, updated_at=2026-06-04T01:40:57+00:00, thread_id=019736d7-fd0a-7ba0-a992-f278c87fc054, success; shell-extension hypothesis supported by hang evidence)
+
+-
+
+-### keywords
+
+-
+
+-- explorer.exe hang, NCOverlays.dll, CoreSync_x64.dll, shell extensions, ProcDump, Adobe, Nextcloud, folder open
+
+-
+
+-## User preferences
+
+-
+
+-- When the user says Task Manager shows much higher CPU than the shell readout -> reconcile against the metric they are actually looking at instead of arguing from a different counter. [Task 1]
+
+-- When the symptom is "opening a folder" or Explorer locking up -> treat shell extensions and Explorer add-ins as a first-class path, not an afterthought. [Task 2]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- `\\Processor Information(_Total)\\% Processor Utility` matched the user's Task Manager reading better than `\\Processor(_Total)\\% Processor Time` in this environment. [Task 1]
+
+-- `HapticService` was the stable live CPU offender during the sampled investigation. [Task 1]
+
+-- The Explorer-hang evidence pointed toward shell extensions, especially Nextcloud and Adobe components (`NCOverlays.dll`, `CoreSync_x64.dll`). [Task 2]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: shell counters make CPU look lower than Task Manager -> cause: different metrics are being compared -> fix: align on `Processor Utility` first. [Task 1]
+
+-- Symptom: folder-open hangs get blamed on generic slowness -> cause: shell-extension hooks were not considered early enough -> fix: inspect Explorer add-ins and hang evidence before broad system speculation. [Task 2]
+
+-
+
+-# Task Group: Idea-mining sessions and military FPS concept shaping
+
+-
+
+-scope: Reuse for future idea-mining sessions that refine the user's tactical-shooter concept into a stronger release direction, especially when they want a practical design center rather than a purely exploratory brainstorm.
+
+-applies_to: cwd=C:\Users\Yoshi\Documents\Codex; reuse_rule=safe for follow-up concept work in this workspace, but treat the concrete FPS design details as project-specific unless the user is still on this game concept
+
+-
+
+-## Task 1: Package local Codex skills for portable download
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-05-30T11-11-56-Sic2-codex_skills_export_and_fps_idea_mining.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\05\30\rollout-2026-05-30T04-11-56-019e7895-63f3-7bb2-98e3-a54551cc9742.jsonl, updated_at=2026-05-31T09:30:31+00:00, thread_id=019e7895-63f3-7bb2-98e3-a54551cc9742, success; local skill export archive)
+
+-
+
+-### keywords
+
+-
+
+-- C:\Users\Yoshi\.codex\skills, codex-skills-export-20260530-041315.zip, Compress-Archive, .system excluded, 69 skill folders, 398 entries
+
+-
+
+-## Task 2: Develop the military FPS concept into a release-worthy direction
+
+-
+
+-### rollout_summary_files
+
+-
+
+-- rollout_summaries/2026-05-30T11-11-56-Sic2-codex_skills_export_and_fps_idea_mining.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\05\30\rollout-2026-05-30T04-11-56-019e7895-63f3-7bb2-98e3-a54551cc9742.jsonl, updated_at=2026-05-31T09:30:31+00:00, thread_id=019e7895-63f3-7bb2-98e3-a54551cc9742, partial; concept narrowed into a strong direction but not a final spec)
+
+-
+
+-### keywords
+
+-
+
+-- military FPS, grounded but gamey, happy medium, Escape from Tarkov, ruck score, freeform loadouts, traps, prep phase, revive rules, 3v3, 4v4, PvEvP
+
+-
+
+-## User preferences
+
+-
+
+-- When the user asks to download the skill files -> package a portable artifact rather than only listing paths. [Task 1]
+
+-- When the user says a game is "just" a learning project but wants people to actually want to play it -> push toward a release-worthy hook, not just practice value. [Task 2]
+
+-- When the user asks for "a happy medium between mindless call of duty/battlefield and the anxiety inducing grind of Escape from Tarkov" -> target tactical weight without punishing frustration. [Task 2]
+
+-- When the user says "I don't want to punish the group for the sins of the one" -> prefer consequences that feel fair without teamwide blame. [Task 2]
+
+-- When the user says "I don't want this to be about crafting weirdly intricate denial systems like Rainbow 6 Siege" -> keep the game gunfight-first and avoid drifting into deep setup-simulator complexity. [Task 2]
+
+-
+
+-## Reusable knowledge
+
+-
+
+-- On this machine, local Codex skills live under `C:\Users\Yoshi\.codex\skills`, and the export archive deliberately excluded the built-in `.system` folder. [Task 1]
+
+-- The created portable archive was `C:\Users\Yoshi\Documents\Codex\codex-skills-export-20260530-041315.zip`, containing 69 skill folders and 398 entries at that time. [Task 1]
+
+-- The current FPS concept is best summarized as a grounded-but-gamey, gunfight-first tactical shooter with freeform loadouts, a working `ruck` budget concept, short prep, trap/route pressure, and mode-specific death/revive rules. [Task 2]
+
+-- The likely first-release sweet spot was small-team play, especially 3v3 or 4v4. [Task 2]
+
+-
+
+-## Failures and how to do differently
+
+-
+
+-- Symptom: a concept stays too vague to feel worth building -> cause: too many design axes are moving at once -> fix: narrow one axis at a time, especially consequences, team size, death model, loadout model, trap counterplay, and tone. [Task 2]
+
+-- Symptom: the design drifts toward heavy classes/operator identity too early -> cause: locking roles before the core loop is proven -> fix: keep freeform loadouts plus soft incentives as the first pass. [Task 2]
+
++- Review artifact created on 2026-06-30.
+
++- Live memory was not edited.
+
++- No full session transcripts were read during this consolidation pass.
+
+
+
+--- live/topics/concepts/military-fps-idea-mining.md
++++ proposed/topics/concepts/military-fps-idea-mining.md
+@@ -0,0 +1,44 @@
++# Task Group: Idea-mining sessions and military FPS concept shaping
+
++
+
++scope: Reuse for future idea-mining sessions that refine the user's tactical-shooter concept into a stronger release direction, especially when they want a practical design center rather than a purely exploratory brainstorm.
+
++applies_to: cwd=C:\Users\Yoshi\Documents\Codex; reuse_rule=safe for follow-up concept work in this workspace, but treat the concrete FPS design details as project-specific unless the user is still on this game concept
+
++
+
++## Task 1: Package local Codex skills for portable download
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-05-30T11-11-56-Sic2-codex_skills_export_and_fps_idea_mining.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\05\30\rollout-2026-05-30T04-11-56-019e7895-63f3-7bb2-98e3-a54551cc9742.jsonl, updated_at=2026-05-31T09:30:31+00:00, thread_id=019e7895-63f3-7bb2-98e3-a54551cc9742, success; local skill export archive)
+
++
+
++### keywords
+
++
+
++- C:\Users\Yoshi\.codex\skills, codex-skills-export-20260530-041315.zip, Compress-Archive, .system excluded, 69 skill folders, 398 entries
+
++
+
++## Task 2: Develop the military FPS concept into a release-worthy direction
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-05-30T11-11-56-Sic2-codex_skills_export_and_fps_idea_mining.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\05\30\rollout-2026-05-30T04-11-56-019e7895-63f3-7bb2-98e3-a54551cc9742.jsonl, updated_at=2026-05-31T09:30:31+00:00, thread_id=019e7895-63f3-7bb2-98e3-a54551cc9742, partial; concept narrowed into a strong direction but not a final spec)
+
++
+
++### keywords
+
++
+
++- military FPS, grounded but gamey, happy medium, Escape from Tarkov, ruck score, freeform loadouts, traps, prep phase, revive rules, 3v3, 4v4, PvEvP
+
++
+
++## User preferences
+
++
+
++- When the user asks to download the skill files -> package a portable artifact rather than only listing paths. [Task 1]
+
++- When the user says a game is "just" a learning project but wants people to actually want to play it -> push toward a release-worthy hook, not just practice value. [Task 2]
+
++- When the user asks for "a happy medium between mindless call of duty/battlefield and the anxiety inducing grind of Escape from Tarkov" -> target tactical weight without punishing frustration. [Task 2]
+
++- When the user says "I don't want to punish the group for the sins of the one" -> prefer consequences that feel fair without teamwide blame. [Task 2]
+
++- When the user says "I don't want this to be about crafting weirdly intricate denial systems like Rainbow 6 Siege" -> keep the game gunfight-first and avoid drifting into deep setup-simulator complexity. [Task 2]
+
++
+
++## Reusable knowledge
+
++
+
++- On this machine, local Codex skills live under `C:\Users\Yoshi\.codex\skills`, and the export archive deliberately excluded the built-in `.system` folder. [Task 1]
+
++- The created portable archive was `C:\Users\Yoshi\Documents\Codex\codex-skills-export-20260530-041315.zip`, containing 69 skill folders and 398 entries at that time. [Task 1]
+
++- The current FPS concept is best summarized as a grounded-but-gamey, gunfight-first tactical shooter with freeform loadouts, a working `ruck` budget concept, short prep, trap/route pressure, and mode-specific death/revive rules. [Task 2]
+
++- The likely first-release sweet spot was small-team play, especially 3v3 or 4v4. [Task 2]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: a concept stays too vague to feel worth building -> cause: too many design axes are moving at once -> fix: narrow one axis at a time, especially consequences, team size, death model, loadout model, trap counterplay, and tone. [Task 2]
+
++- Symptom: the design drifts toward heavy classes/operator identity too early -> cause: locking roles before the core loop is proven -> fix: keep freeform loadouts plus soft incentives as the first pass. [Task 2]
+
+
+
+--- live/topics/machine/windows-cpu-explorer-hangs.md
++++ proposed/topics/machine/windows-cpu-explorer-hangs.md
+@@ -0,0 +1,40 @@
++# Task Group: Windows 11 CPU spike and Explorer folder-open hang troubleshooting
+
++
+
++scope: Reuse for live Windows troubleshooting on this machine when Task Manager disagrees with shell counters, CPU seems abnormally high, or opening folders / Explorer hangs are part of the complaint.
+
++applies_to: cwd=C:\Users\Yoshi\Documents\Codex and machine-level Windows context; reuse_rule=safe for similar live investigations on this machine, but treat exact hot processes and shell-extension evidence as time-specific unless rechecked
+
++
+
++## Task 1: Reconcile high CPU readings and identify the live offender
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-04T01-40-57-OQX4-windows_cpu_spike_hapticservice_explorer_hangs.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\03\rollout-2026-06-03T18-40-56-019736d7-fd0a-7ba0-a992-f278c87fc054.jsonl, updated_at=2026-06-04T01:40:57+00:00, thread_id=019736d7-fd0a-7ba0-a992-f278c87fc054, success; utility-counter alignment and HapticService culprit)
+
++
+
++### keywords
+
++
+
++- Processor Utility, HapticService, svchost.exe, Task Manager mismatch, Get-Counter, live sampling
+
++
+
++## Task 2: Investigate Explorer hangs when opening folders
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-04T01-40-57-OQX4-windows_cpu_spike_hapticservice_explorer_hangs.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\03\rollout-2026-06-03T18-40-56-019736d7-fd0a-7ba0-a992-f278c87fc054.jsonl, updated_at=2026-06-04T01:40:57+00:00, thread_id=019736d7-fd0a-7ba0-a992-f278c87fc054, success; shell-extension hypothesis supported by hang evidence)
+
++
+
++### keywords
+
++
+
++- explorer.exe hang, NCOverlays.dll, CoreSync_x64.dll, shell extensions, ProcDump, Adobe, Nextcloud, folder open
+
++
+
++## User preferences
+
++
+
++- When the user says Task Manager shows much higher CPU than the shell readout -> reconcile against the metric they are actually looking at instead of arguing from a different counter. [Task 1]
+
++- When the symptom is "opening a folder" or Explorer locking up -> treat shell extensions and Explorer add-ins as a first-class path, not an afterthought. [Task 2]
+
++
+
++## Reusable knowledge
+
++
+
++- `\\Processor Information(_Total)\\% Processor Utility` matched the user's Task Manager reading better than `\\Processor(_Total)\\% Processor Time` in this environment. [Task 1]
+
++- `HapticService` was the stable live CPU offender during the sampled investigation. [Task 1]
+
++- The Explorer-hang evidence pointed toward shell extensions, especially Nextcloud and Adobe components (`NCOverlays.dll`, `CoreSync_x64.dll`). [Task 2]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: shell counters make CPU look lower than Task Manager -> cause: different metrics are being compared -> fix: align on `Processor Utility` first. [Task 1]
+
++- Symptom: folder-open hangs get blamed on generic slowness -> cause: shell-extension hooks were not considered early enough -> fix: inspect Explorer add-ins and hang evidence before broad system speculation. [Task 2]
+
+
+
+--- live/topics/machine/windows-startup-cpu.md
++++ proposed/topics/machine/windows-startup-cpu.md
+@@ -0,0 +1,30 @@
++# Task Group: Windows startup and boot CPU investigation
+
++
+
++scope: Reuse for "what is running at startup?" and "why is CPU high right after boot?" questions on this Windows machine, especially when the user is asking about the current session rather than historical configuration alone.
+
++applies_to: cwd=C:\Users\Yoshi\Documents\Codex and machine-level Windows context; reuse_rule=safe for this machine and similar live startup investigations, but treat measured process lists and counters as time-specific
+
++
+
++## Task 1: Investigate what starts with Windows and reconcile it with a current high-CPU complaint
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-04T20-03-55-iRHp-windows_startup_and_cpu_investigation.md (cwd=\\?\C:\Users\Yoshi\Documents\Codex, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\04\rollout-2026-06-04T13-03-54-01973bc8-d5ac-7e80-96ad-d5257da2795e.jsonl, updated_at=2026-06-04T20:03:55+00:00, thread_id=01973bc8-d5ac-7e80-96ad-d5257da2795e, success; startup inventory plus live CPU reconciliation)
+
++
+
++### keywords
+
++
+
++- StartupApproved, Win32_StartupCommand, LastBootUpTime, Fast Startup, Task Scheduler logon trigger, live CPU, Task Manager, Processor Utility
+
++
+
++## User preferences
+
++
+
++- When the user says the issue is happening "right now" after turning the machine on -> capture a short live trace immediately instead of only listing configured startup items. [Task 1]
+
++- When the user asks what was in startup while also reporting high CPU -> do a combined startup-list + CPU-context investigation by default. [Task 1]
+
++
+
++## Reusable knowledge
+
++
+
++- `Win32_StartupCommand`, `HKCU/HKLM ...\Run`, Startup folder entries, `StartupApproved`, and Task Scheduler logon triggers were all relevant for a complete startup sweep on this machine. [Task 1]
+
++- `Win32_OperatingSystem.LastBootUpTime` mattered because Fast Startup / resume can make "I just turned it on" ambiguous. [Task 1]
+
++- Task Manager-aligned CPU reasoning on this machine benefited from `\\Processor Information(_Total)\\% Processor Utility` rather than raw cumulative process CPU alone. [Task 1]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: the startup list is correct but does not explain the user's live CPU complaint -> cause: configuration inventory and live activity were conflated -> fix: pair startup enumeration with a short real-time CPU/process sample. [Task 1]
+
++- Symptom: "just turned it on" assumptions are wrong -> cause: Fast Startup or resume preserved session state -> fix: check `LastBootUpTime` before drawing boot-timing conclusions. [Task 1]
+
+
+
+--- live/topics/projects/agent-even-iris-architecture.md
++++ proposed/topics/projects/agent-even-iris-architecture.md
+@@ -0,0 +1,61 @@
++# Task Group: Even Terminal activation and IRIS desktop-agent architecture
+
++
+
++scope: Reuse for work in `C:\Users\Yoshi\.agent_even\agent_even`, especially when the user wants the IRIS Electron app treated as a template for a more autonomous desktop agent or needs Even Terminal network details for cross-device access.
+
++applies_to: cwd=C:\Users\Yoshi\.agent_even and cwd=C:\Users\Yoshi\.agent_even\agent_even; reuse_rule=safe for follow-up architecture work in this repo family, but treat runtime/network specifics as machine-specific and revalidate before reuse
+
++
+
++## Task 1: Activate Even Terminal and surface the routable host address
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-YZsy-even_terminal_iris_agent_architecture_and_core_build.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff9c-7643-b382-b5f7a129285e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff9c-7643-b382-b5f7a129285e, success; Even Terminal activation plus working LAN IP)
+
++- rollout_summaries/2026-06-25T04-29-11-vQ3s-even_terminal_activation_and_iris_agent_architecture.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff88-78f0-86eb-1529c2e37f1b.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff88-78f0-86eb-1529c2e37f1b, success; same activation + routing context)
+
++
+
++### keywords
+
++
+
++- Even Terminal, agent_even, port 3456, 192.168.0.94, localhost, 169.254.x.x, LAN IP, glasses polling
+
++
+
++## Task 2: Turn the IRIS template into a desktop-agent architecture with provider, memory, skill, and refiner layers
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-YZsy-even_terminal_iris_agent_architecture_and_core_build.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff9c-7643-b382-b5f7a129285e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff9c-7643-b382-b5f7a129285e, success; architecture doc plus 19-file scaffold)
+
++- rollout_summaries/2026-06-25T04-29-11-hhvd-even_terminal_iris_agent_architecture_build.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-01aa-7dd2-b904-488879fe824e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-01aa-7dd2-b904-488879fe824e, success; same IRIS architecture family from another pass)
+
++
+
++### keywords
+
++
+
++- IRIS template, ARCHITECTURE_V2.md, kernel, providers, agent-loop, refiner, memory, skills, protocol, Claude Code, Codex, Gemini CLI, Copilot CLI, OpenAI, Anthropic, Ollama, Continual Harness
+
++
+
++## Task 3: Compress IRIS/G2 notes with maximum non-destructive compression
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-12-jjng-iris_g2_notes_max_compression.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01ea-7353-baeb-07e85afd89c6.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01ea-7353-baeb-07e85afd89c6, success; lossless-style note compression rules)
+
++
+
++### keywords
+
++
+
++- maximum non-destructive compression, ZERO information loss, No prose. Raw signal., Group entries by subject, Preserve ## timestamp | branch format, oldest to newest
+
++
+
++## User preferences
+
++
+
++- When the user asks for cross-device access and says "I can't use localhost from a different machine" -> surface the routable LAN IP, not just localhost or link-local addresses. [Task 1]
+
++- When the user says the IRIS app is "a template" and wants "an app that can run on the even realities G2 glasses" -> adapt the template toward the new target instead of preserving unrelated subsystems. [Task 2]
+
++- When the user says they want a desktop agent "similar to Hermes or OpenClaw" with "free range or autonomous nature" -> default to autonomous desktop-agent framing, not a narrow helper-tool framing. [Task 2]
+
++- When the user says voice routing will not be handled by Even Terminal and mentions "11 Labs or Deepgram or Sonionics" -> do not assume voice is solved at the terminal layer; keep STT/TTS external. [Task 2]
+
++- When the user interrupts with more repos/papers to review before coding -> pause and do the research pass before implementation. [Task 2]
+
++- When the user asks for "maximum non-destructive compression" with "ZERO information loss" and "No prose. Raw signal." -> preserve all facts/relationships and compress by removing filler, not by turning notes into prose. [Task 3]
+
++
+
++## Reusable knowledge
+
++
+
++- Even Terminal was running as `agent_even` on port `3456`, and `192.168.0.94` was the working LAN IP in this session. [Task 1]
+
++- The IRIS template repo is at `C:\Users\Yoshi\.agent_even\agent_even`, and the architecture plan was written to `docs\ARCHITECTURE_V2.md`. [Task 2]
+
++- The new architecture split the app into `kernel`, `providers`, `agent`, `memory`, `skills`, `protocol`, and provider-agnostic `tools` layers, with provider stubs for Claude Code, Codex, Gemini CLI, Copilot CLI, OpenAI, Anthropic, and Ollama. [Task 2]
+
++- The existing IRIS template already contained useful desktop-control primitives such as `@nut-tree-fork/nut-js`, `screenshot-desktop`, `tesseract.js`, `node-window-manager`, `ghost-control.ts`, `telekinesis.ts`, and `puppeteer`. [Task 2]
+
++- The refiner design was explicitly tied to the Continual Harness idea: periodic CRUD updates to prompts, sub-agents, skills, and memory. [Task 2]
+
++- For strict compression requests in this family, the right output shape is a raw shorthand note stream grouped by subject and kept oldest-to-newest within the preserved time format. [Task 3]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: the user cannot reach Even Terminal from another device -> cause: link-local or localhost address was surfaced instead of the routable LAN IP -> fix: distinguish `169.254.x.x` from real LAN addresses and push the routable address first. [Task 1]
+
++- Symptom: implementation starts before the user finishes adding references and constraints -> cause: planning jumped ahead of the requested research pass -> fix: pause on interruptions and complete the repo/paper review before coding. [Task 2]
+
++- Symptom: large structural scaffolds feel complete even though wiring was not proven -> cause: architecture was created without compile/run validation -> fix: follow scaffolding with explicit build/startup verification before calling the architecture integrated. [Task 2]
+
++- Symptom: aggressive note compression drops causality -> cause: compressing by paraphrase rather than subtraction -> fix: preserve entities, verbs, and relationships, and only strip filler words. [Task 3]
+
+
+
+--- live/topics/projects/agentplus-cloud-planning.md
++++ proposed/topics/projects/agentplus-cloud-planning.md
+@@ -0,0 +1,48 @@
++# Task Group: Agentplus repo setup and ambient agent planning workflow
+
++
+
++scope: Reuse for `C:\Users\Yoshi\agentplus` repo bootstrap, Claude cloud planning preparation, and the user's broader ambient-agent design brief when it is anchored to the `agentplus` workspace.
+
++applies_to: cwd=C:\Users\Yoshi\agentplus; reuse_rule=safe for follow-up work in this checkout and similar Claude cloud-prep workflows, but treat repo contents, commit ids, and cloud-session state as project-specific unless revalidated
+
++
+
++## Task 1: Capture the initial ambient-agent design brief and the early `ultraplan` blocker
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-6aDM-agentic_presence_system_planning_interrupted.md (cwd=\\?\C:\Users\Yoshi\agentplus, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe80-7023-b1ca-0b3385f5bb1a.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd09-fe80-7023-b1ca-0b3385f5bb1a, uncertain; agentic-presence scoping interrupted before research/plan)
+
++
+
++### keywords
+
++
+
++- ambient agentic presence, autonomous collaborator, governor, orchestrator, agent layer, persistent memory, self-improvement, OpenAiry Docs, AgentOS, EverOS, MemOS, ultraplan, git repository required
+
++
+
++## Task 2: Create the `agentplus` repo and make it usable for Claude cloud planning
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-uXrO-agentplus_git_repo_claude_cloud_setup_and_ultraplan_timeout.md (cwd=\\?\C:\Users\Yoshi\agentplus, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7320-878f-fdecb41c4278.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd09-fe7f-7320-878f-fdecb41c4278, success; repo bootstrap plus GitHub/cloud prep)
+
++
+
++### keywords
+
++
+
++- agentplus, git init -b main, gh repo create, Claude GitHub App, README.md, PLANNING_FRAMEWORK.md, committed and pushed, ExitPlanMode never reached, remote container failed to start
+
++
+
++## User preferences
+
++
+
++- When the user describes a "true ambient, persistent, AI presence" and "as close to an autonomous collaborator as possible" -> treat the request as systems design, not a narrow feature ticket. [Task 1]
+
++- When the user interrupts with "Before you get too in the weeds, I do have some stuff to add" -> pause early and invite the missing context before locking in architecture details. [Task 1]
+
++- When the user says "Please research and analyze each of the github repositories mentioned" -> expect a research-heavy discovery phase before coding. [Task 1]
+
++- When the user says "create a git repository for this folder/project please" -> handle repo bootstrap directly instead of just giving setup instructions. [Task 2]
+
++- When the user says "The claude github app needs to be installed on the repo" -> treat that cloud wiring as part of done for this workflow. [Task 2]
+
++- When the user asks to include the eventual planning framework and later says "yes please!" to saving project memory -> store the reusable planning structure and memory in-repo or project memory instead of leaving it only in chat. [Task 2]
+
++
+
++## Reusable knowledge
+
++
+
++- `agentplus/` started effectively empty except for `.remember` scaffolding, and `ultraplan` refused to launch there until the workspace became a git repository. [Task 1]
+
++- `ultraplan` in this environment requires a git repository and will fail with `Cloud agents require a git repository (checked: C:\Users\Yoshi\agentplus). Initialize git or run from a git repository.` [Task 1]
+
++- The repo bootstrap path that worked was `git init -b main`, `.gitignore` / `.gitattributes` cleanup, then `gh repo create agentplus --private --source=. --remote=origin --push`. [Task 2]
+
++- Claude cloud sessions only see committed and pushed files; private visibility is fine once the Claude GitHub App is installed on the repo. [Task 2]
+
++- `README.md` became the start-here map for future cloud agents, and `PLANNING_FRAMEWORK.md` stored the requested planning hierarchy in the repo itself. [Task 2]
+
++- Persistent project memory for this repo was stored under `C:\Users\Yoshi\.claude\projects\C--Users-Yoshi-agentplus\memory\`. [Task 2]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: cloud planning commands fail immediately before any real planning starts -> cause: the workspace is not yet a git repo -> fix: check git initialization before invoking cloud-session commands. [Task 1]
+
++- Symptom: the agent starts elaborating architecture before the user finishes the system brief -> cause: insufficient pause for added context -> fix: stop early, gather the extra constraints, then continue. [Task 1]
+
++- Symptom: the repo is ready but `/ultraplan` still stalls -> cause: Claude cloud infra issues can remain after repo/setup correctness -> fix: once app install and pushed-input prerequisites are satisfied, pivot to a local planning workflow instead of re-debugging git forever. [Task 2]
+
+
+
+--- live/topics/projects/cc-g2-win-architecture-mvp.md
++++ proposed/topics/projects/cc-g2-win-architecture-mvp.md
+@@ -0,0 +1,48 @@
++# Task Group: cc-g2-win Windows/Android Claude Code app architecture and MVP bootstrap
+
++
+
++scope: Reuse for scoping or extending the custom Even Realities G2 app at `C:\Users\Yoshi\.agent_even\cc-g2-win`, especially when the user wants a Windows backend + Android EvenHub app that stays separate from IRIS and uses full Claude Code invocation.
+
++applies_to: cwd=C:\Users\Yoshi\.agent_even\cc-g2-win and related `C:\Users\Yoshi\.agent_even` work; reuse_rule=safe for follow-up work in this project family, but treat exact launcher behavior, QR state, and persistence status as checkout-specific unless revalidated
+
++
+
++## Task 1: Clarify the target platform and architecture for the G2 build
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-12-8SGC-g2_claude_code_windows_android_evenhub_architecture.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-0210-7b62-b638-75a6ae83294a.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-0210-7b62-b638-75a6ae83294a, success; platform correction from mac/iPhone reference app to Windows + Android EvenHub target)
+
++
+
++### keywords
+
++
+
++- Even Realities G2, EvenHub, Windows, Android, claude-code-g2, Not quite a web app, hub.evenrealities.com/docs/get-started/overview, Whisper, ElevenLabs, self-hosted STT
+
++
+
++## Task 2: Build the first `cc-g2-win` MVP and stabilize the launcher expectations
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-12-7vYY-cc_g2_win_mvp_devps1_qr_missing.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-0202-78d3-95e7-9423f7981e98.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-0202-78d3-95e7-9423f7981e98, partial; MVP backend/plugin build plus rewritten `dev.ps1`, but QR/persistence remained unresolved)
+
++
+
++### keywords
+
++
+
++- cc-g2-win, EvenHub, Claude Code only, faster-whisper, FastAPI, WebSocket, stream-json, dev.ps1, QR code missing, audio_end, keep Claude alive 15-20 minutes, syncing python deps
+
++
+
++## User preferences
+
++
+
++- When the user corrected the framing with "I have windows and an android" and "Not quite a web app" -> default future work on this project to Windows backend + Android EvenHub app, and read the EvenHub docs before proposing architecture. [Task 1]
+
++- When the user said "This will be separate from the IRIS app, and will be claude code only" and "I want full claude code invocation" -> keep this project separate from IRIS and do not drift into multiprovider or lighter chat-only scope. [Task 2]
+
++- When the user said "Let's use local faster-whisper. Especially if it doesn't take up much VRAM" -> prefer local STT over hosted credits for this build unless they explicitly override. [Task 2]
+
++- When the user said "Your default is fine. Eventually I'll set up a tunnel but right now i Just need an MVP" -> default to LAN-first delivery for the first pass instead of prematurely optimizing for tunnel/cloud setup. [Task 2]
+
++- When the user said "if the glasses lose connection, keep claude alive for 15-20 minutes" -> preserve the Claude session across short disconnects instead of resetting immediately. [Task 2]
+
++- When the user asked "Where is the QR at? And is it supposed to shutdown right away?" -> if the walkthrough mentions QR or startup behavior, make sure the script actually does it before claiming the path is ready. [Task 2]
+
++
+
++## Reusable knowledge
+
++
+
++- The authoritative app shape here is: Windows backend plus Android EvenHub plugin, separate from IRIS, using full Claude Code invocation. [Task 1][Task 2]
+
++- The EvenHub plugin facts used during the MVP build were: Android WebView app surface, 16 kHz PCM audio input, and text-only output via `textContainerUpgrade`. [Task 2]
+
++- The project root is `C:\Users\Yoshi\.agent_even\cc-g2-win`, with `backend\` for FastAPI / faster-whisper / Claude CLI session handling and `plugin\` for the EvenHub UI/HUD. [Task 2]
+
++- `dev.ps1` is the expected launcher entrypoint for this project, and the debug path for "syncing python deps" is to run `backend\.venv\Scripts\pip install -r requirements.txt` directly so real install errors appear. [Task 2]
+
++- Related skill: skills/cc-g2-win-debug-loop/SKILL.md [Task 2]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: discussion drifts toward mac/iPhone or generic web-app patterns -> cause: overfitting to reference repos before confirming the user's platform -> fix: restate Windows + Android EvenHub constraints first, then map any reference repo back into that target. [Task 1]
+
++- Symptom: the walkthrough promises QR sideloading but the user cannot find it -> cause: QR support was described before it actually existed -> fix: do not advertise QR readiness until the script visibly emits or serves it. [Task 2]
+
++- Symptom: a quiet startup flow looks stuck on dependency sync -> cause: the wrapper hides the real pip output -> fix: run pip directly in `backend` before changing `.env` or rewriting config. [Task 2]
+
++- Symptom: persistence questions appear late in the session -> cause: session/token/storage behavior was never made explicit -> fix: explain where session state, token, and project memory live in the first working walkthrough. [Task 2]
+
+
+
+--- live/topics/projects/cc-g2-win-plugin-ux-hud.md
++++ proposed/topics/projects/cc-g2-win-plugin-ux-hud.md
+@@ -0,0 +1,60 @@
++# Task Group: cc-g2-win plugin UX, gesture handling, and HUD debugging
+
++
+
++scope: Reuse for `plugin\src\main.ts` / `display.ts` work on `cc-g2-win`, especially when the user is steering recording flow, speaker alignment, hold-to-record behavior, or debugging why the HUD state and transcription handoff look wrong on-device.
+
++applies_to: cwd=C:\Users\Yoshi\.agent_even\cc-g2-win and `plugin` subpaths; reuse_rule=safe for follow-up UX/debug work in this plugin, but treat exact SDK gesture support and live-device behavior as needing fresh verification
+
++
+
++## Task 1: Redesign recording flow for review-before-send and clearer speaker separation
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-VaZn-cc_g2_win_ux_redesign_review_flow_bubbles.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-0007-7c63-8465-5bdc6fc9061d.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-0007-7c63-8465-5bdc6fc9061d, partial; first redesign discussion without validation)
+
++- rollout_summaries/2026-06-25T04-29-11-23xB-cc_g2_win_review_flow_and_stale_process_debug.md (cwd=\\?\C:\Users\Yoshi\.agent_even, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fff3-7110-a38f-e099217f4d7f.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fff3-7110-a38f-e099217f4d7f, partial; redesign intent plus user report that old auto-send persisted)
+
++
+
++### keywords
+
++
+
++- three taps instead of just two, cancel and rerecord, send after that, left side / right side, normal texting app, review state, main.ts, display.ts, audio_end
+
++
+
++## Task 2: Debug the transcription handoff when the app still says `!Nothing heard`
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-KrZY-even_realities_plugin_transcription_debug_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-01ba-7d53-9f6a-1e8aafed416e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-01ba-7d53-9f6a-1e8aafed416e, partial; `eventType` null/0 handling plus on-screen debug logging)
+
++
+
++### keywords
+
++
+
++- !Nothing heard, eventType 0, eventType null, chrome://inspect, index.html, on-screen debug box, transcription visible, downstream handoff
+
++
+
++## Task 3: Fix the HUD blanking bug and probe hold-to-record support
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-12-Vtfp-even_realities_hud_recording_display_bug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01db-7041-a331-66e9c61a0e67.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01db-7041-a331-66e9c61a0e67, success; HUD blanking fix and SDK-gesture limit note)
+
++- rollout_summaries/2026-06-25T04-29-12-KHwt-recording_hud_debug_logging_tap_broke.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01ca-75b1-af88-bf24f7452799.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01ca-75b1-af88-bf24f7452799, partial; approved recording visual but taps stopped working)
+
++
+
++### keywords
+
++
+
++- hold to record, tap and hold to record, setState('listening'), Display.render(), empty _lines buffer, connection guard, status line, Listening..., tap does nothing, tap double-tap swipe
+
++
+
++## User preferences
+
++
+
++- When the user says "I don't like how you tap to record and then the next tap automatically sends" and asks for "three taps instead of just two" -> default to review-before-send with rerecord/cancel as first-class options. [Task 1]
+
++- When the user says "it's hard to see where your replies begin and my transcription ends" and wants replies on the right and user text on the left "like a normal texting app" -> make turn boundaries visually explicit rather than relying on subtle headers. [Task 1]
+
++- When the user says their other apps are "hold to record" or "It should be a tap and hold to record" -> treat hold-to-record as the desired UX, and if the SDK blocks it, surface that constraint explicitly instead of silently substituting tap-to-toggle. [Task 3]
+
++- When the user says "that visual you sent is perfect" -> a strong on-screen recording indicator in the content area is a preferred default for this app. [Task 3]
+
++- When the user rejects a remote-debug path with "nah it's not weorking" -> pivot quickly to in-app/on-screen logging instead of insisting on the same tooling. [Task 2]
+
++
+
++## Reusable knowledge
+
++
+
++- `plugin\src\main.ts` is the primary edit point for the recording state machine, review flow, connection guards, and event handling; `plugin\src\display.ts` controls the HUD rendering constraints. [Task 1][Task 3]
+
++- On this Android/WebView path, `eventType` can be `0` or `null`; checking only for `undefined` misses real taps. [Task 2]
+
++- A visible in-app debug element in `plugin\index.html` was a practical fallback when `chrome://inspect` was unavailable. [Task 2]
+
++- The symptom "transcription appears on screen but the app still says `!Nothing heard`" means capture succeeded and the remaining bug is in the downstream heard-state propagation. [Task 2]
+
++- The blank-HUD bug came from `setState('listening')` triggering `Display.render()` with an empty `_lines` buffer; keeping a persistent status line avoids a blank screen. [Task 3]
+
++- The strongest approved recording-state visual was a larger "Listening..." style box in the content area, not just a tiny header/state label. [Task 3]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: the code change looks right but taps stop working -> cause: interaction was not revalidated after the UX change -> fix: immediately retest tap, double-tap, and any candidate hold behavior after each gesture/UI edit. [Task 3]
+
++- Symptom: visible transcription is treated as proof the app is fixed -> cause: downstream handoff/state update was skipped -> fix: keep tracing past capture until the app leaves `!Nothing heard` and enters the intended heard/review path. [Task 2]
+
++- Symptom: hold-to-record is assumed to work because the user wants it -> cause: UX preference was stronger than the proven SDK contract -> fix: instrument actual event output and treat hold support as open until the device logs confirm it. [Task 3]
+
++- Symptom: recording/listening state blanks the HUD -> cause: render logic clears the line buffer on state changes -> fix: preserve at least a status line and guard empty-buffer renders. [Task 3]
+
+
+
+--- live/topics/projects/cc-g2-win-runtime-reachability.md
++++ proposed/topics/projects/cc-g2-win-runtime-reachability.md
+@@ -0,0 +1,73 @@
++# Task Group: cc-g2-win backend runtime, reachability, and simulator verification
+
++
+
++scope: Reuse for debugging live runtime mismatches in `cc-g2-win`, especially when the source tree looks correct but the phone/simulator still shows old behavior, Claude replies never arrive, or the chosen URL/QR path is not reachable.
+
++applies_to: cwd=C:\Users\Yoshi\.agent_even\cc-g2-win and cwd=C:\Users\Yoshi\.agent_even; reuse_rule=safe for this project family and nearby EvenHub simulator work, but treat PIDs, ports, and network addresses as ephemeral and revalidate each run
+
++
+
++## Task 1: Fix the Claude no-reply path by switching to valid UUID session IDs and draining stderr
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-QcAv-even_realities_g2_claude_session_uuid_stderr_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-0189-7b92-9629-c12c5fdc7e27.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-0189-7b92-9629-c12c5fdc7e27, success; direct evidence for UUID requirement and stderr drain)
+
++- rollout_summaries/2026-06-25T04-29-11-gTQi-cc_g2_win_claude_session_id_uuid_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffe3-7e63-b334-46f326fe18c6.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffe3-7e63-b334-46f326fe18c6, success; same backend failure pattern)
+
++- rollout_summaries/2026-06-25T04-29-11-k5yy-cc_g2_win_fix_invalid_session_id_no_reply.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd0a-001b-7b01-b54a-641b3d2d6237.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd0a-001b-7b01-b54a-641b3d2d6237, success; same invalid-session diagnosis)
+
++- rollout_summaries/2026-06-25T04-29-11-lvH6-cc_g2_win_claude_reply_fix_uuid_stderr.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffac-7072-abf4-29e57e404b34.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffac-7072-abf4-29e57e404b34, success; daily-log framing of the same fix)
+
++- rollout_summaries/2026-06-25T04-29-11-sBtJ-cc_g2_invalid_session_id_claude_no_reply.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fffc-7e42-bec6-ca65ab260af2.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fffc-7e42-bec6-ca65ab260af2, success; same no-reply symptom from another pass)
+
++
+
++### keywords
+
++
+
++- session.py, invalid session id, Must be a valid UUID, stderr=PIPE, asyncio.create_subprocess_exec, Claude CLI, stream-json, no reply after transcription
+
++
+
++## Task 2: Debug stale runtime behavior when review-flow edits do not appear live
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-23xB-cc_g2_win_review_flow_and_stale_process_debug.md (cwd=\\?\C:\Users\Yoshi\.agent_even, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fff3-7110-a38f-e099217f4d7f.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fff3-7110-a38f-e099217f4d7f, partial; old auto-send behavior traced to stale process / stale served bundle)
+
++- rollout_summaries/2026-06-25T04-29-11-9NQq-cc_g2_win_3tap_review_left_right_bubbles_stale_backend.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffaf-7d50-a2a9-7c918bab8862.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffaf-7d50-a2a9-7c918bab8862, partial; stale runtime after launch)
+
++- rollout_summaries/2026-06-25T04-29-11-A8Lw-cc_g2_win_ux_redesign_stale_runtime_debug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffe3-7e63-b334-4709b673bc1e.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffe3-7e63-b334-4709b673bc1e, partial; stale backend kept serving old behavior)
+
++- rollout_summaries/2026-06-25T04-29-11-rrNh-cc_g2_win_review_flow_layout_and_stale_backend_debug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffd4-7403-9518-20feb24c8e23.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffd4-7403-9518-20feb24c8e23, partial; stale backend after review-flow redesign)
+
++- rollout_summaries/2026-06-25T04-29-11-Ig4b-daily_memory_log_entry_for_cc_g2_win_simulator_blocker.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff8c-77b0-ba7e-5044f1f37503.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff8c-77b0-ba7e-5044f1f37503, success; Vite port collision note preserved for routing)
+
++
+
++### keywords
+
++
+
++- stale backend, cached bundle, PID 7636, port 8787, port 5173, review state false, sendPending true, Vite, PORT=8787, auto-send still happening
+
++
+
++## Task 3: Use the EvenHub simulator and fix layout/disconnect/reachability issues
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-Gq0p-even_hub_simulator_ui_overflow_and_disconnect_fix.md (cwd=\\?\C:\Users\Yoshi\.agent_even, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff45-7771-b6ba-a5086501ba51.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff45-7771-b6ba-a5086501ba51, partial; simulator path, width fix, websocket ping disable)
+
++- rollout_summaries/2026-06-25T04-29-11-fTCc-cc_g2_win_hud_wrap_and_websocket_timeout_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ff33-70d2-a5b1-928099796a84.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ff33-70d2-a5b1-928099796a84, partial; same wrap + disconnect cluster from another pass)
+
++- rollout_summaries/2026-06-25T04-29-11-jHHB-evenhub_right_alignment_simulator_setup.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffbe-7261-abcc-2979d64c9fd3.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffbe-7261-abcc-2979d64c9fd3, partial; simulator harness for alignment validation)
+
++- rollout_summaries/2026-06-25T04-29-11-zuy6-cc_g2_win_right_align_and_even_dev_simulator_debug.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-ffd3-73c2-854d-ced437fd9e92.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-ffd3-73c2-854d-ced437fd9e92, partial; hardware-free verification path)
+
++- rollout_summaries/2026-06-25T04-29-12-pDM7-even_realities_plugin_qr_reachability_fix.md (cwd=\\?\C:\Users\Yoshi\AppData\Local\Temp, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-12-019efd0a-01e8-7680-abd8-601913bd90db.jsonl, updated_at=2026-06-25T04:29:12+00:00, thread_id=019efd0a-01e8-7680-abd8-601913bd90db, partial; plugin URL / QR payload / WSL-IP reachability)
+
++
+
++### keywords
+
++
+
++- even-dev, apps.json, APP_NAME=cc-g2, port 5173, GLASS_RESPONSE_WRAP_WIDTH = 38, ws_ping_interval=None, ws_ping_timeout=None, plugin URL only, backend URL, token, 172.22.32.1, Tailscale, ngrok
+
++
+
++## User preferences
+
++
+
++- When the user says the UI is stuck or asks "do you see where I provided the simulator" -> prefer checking the real simulator/UI path instead of only reading code or logs. [Task 2][Task 3]
+
++- When the user reports "it already didn't work" after an edit -> verify the actual running process and served bundle, not just the on-disk files. [Task 2]
+
++- When the user says "Try 5173 as the port" -> be ready to follow the app port the user names and confirm which service a port actually belongs to before debugging the wrong surface. [Task 3]
+
++- When the user asks "I just need the plugin url as the qr code?" -> answer explicitly that the QR should contain only the plugin URL, with backend URL/token entered separately. [Task 3]
+
++- When the user says the phone will not be on the same Wi-Fi and Tailscale is already installed -> pivot to Tailscale quickly instead of spending more time on unreachable local LAN URLs. [Task 3]
+
++
+
++## Reusable knowledge
+
++
+
++- `claude --session-id` must receive a real UUID; a shortened `uuid.uuid4().hex[:16]` fails with `Invalid session ID. Must be a valid UUID.` [Task 1]
+
++- `backend\session.py` needs concurrent stderr drainage when using `asyncio.create_subprocess_exec(..., stderr=PIPE)` so CLI failures do not vanish behind a blank no-reply symptom. [Task 1]
+
++- In stale-runtime cases, simple `backend: UP` / `plugin: UP` health checks were not enough; the useful proof was PID age, command line, and served bundle content such as `review state: False` even after a supposed review-flow patch. [Task 2]
+
++- `C:\Users\Yoshi\.agent_even\even-dev` is the local EvenHub simulator workspace, and `apps.json` already maps `"cc-g2"` to `"../cc-g2-win/plugin"`. [Task 3]
+
++- A working Even app in the repo used a glass wrap width of `38`, which became the concrete reference for shrinking `display.ts` from `COLS = 44`. [Task 3]
+
++- The proven reconnect fix here was disabling uvicorn websocket ping timeouts in `backend\main.py`. [Task 3]
+
++- A WSL address like `172.22.32.1` is the wrong interface for phone reachability in this workflow; use a routable LAN IP or Tailscale `100.x.x.x` instead. [Task 3]
+
++- Related skill: skills/cc-g2-win-debug-loop/SKILL.md [Task 1][Task 2][Task 3]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: transcription succeeds but Claude never replies -> cause: invalid `--session-id` or hidden stderr in the subprocess layer -> fix: validate the CLI contract first, use a real UUID, and drain stderr before blaming STT or transport. [Task 1]
+
++- Symptom: the user still sees old behavior after a source edit -> cause: stale backend process or cached plugin bundle -> fix: inspect the live PID/process age and prove what bundle is being served before editing more code. [Task 2]
+
++- Symptom: the simulator opens but shows the wrong thing -> cause: port confusion between backend and plugin -> fix: point the simulator at the actual plugin app port (`5173`) and confirm `apps.json` mapping. [Task 3]
+
++- Symptom: phone loads forever or cannot reach the plugin -> cause: launcher chose loopback, link-local, or WSL adapter IP -> fix: reject those interfaces early and switch to LAN/Tailscale. [Task 3]
+
++- Symptom: disconnects keep breaking the flow -> cause: websocket ping handling at the server layer, not necessarily app heartbeat logic -> fix: inspect uvicorn websocket settings instead of only the app-level code. [Task 3]
+
+
+
+--- live/topics/projects/finance-app-startup-baseline.md
++++ proposed/topics/projects/finance-app-startup-baseline.md
+@@ -0,0 +1,54 @@
++# Task Group: Finance-app startup, baseline creation, and blocked document-redesign follow-up
+
++
+
++scope: Reuse for `C:\Users\Yoshi\finance-app` startup verification, README corrections, clean-baseline tagging/branching, and the later novice-facing instruction-packet redesign request that was blocked by auth.
+
++applies_to: cwd=C:\Users\Yoshi\finance-app; reuse_rule=safe for this checkout and closely related follow-up work, but treat the exact server command, ports, tags, and auth state as checkout-specific unless rechecked
+
++
+
++## Task 1: Verify the working startup path and correct the README
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-qur6-finance_app_startup_readme_baseline_and_doc_redesign_blocked.md (cwd=\\?\C:\Users\Yoshi\finance-app, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7050-bfd3-a18500fb8f2a.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fe7f-7050-bfd3-a18500fb8f2a, success; corrected docs to match actual app startup)
+
++
+
++### keywords
+
++
+
++- finance-app, uvicorn, 8765, 127.0.0.1, 0.0.0.0, README.md, full Python 3.11 path, backend/main.py, LAN reachability
+
++
+
++## Task 2: Create a known-good baseline before new iteration
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-qur6-finance_app_startup_readme_baseline_and_doc_redesign_blocked.md (cwd=\\?\C:\Users\Yoshi\finance-app, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7050-bfd3-a18500fb8f2a.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fe7f-7050-bfd3-a18500fb8f2a, success; commit + tag + branch + push baseline pattern)
+
++
+
++### keywords
+
++
+
++- v1.0-known-good, iterate, git tag -a, baseline, push origin main, push origin iterate, clean restore point
+
++
+
++## Task 3: Attempt the novice-facing instruction-packet redesign and capture the auth blocker
+
++
+
++### rollout_summary_files
+
++
+
++- rollout_summaries/2026-06-25T04-29-11-qur6-finance_app_startup_readme_baseline_and_doc_redesign_blocked.md (cwd=\\?\C:\Users\Yoshi\finance-app, rollout_path=C:\Users\Yoshi\.codex\sessions\2026\06\24\rollout-2026-06-24T21-29-11-019efd09-fe7f-7050-bfd3-a18500fb8f2a.jsonl, updated_at=2026-06-25T04:29:11+00:00, thread_id=019efd09-fe7f-7050-bfd3-a18500fb8f2a, partial; redesign brief captured but auth blocked live edits)
+
++
+
++### keywords
+
++
+
++- instruction packet, infographic, novice user, AI prompts, second page, /login, 401 Invalid authentication credentials, docs redesign
+
++
+
++## User preferences
+
++
+
++- When the user says "start this program" or asks whether it is listening on `0.0.0.0` -> verify the real command and real binding instead of inferring from docs. [Task 1]
+
++- When the discovered startup path differs from the README -> update the README in the same run, not just the verbal answer. [Task 1]
+
++- When the user says "fork this project" in a local repo-iteration context -> clarify once if needed, but expect they may mean a clean tag/branch baseline rather than a GitHub fork. [Task 2]
+
++- When the user asks for novice-facing docs with AI prompts "for every single line item" -> treat the deliverable as a real instruction packet plus companion prompt artifact, not a light copy edit. [Task 3]
+
++
+
++## Reusable knowledge
+
++
+
++- The working startup command used the full Python path on this machine and served the app on port `8765`. [Task 1]
+
++- The verified binding answer here was explicit: local access on `127.0.0.1`, remote/LAN only if the app binds to `0.0.0.0`. [Task 1]
+
++- The successful clean-baseline workflow was commit -> annotated tag `v1.0-known-good` -> branch `iterate` -> push both tag and branch. [Task 2]
+
++- The later redesign task was blocked by auth at `/login` with `401 Invalid authentication credentials`, so the durable value from that pass is the brief, not code changes. [Task 3]
+
++
+
++## Failures and how to do differently
+
++
+
++- Symptom: README startup guidance does not match the working launch path -> cause: docs drift -> fix: verify the real command locally and patch the README immediately. [Task 1]
+
++- Symptom: later experimentation needs an easy rollback point -> cause: no clean baseline before iterating -> fix: create a commit, annotated tag, and dedicated branch before the next round of edits. [Task 2]
+
++- Symptom: document-redesign work cannot be validated in-app -> cause: auth failure at `/login` -> fix: treat `401 Invalid authentication credentials` as a hard blocker and avoid pretending the redesign was implemented. [Task 3]
+
+

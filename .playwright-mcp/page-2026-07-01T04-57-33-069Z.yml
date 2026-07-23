@@ -1,0 +1,162 @@
+- generic [ref=f13e2]:
+  - complementary [ref=f13e3]:
+    - generic [ref=f13e5]:
+      - img [ref=f13e8]
+      - generic [ref=f13e10]:
+        - generic [ref=f13e11]: Triage Engine
+        - generic [ref=f13e12]: CS · Draft · Route
+    - navigation [ref=f13e13]:
+      - generic [ref=f13e14]: Workspace
+      - button "Queue 0" [ref=f13e15] [cursor=pointer]:
+        - img [ref=f13e17]
+        - text: Queue
+        - generic [ref=f13e19]: "0"
+      - button "Report" [ref=f13e20] [cursor=pointer]:
+        - img [ref=f13e22]
+        - text: Report
+      - generic "Knowledge base (docs the engine cites)" [ref=f13e24]:
+        - img [ref=f13e26]
+        - text: Knowledge
+      - generic "Engine settings" [ref=f13e28]:
+        - img [ref=f13e30]
+        - text: Settings
+    - generic [ref=f13e32]:
+      - generic [ref=f13e33]:
+        - generic [ref=f13e36]: Engine online
+        - generic [ref=f13e37]: last import · —
+        - generic [ref=f13e38]: claude · retrieval on
+      - generic [ref=f13e39]:
+        - generic [ref=f13e40]: NI
+        - generic [ref=f13e41]:
+          - generic [ref=f13e42]: Support agent
+          - generic [ref=f13e43]: Support · Nimbus Notes
+      - textbox "Stored locally in your browser only" [ref=f13e44]:
+        - /placeholder: auth token
+  - main [ref=f13e45]:
+    - generic [ref=f13e46]:
+      - generic [ref=f13e47]:
+        - generic [ref=f13e50]: CS Triage & Draft Engine
+        - heading "Approval Queue" [level=1] [ref=f13e51]:
+          - text: Approval
+          - emphasis [ref=f13e52]: Queue
+        - generic [ref=f13e53]: Nimbus Notes · claude · draft desk
+      - generic [ref=f13e54]:
+        - button "Simulate" [ref=f13e55] [cursor=pointer]:
+          - img [ref=f13e57]
+          - text: Simulate
+        - button "Run inbox" [ref=f13e59] [cursor=pointer]:
+          - img [ref=f13e61]
+          - text: Run inbox
+    - generic [ref=f13e63]:
+      - generic [ref=f13e64]:
+        - generic [ref=f13e65]:
+          - generic [ref=f13e66]:
+            - generic [ref=f13e67]: Open
+            - img [ref=f13e70]
+          - generic [ref=f13e72]: "0"
+          - generic [ref=f13e73]:
+            - img [ref=f13e76]
+            - text: in the queue now
+        - generic [ref=f13e78]:
+          - generic [ref=f13e79]:
+            - generic [ref=f13e80]: Urgent · go now
+            - img [ref=f13e83]
+          - generic [ref=f13e85]: "0"
+          - generic [ref=f13e87]: needs a human fast
+        - generic [ref=f13e88]:
+          - generic [ref=f13e89]:
+            - generic [ref=f13e90]: Drafts ready
+            - img [ref=f13e93]
+          - generic [ref=f13e95]: "0"
+          - generic [ref=f13e97]: review & send
+        - generic [ref=f13e98]:
+          - generic [ref=f13e99]:
+            - generic [ref=f13e100]: Escalations
+            - img [ref=f13e103]
+          - generic [ref=f13e105]: "0"
+          - generic [ref=f13e107]: human handles
+        - generic [ref=f13e108]:
+          - generic [ref=f13e109]:
+            - generic [ref=f13e110]: Sent today
+            - img [ref=f13e113]
+          - generic [ref=f13e115]: "0"
+          - generic [ref=f13e116]:
+            - img [ref=f13e119]
+            - text: approved & delivered
+          - img [ref=f13e121]
+        - generic [ref=f13e123]:
+          - generic [ref=f13e124]:
+            - generic [ref=f13e125]: Deflection
+            - img [ref=f13e128]
+          - generic [ref=f13e130]: 0%
+          - generic [ref=f13e132]: auto-resolved by AI
+      - generic [ref=f13e133]:
+        - generic [ref=f13e134]:
+          - generic [ref=f13e135]:
+            - generic [ref=f13e136]: Draft quality
+            - generic [ref=f13e137]: rolling
+          - generic [ref=f13e138]:
+            - generic [ref=f13e139]:
+              - img [ref=f13e140]
+              - generic [ref=f13e143]:
+                - generic [ref=f13e144]: "0"
+                - generic [ref=f13e145]: Avg conf
+            - generic [ref=f13e146]:
+              - generic [ref=f13e147]:
+                - generic [ref=f13e148]: Time saved
+                - generic [ref=f13e149]: 0 hrs
+              - generic [ref=f13e150]:
+                - generic [ref=f13e151]: Total handled
+                - generic [ref=f13e152]: "0"
+        - generic [ref=f13e153]:
+          - generic [ref=f13e154]:
+            - generic [ref=f13e155]: Top intents
+            - generic [ref=f13e156]: by volume
+          - generic [ref=f13e158]: No intents yet.
+        - generic [ref=f13e159]:
+          - generic [ref=f13e160]:
+            - generic [ref=f13e161]: Route mix
+            - generic [ref=f13e162]: where mail goes
+          - img [ref=f13e163]
+          - generic [ref=f13e164]:
+            - generic [ref=f13e165]: Ready
+            - generic [ref=f13e167]: Escalated
+            - generic [ref=f13e169]: Sent
+        - generic [ref=f13e171]:
+          - generic [ref=f13e172]:
+            - generic [ref=f13e173]: Deflection rate
+            - generic [ref=f13e174]: this window
+          - generic [ref=f13e175]:
+            - generic [ref=f13e176]: 0%
+            - generic [ref=f13e177]: Share of inbound resolved by a reviewed AI draft — the rest routed to a human within seconds.
+      - generic [ref=f13e178]:
+        - generic [ref=f13e181]: Work surface
+        - generic [ref=f13e182]:
+          - generic [ref=f13e183] [cursor=pointer]: Urgent first
+          - generic [ref=f13e185] [cursor=pointer]: All
+          - generic [ref=f13e186] [cursor=pointer]: Needs you
+          - generic [ref=f13e187] [cursor=pointer]: Ready to send
+      - generic [ref=f13e188]:
+        - generic [ref=f13e189]:
+          - generic [ref=f13e190]:
+            - generic [ref=f13e191]:
+              - img [ref=f13e194]
+              - heading "Needs you" [level=2] [ref=f13e196]
+              - generic [ref=f13e197]: "0"
+            - generic [ref=f13e198]: human handles
+          - generic [ref=f13e199]:
+            - img [ref=f13e202]
+            - text: You're caught up — nothing needs a human right now.
+        - generic [ref=f13e204]:
+          - generic [ref=f13e205]:
+            - generic [ref=f13e206]:
+              - img [ref=f13e209]
+              - heading "Ready to send" [level=2] [ref=f13e211]
+              - generic [ref=f13e212]: "0"
+            - generic [ref=f13e213]: review & send
+          - generic [ref=f13e214]:
+            - text: No drafts waiting. Hit
+            - generic [ref=f13e215]: Run inbox
+            - text: or
+            - generic [ref=f13e216]: Simulate
+            - text: .

@@ -1,0 +1,1 @@
+[112815482ms] [WARNING] The resource http://127.0.0.1:3737/_next/static/chunks/0rsf2zn6h5kro.css was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ http://127.0.0.1:3737/deals:0

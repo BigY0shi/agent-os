@@ -1,0 +1,703 @@
+@import "tailwindcss";
+
+/* Tailwind v4 dropped the default hand cursor on <button> — restore it app-wide
+   so buttons don't feel dead next to nav links. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) { cursor: pointer; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Agentic OS — Midnight Aubergine design system
+   Tokens, typography, paper-grain backdrop, and component primitives
+   that match free-claude-code-elegant.html.
+   ───────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Hybrid Premium Dark HUD palette */
+  --bg-deep:    #09090b; /* matched to EnterpriseComponents reference (zinc-950) */
+  --bg-mid:     #0a0e16;
+  --bg-card:    rgba(16, 22, 34, 0.72);
+  --bg-elev:    rgba(18, 26, 40, 0.92);
+
+  --cream:      #e6ecf5;
+  --cream-soft: #9aa6b8;
+  --cream-dim:  #5b6678;
+  --cream-mute: #475366;
+
+  --gold:       #6fff9b; /* mapped to neon green for active states */
+  --gold-soft:  #36c97a;
+  --gold-deep:  #2aa860;
+
+  --emerald:    #5ab896;
+  --emerald-dim:#3a8a6e;
+  --plum:       #ff5cb0; /* mapped to aurora pink */
+  --rust:       #ff5a6b; /* mapped to danger red */
+
+  --line:       rgba(120, 140, 180, 0.25);
+  --line-soft:  rgba(120, 140, 180, 0.12);
+  --line-deep:  rgba(120, 140, 180, 0.06);
+
+  --shadow-1: 0 1px 0 rgba(230, 236, 245, 0.03), 0 8px 24px rgba(0,0,0,0.6);
+  --shadow-2: 0 2px 0 rgba(230, 236, 245, 0.04), 0 20px 60px rgba(0,0,0,0.65);
+
+  /* Backwards-compat aliases — existing components reference these. */
+  --bg: var(--bg-deep);
+  --bg-2: var(--bg-mid);
+  --panel: rgba(16, 22, 34, 0.72);
+  --panel-border: var(--line-soft);
+  --panel-border-hot: var(--line);
+  --fg: var(--cream);
+  --fg-dim: var(--cream-soft);
+  --fg-dimmer: var(--cream-dim);
+
+  --accent-cyan: var(--emerald);
+  --accent-violet: #6c4bff; /* aurora purple */
+  --accent-pink: var(--plum);
+  --accent-lime: var(--emerald);
+  --accent-amber: var(--gold);
+  --accent-red: #ff5a6b;
+
+  --claude: #ffb547;
+  --openclaw: var(--plum);
+  --hermes: var(--gold-soft);
+
+  --grid: rgba(120, 140, 180, 0.05);
+  --glow: 0 0 40px 0;
+}
+
+@theme {
+  --color-bg-0: #09090b;
+  --color-bg-1: #0a0e16;
+  --color-bg-2: #0f1420;
+  --color-surface: rgba(16, 22, 34, 0.72);
+  --color-surface-strong: rgba(18, 26, 40, 0.92);
+  --color-border: rgba(120, 140, 180, 0.12);
+  --color-border-strong: rgba(120, 140, 180, 0.25);
+
+  --color-ink: #e6ecf5;
+  --color-ink-dim: #9aa6b8;
+  --color-ink-faint: #5b6678;
+
+  --color-neon: #6fff9b;
+  --color-neon-dim: #36c97a;
+  --color-neon-glow: rgba(111, 255, 155, 0.35);
+
+  --color-aurora-a: #6c4bff;
+  --color-aurora-b: #2bb6ff;
+  --color-aurora-c: #ff5cb0;
+
+  --color-warn: #ffb547;
+  --color-danger: #ff5a6b;
+  --color-info: #6fb8ff;
+
+  --font-sans: "Inter", var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+}
+
+/* Premium neon focus ring (keyboard nav only) + accent text selection */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid rgba(111, 255, 155, 0.55);
+  outline-offset: 2px;
+}
+::selection { background: rgba(111, 255, 155, 0.26); color: #f3fff7; }
+
+body {
+  color: var(--cream);
+  /* Matched to EnterpriseComponents-Design.html: flat zinc-950 base with a
+     faint 32px structural grid (orange whisper @ 2%) + a fixed film-grain. */
+  background-color: #09090b;
+  background-image:
+    linear-gradient(to right, rgba(255, 85, 0, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 85, 0, 0.02) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-attachment: fixed;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+/* Fixed film-grain overlay (the reference's .noise-bg) — sits above everything
+   but never intercepts the mouse, for that subtle textured-matte finish. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Grid overlay HUD styling */
+.bg-hud-grid {
+  background-image:
+    linear-gradient(rgba(120, 140, 180, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 140, 180, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+.bg-hud-grid-fine {
+  background-image:
+    linear-gradient(rgba(120, 140, 180, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 140, 180, 0.05) 1px, transparent 1px);
+  background-size: 16px 16px;
+  background-position: -1px -1px;
+}
+
+/* Lift real chrome above the overlays */
+main, header, aside, nav, .surface { position: relative; z-index: 2; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Typography primitives
+   ───────────────────────────────────────────────────────────────────── */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  color: var(--cream);
+}
+
+code, pre, kbd, samp, .mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Hand-script accent for numerals, roman numerals, emphasis */
+.hand,
+.hand-num,
+em.hand,
+[data-hand="true"] {
+  font-family: 'Caveat', cursive;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--gold);
+}
+
+/* In headings, <em> automatically becomes the hand-script accent */
+h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
+.page-title em, .vital-tile .v em, .status-meta em {
+  font-family: 'Caveat', cursive;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--gold);
+  font-size: 1.4em;
+  line-height: 0.9;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Eyebrow — `I. ─── Chapter Label` pattern
+   ───────────────────────────────────────────────────────────────────── */
+
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 14px;
+  color: var(--cream-dim); margin-bottom: 18px;
+}
+.eyebrow .num {
+  font-family: 'Caveat', cursive; font-weight: 500;
+  font-size: 1.4rem; color: var(--gold); line-height: 0.9;
+}
+.eyebrow .line {
+  width: 32px; height: 1px; background: var(--gold); opacity: 0.6;
+}
+.eyebrow .label {
+  font-family: 'Manrope', sans-serif; font-weight: 600;
+  font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--cream-dim);
+}
+
+.page-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500; font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+  line-height: 1.05; letter-spacing: -0.03em; color: var(--cream);
+  margin: 0;
+}
+.page-subtitle {
+  font-family: 'Manrope', sans-serif; font-weight: 400;
+  font-size: 1rem; color: var(--cream-dim); margin-top: 12px; line-height: 1.55;
+  max-width: 720px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Status row (`● Active   28 days remaining`)
+   ───────────────────────────────────────────────────────────────────── */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'Manrope', sans-serif; font-weight: 600;
+  font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--emerald);
+}
+.status-pill::before {
+  content: "●"; color: var(--emerald);
+  text-shadow: 0 0 8px var(--emerald);
+}
+.status-meta {
+  font-family: 'Manrope', sans-serif; font-weight: 500;
+  font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--cream-dim);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Mission progress bar
+   ───────────────────────────────────────────────────────────────────── */
+.pbar {
+  width: 100%; height: 4px;
+  background: rgba(243, 235, 218, 0.05);
+  border-radius: 999px; overflow: hidden;
+}
+.pbar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-soft), var(--gold));
+  border-radius: 999px;
+  box-shadow: 0 0 10px rgba(111, 255, 155, 0.45);
+  transition: width 0.4s ease;
+}
+.pbar-value {
+  font-family: 'Caveat', cursive;
+  font-size: 1.3rem; color: var(--gold); font-weight: 500;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Action cards (Mission Control + most surfaces) — generic .surface-card too
+   ───────────────────────────────────────────────────────────────────── */
+.action-card,
+.surface-card {
+  background: linear-gradient(180deg, rgba(18, 25, 38, 0.72), rgba(12, 17, 27, 0.66));
+  border: 1px solid rgba(140, 165, 210, 0.10);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.035), var(--shadow-1);
+  transition: border-color 0.22s ease, background 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+}
+.action-card:hover,
+.surface-card:hover {
+  border-color: rgba(140, 165, 210, 0.20);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 22px 56px -16px rgba(0, 0, 0, 0.8),
+    0 0 28px -12px rgba(111, 255, 155, 0.12);
+}
+.action-card.active {
+  border-color: rgba(111, 255, 155, 0.5);
+  background: linear-gradient(180deg, rgba(111, 255, 155, 0.06), rgba(14, 20, 31, 0.7));
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(111, 255, 155, 0.12),
+    0 0 30px -10px rgba(111, 255, 155, 0.22);
+}
+
+.action-num {
+  font-family: 'Caveat', cursive; font-weight: 500;
+  font-size: 2.4rem; color: var(--gold); line-height: 0.9;
+}
+.action-tag {
+  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--cream-mute);
+}
+.action-tag.up-next { color: var(--gold); }
+.action-title {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500; font-size: 1.25rem;
+  letter-spacing: -0.015em; color: var(--cream);
+}
+.action-desc { color: var(--cream-soft); font-size: 0.98rem; line-height: 1.6; }
+
+/* COPY button */
+.copy-btn {
+  background: var(--gold);
+  color: var(--bg-deep);
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700; font-size: 0.78rem;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.copy-btn:hover {
+  background: var(--gold-soft);
+  box-shadow: 0 8px 26px rgba(111, 255, 155, 0.32);
+  transform: translateY(-1px);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Sidebar
+   ───────────────────────────────────────────────────────────────────── */
+.sidebar-section-label {
+  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--cream-mute);
+}
+.sidebar-item {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500; font-size: 0.95rem;
+  color: var(--cream-soft);
+  border-left: 2px solid transparent;
+  transition: all 0.15s ease;
+}
+.sidebar-item:hover { background: rgba(111, 255, 155, 0.05); color: var(--cream); }
+.sidebar-item.active {
+  background: var(--bg-elev);
+  border-left-color: var(--gold);
+  color: var(--cream);
+  box-shadow: inset 2px 0 12px -6px var(--gold);
+}
+.sidebar-badge {
+  font-family: 'Caveat', cursive; font-weight: 500;
+  font-size: 1.1rem; color: var(--gold);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Vital tiles (Mission Control row)
+   ───────────────────────────────────────────────────────────────────── */
+.vital-tile {
+  background: linear-gradient(180deg, rgba(18, 25, 38, 0.7), rgba(12, 17, 27, 0.64));
+  border: 1px solid rgba(140, 165, 210, 0.10);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 6px;
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.035), var(--shadow-1);
+  transition: border-color 0.22s ease, transform 0.22s ease, box-shadow 0.22s ease;
+}
+.vital-tile:hover {
+  border-color: rgba(140, 165, 210, 0.20);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 18px 44px -16px rgba(0, 0, 0, 0.78),
+    0 0 24px -12px rgba(111, 255, 155, 0.12);
+}
+.vital-tile .k {
+  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--cream-mute);
+}
+.vital-tile .v {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500; font-size: 1.05rem;
+  letter-spacing: -0.01em; color: var(--cream);
+}
+.vital-tile .v em {
+  font-family: 'Caveat', cursive; font-style: normal;
+  color: var(--gold); font-size: 1.4em; font-weight: 500;
+}
+.vital-tile .sub {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--cream-dim);
+}
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.ok { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+.status-dot.warn { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.status-dot.err { background: var(--plum); box-shadow: 0 0 8px var(--plum); }
+.status-dot.info { background: var(--gold-soft); box-shadow: 0 0 8px var(--gold-soft); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Pull quotes
+   ───────────────────────────────────────────────────────────────────── */
+blockquote {
+  margin: 48px 0; padding: 0 0 0 28px;
+  border-left: 2px solid var(--gold);
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 300; font-size: 1.55rem;
+  line-height: 1.42; color: var(--cream);
+  letter-spacing: -0.018em;
+}
+blockquote cite {
+  display: block; margin-top: 18px;
+  font-family: 'Manrope', sans-serif; font-weight: 600;
+  font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--gold); font-style: normal;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ✦ Section dividers between major page blocks
+   ───────────────────────────────────────────────────────────────────── */
+.divider {
+  display: flex; align-items: center; justify-content: center;
+  margin: 70px 0; gap: 24px;
+}
+.divider .ornament {
+  color: var(--gold); opacity: 0.7;
+  font-family: 'Caveat', cursive; font-size: 1.6rem;
+}
+.divider .rule { flex: 1; height: 1px; background: var(--line); max-width: 160px; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Mascot card (Athena/Owl portrait holder)
+   ───────────────────────────────────────────────────────────────────── */
+.mascot-wrap {
+  position: relative;
+  background: radial-gradient(ellipse at center, rgba(111, 255, 155, 0.12), transparent 60%);
+  padding: 8px;
+}
+.mascot-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0; overflow: hidden;
+  box-shadow: var(--shadow-2);
+}
+.mascot-card img { width: 100%; height: auto; display: block; }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Glass `.panel` (reused everywhere) — reskinned to aubergine + gold
+   ───────────────────────────────────────────────────────────────────── */
+.panel {
+  background:
+    linear-gradient(180deg, rgba(20, 27, 41, 0.78), rgba(11, 16, 26, 0.72));
+  border: 1px solid rgba(140, 165, 210, 0.10);
+  border-radius: 14px;
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.045),
+    0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 18px 50px -14px rgba(0, 0, 0, 0.72);
+}
+/* faint accent bloom from the top edge */
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 72% at 50% -12%, rgba(111, 255, 155, 0.055), transparent 56%);
+  pointer-events: none;
+}
+/* premium glass top-edge hairline */
+.panel::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(180, 210, 255, 0.22), transparent);
+  pointer-events: none;
+}
+.panel-hot {
+  border-color: rgba(140, 165, 210, 0.18);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(111, 255, 155, 0.05),
+    0 18px 50px -14px rgba(0, 0, 0, 0.72);
+}
+.panel-hover { transition: border-color .28s ease, transform .28s ease, box-shadow .28s ease; }
+.panel-hover:hover {
+  border-color: rgba(140, 165, 210, 0.20);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(111, 255, 155, 0.07),
+    0 26px 64px -16px rgba(0, 0, 0, 0.82),
+    0 0 32px -10px rgba(111, 255, 155, 0.14);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Kinetic interactions — adapted from EnterpriseComponents-Design.html.
+   Snappier easing, a larger hover-lift, and a tactile click-press across the
+   interactive cards + buttons. Accent stays neon-green to match the UI.
+   ───────────────────────────────────────────────────────────────────── */
+.action-card, .surface-card, .vital-tile, .panel-hover, .kinetic-card {
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.action-card:hover, .surface-card:hover, .vital-tile:hover, .panel-hover:hover, .kinetic-card:hover {
+  transform: translateY(-4px);
+}
+/* tactile press on click */
+.action-card:active, .surface-card:active, .vital-tile:active, .panel-hover:active,
+.kinetic-card:active, .copy-btn:active {
+  transform: translateY(-1px) scale(0.994);
+  transition-duration: 0.09s;
+}
+.copy-btn:active { transform: translateY(0) scale(0.97); }
+/* standalone, opt-in kinetic card (the reference's lift + accent glow) */
+.kinetic-card {
+  border: 1px solid rgba(140, 165, 210, 0.10);
+  border-radius: 14px;
+}
+.kinetic-card:hover {
+  border-color: rgba(111, 255, 155, 0.30);
+  box-shadow: 0 20px 40px rgba(111, 255, 155, 0.08), 0 0 0 1px rgba(111, 255, 155, 0.10);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Pills — small status chips
+   ───────────────────────────────────────────────────────────────────── */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 11px; border-radius: 999px;
+  font-size: 10.5px; letter-spacing: 0.16em;
+  background: rgba(243,235,218,0.04);
+  border: 1px solid var(--line-soft);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  text-transform: uppercase;
+  color: var(--cream-dim);
+}
+.pill-ok   { color: var(--emerald);   border-color: rgba(90, 184, 150, 0.30); background: rgba(90, 184, 150, 0.06); }
+.pill-warn { color: var(--gold);      border-color: rgba(212, 165, 116, 0.30); background: rgba(212, 165, 116, 0.06); }
+.pill-err  { color: var(--plum);      border-color: rgba(196, 96, 126, 0.30); background: rgba(196, 96, 126, 0.06); }
+.pill-info { color: var(--color-info); border-color: rgba(107, 184, 255, 0.30); background: rgba(107, 184, 255, 0.07); }
+
+/* ─────────────────────────────────────────────────────────────────────
+   Heartbeat dot + metric numerals
+   ───────────────────────────────────────────────────────────────────── */
+.heartbeat {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor; box-shadow: 0 0 10px currentColor;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.7); opacity: 0.4; }
+}
+
+.metric {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Minimal scrollbar — thin, accent-tinted, app-wide */
+.scroll::-webkit-scrollbar,
+.sidebar-scroll::-webkit-scrollbar,
+main::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll::-webkit-scrollbar-thumb,
+.sidebar-scroll::-webkit-scrollbar-thumb,
+main::-webkit-scrollbar-thumb { background: rgba(111, 255, 155, 0.16); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
+.scroll::-webkit-scrollbar-thumb:hover,
+.sidebar-scroll::-webkit-scrollbar-thumb:hover,
+main::-webkit-scrollbar-thumb:hover { background: rgba(111, 255, 155, 0.30); background-clip: padding-box; }
+.scroll::-webkit-scrollbar-track,
+.sidebar-scroll::-webkit-scrollbar-track,
+main::-webkit-scrollbar-track { background: transparent; }
+* { scrollbar-width: thin; scrollbar-color: rgba(111, 255, 155, 0.22) transparent; }
+
+/* Agent glow utility — keeps existing class names alive */
+.glow-c { color: var(--rust);     text-shadow: 0 0 18px rgba(201, 124, 94, 0.5); }
+.glow-o { color: var(--plum);     text-shadow: 0 0 18px rgba(196, 96, 126, 0.5); }
+.glow-h { color: var(--gold-soft);text-shadow: 0 0 18px rgba(230, 198, 154, 0.5); }
+
+/* Heading strip used by Panel.tsx header */
+.heading-strip {
+  position: relative;
+  padding-left: 12px;
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.heading-strip::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 2px; border-radius: 2px;
+  background: var(--gold);
+  opacity: 0.85;
+  box-shadow: 0 0 10px var(--gold);
+}
+
+/* Command palette */
+.cmdk-input {
+  background: transparent; outline: none; border: none;
+  width: 100%; padding: 16px 18px; color: var(--cream);
+  font-family: 'Manrope', sans-serif; font-size: 15px;
+}
+.cmdk-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 6px;
+  cursor: pointer; color: var(--cream-soft);
+}
+.cmdk-item[data-selected="true"] {
+  background: rgba(111, 255, 155, 0.08);
+  color: var(--cream);
+  box-shadow: inset 0 0 0 1px rgba(111, 255, 155, 0.18);
+}
+
+/* Activity stream fade */
+.stream-fade {
+  mask-image: linear-gradient(to bottom, transparent, black 8%, black 92%, transparent);
+}
+
+/* Live tick bars */
+.tick {
+  display: inline-block;
+  width: 4px; height: 12px; margin: 0 1px;
+  background: currentColor; border-radius: 1px;
+  opacity: 0.4;
+}
+.tick.live { animation: tick 1.4s ease-in-out infinite; }
+@keyframes tick {
+  0%, 100% { transform: scaleY(0.4); opacity: 0.4; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+/* Aurora element exists in layout — silence it; the design system uses
+   ambient gradients on body::after instead */
+.aurora { display: none !important; }
+
+/* Fusion Boardroom — deliberating animations */
+@keyframes fusionShimmer { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+.fusion-shimmer { animation: fusionShimmer 1.3s ease-in-out infinite; }
+@keyframes fusionBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.fusion-caret { animation: fusionBlink 1s step-end infinite; color: #d4a574; }
+
+/* Hermes / agent chat — render markdown replies tightly inside the bubble
+   (fixes raw ** asterisks, lists, code, headings showing as plain text) */
+.chat-md > :first-child { margin-top: 0; }
+.chat-md > :last-child { margin-bottom: 0; }
+.chat-md p { margin: 0 0 0.5em; }
+.chat-md strong { font-weight: 700; color: var(--fg); }
+.chat-md em { font-style: italic; }
+.chat-md ul, .chat-md ol { margin: 0.3em 0 0.6em; padding-left: 1.25em; }
+.chat-md li { margin: 0.15em 0; }
+.chat-md li > p { margin: 0; }
+.chat-md h1, .chat-md h2, .chat-md h3, .chat-md h4 {
+  font-weight: 700; line-height: 1.25; margin: 0.7em 0 0.35em; color: var(--fg);
+}
+.chat-md h1 { font-size: 1.15em; }
+.chat-md h2 { font-size: 1.1em; }
+.chat-md h3, .chat-md h4 { font-size: 1.02em; }
+.chat-md a { color: var(--accent-cyan, #00ccff); text-decoration: underline; }
+.chat-md code {
+  font-family: var(--font-geist-mono, ui-monospace), monospace; font-size: 0.92em;
+  background: rgba(255,255,255,0.08); padding: 0.08em 0.36em; border-radius: 5px;
+}
+.chat-md pre {
+  background: rgba(0,0,0,0.35); border: 1px solid var(--panel-border, rgba(255,255,255,0.1));
+  border-radius: 10px; padding: 10px 12px; margin: 0.5em 0; overflow-x: auto;
+}
+.chat-md pre code { background: none; padding: 0; font-size: 0.86em; }
+.chat-md blockquote {
+  border-left: 3px solid var(--panel-border, rgba(255,255,255,0.2));
+  margin: 0.5em 0; padding-left: 0.8em; color: var(--fg-dim);
+}
+.chat-md table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.95em; }
+.chat-md th, .chat-md td { border: 1px solid var(--panel-border, rgba(255,255,255,0.12)); padding: 4px 9px; }
+.chat-md hr { border: 0; border-top: 1px solid var(--panel-border, rgba(255,255,255,0.12)); margin: 0.7em 0; }

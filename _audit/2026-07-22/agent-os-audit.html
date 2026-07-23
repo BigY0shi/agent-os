@@ -1,0 +1,437 @@
+<title>Agent OS — Full System Audit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --bg:#080b11; --bg2:#0c111a; --panel:#0f1620; --panel2:#131c28;
+    --line:rgba(120,150,170,.16); --line2:rgba(120,150,170,.28);
+    --ink:#e8eef2; --ink-dim:#9fb0bd; --ink-faint:#6b7c8a;
+    --mint:#6fff9b; --mint-dim:rgba(111,255,155,.14);
+    --gold:#d4a574; --violet:#a98bff;
+    --p0:#ff5f6d; --p0-bg:rgba(255,95,109,.12);
+    --p1:#ffab3d; --p1-bg:rgba(255,171,61,.12);
+    --p2:#6ca8ff; --p2-bg:rgba(108,168,255,.12);
+    --p3:#7bdca0; --p3-bg:rgba(123,220,160,.10);
+    --ok:#4bd486;
+    --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 18px 40px -24px rgba(0,0,0,.8);
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --maxw:1080px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#eef1f4; --bg2:#e6eaee; --panel:#ffffff; --panel2:#f4f7f9;
+      --line:rgba(30,50,70,.12); --line2:rgba(30,50,70,.22);
+      --ink:#141b22; --ink-dim:#42525f; --ink-faint:#71828f;
+      --mint:#0f9d58; --mint-dim:rgba(15,157,88,.12);
+      --gold:#a9741c; --violet:#6b4bd6;
+      --p0:#d62839; --p0-bg:rgba(214,40,57,.09);
+      --p1:#b76e00; --p1-bg:rgba(183,110,0,.10);
+      --p2:#2563c9; --p2-bg:rgba(37,99,201,.09);
+      --p3:#1f8f57; --p3-bg:rgba(31,143,87,.08);
+      --ok:#0f9d58;
+      --shadow:0 1px 0 rgba(255,255,255,.6) inset, 0 14px 34px -22px rgba(20,40,60,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#080b11; --bg2:#0c111a; --panel:#0f1620; --panel2:#131c28;
+    --line:rgba(120,150,170,.16); --line2:rgba(120,150,170,.28);
+    --ink:#e8eef2; --ink-dim:#9fb0bd; --ink-faint:#6b7c8a;
+    --mint:#6fff9b; --mint-dim:rgba(111,255,155,.14); --gold:#d4a574; --violet:#a98bff;
+    --p0:#ff5f6d; --p0-bg:rgba(255,95,109,.12); --p1:#ffab3d; --p1-bg:rgba(255,171,61,.12);
+    --p2:#6ca8ff; --p2-bg:rgba(108,168,255,.12); --p3:#7bdca0; --p3-bg:rgba(123,220,160,.10); --ok:#4bd486;
+  }
+  :root[data-theme="light"]{
+    --bg:#eef1f4; --bg2:#e6eaee; --panel:#ffffff; --panel2:#f4f7f9;
+    --line:rgba(30,50,70,.12); --line2:rgba(30,50,70,.22);
+    --ink:#141b22; --ink-dim:#42525f; --ink-faint:#71828f;
+    --mint:#0f9d58; --mint-dim:rgba(15,157,88,.12); --gold:#a9741c; --violet:#6b4bd6;
+    --p0:#d62839; --p0-bg:rgba(214,40,57,.09); --p1:#b76e00; --p1-bg:rgba(183,110,0,.10);
+    --p2:#2563c9; --p2-bg:rgba(37,99,201,.09); --p3:#1f8f57; --p3-bg:rgba(31,143,87,.08); --ok:#0f9d58;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto} *{animation:none!important;transition:none!important}}
+  body{
+    margin:0;background:
+      radial-gradient(130% 60% at 50% -10%, rgba(111,255,155,.06), transparent 60%),
+      linear-gradient(180deg,var(--bg2),var(--bg));
+    color:var(--ink);font-family:var(--sans);line-height:1.6;
+    -webkit-font-smoothing:antialiased;letter-spacing:.005em;
+  }
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--mint);margin:0 0 10px}
+  h1,h2,h3{text-wrap:balance;line-height:1.12;margin:0}
+  a{color:inherit}
+
+  /* hero */
+  header{padding:74px 0 30px;border-bottom:1px solid var(--line)}
+  .h-title{font-size:clamp(38px,7vw,72px);font-weight:800;letter-spacing:-.02em;line-height:.98}
+  .h-title .os{color:var(--mint)}
+  .h-sub{font-size:clamp(16px,2.3vw,21px);color:var(--ink-dim);max-width:60ch;margin:20px 0 0}
+  .h-meta{display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:24px;font-family:var(--mono);font-size:11.5px}
+  .h-meta span{border:1px solid var(--line2);border-radius:999px;padding:5px 12px;color:var(--ink-dim);background:var(--panel)}
+  .verdict{margin-top:30px;padding:20px 22px;border:1px solid var(--line2);border-radius:14px;background:var(--panel);box-shadow:var(--shadow)}
+  .verdict b:first-child{color:var(--mint)}
+  .verdict b{color:var(--ink)}
+
+  /* severity tally */
+  .tally{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0 0}
+  .tcard{border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;background:var(--panel);box-shadow:var(--shadow)}
+  .tcard .n{font-family:var(--mono);font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tcard .l{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-top:8px}
+  .tcard .d{font-size:12.5px;color:var(--ink-dim);margin-top:6px}
+  .tcard.p0{border-top:3px solid var(--p0)} .tcard.p0 .n{color:var(--p0)}
+  .tcard.p1{border-top:3px solid var(--p1)} .tcard.p1 .n{color:var(--p1)}
+  .tcard.p2{border-top:3px solid var(--p2)} .tcard.p2 .n{color:var(--p2)}
+  .tcard.ok{border-top:3px solid var(--ok)} .tcard.ok .n{color:var(--ok)}
+
+  section{padding:52px 0;border-bottom:1px solid var(--line)}
+  .sec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:8px}
+  .sec-n{font-family:var(--mono);font-size:12px;color:var(--mint);letter-spacing:.1em}
+  h2{font-size:clamp(24px,3.6vw,34px);font-weight:750;letter-spacing:-.015em}
+  .sec-lede{color:var(--ink-dim);max-width:70ch;margin:14px 0 30px;font-size:15.5px}
+
+  /* summary callouts */
+  .tldr{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  .tldr .box{border:1px solid var(--line);border-radius:14px;padding:18px;background:var(--panel);box-shadow:var(--shadow)}
+  .tldr .box h4{margin:0 0 8px;font-size:13px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase}
+  .tldr .box.a h4{color:var(--p0)} .tldr .box.b h4{color:var(--gold)} .tldr .box.c h4{color:var(--mint)}
+  .tldr .box p{margin:0;font-size:14px;color:var(--ink-dim)}
+  .tldr .box ul{margin:8px 0 0;padding-left:18px;font-size:14px;color:var(--ink-dim)}
+  .tldr .box li{margin:5px 0}
+
+  /* theme rows */
+  .theme{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel);margin:12px 0;box-shadow:var(--shadow);display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start}
+  .theme .tn{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--mint);line-height:1}
+  .theme h4{margin:0 0 4px;font-size:16px}
+  .theme p{margin:0;font-size:14px;color:var(--ink-dim)}
+  .theme code{font-family:var(--mono);font-size:12px;background:var(--panel2);padding:1px 6px;border-radius:5px;color:var(--ink);border:1px solid var(--line)}
+
+  /* finding cards */
+  .finds{display:flex;flex-direction:column;gap:10px}
+  .find{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:15px 16px 15px 18px;position:relative;box-shadow:var(--shadow)}
+  .find::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:3px;background:var(--ink-faint)}
+  .find.p0::before{background:var(--p0)} .find.p1::before{background:var(--p1)}
+  .find.p2::before{background:var(--p2)} .find.p3::before{background:var(--p3)}
+  .find-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:5px}
+  .sev{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:6px;text-transform:uppercase}
+  .sev.p0{color:var(--p0);background:var(--p0-bg)} .sev.p1{color:var(--p1);background:var(--p1-bg)}
+  .sev.p2{color:var(--p2);background:var(--p2-bg)} .sev.p3{color:var(--p3);background:var(--p3-bg)}
+  .find h4{margin:0;font-size:15.5px;flex:1;min-width:200px}
+  .find .path{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
+  .find p{margin:5px 0 0;font-size:13.5px;color:var(--ink-dim)}
+  .find p.fix{color:var(--ink);margin-top:7px}
+  .find p.fix b{color:var(--mint);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+
+  /* module map */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin-bottom:16px}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  .modgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modcol h4{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;color:var(--ink-faint)}
+  .mod{display:flex;gap:10px;align-items:baseline;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel);margin-bottom:7px}
+  .mod .mname{font-weight:650;font-size:13.5px;min-width:96px}
+  .mod .mwhy{font-size:12.5px;color:var(--ink-dim)}
+  .mod.g{border-left:3px solid var(--ok)} .mod.y{border-left:3px solid var(--p1)} .mod.r{border-left:3px solid var(--p0)}
+
+  /* gaps */
+  .gaps{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+  .gap{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--panel)}
+  .gap .g-n{font-family:var(--mono);color:var(--gold);font-size:12px}
+  .gap h4{margin:6px 0 5px;font-size:15px}
+  .gap p{margin:0;font-size:13px;color:var(--ink-dim)}
+
+  /* council */
+  .seats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+  .seat{border:1px solid var(--line);border-radius:12px;padding:15px 16px;background:var(--panel);box-shadow:var(--shadow)}
+  .seat .who{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .seat .chip{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px;border:1px solid var(--line2);color:var(--ink-dim)}
+  .seat .lin{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-left:auto}
+  .seat h4{margin:0;font-size:15px}
+  .seat .persona{font-size:12.5px;color:var(--ink-faint);font-style:italic;margin:2px 0 10px}
+  .seat ul{margin:0;padding-left:16px;font-size:13px;color:var(--ink-dim)}
+  .seat li{margin:5px 0}
+  .seat b{color:var(--ink)}
+  .judge{border:1px solid var(--line2);border-radius:14px;padding:20px 22px;background:linear-gradient(180deg,var(--panel2),var(--panel));box-shadow:var(--shadow);margin-top:6px}
+  .judge .eyebrow{color:var(--gold)}
+  .judge h3{font-size:18px;margin-bottom:12px}
+  .ruling{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px}
+  .ruling .q{font-family:var(--mono);font-size:11.5px;color:var(--gold);padding-top:3px;white-space:nowrap}
+  .ruling .a{color:var(--ink-dim);margin-bottom:10px}
+  .ruling .a b{color:var(--ink)}
+
+  /* roadmap */
+  .phase{border:1px solid var(--line);border-radius:14px;background:var(--panel);margin:12px 0;overflow:hidden;box-shadow:var(--shadow)}
+  .phase-h{display:flex;align-items:center;gap:12px;padding:15px 18px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  .phase-h .pn{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--bg);background:var(--mint);padding:3px 10px;border-radius:7px}
+  .phase-h h4{margin:0;font-size:16px;flex:1}
+  .phase-h .when{font-family:var(--mono);font-size:11px;color:var(--ink-faint)}
+  .phase ul{margin:0;padding:14px 18px 16px 36px;font-size:14px;color:var(--ink-dim)}
+  .phase li{margin:6px 0}
+  .phase li b{color:var(--ink)}
+
+  .foot{padding:40px 0 70px;color:var(--ink-faint);font-size:12.5px;font-family:var(--mono)}
+  .foot p{margin:4px 0}
+  @media(max-width:760px){
+    .tally{grid-template-columns:1fr 1fr}
+    .tldr,.modgrid,.gaps,.seats{grid-template-columns:1fr}
+    .ruling{grid-template-columns:1fr}.ruling .q{padding-top:0}
+  }
+</style>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">System Audit · 22 Jul 2026</p>
+    <h1 class="h-title">Agent&nbsp;<span class="os">OS</span><br>System Audit</h1>
+    <p class="h-sub">A two-pass teardown of the Founder's Mission Control — first through an engineer's eyes (make the monster live), then through the eyes of the executive assistant it's supposed to be.</p>
+    <div class="h-meta">
+      <span>9 audit agents</span><span>2 cross-lineage critics</span><span>2 agent councils</span>
+      <span>224 API routes swept</span><span>~85 components</span><span>~75 libs</span>
+    </div>
+    <div class="verdict">
+      <b>Verdict —</b> The monster is alive but lying to its owner. Nothing on the happy path crashes, yet the front page shows <b>fabricated telemetry</b>, version control has been <b>wiped</b>, and a single cleartext password gates <b>full remote code execution</b> of the machine. The bones are good — CLI-first design, clean spawn plumbing, an intact backup discipline. The work is honesty, portability, and focus: fix the five-minute security tourniquet, make the cockpit tell the truth, and aim the 31 modules back at the one flywheel that pays.
+    </div>
+    <div class="tally">
+      <div class="tcard p0"><div class="n">8</div><div class="l">P0 · Broken</div><div class="d">Front page, empty .git, RCE gate, 5 Windows spawn failures</div></div>
+      <div class="tcard p1"><div class="n">21</div><div class="l">P1 · Degraded</div><div class="d">Loop bugs, dead-on-click features, orphaned pages</div></div>
+      <div class="tcard p2"><div class="n">17</div><div class="l">P2 · Smells</div><div class="d">Duplication, stale copy, silent no-ops</div></div>
+      <div class="tcard ok"><div class="n">8</div><div class="l">Good bones</div><div class="d">No shell injection, CLI-first, vault-safe, .exile intact</div></div>
+    </div>
+  </div>
+</header>
+
+<section id="tldr">
+  <div class="wrap">
+    <div class="sec-h"><span class="sec-n">00</span><h2>The 60-second read</h2></div>
+    <div class="tldr">
+      <div class="box a">
+        <h4>What's actually broken</h4>
+        <ul>
+          <li>Home page is a <b>demo shell</b> — fabricated agent status, tokens &amp; cost</li>
+          <li><b>.git is empty</b> — no history or rollback since ~Jun 30</li>
+          <li>One password over cleartext HTTP gates <b>full RCE</b>; no rate-limit</li>
+          <li><b>5 P0 macOS-only spawn bugs</b> in routes that bypass the Windows-safe layer</li>
+          <li>Jarvis voice defaults to a dead feed labeled <b>"live"</b></li>
+        </ul>
+      </div>
+      <div class="box b">
+        <h4>The shape of it</h4>
+        <ul>
+          <li>31 modules, one operator — <b>~20 ways to talk to an agent</b></li>
+          <li>Money modules (Deal Desk, Leads, Pipeline, Loop) are real &amp; healthy</li>
+          <li>Creative studios (Video/Music/Games) are hobby or broken</li>
+          <li>3 fully-built pages are <b>unreachable from the nav</b></li>
+          <li>Frozen — no code changes in ~3 weeks</li>
+        </ul>
+      </div>
+      <div class="box c">
+        <h4>Do this first</h4>
+        <ul>
+          <li><b>Security tourniquet</b> (hours): rate-limit login, close the traversal, salt sessions, bind Tailscale-only</li>
+          <li>Fix the <b>Loop engine</b> (burns budget every run)</li>
+          <li>Make the home page <b>honest</b> — wire the real activity feed it already owns</li>
+          <li>Then <b>focus</b>: merge Leads + Deal Desk, collapse the 13 agent tabs</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pass1">
+  <div class="wrap">
+    <div class="sec-h"><span class="sec-n">01</span><h2>Pass 1 — Engineering</h2></div>
+    <p class="sec-lede">Nine read-only agents swept the core plumbing, the front page, all 224 API routes, the 13 agent workspaces, the Hermes/knowledge modules, and the work/output modules. An OpenAI-lineage critic (Codex) independently re-reviewed the core layer. Seven cross-cutting themes emerged.</p>
+
+    <div class="theme"><div class="tn">1</div><div><h4>Two lies to the owner</h4><p>The home page fabricates fleet telemetry — <code>store.ts:44</code> literally comments <em>"Mock runtime numbers — replaced by real telemetry when the bridge is wired."</em> The bridge was never wired: agent status is assigned by array index (agent #4 is always "error"), tokens and cost by formula. Separately, Jarvis hardcodes <em>"Realtime voice is live — just talk"</em> over a voice feed that is dead on this machine. Once one number is theater, none are trusted.</p></div></div>
+    <div class="theme"><div class="tn">2</div><div><h4>A macOS → Windows portability bug class</h4><p>The shared spawn layer (<code>runner.ts</code>) is Windows-safe, but ~8 routes <b>bypass it and reintroduce the exact macOS assumptions it was written to kill</b> — producing 5 P0 failures: a hardcoded <code>/usr/bin/python3</code>, a macOS-only <code>open</code>, a Chrome path that silently disables Loop's browser check, an empty <code>HOME</code> that breaks Goal-mode, and a bare <code>netlify</code>/<code>claude</code> spawn. This is the single highest-yield engineering theme.</p></div></div>
+    <div class="theme"><div class="tn">3</div><div><h4>Chat-surface sprawl</h4><p>~20 ways to talk to an agent: 1 shared component (<code>UnifiedChat</code>, reused 3×) + 8 bespoke reimplementations + 5+ orphaned/duplicate panels. <code>CursorView</code> and <code>PiView</code> are ~95% identical twins. A shared <code>AgentPicker</code> exists and is used by 12 files — but <code>/room</code> and <code>/fusion</code> hand-roll their own.</p></div></div>
+    <div class="theme"><div class="tn">4</div><div><h4>OpenRouter blast radius</h4><p>One invalid key silently kills Fusion (P0), Free Claude, the Room's openclaw agent, the N2 build engine, and a Whisper fallback — because those paths have <b>no CLI fallback</b>, violating the project's own CLI-first rule. Everything CLI-shelled is unaffected, which proves the healthy design.</p></div></div>
+    <div class="theme"><div class="tn">5</div><div><h4>Loop-engine fragility</h4><p>The autonomous core is the least trustworthy: Stop doesn't reach the CLI child (burns the full 600s), prompts over 32k chars are silently dropped (loops spin uselessly after iteration 1), the string <code>"false"</code> is read as a passing verdict, the Judge silently falls back to Ollama (Rule-11 violation, triggerable today), and the browser check is disabled on Windows.</p></div></div>
+    <div class="theme"><div class="tn">6</div><div><h4>Security: one password, full RCE — but cheap to fix</h4><p>By design this app is a remote-code-execution service for the machine. The whole boundary is one brute-forceable password over cleartext HTTP, with a pass-the-hash cookie and a path-traversal to <code>~/.agentic-os</code> secrets. Impact is total; the core fixes are hours, not weeks.</p></div></div>
+    <div class="theme"><div class="tn">7</div><div><h4>Rot &amp; recoverability</h4><p>~12 orphaned routes/components, 3 nav-orphaned but fully-built pages (<code>/ruflo</code>, <code>/goals</code>, <code>/journal</code>), and version control gone (empty <code>.git</code>). Countervailing good news: the <code>.exile</code> move-don't-delete discipline is intact and active through Jul 1 — nothing was truly lost.</p></div></div>
+
+    <h3 style="font-size:16px;margin:34px 0 14px;font-family:var(--mono);letter-spacing:.06em;color:var(--ink-faint)">CRITICAL BOARD · the P0s</h3>
+    <div class="finds">
+      <div class="find p0"><div class="find-top"><span class="sev p0">P0</span><h4>Front page renders fabricated telemetry</h4><span class="path">store.ts:44</span></div><p>5 of 8 widgets are pure fiction (fake KPIs, a random "live" event feed, recs for agents that don't exist); 3 dress real config with per-index fake status. A real feed (<code>/api/activity</code>) exists but the home page ignores it.</p><p class="fix"><b>Fix</b> Replace <code>seedRuntime</code> with honest status + wire the real activity feed. One move fixes 4 widgets.</p></div>
+      <div class="find p0"><div class="find-top"><span class="sev p0">P0</span><h4>Version control wiped — <code>.git</code> is empty</h4><span class="path">.git/</span></div><p>No HEAD, no refs, no history since ~Jun 30. No diff, no rollback, no upstream pull. <code>.exile</code> backups are the only recovery net (intact through Jul 1).</p><p class="fix"><b>Fix</b> Re-clone upstream, exile current tree first, keep the remote (per Council ruling).</p></div>
+      <div class="find p0"><div class="find-top"><span class="sev p0">P0</span><h4>Login has no rate-limit → brute-force = full RCE</h4><span class="path">api/auth/login/route.ts:14</span></div><p>The one password gating agent-spawn routes (with <code>--yolo</code>/<code>--dangerously-skip-permissions</code>) has no lockout, no throttle. Guess it → arbitrary code execution as the user.</p><p class="fix"><b>Fix</b> Per-IP backoff + lockout, entropy check, bind Tailscale-only.</p></div>
+      <div class="find p0"><div class="find-top"><span class="sev p0">P0</span><h4>5 macOS-only spawns break on Windows</h4><span class="path">seo/research · realtime/open · loop/run · hermes+codex/goals · hyperframes</span></div><p>Hardcoded <code>/usr/bin/python3</code>, macOS <code>open</code>, macOS-only Chrome path (silently disables Loop's browser check), empty <code>HOME</code>, bare <code>claude</code> — all bypass the Windows-safe <code>runner.ts</code>.</p><p class="fix"><b>Fix</b> Route every spawn through <code>runner.ts</code>; delete the bespoke env-building.</p></div>
+      <div class="find p0"><div class="find-top"><span class="sev p0">P0</span><h4>Fusion chat is dead on arrival</h4><span class="path">api/fusion/chat/route.ts</span></div><p>Its only path is the invalid OpenRouter key, no fallback. The "PANEL" model chips (Opus/Gemini/Grok/Fable) are a hardcoded client-side illusion — the backend calls one model id.</p><p class="fix"><b>Fix</b> Add a CLI fallback or an honest "not connected" state.</p></div>
+      <div class="find p0"><div class="find-top"><span class="sev p0">P0</span><h4>Video pipeline broken end-to-end</h4><span class="path">api/video/hyperframes/render/route.ts:20</span></div><p>Render binary hardcoded to a Unix path (no Windows) → 503 on every render. HeyGen/MiniMax unconfigured → grids silently empty (errors swallowed to <code>[]</code>).</p><p class="fix"><b>Fix</b> Portability fix + surface the errors the server already produces — or bundle/exile the studio.</p></div>
+    </div>
+
+    <h3 style="font-size:16px;margin:34px 0 14px;font-family:var(--mono);letter-spacing:.06em;color:var(--ink-faint)">SELECTED P1s · dead-on-click &amp; degraded</h3>
+    <div class="finds">
+      <div class="find p1"><div class="find-top"><span class="sev p1">P1</span><h4>Jarvis voice defaults to a dead feed labeled "live"</h4><span class="path">JarvisView.tsx:1124</span></div><p>Realtime is the default mode and needs an <code>OPENAI_API_KEY</code> that isn't set → session 400s; meanwhile the UI hardcodes "Realtime voice is live — just talk" and disables the working fallback buttons.</p></div>
+      <div class="find p1"><div class="find-top"><span class="sev p1">P1</span><h4>Thumbnails default backend lies about saving</h4><span class="path">ThumbnailStudio.tsx:180</span></div><p>UI claims vault-save but the default labs route returns <code>savedTo:null</code> → history is always empty. Also <code>sharp</code> is imported but absent from <code>package.json</code> — a clean install breaks preview.</p></div>
+      <div class="find p1"><div class="find-top"><span class="sev p1">P1</span><h4>Loop Judge silently falls back to Ollama</h4><span class="path">loopEngine.ts:216</span></div><p>Any judge failure quietly drops to a local Ollama verdict with no UI indication — the exact Rule-11 anti-pattern, and currently triggerable because the N2/Fusion judges need the invalid OpenRouter key.</p></div>
+      <div class="find p1"><div class="find-top"><span class="sev p1">P1</span><h4>Claude Artifacts publish broken on Windows</h4><span class="path">claudeArtifacts.ts:124</span></div><p>Bespoke macOS-only <code>netlify</code> spawn (<code>:</code>-PATH rebuild) instead of the Windows-safe <code>runner.ts</code> layer — publish never works here.</p></div>
+      <div class="find p1"><div class="find-top"><span class="sev p1">P1</span><h4>/ruflo — fully built, zero nav entry</h4><span class="path">Sidebar.tsx / TopBar.tsx</span></div><p>A complete SEO-swarm launcher with no Sidebar and no TopBar link — reachable only by typing the URL. Highest effort-to-impact fix in the app: add two nav lines.</p></div>
+      <div class="find p1"><div class="find-top"><span class="sev p1">P1</span><h4>settings.json can be silently wiped</h4><span class="path">settings.ts:137</span></div><p>Non-atomic read-merge-write plus a corrupt-file → default-and-persist path can permanently destroy the user's real settings, including pasted API keys.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pass2">
+  <div class="wrap">
+    <div class="sec-h"><span class="sec-n">02</span><h2>Pass 2 — The Executive Assistant lens</h2></div>
+    <p class="sec-lede">The same system, judged not by "does it run" but by "does it move a dollar for the founder it serves." His flywheel: <b>find leads → verify → pitch the augment offer → deliver an automation → productize it as a reusable "machine" → sell it N times.</b> Every module gets one test — does it turn his scarce hours into booked revenue, or is it a toy that wandered in?</p>
+
+    <div class="legend">
+      <span><span class="dot" style="background:var(--ok)"></span>Core — protect &amp; polish</span>
+      <span><span class="dot" style="background:var(--p1)"></span>Situational — keep, tidy</span>
+      <span><span class="dot" style="background:var(--p0)"></span>Off-mission / broken</span>
+    </div>
+    <div class="modgrid">
+      <div class="modcol">
+        <h4>Moves the flywheel</h4>
+        <div class="mod g"><span class="mname">Deal Desk</span><span class="mwhy">the money — Upwork lead triage + proposal drafting</span></div>
+        <div class="mod g"><span class="mname">Leads</span><span class="mwhy">prospecting engine; clean, no auto-send</span></div>
+        <div class="mod g"><span class="mname">Pipeline</span><span class="mwhy">the "machine" builder spine</span></div>
+        <div class="mod g"><span class="mname">Loop</span><span class="mwhy">autonomous build-until-passing (but buggy)</span></div>
+        <div class="mod g"><span class="mname">Memory</span><span class="mwhy">the Obsidian second brain / substrate</span></div>
+        <div class="mod g"><span class="mname">Home</span><span class="mwhy">should be the cockpit — currently faked</span></div>
+      </div>
+      <div class="modcol">
+        <h4>Situational &amp; off-mission</h4>
+        <div class="mod y"><span class="mname">Notebook · Kanban · Mastermind</span><span class="mwhy">real utility, not the core loop</span></div>
+        <div class="mod y"><span class="mname">Paperclip · SEO · Thumbnails</span><span class="mwhy">useful edges; some dead backends</span></div>
+        <div class="mod r"><span class="mname">Video · Music · Games</span><span class="mwhy">hobby or broken — he does real gamedev elsewhere</span></div>
+        <div class="mod r"><span class="mname">13 agent tabs</span><span class="mwhy">one pattern maintained thirteen ways</span></div>
+        <div class="mod r"><span class="mname">Fusion · Sakana · Open Design</span><span class="mwhy">extra panels off the money path</span></div>
+      </div>
+    </div>
+
+    <h3 style="font-size:16px;margin:34px 0 14px;font-family:var(--mono);letter-spacing:.06em;color:var(--ink-faint)">SYNERGY GAPS · things that should connect but don't</h3>
+    <div class="gaps">
+      <div class="gap"><div class="g-n">GAP 01</div><h4>Leads ✕ Deal Desk don't touch</h4><p>Two separate prospecting systems with zero shared code. The flywheel's first two stages are a manual re-keying, not a pipe.</p></div>
+      <div class="gap"><div class="g-n">GAP 02</div><h4>No won-deal → machine bridge</h4><p>When a pitch lands there's no path to "spin up the machine for this client." The productization spine (CS Engine) lives in a repo the dashboard can't see.</p></div>
+      <div class="gap"><div class="g-n">GAP 03</div><h4>No revenue truth anywhere</h4><p>The home page fabricates tokens/cost, but there is no real "deals in flight / $ pipeline / machines shipped" view — the one thing a founder wants each morning.</p></div>
+      <div class="gap"><div class="g-n">GAP 04</div><h4>The approval gate is off-dashboard</h4><p>The draft-never-send rule is honored, but the human-in-the-loop step happens in Gmail — the cockpit can't show "N drafts awaiting your review."</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="council">
+  <div class="wrap">
+    <div class="sec-h"><span class="sec-n">03</span><h2>The Councils</h2></div>
+    <p class="sec-lede">For the genuinely debatable calls, a cross-lineage council convened — an OpenAI seat (Codex), a local-OSS seat (Hermes/Kimi), and two Anthropic seats, each wearing a contrasting persona drawn from the Nemotron-Personas set so the debate had real friction. A bias-aware Judge, Supreme-Court-Justice in temperament, named its own biases and ruled narrowly on the evidence, treating the builder's ethos — <em>no irreversible loss, exile-not-delete</em> — as binding law.</p>
+
+    <h3 style="font-size:17px;margin:8px 0 4px">Council #1 — Engineering triage</h3>
+    <div class="seats">
+      <div class="seat"><div class="who"><span class="chip">Codex</span><span class="lin">OpenAI</span></div><h4>Structure &amp; skepticism</h4><p class="persona">persona: Stephen Cate — disciplined supervisor, resists churn</p><ul><li>Git: <b>re-clone</b> + overlay in a recovery workspace</li><li>Security: a <b>short containment gate first</b>, not a rewrite</li><li>Dead code: <b>exile with a manifest</b>; wire Radar only after core is stable</li></ul></div>
+      <div class="seat"><div class="who"><span class="chip">Hermes</span><span class="lin">local OSS</span></div><h4>Return on hours</h4><p class="persona">persona: Ravin Vanchipura — data-driven economist</p><ul><li>Git: <b>hard-fork</b> — upstream merges are negative-value <span style="color:var(--p1)">(dissent)</span></li><li>Security: patch in 48h, <b>then stop the Loop's budget bleed</b></li><li>Dead code: <b>exile all</b> — unfinished = balance-sheet fiction</li></ul></div>
+      <div class="seat"><div class="who"><span class="chip">Claude A</span><span class="lin">Anthropic</span></div><h4>Craft &amp; coherence</h4><p class="persona">persona: Marie Pickett — an artist's eye, perfectionist</p><ul><li>Git: <b>re-clone</b> — history is provenance</li><li>Security: <b>security + honesty</b> — the front page lies; both are removing falsehoods</li><li>Dead code: <b>wire Radar</b> (it's unborn, not dead), exile the rest <span style="color:var(--p1)">(dissent)</span></li></ul></div>
+      <div class="seat"><div class="who"><span class="chip">Claude B</span><span class="lin">Anthropic</span></div><h4>Stewardship</h4><p class="persona">persona: Ruth Gresham — methodical preservationist</p><ul><li>Git: <b>re-clone</b> + keep upstream remote for cherry-picks</li><li>Security: a <b>"tourniquet, not a fortress"</b> — 3 cheap fixes</li><li>Dead code: <b>nothing leaves without a ledger entry</b> — the line between an archive and a graveyard is a catalog</li></ul></div>
+    </div>
+    <div class="judge">
+      <p class="eyebrow">Ruling of the Court · bias-aware</p>
+      <h3>Judge — persona: Owen Newsom, recast as arbiter</h3>
+      <p style="font-size:13.5px;color:var(--ink-dim);margin:0 0 14px">Declared self-checks: bandwagon (3-seat convergence ≠ evidence), availability (vivid "RCE" language), deference-to-the-eloquent. The builder's ethos is binding law; every destructive step must stay reversible.</p>
+      <div class="ruling">
+        <div class="q">Q1 · Git</div><div class="a"><b>Re-clone, exile the current tree first, keep the upstream remote.</b> <code>init</code> discards history — the exact irreversible loss the ethos forbids. Hard-fork buys only "cleanliness" while destroying cheap cherry-pick optionality. (Sided with three seats over Hermes.)</div>
+        <div class="q">Q2 · Sequence</div><div class="a"><b>A few-hours security tourniquet first, then Loop, then honest go-live.</b> "The split is smaller than it appears — all four say security-first, all price it in hours." The fabricated-telemetry fix rides with go-live; it must not jump the security queue.</div>
+        <div class="q">Q3 · Dead code</div><div class="a"><b>Exile-by-default with a manifest; consolidate duplicate chats to one winner; promote Radar to a tracked backlog item — wire only if the last mile is short.</b> Rejected "kill all" (forecloses the one unique asset) and "wire now" (lets novelty jump security's queue). "Don't destroy it, don't crown it."</div>
+      </div>
+    </div>
+
+    <h3 style="font-size:17px;margin:34px 0 4px">Council #2 — Roadmap</h3>
+    <div id="council2-seats" class="seats">
+      <div class="seat"><div class="who"><span class="chip">Hermes</span><span class="lin">local OSS</span></div><h4>Revenue per hour</h4><p class="persona">persona: Ravin Vanchipura — economist</p><ul><li>Consolidate: <b>ruthlessly to 6–8</b>; keep flexibility via external tools on-demand, not dashboard sprawl</li><li>One build: <b>(b) Deal Flow merge</b> — a cockpit on fractured data is just more fabricated telemetry; fix the data layer first</li><li>Morning glance: pipeline $, drafts awaiting approval, machine health, today's outreach, honest overnight agent log</li></ul></div>
+      <div class="seat"><div class="who"><span class="chip">Codex</span><span class="lin">OpenAI</span></div><h4>Finish, don't start</h4><p class="persona">persona: Stephen Cate — disciplined supervisor</p><ul><li>Consolidate: <b>ruthlessly</b> — keep only find→win→deliver→productize + infra; retire the product surface, preserve the capability</li><li>One build: <b>(b) Deal Flow merge</b> — closest to money; the Cockpit should be a thin read-only projection of it, not the next major build</li><li>Morning: pipeline · approval queue · today's top actions · delivery · honest exceptions only</li></ul></div>
+      <div class="seat"><div class="who"><span class="chip">Claude</span><span class="lin">Anthropic</span></div><h4>Offense &amp; leverage</h4><p class="persona">persona: Carl Turner — charismatic finance, growth instinct</p><ul><li>Consolidate: the revenue surface, yes — but <b>keep the multi-CLI stack</b>, it's his delivery engine not clutter</li><li>One build: <b>(a) Founder Cockpit as an ACTION QUEUE</b> — latency is the binding constraint; unsent drafts are frozen cash; the only build that changes what he does every morning <span style="color:var(--p1)">(dissent)</span></li><li>Morning: every line a clickable list, never a vanity metric</li></ul></div>
+      <div class="seat"><div class="who"><span class="chip">Claude</span><span class="lin">Anthropic</span></div><h4>Stewardship</h4><p class="persona">persona: Ruth Gresham — methodical preservationist</p><ul><li>Consolidate: the <b>nav</b> ruthlessly, <b>delete nothing</b> — dormant studios are R&amp;D soil; exile behind a catalog/manifest</li><li>One build: <b>(d) One Agent Console</b> — the only option that purely removes surface, fully reversible, and mints the agent-picker the Cockpit later reuses <span style="color:var(--p1)">(dissent)</span></li><li>Morning: drafts · deals by stage · weighted $ + won-this-week · runs needing attention · new verified leads</li></ul></div>
+    </div>
+    <div id="council2-judge">
+      <div class="judge">
+        <p class="eyebrow">Ruling of the Court · bias-aware</p>
+        <h3>Judge — the 3-way split, resolved on dependency</h3>
+        <p style="font-size:13.5px;color:var(--ink-dim);margin:0 0 14px">"The seats disagreed on sequence, not destination — evidence the record, not the arguers, is doing the work." Self-checks: majority-deference ("2-1-1 is a count, not an argument"), dashboard-theater, revenue-tunnel-vision, builder-bias.</p>
+        <div class="ruling">
+          <div class="q">Q1 · Consolidate</div><div class="a"><b>Down to 6-8 modules; the line is honesty, not activity.</b> Whatever lies or endangers comes off now; everything dormant is exiled behind a catalog manifest, never deleted. The multi-CLI delivery stack is <b>capability, not surface</b> — exempt from the count. "The nav is not where options are stored."</div>
+          <div class="q">Q2 · One build</div><div class="a"><b>(b) Deal Flow merge, first — built as an action queue with the Gmail approval gate on it, not a CRM.</b> The controlling argument is dependency: a cockpit on fractured data is just more fabricated telemetry. Its top strip becomes the interim honest cockpit and replaces the lying home page in one stroke.</div>
+          <div class="q">Q2 · Sequence</div><div class="a"><b>Deal Flow → One Agent Console → Founder Cockpit proper → Machine Shop.</b> The Console follows (it fixes maintenance cost, not the money path) and mints the agent-picker the Cockpit reuses. Machine Shop waits until the funnel consistently feeds it — unless a second machine sells first.</div>
+          <div class="q">Q3 · Morning glance</div><div class="a"><b>Five clickable action-lists, exceptions-only.</b> Drafts awaiting approval (+age) · deals in flight by stage/days/weighted-$ · new verified leads · machine status (blocked only) · overnight runs needing attention. <b>Excluded with prejudice:</b> token counts, cost graphs, any tile you can't click into an action.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap">
+    <div class="sec-h"><span class="sec-n">04</span><h2>The Roadmap</h2></div>
+    <p class="sec-lede">Both councils agreed on the destination and, after the Judges ruled, on the order. One through-line governs it: <b>honesty is the line, reversibility is the rule.</b> Every destructive step stays undoable; the fabricated numbers and the loaded gun come off first; then the app gets aimed back at the one flywheel that pays.</p>
+
+    <div class="phase">
+      <div class="phase-h"><span class="pn">0</span><h4>The Tourniquet</h4><span class="when">hours</span></div>
+      <ul>
+        <li><b>Security containment</b> — rate-limit the login, close the <code>project=".."</code> path-traversal to <code>~/.agentic-os</code>, salt + expire the session token, bind the server to the Tailscale interface only. Impact is total, the fixes are an afternoon.</li>
+        <li><b>Recover version control</b> — re-clone upstream, exile the current working tree first, keep the upstream remote for cherry-picks. Never <code>git init</code> over the history (irreversible).</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="phase-h"><span class="pn">1</span><h4>Stop the Bleeding</h4><span class="when">days</span></div>
+      <ul>
+        <li><b>Fix the Loop engine</b> — wire abort→child kill, send prompts over 32k via stdin, make <code>"false"</code> a real boolean verdict, kill the silent Ollama fallback (surface it), add the Windows Chrome path. This burns real budget on every run.</li>
+        <li><b>Kill the macOS→Windows spawn bug class</b> — route the 5 P0 offenders (python3, <code>open</code>, Chrome, HOME, netlify/claude) through the Windows-safe <code>runner.ts</code>; delete the bespoke env-building.</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="phase-h"><span class="pn">2</span><h4>Make It Honest</h4><span class="when">days</span></div>
+      <ul>
+        <li><b>Stop the two lies</b> — retire the fabricated home-page telemetry (wire the real <code>/api/activity</code> feed it already owns) and gate Jarvis's "voice is live" text off the actual connection state.</li>
+        <li><b>Resurrect or catalog the orphans</b> — add nav for <code>/ruflo</code>, <code>/goals</code>, <code>/journal</code> (two lines each), or exile them behind a manifest. Nothing leaves without a ledger entry.</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="phase-h"><span class="pn">3</span><h4>Focus — the one build</h4><span class="when">week+</span></div>
+      <ul>
+        <li><b>Deal Flow</b> — merge Leads + Deal Desk into one funnel built as an <b>action queue with the Gmail approval gate on the dashboard</b>. Its top strip becomes the honest cockpit and replaces the fake home page. This is the Judge's first move: fix the data layer, and the cockpit falls out of it.</li>
+        <li><b>One Agent Console</b> — collapse the 13 near-identical agent tabs into one chat + agent-picker. Purely subtractive, fully reversible, and it mints the picker the real Cockpit will reuse. The CLI delivery stack stays — it's capability, not surface.</li>
+      </ul>
+    </div>
+    <div class="phase">
+      <div class="phase-h"><span class="pn">4</span><h4>Compound</h4><span class="when">ongoing</span></div>
+      <ul>
+        <li><b>Founder Cockpit proper</b> — a thin projection over real Deal Flow data, reusing the agent-picker. Shows the five morning numbers below and nothing that can't be clicked into an action.</li>
+        <li><b>Machine Shop</b> — the productization tracker bridging won-deal → client machine. Last in line, unless a second machine sells first — then it jumps the queue.</li>
+        <li><b>Exile-catalog the studios</b> (Video / Music / Games / Open Design) behind a manifest; promote the unique WordPress-publish Radar pipeline to a tracked backlog item — don't destroy it, don't crown it.</li>
+      </ul>
+    </div>
+
+    <h3 style="font-size:16px;margin:34px 0 14px;font-family:var(--mono);letter-spacing:.06em;color:var(--ink-faint)">THE MORNING GLANCE · what the cockpit should show</h3>
+    <div class="tldr" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+      <div class="box c"><h4 style="color:var(--mint)">01 Drafts</h4><p>awaiting your approval, oldest first — frozen cash</p></div>
+      <div class="box c"><h4 style="color:var(--mint)">02 Deals</h4><p>in flight by stage, days-since-touch, weighted $</p></div>
+      <div class="box c"><h4 style="color:var(--mint)">03 Leads</h4><p>new &amp; verified since yesterday, ready to pitch</p></div>
+      <div class="box c"><h4 style="color:var(--mint)">04 Delivery</h4><p>client machines blocked or failing — only</p></div>
+      <div class="box c"><h4 style="color:var(--mint)">05 Runs</h4><p>overnight agent runs needing attention — honest log</p></div>
+    </div>
+    <p style="font-size:13px;color:var(--ink-faint);margin-top:14px;font-family:var(--mono)">Excluded with prejudice: token counts · cost graphs · activity charts · any tile you can't click into an action.</p>
+  </div>
+</section>
+
+<section id="thirdparty">
+  <div class="wrap">
+    <div class="sec-h"><span class="sec-n">05</span><h2>Third-Party Roadmap</h2></div>
+    <p class="sec-lede">An independent OpenAI-lineage engineer, given only the findings and none of my council's conclusions — a genuine outside opinion, including where it disagrees with me.</p>
+    <div style="border:1px solid var(--line2);border-radius:14px;padding:20px 22px;background:var(--panel);box-shadow:var(--shadow)">
+      <p class="eyebrow" style="color:var(--gold)">Outside eyes · Codex</p>
+      <ul style="margin:8px 0 0;padding-left:18px;font-size:14px;color:var(--ink-dim)">
+        <li style="margin:7px 0"><b style="color:var(--ink)">Fix first:</b> contain the RCE surface (Tailscale-bind, TLS, rate-limit, revocable sessions, route-level authz, reject traversal); make execution trustworthy (abort, tree-kill, oversized prompts, the <code>"false"</code> verdict, silent fallback) then remove the fabricated KPIs/statuses — "a control plane that can falsely report success is worse than one that reports failure"; restore recoverability + one runtime contract (git from <code>.exile</code>, route every spawn through the Windows-safe runner).</li>
+        <li style="margin:7px 0"><b style="color:var(--ink)">Build next:</b> the revenue-to-machine vertical slice — lead → verified contact → approval-gated draft → won → client machine — one durable schema, only real counts on the home screen. (Converges with my council's Deal Flow ruling.)</li>
+        <li style="margin:7px 0"><b style="color:var(--ink)">Cut:</b> freeze and exile Video/Music/Games/Open Design/Sakana/Fusion, the Local/FreeClaude duplicates, orphaned panels, dead routes, fake settings — keep recoverable, stop treating as product surface.</li>
+        <li style="margin:7px 0"><b style="color:var(--ink)">Biggest under-weighted risk:</b> <b>single-host blast radius</b> — one Windows box holds source, credentials, vault, client artifacts, and privileged agents; a bad run or disk failure could destroy operations and expose customer data at once. Recovery drills, secret isolation, and sandboxed working dirs matter more than another feature.</li>
+        <li style="margin:7px 0"><b style="color:var(--ink)">Contrarian (disagrees with my council):</b> do NOT build the One Agent Console yet — a universal UI refactor is expensive and capability-flattening; standardize the backend runner + telemetry contract, but preserve the native agent surfaces until usage proves them redundant.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="foot">
+  <div class="wrap">
+    <p>METHOD · 9 read-only audit agents (Claude Opus/Sonnet) · Codex (OpenAI) independent core critic · Hermes (local Kimi/GLM) + Codex council seats · 2 bias-aware Judges</p>
+    <p>COVERAGE · core plumbing · front page · 224 API routes · 13 agent workspaces · Hermes/knowledge · work/output modules · security · verified live on :3737</p>
+    <p>WORKING JOURNAL · _audit/2026-07-22/ — JOURNAL.md · AUDIT-1-ENGINEERING.md · AUDIT-2-EXEC.md · COUNCILS.md</p>
+  </div>
+</div>

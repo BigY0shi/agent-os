@@ -1,0 +1,196 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - link "Command Center Agentic OS · v0.2" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e8]
+        - generic [ref=e11]:
+          - generic [ref=e12]: Command Center
+          - generic [ref=e13]: Agentic OS · v0.2
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Workspace
+          - button "Customize sidebar — drag to reorder, hide items" [ref=e18]:
+            - img [ref=e19]
+        - navigation [ref=e20]:
+          - link "Mission Control" [ref=e22] [cursor=pointer]:
+            - /url: /
+            - img [ref=e24]
+            - generic [ref=e29]: Mission Control
+          - generic [ref=e30]:
+            - generic [ref=e31]: Agent Orchestration
+            - link "Paperclip" [ref=e32] [cursor=pointer]:
+              - /url: /paperclip
+              - img [ref=e34]
+              - generic [ref=e38]: Paperclip
+          - link "AI Agent Mastermind" [ref=e40] [cursor=pointer]:
+            - /url: /room
+            - img [ref=e42]
+            - generic [ref=e45]: AI Agent Mastermind
+          - link "Pipeline" [ref=e47] [cursor=pointer]:
+            - /url: /pipeline
+            - img [ref=e49]
+            - generic [ref=e53]: Pipeline
+          - link "Agent Kanban" [ref=e55] [cursor=pointer]:
+            - /url: /agent-kanban
+            - img [ref=e57]
+            - generic [ref=e62]: Agent Kanban
+          - generic [ref=e63]:
+            - generic [ref=e64]: Agents
+            - link "Claude Claude" [ref=e65] [cursor=pointer]:
+              - /url: /claude
+              - generic "Claude" [ref=e67]:
+                - img [ref=e68]
+              - generic [ref=e70]: Claude
+          - link "OpenClaw OpenClaw" [ref=e72] [cursor=pointer]:
+            - /url: /openclaw
+            - generic "OpenClaw" [ref=e74]:
+              - img [ref=e75]
+            - generic [ref=e79]: OpenClaw
+          - link "Hermes Hermes" [ref=e81] [cursor=pointer]:
+            - /url: /hermes
+            - generic "Hermes" [ref=e83]:
+              - img [ref=e84]
+            - generic [ref=e87]: Hermes
+          - link "Antigravity Antigravity" [ref=e89] [cursor=pointer]:
+            - /url: /antigravity
+            - generic "Antigravity" [ref=e91]:
+              - img [ref=e92]
+            - generic [ref=e96]: Antigravity
+          - link "Codex Codex" [ref=e98] [cursor=pointer]:
+            - /url: /codex
+            - generic "Codex" [ref=e100]:
+              - img [ref=e101]
+            - generic [ref=e109]: Codex
+          - link "Kimi Code Kimi Code" [ref=e111] [cursor=pointer]:
+            - /url: /kimi
+            - generic "Kimi Code" [ref=e113]:
+              - img [ref=e114]
+            - generic [ref=e116]: Kimi Code
+          - link "GLM 5.2 GLM 5.2" [ref=e118] [cursor=pointer]:
+            - /url: /glm
+            - generic "GLM 5.2" [ref=e120]:
+              - img [ref=e121]:
+                - generic [ref=e122]: G
+            - generic [ref=e123]: GLM 5.2
+          - link "Grok Build Grok Build" [ref=e125] [cursor=pointer]:
+            - /url: /grok
+            - generic "Grok Build" [ref=e127]:
+              - img [ref=e128]
+            - generic [ref=e130]: Grok Build
+          - link "Ollama Cloud" [ref=e132] [cursor=pointer]:
+            - /url: /ollama
+            - img [ref=e136]
+            - generic [ref=e138]: Ollama Cloud
+          - link "Free Claude Code Free Claude Code" [ref=e140] [cursor=pointer]:
+            - /url: /freeclaude
+            - generic "Free Claude Code" [ref=e142]:
+              - img [ref=e143]
+            - generic [ref=e151]: Free Claude Code
+          - link "Fusion" [ref=e153] [cursor=pointer]:
+            - /url: /fusion
+            - img [ref=e155]
+            - generic [ref=e160]: Fusion
+          - link "Sakana Fugu" [ref=e162] [cursor=pointer]:
+            - /url: /sakana
+            - img [ref=e164]
+            - generic [ref=e169]: Sakana Fugu
+          - link "Local" [ref=e171] [cursor=pointer]:
+            - /url: /local
+            - img [ref=e173]
+            - generic [ref=e176]: Local
+          - link "Local Engine" [ref=e178] [cursor=pointer]:
+            - /url: /engine
+            - img [ref=e180]
+            - generic [ref=e190]: Local Engine
+          - generic [ref=e191]:
+            - generic [ref=e192]: Self
+            - link "Loop" [ref=e193] [cursor=pointer]:
+              - /url: /loop
+              - img [ref=e195]
+              - generic [ref=e200]: Loop
+          - link "SEO" [ref=e202] [cursor=pointer]:
+            - /url: /seo
+            - img [ref=e204]
+            - generic [ref=e207]: SEO
+          - link "Leads" [ref=e209] [cursor=pointer]:
+            - /url: /leads
+            - img [ref=e211]
+            - generic [ref=e216]: Leads
+          - link "Open Design" [ref=e218] [cursor=pointer]:
+            - /url: /opendesign
+            - img [ref=e220]
+            - generic [ref=e226]: Open Design
+          - link "Video" [ref=e228] [cursor=pointer]:
+            - /url: /video
+            - img [ref=e230]
+            - generic [ref=e232]: Video
+          - link "Music" [ref=e234] [cursor=pointer]:
+            - /url: /music
+            - img [ref=e236]
+            - generic [ref=e239]: Music
+          - link "Game Studio" [ref=e241] [cursor=pointer]:
+            - /url: /games
+            - img [ref=e243]
+            - generic [ref=e245]: Game Studio
+          - link "Thumbnails" [ref=e247] [cursor=pointer]:
+            - /url: /thumbnails
+            - img [ref=e249]
+            - generic [ref=e253]: Thumbnails
+          - link "Notebook" [ref=e255] [cursor=pointer]:
+            - /url: /notebook
+            - img [ref=e257]
+            - generic [ref=e259]: Notebook
+          - link "Kanban" [ref=e261] [cursor=pointer]:
+            - /url: /kanban
+            - img [ref=e263]
+            - generic [ref=e265]: Kanban
+          - link "Memory" [ref=e267] [cursor=pointer]:
+            - /url: /memory
+            - img [ref=e269]
+            - generic [ref=e277]: Memory
+          - link "Build Guide" [ref=e279] [cursor=pointer]:
+            - /url: /guide
+            - img [ref=e281]
+            - generic [ref=e284]: Build Guide
+      - generic [ref=e285]:
+        - generic [ref=e286]: Wired
+        - generic [ref=e287]:
+          - text: claude · openclaw · hermes
+          - text: + Obsidian vault
+    - main [ref=e288]:
+      - generic [ref=e289]:
+        - generic [ref=e290]:
+          - generic [ref=e291]:
+            - generic [ref=e292]:
+              - generic [ref=e293]: I.
+              - generic [ref=e295]: Mission Control
+            - heading "Mission Control" [level=1] [ref=e296]
+            - paragraph [ref=e297]: Status of every agent, every memory, every signal.
+            - generic [ref=e298]: 09:29·Local · Studio
+          - generic [ref=e299]:
+            - button "⌘K Command palette" [ref=e300]:
+              - generic [ref=e301]: ⌘K
+              - generic [ref=e302]: Command palette
+            - generic [ref=e309]: All systems
+        - generic [ref=e311]:
+          - generic [ref=e312]:
+            - img [ref=e314]
+            - generic [ref=e316]:
+              - generic [ref=e317]: Ollama Cloud
+              - generic [ref=e318]: Hosted open models · — available · streaming
+            - button "qwen3-coder:480b" [ref=e320]:
+              - text: qwen3-coder:480b
+              - img [ref=e322]
+          - generic [ref=e324]:
+            - generic [ref=e327]:
+              - img [ref=e328]
+              - generic [ref=e331]: Chat with Ollama Cloud.
+              - generic [ref=e332]: Frontier open models, hosted — no local GPU needed. Pick a model top-right.
+            - generic [ref=e333]:
+              - textbox "Ask qwen3-coder:480b to build, fix, or explain… (⌘/Ctrl+Enter to send)" [ref=e334]:
+                - /placeholder: Ask qwen3-coder:480b to build, fix, or explain…  (⌘/Ctrl+Enter to send)
+              - button "Send" [disabled] [ref=e335]:
+                - img [ref=e336]
+                - text: Send
+  - alert [ref=e339]

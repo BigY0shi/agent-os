@@ -1,0 +1,383 @@
+- generic [ref=e4]:
+  - link "Skip to Main Content" [ref=e5] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - complementary [ref=e10]:
+        - generic [ref=e11]:
+          - button "Open YoshiCorp workspace switcher" [ref=e12]:
+            - generic [ref=e13]:
+              - generic [ref=e14]:
+                - img [ref=e15]
+                - generic [ref=e16]: "Y"
+              - generic [ref=e17]: YoshiCorp
+            - img
+          - link "Open search" [ref=e18] [cursor=pointer]:
+            - /url: /LAU/search
+            - img
+          - button "Collapse sidebar" [expanded] [ref=e19]:
+            - img
+        - navigation [ref=e20]:
+          - generic [ref=e21]:
+            - button "New Task" [ref=e22]:
+              - img [ref=e23]
+              - generic [ref=e26]: New Task
+            - link "Dashboard" [ref=e27] [cursor=pointer]:
+              - /url: /LAU/dashboard
+              - img [ref=e29]
+              - generic [ref=e34]: Dashboard
+            - link "Inbox 1" [ref=e35] [cursor=pointer]:
+              - /url: /LAU/inbox
+              - img [ref=e37]
+              - generic [ref=e41]: Inbox
+              - generic [ref=e42]: "1"
+          - generic [ref=e43]:
+            - generic [ref=e47]: Work
+            - generic [ref=e48]:
+              - link "Tasks" [ref=e49] [cursor=pointer]:
+                - /url: /LAU/issues
+                - img [ref=e51]
+                - generic [ref=e54]: Tasks
+              - link "Routines" [ref=e55] [cursor=pointer]:
+                - /url: /LAU/routines
+                - img [ref=e57]
+                - generic [ref=e62]: Routines
+              - link "Goals" [ref=e63] [cursor=pointer]:
+                - /url: /LAU/goals
+                - img [ref=e65]
+                - generic [ref=e69]: Goals
+              - link "Artifacts" [ref=e70] [cursor=pointer]:
+                - /url: /LAU/artifacts
+                - img [ref=e72]
+                - generic [ref=e76]: Artifacts
+          - generic [ref=e77]:
+            - generic [ref=e79]:
+              - button "Collapse Projects" [expanded] [ref=e80]:
+                - img [ref=e81]
+              - button "Projects section actions" [ref=e83]:
+                - generic [ref=e84]: Projects
+              - button "New project" [ref=e85]:
+                - img
+            - generic [ref=e87]:
+              - button "Onboarding Open actions for Onboarding" [ref=e89]:
+                - generic [ref=e91]:
+                  - link "Onboarding" [ref=e92] [cursor=pointer]:
+                    - /url: /LAU/projects/onboarding/issues
+                    - img [ref=e94]
+                    - generic [ref=e96]: Onboarding
+                  - button "Open actions for Onboarding":
+                    - img
+              - status [ref=e97]
+          - generic [ref=e98]:
+            - generic [ref=e100]:
+              - button "Collapse Agents" [expanded] [ref=e101]:
+                - img [ref=e102]
+              - button "Agents section actions" [ref=e104]:
+                - generic [ref=e105]: Agents
+              - button "New agent" [ref=e106]:
+                - img
+            - generic [ref=e109]:
+              - link "Alpha" [ref=e110] [cursor=pointer]:
+                - /url: /LAU/agents/alpha/dashboard
+                - img [ref=e111]
+                - generic [ref=e114]: Alpha
+              - button "Open actions for Alpha":
+                - img
+          - generic [ref=e115]:
+            - generic [ref=e119]: Company
+            - generic [ref=e120]:
+              - link "Org" [ref=e121] [cursor=pointer]:
+                - /url: /LAU/org
+                - img [ref=e123]
+                - generic [ref=e128]: Org
+              - link "Skills" [ref=e129] [cursor=pointer]:
+                - /url: /LAU/skills
+                - img [ref=e131]
+                - generic [ref=e141]: Skills
+              - link "Costs" [ref=e142] [cursor=pointer]:
+                - /url: /LAU/costs
+                - img [ref=e144]
+                - generic [ref=e146]: Costs
+              - link "Activity" [ref=e147] [cursor=pointer]:
+                - /url: /LAU/activity
+                - img [ref=e149]
+                - generic [ref=e153]: Activity
+              - link "Settings" [ref=e154] [cursor=pointer]:
+                - /url: /LAU/company/settings
+                - img [ref=e156]
+                - generic [ref=e159]: Settings
+      - button "Open account menu" [ref=e161]:
+        - generic [ref=e163]: BO
+        - generic [ref=e164]: Board
+      - separator "Resize sidebar" [ref=e165]
+    - generic [ref=e166]:
+      - navigation "breadcrumb" [ref=e170]:
+        - list [ref=e171]:
+          - listitem [ref=e172]:
+            - link "Agents" [ref=e173] [cursor=pointer]:
+              - /url: /LAU/agents
+          - listitem [ref=e174]:
+            - img [ref=e175]
+          - listitem [ref=e177]:
+            - link "Alpha" [disabled] [ref=e178]
+      - main [ref=e180]:
+        - generic [ref=e181]:
+          - generic [ref=e182]:
+            - generic [ref=e183]:
+              - button [ref=e184]:
+                - img [ref=e185]
+              - generic [ref=e188]:
+                - heading "Alpha" [level=2] [ref=e189]
+                - paragraph [ref=e190]: CEO - Chief of Staff
+            - generic [ref=e191]:
+              - button "Assign Task" [ref=e192]:
+                - img
+                - generic [ref=e193]: Assign Task
+              - button "Run Heartbeat" [ref=e194]:
+                - img
+                - generic [ref=e195]: Run Heartbeat
+              - button "Pause" [ref=e555]:
+                - img
+                - generic [ref=e556]: Pause
+              - generic [ref=e199]: idle
+              - button "Open actions for Alpha" [ref=e200]:
+                - img
+          - tablist [ref=e202]:
+            - tab "Dashboard" [selected] [ref=e203]
+            - tab "Instructions" [ref=e204]
+            - tab "Skills" [ref=e205]
+            - tab "Configuration" [ref=e206]
+            - tab "Runs" [ref=e207]
+            - tab "Budget" [ref=e208]
+          - generic [ref=e209]:
+            - generic [ref=e210]:
+              - generic [ref=e211]:
+                - heading "Latest Run" [level=3] [ref=e212]
+                - link "View details →" [ref=e213] [cursor=pointer]:
+                  - /url: /LAU/agents/alpha/runs/edb140d0-6f12-464a-baae-24fa1d193dc1
+              - 'link "failed edb140d0 Automation 2h ago Warning: Unknown toolsets: messaging, moa ⚠️ Normalized model ''anthropic/claude-sonnet-4'' to ''claude-sonnet-4'' for anthropic." [ref=e214] [cursor=pointer]':
+                - /url: /LAU/agents/alpha/runs/edb140d0-6f12-464a-baae-24fa1d193dc1
+                - generic [ref=e215]:
+                  - img [ref=e216]
+                  - generic [ref=e220]: failed
+                  - generic [ref=e221]: edb140d0
+                  - generic [ref=e222]: Automation
+                  - generic [ref=e223]: 2h ago
+                - paragraph [ref=e557]: "Warning: Unknown toolsets: messaging, moa ⚠️ Normalized model 'anthropic/claude-sonnet-4' to 'claude-sonnet-4' for anthropic."
+            - generic [ref=e227]:
+              - generic [ref=e228]:
+                - generic [ref=e229]:
+                  - heading "Run Activity" [level=3] [ref=e230]
+                  - text: Last 14 days
+                - generic [ref=e231]:
+                  - generic [ref=e232]:
+                    - 'generic "2026-06-13: 0 runs" [ref=e233]'
+                    - 'generic "2026-06-14: 0 runs" [ref=e235]'
+                    - 'generic "2026-06-15: 0 runs" [ref=e237]'
+                    - 'generic "2026-06-16: 0 runs" [ref=e239]'
+                    - 'generic "2026-06-17: 0 runs" [ref=e241]'
+                    - 'generic "2026-06-18: 0 runs" [ref=e243]'
+                    - 'generic "2026-06-19: 0 runs" [ref=e245]'
+                    - 'generic "2026-06-20: 0 runs" [ref=e247]'
+                    - 'generic "2026-06-21: 0 runs" [ref=e249]'
+                    - 'generic "2026-06-22: 0 runs" [ref=e251]'
+                    - 'generic "2026-06-23: 0 runs" [ref=e253]'
+                    - 'generic "2026-06-24: 0 runs" [ref=e255]'
+                    - 'generic "2026-06-25: 0 runs" [ref=e257]'
+                    - 'generic "2026-06-26: 19 runs" [ref=e259]'
+                  - generic [ref=e264]:
+                    - generic [ref=e265]: 6/13
+                    - generic [ref=e271]: 6/19
+                    - generic [ref=e278]: 6/26
+              - generic [ref=e279]:
+                - generic [ref=e280]:
+                  - heading "Tasks by Priority" [level=3] [ref=e281]
+                  - text: Last 14 days
+                - generic [ref=e282]:
+                  - generic [ref=e283]:
+                    - 'generic "2026-06-13: 0 issues" [ref=e284]'
+                    - 'generic "2026-06-14: 0 issues" [ref=e286]'
+                    - 'generic "2026-06-15: 0 issues" [ref=e288]'
+                    - 'generic "2026-06-16: 0 issues" [ref=e290]'
+                    - 'generic "2026-06-17: 0 issues" [ref=e292]'
+                    - 'generic "2026-06-18: 0 issues" [ref=e294]'
+                    - 'generic "2026-06-19: 0 issues" [ref=e296]'
+                    - 'generic "2026-06-20: 0 issues" [ref=e298]'
+                    - 'generic "2026-06-21: 0 issues" [ref=e300]'
+                    - 'generic "2026-06-22: 0 issues" [ref=e302]'
+                    - 'generic "2026-06-23: 0 issues" [ref=e304]'
+                    - 'generic "2026-06-24: 0 issues" [ref=e306]'
+                    - 'generic "2026-06-25: 0 issues" [ref=e308]'
+                    - 'generic "2026-06-26: 4 issues" [ref=e310]'
+                  - generic [ref=e315]:
+                    - generic [ref=e316]: 6/13
+                    - generic [ref=e322]: 6/19
+                    - generic [ref=e329]: 6/26
+                  - generic [ref=e330]:
+                    - generic [ref=e331]: Critical
+                    - generic [ref=e333]: High
+                    - generic [ref=e335]: Medium
+                    - generic [ref=e337]: Low
+              - generic [ref=e339]:
+                - generic [ref=e340]:
+                  - heading "Tasks by Status" [level=3] [ref=e341]
+                  - text: Last 14 days
+                - generic [ref=e342]:
+                  - generic [ref=e343]:
+                    - 'generic "2026-06-13: 0 issues" [ref=e344]'
+                    - 'generic "2026-06-14: 0 issues" [ref=e346]'
+                    - 'generic "2026-06-15: 0 issues" [ref=e348]'
+                    - 'generic "2026-06-16: 0 issues" [ref=e350]'
+                    - 'generic "2026-06-17: 0 issues" [ref=e352]'
+                    - 'generic "2026-06-18: 0 issues" [ref=e354]'
+                    - 'generic "2026-06-19: 0 issues" [ref=e356]'
+                    - 'generic "2026-06-20: 0 issues" [ref=e358]'
+                    - 'generic "2026-06-21: 0 issues" [ref=e360]'
+                    - 'generic "2026-06-22: 0 issues" [ref=e362]'
+                    - 'generic "2026-06-23: 0 issues" [ref=e364]'
+                    - 'generic "2026-06-24: 0 issues" [ref=e366]'
+                    - 'generic "2026-06-25: 0 issues" [ref=e368]'
+                    - 'generic "2026-06-26: 4 issues" [ref=e370]'
+                  - generic [ref=e374]:
+                    - generic [ref=e375]: 6/13
+                    - generic [ref=e381]: 6/19
+                    - generic [ref=e388]: 6/26
+                  - generic [ref=e389]:
+                    - generic [ref=e390]: In Review
+                    - generic [ref=e392]: Done
+              - generic [ref=e394]:
+                - generic [ref=e395]:
+                  - heading "Success Rate" [level=3] [ref=e396]
+                  - text: Last 14 days
+                - generic [ref=e397]:
+                  - generic [ref=e398]:
+                    - 'generic "2026-06-13: 0% (0/0)" [ref=e399]'
+                    - 'generic "2026-06-14: 0% (0/0)" [ref=e401]'
+                    - 'generic "2026-06-15: 0% (0/0)" [ref=e403]'
+                    - 'generic "2026-06-16: 0% (0/0)" [ref=e405]'
+                    - 'generic "2026-06-17: 0% (0/0)" [ref=e407]'
+                    - 'generic "2026-06-18: 0% (0/0)" [ref=e409]'
+                    - 'generic "2026-06-19: 0% (0/0)" [ref=e411]'
+                    - 'generic "2026-06-20: 0% (0/0)" [ref=e413]'
+                    - 'generic "2026-06-21: 0% (0/0)" [ref=e415]'
+                    - 'generic "2026-06-22: 0% (0/0)" [ref=e417]'
+                    - 'generic "2026-06-23: 0% (0/0)" [ref=e419]'
+                    - 'generic "2026-06-24: 0% (0/0)" [ref=e421]'
+                    - 'generic "2026-06-25: 0% (0/0)" [ref=e423]'
+                    - 'generic "2026-06-26: 47% (9/19)" [ref=e425]'
+                  - generic [ref=e427]:
+                    - generic [ref=e428]: 6/13
+                    - generic [ref=e434]: 6/19
+                    - generic [ref=e441]: 6/26
+            - generic [ref=e442]:
+              - generic [ref=e443]:
+                - heading "Recent Tasks" [level=3] [ref=e444]
+                - link "See All →" [ref=e445] [cursor=pointer]:
+                  - /url: /LAU/issues?participantAgentId=5873a930-144c-4467-8bca-0aeaf4cdc085
+              - generic [ref=e446]:
+                - link "LAU-5 C-Suite Agent \"hiring\" in review" [ref=e447] [cursor=pointer]:
+                  - /url: /LAU/issues/LAU-5
+                  - generic [ref=e449]:
+                    - generic [ref=e450]: LAU-5
+                    - generic "C-Suite Agent \"hiring\"" [ref=e451]
+                  - generic [ref=e453]: in review
+                - link "LAU-4 Draft CTO and CPO job descriptions done" [ref=e454] [cursor=pointer]:
+                  - /url: /LAU/issues/LAU-4
+                  - generic [ref=e456]:
+                    - generic [ref=e457]: LAU-4
+                    - generic "Draft CTO and CPO job descriptions" [ref=e458]
+                  - generic [ref=e460]: done
+                - link "LAU-2 Post Founding Engineer job listing on Indeed and Upwork done" [ref=e461] [cursor=pointer]:
+                  - /url: /LAU/issues/LAU-2
+                  - generic [ref=e463]:
+                    - generic [ref=e464]: LAU-2
+                    - generic "Post Founding Engineer job listing on Indeed and Upwork" [ref=e465]
+                  - generic [ref=e467]: done
+                - link "LAU-1 Hire your first engineer and create a hiring plan with job descriptions. done" [ref=e468] [cursor=pointer]:
+                  - /url: /LAU/issues/LAU-1
+                  - generic [ref=e470]:
+                    - generic [ref=e471]: LAU-1
+                    - generic "Hire your first engineer and create a hiring plan with job descriptions." [ref=e472]
+                  - generic [ref=e474]: done
+            - generic [ref=e475]:
+              - heading "Costs" [level=3] [ref=e476]
+              - generic [ref=e477]:
+                - generic [ref=e479]:
+                  - generic [ref=e480]:
+                    - generic [ref=e481]: Input tokens
+                    - text: 28.4k
+                  - generic [ref=e482]:
+                    - generic [ref=e483]: Output tokens
+                    - text: 37.7k
+                  - generic [ref=e484]:
+                    - generic [ref=e485]: Cached tokens
+                    - text: 4.6M
+                  - generic [ref=e486]:
+                    - generic [ref=e487]: Total cost
+                    - text: $0.00
+                - table [ref=e489]:
+                  - rowgroup [ref=e490]:
+                    - row "Date Run Input Output Cost" [ref=e491]:
+                      - columnheader "Date" [ref=e492]
+                      - columnheader "Run" [ref=e493]
+                      - columnheader "Input" [ref=e494]
+                      - columnheader "Output" [ref=e495]
+                      - columnheader "Cost" [ref=e496]
+                  - rowgroup [ref=e497]:
+                    - row "Jun 26, 2026 bd218bba 28.3k 5.7k -" [ref=e498]:
+                      - cell "Jun 26, 2026" [ref=e499]
+                      - cell "bd218bba" [ref=e500]
+                      - cell "28.3k" [ref=e501]
+                      - cell "5.7k" [ref=e502]
+                      - cell "-" [ref=e503]
+                    - row "Jun 26, 2026 72beb55e 17 7.0k -" [ref=e504]:
+                      - cell "Jun 26, 2026" [ref=e505]
+                      - cell "72beb55e" [ref=e506]
+                      - cell "17" [ref=e507]
+                      - cell "7.0k" [ref=e508]
+                      - cell "-" [ref=e509]
+                    - row "Jun 26, 2026 dc41c5e6 14 2.7k -" [ref=e510]:
+                      - cell "Jun 26, 2026" [ref=e511]
+                      - cell "dc41c5e6" [ref=e512]
+                      - cell "14" [ref=e513]
+                      - cell "2.7k" [ref=e514]
+                      - cell "-" [ref=e515]
+                    - row "Jun 26, 2026 cae98332 26 7.9k -" [ref=e516]:
+                      - cell "Jun 26, 2026" [ref=e517]
+                      - cell "cae98332" [ref=e518]
+                      - cell "26" [ref=e519]
+                      - cell "7.9k" [ref=e520]
+                      - cell "-" [ref=e521]
+                    - row "Jun 26, 2026 f878b715 5 834 -" [ref=e522]:
+                      - cell "Jun 26, 2026" [ref=e523]
+                      - cell "f878b715" [ref=e524]
+                      - cell "5" [ref=e525]
+                      - cell "834" [ref=e526]
+                      - cell "-" [ref=e527]
+                    - row "Jun 26, 2026 1bd66ab8 17 3.7k -" [ref=e528]:
+                      - cell "Jun 26, 2026" [ref=e529]
+                      - cell "1bd66ab8" [ref=e530]
+                      - cell "17" [ref=e531]
+                      - cell "3.7k" [ref=e532]
+                      - cell "-" [ref=e533]
+                    - row "Jun 26, 2026 52b95db7 4 345 -" [ref=e534]:
+                      - cell "Jun 26, 2026" [ref=e535]
+                      - cell "52b95db7" [ref=e536]
+                      - cell "4" [ref=e537]
+                      - cell "345" [ref=e538]
+                      - cell "-" [ref=e539]
+                    - row "Jun 26, 2026 4dd98296 7 1.6k -" [ref=e540]:
+                      - cell "Jun 26, 2026" [ref=e541]
+                      - cell "4dd98296" [ref=e542]
+                      - cell "7" [ref=e543]
+                      - cell "1.6k" [ref=e544]
+                      - cell "-" [ref=e545]
+                    - row "Jun 26, 2026 fa3d034b 22 8.0k -" [ref=e546]:
+                      - cell "Jun 26, 2026" [ref=e547]
+                      - cell "fa3d034b" [ref=e548]
+                      - cell "22" [ref=e549]
+                      - cell "8.0k" [ref=e550]
+                      - cell "-" [ref=e551]
+  - generic [ref=e552]:
+    - heading "Command Palette" [level=2] [ref=e553]
+    - paragraph [ref=e554]: Search for a command to run...
