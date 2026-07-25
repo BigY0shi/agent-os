@@ -37,6 +37,11 @@ export async function POST(req: Request) {
   // Personas mode: the client sends { agentId: "Persona Name" } (drawn earlier from
   // /api/room/personas). Re-hydrate the full record server-side — the browser never
   // holds the prompt text, and names stay stable if the roster changes mid-chat.
+  // Incognito: run the CLI agents with no user/project memory, no MCP, no session
+  // persistence, in a neutral cwd. Vault grounding is skipped too — the whole point
+  // is a clean room, so feeding the user's notes back in would defeat it.
+  const incognito = body.incognito === true;
+
   const personaByAgent: Record<string, Persona | undefined> = {};
   if (body.personas && typeof body.personas === "object") {
     for (const [id, name] of Object.entries(body.personas as Record<string, unknown>)) {
@@ -50,14 +55,16 @@ export async function POST(req: Request) {
       const send = (o: unknown) => { try { controller.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch {} };
       // Pull the user's own vault context once for the whole round + show sources.
       let ctx: { text: string; sources: { kind: string; title: string }[] } = { text: "", sources: [] };
-      try { ctx = await roomContext(message); } catch {}
+      // Skip vault grounding in incognito — injecting the user's notes would
+      // reintroduce exactly the personal context the mode exists to remove.
+      if (!incognito) { try { ctx = await roomContext(message); } catch {} }
       if (ctx.sources.length) send({ t: "context", sources: ctx.sources });
 
       for (const agent of repliers) {
         if (req.signal.aborted) break;
         send({ t: "typing", id: agent.id, name: agent.name, color: agent.color });
         let raw = "";
-        try { raw = await roomReply(agent, transcript, ctx.text, req.signal, personaByAgent[agent.id]); }
+        try { raw = await roomReply(agent, transcript, ctx.text, req.signal, personaByAgent[agent.id], incognito); }
         catch (e) { if (req.signal.aborted) break; raw = `(${agent.name} couldn't reply — ${String(e).slice(0, 80)})`; }
         if (!raw) raw = "…";
         // run any NOTE:: / PIPELINE:: actions the agent emitted

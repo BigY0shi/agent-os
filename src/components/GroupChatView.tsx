@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Square, Users, History, Plus, Trash2, Drama, X } from "lucide-react";
+import { Send, Square, Users, History, Plus, Trash2, Drama, X, Eye, EyeOff } from "lucide-react";
 import AgentAvatar, { type AgentKey } from "./AgentAvatar";
 
 interface Agent { id: string; name: string; color: string; model: string; provider: string }
@@ -26,6 +26,9 @@ export default function GroupChatView() {
   const [personas, setPersonas] = useState<Record<string, PersonaView>>({});
   const [personaLoading, setPersonaLoading] = useState(false);
   const hasPersonas = Object.keys(personas).length > 0;
+  // Incognito: agents run with no user/project memory (CLAUDE.md, rules), no MCP,
+  // no session persistence, and no vault grounding — a clean-room council.
+  const [incognito, setIncognito] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const ctrlRef = useRef<AbortController | null>(null);
   const keyRef = useRef(0);
@@ -116,6 +119,7 @@ export default function GroupChatView() {
         body: JSON.stringify({
           message, history, agents: [...present],
           personas: Object.fromEntries(Object.entries(personas).map(([id, p]) => [id, p.name])),
+          incognito,
         }), signal: ctrl.signal,
       });
       if (r.body) {
@@ -169,6 +173,20 @@ export default function GroupChatView() {
             }}
           >
             <Drama size={13} /> {personaLoading ? "Casting…" : "New chat with Personas"}
+          </button>
+          <button
+            onClick={() => setIncognito((v) => !v)}
+            title={incognito
+              ? "Incognito ON — agents run with no CLAUDE.md/rules, no MCP, no session history and no vault context. Full for Claude/Hermes/Codex; Cursor + Antigravity get a neutral working dir only."
+              : "Incognito — run the council clean-room: no user/project memory, no MCP, no vault grounding"}
+            className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-[12px]"
+            style={{
+              borderColor: incognito ? "#5eead4" : "var(--panel-border)",
+              color: incognito ? "#5eead4" : "var(--fg-dim)",
+              background: incognito ? "rgba(94,234,212,0.12)" : "transparent",
+            }}
+          >
+            {incognito ? <EyeOff size={13} /> : <Eye size={13} />} Incognito {incognito ? "ON" : "OFF"}
           </button>
           <button onClick={() => setShowHistory((s) => !s)} className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-[12px]" style={{ borderColor: showHistory ? "#a855f7" : "var(--panel-border)", color: showHistory ? "#a855f7" : "var(--fg-dim)", background: showHistory ? "rgba(168,85,247,0.1)" : "transparent" }}><History size={13} /> History{convos.length ? ` (${convos.length})` : ""}</button>
           {showHistory && (

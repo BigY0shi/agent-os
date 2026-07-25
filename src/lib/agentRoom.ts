@@ -263,10 +263,10 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
 
 // Room turn from one of the user's REAL CLI agents (their subscription, no API key) —
 // one-shot per turn. Slower than the HTTP agents, but it's genuinely that CLI talking.
-async function roomCli(id: string, sys: string, user: string): Promise<string> {
+async function roomCli(id: string, sys: string, user: string, incognito?: boolean): Promise<string> {
   const prompt = `${sys}\n\n${user}`;
   if ((LOOP_CLI_AGENTS as readonly string[]).includes(id)) {
-    return cliComplete(id, prompt, { timeoutMs: 90_000 });
+    return cliComplete(id, prompt, { timeoutMs: 90_000, incognito });
   }
   throw new Error(`No room CLI runner for ${id}`);
 }
@@ -345,6 +345,7 @@ export async function roomReply(
   context: string,
   signal?: AbortSignal,
   persona?: Persona,
+  incognito?: boolean,
 ): Promise<string> {
   const ctx = context
     ? `\n\n--- THE USER'S REAL CONTEXT (from their Obsidian vault) ---\n${context}\n--- end context ---\nGround your reply in THIS. Reference their actual business, projects, and notes. Be specific to the user — never give generic advice you could give anyone.`
@@ -356,7 +357,7 @@ export async function roomReply(
   const user = `${convo}\n\n${agent.name}:`;
   // The user's real CLI agents (cursor/pi/antigravity) — no API key.
   if (agent.provider === "cli") {
-    return roomCli(agent.id, sys, user);
+    return roomCli(agent.id, sys, user, incognito);
   }
   if (agent.provider === "ollama") {
     const model = (agent.model === "auto" || !agent.model) ? await roomTaskModel(transcript) : agent.model;

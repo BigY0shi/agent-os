@@ -2,7 +2,7 @@
 // Implements the loop-engineering cycle: a BUILDER model acts, the Fusion council
 // (panel of models + judge) verifies adversarially, and we loop until the verifier
 // passes or progress stalls. The builder never grades its own homework — Fusion does.
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { run, type AgentName } from "./runner";
@@ -21,8 +21,40 @@ export const LOOP_CLI_AGENTS = ["claude", "codex", "cursor", "pi", "hermes", "an
 // goes over stdin, which every one of these CLIs accepts.
 const ARG_PROMPT_LIMIT = 30_000;
 
-export async function cliComplete(agent: string, prompt: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<string> {
+/**
+ * INCOGNITO — run a CLI agent with no personal context: no user/project memory
+ * (CLAUDE.md, AGENTS.md, rules), no MCP servers, no session persistence, and a
+ * neutral scratch cwd so nothing project-local is discovered.
+ *
+ * Coverage differs per CLI, and this is what each one ACTUALLY supports (verified
+ * against `--help` + a live probe on 2026-07-25 — do not add flags unverified):
+ *   claude      FULL    --setting-sources "" --strict-mcp-config
+ *                       --no-session-persistence --system-prompt <generic>
+ *                       (probe: normal run quoted the user's Learned Rules; with
+ *                        these flags it reported no memory loaded)
+ *   hermes      FULL    --ignore-user-config --ignore-rules
+ *   codex       FULL    --ignore-user-config (already passed in every run)
+ *   pi          PARTIAL --system-prompt replaces its default coding prompt
+ *   cursor      CWD-ONLY no documented config/memory flag
+ *   antigravity CWD-ONLY no documented config/memory flag
+ */
+export const INCOGNITO_COVERAGE: Record<string, "full" | "partial" | "cwd-only"> = {
+  claude: "full", hermes: "full", codex: "full",
+  pi: "partial", cursor: "cwd-only", antigravity: "cwd-only",
+};
+
+// A neutral working directory so no project CLAUDE.md/AGENTS.md is discovered.
+function scratchCwd(): string {
+  const dir = path.join(os.tmpdir(), "agent-os-incognito");
+  try { mkdirSync(dir, { recursive: true }); } catch { /* fall back to tmpdir */ }
+  return dir;
+}
+
+const INCOGNITO_SYS = "You are a participant in a group conversation. Follow the instructions given in the message.";
+
+export async function cliComplete(agent: string, prompt: string, opts?: { timeoutMs?: number; signal?: AbortSignal; incognito?: boolean }): Promise<string> {
   const timeoutMs = opts?.timeoutMs ?? 240_000;
+  const incog = !!opts?.incognito;
   // The loop embeds the previous artifact in the prompt, so by iteration 2 this is
   // routinely >30k chars — stdin is the only safe channel.
   const viaStdin = prompt.length > ARG_PROMPT_LIMIT;
@@ -39,7 +71,27 @@ export async function cliComplete(agent: string, prompt: string, opts?: { timeou
     default: throw new Error(`${agent} isn't wired for Loop yet — use Claude, Codex, Cursor, Pi or Hermes.`);
   }
   if (viaStdin && input === undefined) input = prompt;
-  const res = await run(agent as AgentName, args, { timeoutMs, input, signal: opts?.signal });
+
+  // Layer the per-CLI incognito flags on top (see INCOGNITO_COVERAGE above).
+  if (incog) {
+    switch (agent) {
+      case "claude":
+        args = [...args, "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--system-prompt", INCOGNITO_SYS];
+        break;
+      case "hermes":
+        args = [...args, "--ignore-user-config", "--ignore-rules"];
+        break;
+      case "pi":
+        args = [...args, "--system-prompt", INCOGNITO_SYS];
+        break;
+      // codex already passes --ignore-user-config; cursor/antigravity get cwd isolation only.
+    }
+  }
+
+  const res = await run(agent as AgentName, args, {
+    timeoutMs, input, signal: opts?.signal,
+    ...(incog ? { cwd: scratchCwd() } : {}),
+  });
   const out = (res.stdout || "").trim();
   if (!out) throw new Error((res.stderr || `${agent} returned no output (exit ${res.code}).`).slice(-220));
   return out;
