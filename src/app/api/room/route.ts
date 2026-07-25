@@ -67,8 +67,12 @@ export async function POST(req: Request) {
         try { raw = await roomReply(agent, transcript, ctx.text, req.signal, personaByAgent[agent.id], incognito); }
         catch (e) { if (req.signal.aborted) break; raw = `(${agent.name} couldn't reply — ${String(e).slice(0, 80)})`; }
         if (!raw) raw = "…";
-        // run any NOTE:: / PIPELINE:: actions the agent emitted
-        const { clean, actions } = await executeRoomActions(raw);
+        // Run any NOTE:: / PIPELINE:: actions the agent emitted — but NEVER in
+        // incognito: a clean-room round must not write to the user's vault or
+        // pipeline, even if a model emits a directive out of habit.
+        const { clean, actions } = incognito
+          ? { clean: raw.replace(/^\s*(?:NOTE|PIPELINE)::.*$/gim, "").trim() || raw, actions: [] as never[] }
+          : await executeRoomActions(raw);
         transcript.push({ speaker: agent.name, text: clean });
         send({ t: "msg", id: agent.id, name: agent.name, color: agent.color, text: clean });
         for (const a of actions) send({ t: "action", id: agent.id, name: agent.name, color: agent.color, ...a });

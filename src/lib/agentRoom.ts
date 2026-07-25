@@ -215,6 +215,19 @@ const ROOM_SYSTEM =
   "• To ADD an idea to their project pipeline, add a final line exactly: PIPELINE:: <one-line idea>\n" +
   "Use these sparingly — only when asked to save/note/remember something or add a project/idea. Write your normal chat message first, then the directive on its own final line. Never mention this directive syntax in your visible message.";
 
+// Incognito variant: no vault, no saved actions, no reference to "the user's"
+// anything. The mode exists to generate opinions and ideas from a clean room, so
+// anything that pulls the model back toward personalisation is removed — including
+// the NOTE::/PIPELINE:: directives, which would be incoherent with no vault context.
+const ROOM_SYSTEM_INCOGNITO =
+  "You are in a fast, live group conversation with several other participants. " +
+  "Keep every message SHORT and conversational — 1 to 3 sentences, like a real chat. " +
+  "Stay fully in your own character. You can agree, disagree, build on, or tease the others by name. " +
+  "Don't repeat what someone already said. Think independently and say what you actually believe — " +
+  "this is for generating genuine opinions and ideas, not for coding tasks or personal admin. " +
+  "You have no access to anyone's files, notes or history, and you should not pretend otherwise. " +
+  "No preamble, no name prefix — just your message.";
+
 export interface RoomTurn { speaker: string; text: string; }
 
 // Generic OpenAI-compatible chat completion — works for OpenRouter, z.ai, Sakana,
@@ -352,7 +365,8 @@ export async function roomReply(
     : "";
   // Personas mode: layer a human character (Nemotron) over the agent's own identity.
   const personaLayer = persona ? `\n\n${personaPrompt(persona)}` : "";
-  const sys = `${ROOM_SYSTEM}\n\nYou are ${agent.name}. ${agent.persona}${personaLayer}${ctx}`;
+  const base = incognito ? ROOM_SYSTEM_INCOGNITO : ROOM_SYSTEM;
+  const sys = `${base}\n\nYou are ${agent.name}. ${agent.persona}${personaLayer}${ctx}`;
   const convo = transcript.slice(-14).map((t) => `${t.speaker}: ${t.text}`).join("\n");
   const user = `${convo}\n\n${agent.name}:`;
   // The user's real CLI agents (cursor/pi/antigravity) — no API key.
