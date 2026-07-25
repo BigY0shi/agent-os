@@ -199,14 +199,38 @@ async function minimaxComplete(persona: string, prompt: string, history: JarvisM
   } finally { clearTimeout(to); }
 }
 
+/**
+ * Last-resort completion over a local CLI the user actually has authed.
+ * Both hosted paths below (MiniMax OAuth, OpenRouter) are frequently unavailable
+ * on this machine, which used to make Jarvis's default "auto" mode fail outright.
+ * `claude -p` is a one-shot print completion (no agent cold-boot) on the user's
+ * own subscription — slower than a raw API call, but it works.
+ */
+async function cliFallbackComplete(persona: string, prompt: string, history: JarvisMsg[]): Promise<{ text: string; error?: string }> {
+  const convo = history.slice(-6).map((m) => `${m.role === "user" ? "Me" : "You"}: ${m.content}`).join("\n");
+  const full = `${persona}\n\n${convo ? `Recent conversation:\n${convo}\n\n` : ""}Me: ${prompt}\n\nReply in character, briefly.`;
+  try {
+    const out = await run("claude", ["-p", "--output-format", "text"], { timeoutMs: 120_000, input: full });
+    const text = (out.stdout || "").trim();
+    return text ? { text } : { text: "", error: (out.stderr || "claude CLI returned no output").slice(-200) };
+  } catch (e) {
+    return { text: "", error: String(e) };
+  }
+}
+
 // One direct completion (no Hermes agent). Prefers MiniMax (uses your connected
-// plan); falls back to OpenRouter if MiniMax is unavailable or errors.
+// plan); falls back to OpenRouter, then to the local Claude CLI so Jarvis still
+// answers when neither hosted provider is connected.
 export async function complete(persona: string, prompt: string, history: JarvisMsg[]): Promise<{ text: string; error?: string }> {
   const mm = await minimaxComplete(persona, prompt, history);
   if (mm.text) return mm;
 
   const key = readEnv("OPENROUTER_API_KEY");
-  if (!key) return { text: "", error: mm.error || "MiniMax unavailable and no OPENROUTER_API_KEY in the active Hermes profile." };
+  if (!key) {
+    const cli = await cliFallbackComplete(persona, prompt, history);
+    if (cli.text) return cli;
+    return { text: "", error: mm.error || cli.error || "No completion backend available (MiniMax, OpenRouter and the Claude CLI all failed)." };
+  }
   const messages = [{ role: "system", content: persona }, ...history.slice(-6), { role: "user", content: prompt }];
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 20_000);
@@ -221,9 +245,13 @@ export async function complete(persona: string, prompt: string, history: JarvisM
     });
     const j = await r.json();
     const text = String(j?.choices?.[0]?.message?.content ?? "").trim();
-    return text ? { text } : { text: "", error: j?.error?.message || "empty reply" };
+    if (text) return { text };
+    // OpenRouter reachable but unusable (bad key / empty reply) → local CLI.
+    const cli = await cliFallbackComplete(persona, prompt, history);
+    return cli.text ? cli : { text: "", error: j?.error?.message || cli.error || "empty reply" };
   } catch (e) {
-    return { text: "", error: String(e) };
+    const cli = await cliFallbackComplete(persona, prompt, history);
+    return cli.text ? cli : { text: "", error: String(e) };
   } finally { clearTimeout(to); }
 }
 

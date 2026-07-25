@@ -4,6 +4,33 @@ Companion docs: `_audit/2026-07-22/` (the audit + front-page repair log).
 
 ---
 
+## 2026-07-23 · Session 4 — Jarvis rewired to a stack that actually exists (DONE)
+**Goal:** get Jarvis working, per the plan: drop the dead OpenAI Realtime default → mic → speech-to-text → an LLM we have → **ElevenLabs TTS**. User confirmed ElevenLabs + hermes CLI both work.
+
+### What was broken (verified first-hand)
+- `JarvisView.tsx:645` — **Realtime defaulted ON**, and it needs an `OPENAI_API_KEY` this box doesn't have. Worse, while ON it **disabled every working path**: tap-to-talk (`coreTap` early-returns), Live, and the wake word are all `disabled={realtime}`. So the default experience was: nothing works.
+- `JarvisView.tsx:1124` — hardcoded **"Realtime voice is live below — just talk."** It reported the *toggle*, never the connection. Pure UI lie.
+- `JarvisView.tsx:768` — `speak()` hardcoded `provider: "openai"`, so TTS hit the one provider without a key, even though `/api/hermes/tts` already supports ElevenLabs (`route.ts:111`).
+- `VOICES` were OpenAI voice names (`ash`/`onyx`/`ballad`) — meaningless to ElevenLabs, whose ids are long alphanumerics.
+- `hermesJarvis.ts complete()` — the engine behind the **default "auto" mode** tried MiniMax OAuth → OpenRouter and then **gave up**. Both are unavailable here, so Jarvis's normal chat path returned an error string.
+
+### Fixes
+| Area | Change |
+|---|---|
+| Voice out | `speak()` now uses **`provider:"elevenlabs"`**; default voice = Daniel (`onwK4e9ZLuTAKqWW03F9`, British — fits the butler) |
+| Voice picker | fetches the **real ElevenLabs voice list** from `/api/video/voices` (same source the Oracle uses), falling back to the built-in default if unreachable |
+| Realtime | **defaults OFF** — so tap-to-talk / Live / wake word (browser speech-recognition, no key needed) work out of the box. Toggle still there if a key is ever added; tooltip now says it needs one |
+| Status line | no longer claims "voice is live"; defers to the Realtime panel's own state |
+| Chat engine | `complete()` gained a **local CLI fallback** (`claude -p`, one-shot, on the user's subscription) when MiniMax **and** OpenRouter are unavailable — including when OpenRouter is reachable but returns an empty/bad-key reply |
+
+**Result:** the working stack is now the default — browser STT → Jarvis (MiniMax → OpenRouter → **Claude CLI**) → **ElevenLabs** voice. No OpenAI key anywhere in the path.
+
+**Honest caveat:** the CLI fallback is a *correctness* fix, not a speed one — `claude -p` is slower than a hosted API call, so "fast" mode won't feel fast when it's on the fallback. It answers instead of erroring, which is the point. (Agent mode already used the hermes CLI and was the only path that worked before.)
+
+**Verification:** `tsc --noEmit` → 0 errors; no OpenAI voice names or `provider:"openai"` left in Jarvis. **Not runtime-tested** — needs a rebuild + a real mic session to confirm end-to-end.
+
+---
+
 ## 2026-07-23 · Session 3 — Loop engine repair (DONE, commit `be17294`)
 **Goal:** fix the autonomous Loop engine (Builder → Judge → retry). It's the feature that works unsupervised, so its bugs cost real time + tokens.
 

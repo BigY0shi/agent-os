@@ -14,11 +14,12 @@ interface Turn { id: number; who: "you" | "hermes"; text: string; working?: bool
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 
 // OpenAI gpt-4o-mini-tts voices, steered to an English butler via server instructions.
+// Fallback list used until the real ElevenLabs voices load from /api/video/voices.
+// (These were OpenAI TTS voice names; Jarvis now speaks through ElevenLabs, whose
+// ids are long alphanumerics — an unrecognised id server-side falls back to Daniel.)
+const DEFAULT_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"; // Daniel — British, suits the butler
 const VOICES = [
-  { id: "ash", label: "Ash (JARVIS · butler)" },
-  { id: "onyx", label: "Onyx (deep)" },
-  { id: "ballad", label: "Ballad (warm)" },
-  { id: "echo", label: "Echo (crisp)" },
+  { id: DEFAULT_VOICE_ID, label: "Daniel (JARVIS · British butler)" },
 ];
 
 type SR = {
@@ -642,11 +643,16 @@ export default function JarvisView() {
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [live, setLive] = useState(false);   // hands-free continuous conversation
-  const [realtime, setRealtime] = useState(true);   // OpenAI Realtime speech-to-speech mode — default ON (auto-connects)
+  // OpenAI Realtime speech-to-speech. Default OFF: it needs an OPENAI_API_KEY that
+  // isn't configured here, and while it was on it DISABLED the working paths
+  // (tap-to-talk / Live / wake word) and claimed "voice is live" regardless.
+  // The working stack is browser speech-recognition → Jarvis → ElevenLabs TTS.
+  const [realtime, setRealtime] = useState(false);
   const [wake, setWake] = useState(false);
   const [wall, setWall] = useState(false);
   const [status, setStatus] = useState("Tap the core and speak — or enable the wake word.");
-  const [voice, setVoice] = useState("ash");
+  const [voice, setVoice] = useState(DEFAULT_VOICE_ID);
+  const [voices, setVoices] = useState(VOICES);
   const [mode, setMode] = useState<"auto" | "agent">("auto");
   const [input, setInput] = useState("");
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -687,6 +693,20 @@ export default function JarvisView() {
   const setPhase = useCallback((p: Phase) => { phaseRef.current = p; setPhaseState(p); }, []);
 
   useEffect(() => { setSupported(!!getSR()); }, []);
+
+  // Real ElevenLabs voices (same source the Oracle uses). Falls back to the
+  // built-in default if ElevenLabs isn't reachable.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/video/voices", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; voices?: { voice_id: string; name: string }[] }) => {
+        if (!alive || !j?.ok || !Array.isArray(j.voices) || !j.voices.length) return;
+        setVoices(j.voices.map((v) => ({ id: v.voice_id, label: v.name })));
+      })
+      .catch(() => { /* keep the fallback list */ });
+    return () => { alive = false; };
+  }, []);
 
   // Log every turn to disk + the Obsidian vault (fire-and-forget — never block).
   function logTurn(you: string, jarvis: string, kind: string) {
@@ -765,7 +785,9 @@ export default function JarvisView() {
     try {
       const r = await fetch("/api/hermes/tts", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: "openai" }),
+        // ElevenLabs: the key that's actually configured here (the OpenAI TTS path
+        // needs an OPENAI_API_KEY this box doesn't have).
+        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: "elevenlabs" }),
       });
       const j = await r.json();
       if (j.audio && audioRef.current) {
@@ -1039,7 +1061,7 @@ export default function JarvisView() {
   const controls = (
     <div className="flex items-center gap-2 flex-wrap justify-center">
       <button onClick={() => { const n = !realtime; if (n) { if (wakeOnRef.current) stopWake(); if (liveRef.current) toggleLive(); } setRealtime(n); }}
-        title="Realtime — OpenAI speech-to-speech, fastest. Talk + type with no clicking."
+        title="Realtime — OpenAI speech-to-speech (needs OPENAI_API_KEY; off by default). The standard path below works without it."
         className="px-3 h-9 rounded-lg border text-[12px] flex items-center gap-1.5 transition"
         style={{ borderColor: realtime ? CYAN : "var(--panel-border)", color: realtime ? CYAN : "var(--fg-dim)", background: realtime ? "rgba(34,211,238,0.16)" : "transparent" }}>
         <Zap size={13} className={realtime ? "animate-pulse" : ""} /> Realtime {realtime ? "ON" : "OFF"}
@@ -1068,7 +1090,7 @@ export default function JarvisView() {
       </button>
       <select value={voice} onChange={(e) => setVoice(e.target.value)} title="Reply voice"
         className="bg-[rgba(0,0,0,0.3)] border border-[var(--panel-border)] rounded-lg px-2 h-9 text-[12px] text-[var(--fg-dim)] outline-none">
-        {VOICES.map((v) => <option key={v.id} value={v.id}>🔊 {v.label}</option>)}
+        {voices.map((v) => <option key={v.id} value={v.id}>🔊 {v.label}</option>)}
       </select>
     </div>
   );
@@ -1121,7 +1143,9 @@ export default function JarvisView() {
             <ArcReactor phaseRef={phaseRef} levelRef={levelRef} size={300} />
             <span className="absolute text-[10px] font-mono tracking-[0.3em]" style={{ color: phaseColor(phaseState), bottom: 26 }}>{phaseLabel}</span>
           </button>
-          <div className="text-[12.5px] font-mono text-center px-4 mt-1" style={{ color: CYAN }}>{realtime ? "Realtime voice is live below — just talk." : status}</div>
+          {/* Don't claim the realtime link is live — it only reports the toggle, not
+              the connection. When Realtime is on, its own panel below shows the real state. */}
+          <div className="text-[12.5px] font-mono text-center px-4 mt-1" style={{ color: CYAN }}>{realtime ? "Realtime mode — see the panel below for connection status." : status}</div>
         </div>
 
         {/* ── Boot-up sequence overlay ── */}
