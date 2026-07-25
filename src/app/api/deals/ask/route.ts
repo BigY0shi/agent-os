@@ -1,5 +1,6 @@
 import { getDeal, addAnswer } from "@/lib/upworkDesk";
 import { run } from "@/lib/runner";
+import { CLAUDE_MODEL } from "@/lib/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,9 @@ export async function POST(req: Request) {
     `QUESTION: ${question.trim()}`;
 
   try {
-    const r = await run("claude", ["-p", prompt], { timeoutMs: 120_000 });
+    // `--model` is required (a bare `claude -p` resolves a "default" alias that
+    // errors), and the prompt goes over stdin since it embeds the job description.
+    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"], { timeoutMs: 120_000, input: prompt });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }

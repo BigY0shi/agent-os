@@ -15,6 +15,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
 import { run } from "@/lib/runner";
+import { CLAUDE_MODEL } from "@/lib/config";
 import { searchNotes, searchOmi, notesModifiedOn, recentNotes, recentOmi } from "@/lib/vault";
 
 const HOME = os.homedir();
@@ -210,7 +211,9 @@ async function cliFallbackComplete(persona: string, prompt: string, history: Jar
   const convo = history.slice(-6).map((m) => `${m.role === "user" ? "Me" : "You"}: ${m.content}`).join("\n");
   const full = `${persona}\n\n${convo ? `Recent conversation:\n${convo}\n\n` : ""}Me: ${prompt}\n\nReply in character, briefly.`;
   try {
-    const out = await run("claude", ["-p", "--output-format", "text"], { timeoutMs: 120_000, input: full });
+    // `--model` is REQUIRED: without it the CLI resolves a "default" alias that
+    // errors with "There's an issue with the selected model (default)".
+    const out = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"], { timeoutMs: 120_000, input: full });
     const text = (out.stdout || "").trim();
     return text ? { text } : { text: "", error: (out.stderr || "claude CLI returned no output").slice(-200) };
   } catch (e) {
