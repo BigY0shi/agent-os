@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Square, Users, History, Plus, Trash2 } from "lucide-react";
+import { Send, Square, Users, History, Plus, Trash2, Drama, X } from "lucide-react";
 import AgentAvatar, { type AgentKey } from "./AgentAvatar";
 
 interface Agent { id: string; name: string; color: string; model: string; provider: string }
 interface Msg { key: number; who: "you" | "system" | string; name?: string; color?: string; text: string; kind?: "context" | "action" }
 interface Convo { id: string; title: string; ts: number; msgs: Msg[] }
+// Display-only view of a Nemotron persona. The full record (and the prompt text)
+// stays server-side; we hold this to render the chips and post the name back.
+interface PersonaView { name: string; label: string; occupation: string; age: number | null; location: string | null; summary: string }
 const CONVOS_KEY = "agentroom/conversations/v1";
 
 export default function GroupChatView() {
@@ -19,6 +22,10 @@ export default function GroupChatView() {
   const [typing, setTyping] = useState<{ id: string; name: string; color: string } | null>(null);
   const [convos, setConvos] = useState<Convo[]>([]);
   const [currentId, setCurrentId] = useState<string>(() => "c" + Date.now());
+  // Personas mode: agentId → the persona that agent is playing for THIS chat.
+  const [personas, setPersonas] = useState<Record<string, PersonaView>>({});
+  const [personaLoading, setPersonaLoading] = useState(false);
+  const hasPersonas = Object.keys(personas).length > 0;
   const [showHistory, setShowHistory] = useState(false);
   const ctrlRef = useRef<AbortController | null>(null);
   const keyRef = useRef(0);
@@ -62,7 +69,26 @@ export default function GroupChatView() {
     }, 900);
   }, [msgs, currentId]);
 
-  function newChat() { setMsgs([]); setCurrentId("c" + Date.now()); setShowHistory(false); }
+  function newChat() { setMsgs([]); setCurrentId("c" + Date.now()); setShowHistory(false); setPersonas({}); }
+
+  // "New chat with Personas" — draw a distinct Nemotron persona for each present
+  // agent. They keep it for the whole chat: we hold the display fields here and post
+  // the NAMES back with each message, and the server re-hydrates the full record.
+  async function newPersonaChat() {
+    setMsgs([]); setCurrentId("c" + Date.now()); setShowHistory(false);
+    setPersonaLoading(true);
+    try {
+      const ids = [...present];
+      const r = await fetch(`/api/room/personas?agents=${encodeURIComponent(ids.join(","))}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j?.ok && j.personas) {
+        setPersonas(j.personas as Record<string, PersonaView>);
+      } else {
+        setPersonas({});
+      }
+    } catch { setPersonas({}); }
+    finally { setPersonaLoading(false); }
+  }
   function loadConvo(c: Convo) { setMsgs(c.msgs); setCurrentId(c.id); setShowHistory(false); keyRef.current = Math.max(keyRef.current, ...c.msgs.map((m) => m.key), 0); }
   function deleteConvo(id: string) { setConvos((prev) => { const u = prev.filter((c) => c.id !== id); try { localStorage.setItem(CONVOS_KEY, JSON.stringify(u)); } catch {} return u; }); fetch(`/api/room/history?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {}); if (id === currentId) newChat(); }
 
@@ -85,7 +111,12 @@ export default function GroupChatView() {
     try {
       const r = await fetch("/api/room", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message, history, agents: [...present] }), signal: ctrl.signal,
+        // Personas mode sends { agentId: "Persona Name" }; the server re-hydrates the
+        // full record so the browser never carries the prompt text.
+        body: JSON.stringify({
+          message, history, agents: [...present],
+          personas: Object.fromEntries(Object.entries(personas).map(([id, p]) => [id, p.name])),
+        }), signal: ctrl.signal,
       });
       if (r.body) {
         const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
@@ -126,6 +157,19 @@ export default function GroupChatView() {
         </div>
         <div className="relative flex items-center gap-1.5 shrink-0">
           <button onClick={newChat} className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg border border-[var(--panel-border)] hover:border-[var(--panel-border-hot)] text-[12px] text-[var(--fg-dim)]"><Plus size={13} /> New chat</button>
+          <button
+            onClick={newPersonaChat}
+            disabled={personaLoading}
+            title="New chat where every agent role-plays a random real-world persona (NVIDIA Nemotron Personas)"
+            className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-full border text-[12px] disabled:opacity-60"
+            style={{
+              borderColor: hasPersonas ? "#f0abfc" : "var(--panel-border)",
+              color: hasPersonas ? "#f0abfc" : "var(--fg-dim)",
+              background: hasPersonas ? "rgba(240,171,252,0.12)" : "transparent",
+            }}
+          >
+            <Drama size={13} /> {personaLoading ? "Casting…" : "New chat with Personas"}
+          </button>
           <button onClick={() => setShowHistory((s) => !s)} className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-[12px]" style={{ borderColor: showHistory ? "#a855f7" : "var(--panel-border)", color: showHistory ? "#a855f7" : "var(--fg-dim)", background: showHistory ? "rgba(168,85,247,0.1)" : "transparent" }}><History size={13} /> History{convos.length ? ` (${convos.length})` : ""}</button>
           {showHistory && (
             <div className="absolute right-0 top-full mt-2 w-[320px] max-h-[64vh] overflow-y-auto rounded-xl border border-[var(--panel-border)] z-30 p-1.5" style={{ background: "var(--bg-panel, #14101a)", boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>
@@ -159,6 +203,31 @@ export default function GroupChatView() {
           );
         })}
       </div>
+
+      {/* Personas cast — who each agent is playing this chat */}
+      {hasPersonas && (
+        <div className="flex items-start gap-2 flex-wrap mb-3 pb-3 border-b border-[var(--panel-border)]">
+          <span className="text-[10px] uppercase tracking-widest text-[var(--fg-dimmer)] mr-1 mt-1.5" style={{ color: "#f0abfc" }}>Cast</span>
+          {agents.filter((a) => personas[a.id]).map((a) => {
+            const p = personas[a.id];
+            return (
+              <span key={a.id} title={p.summary}
+                className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full border text-[11.5px]"
+                style={{ borderColor: "rgba(240,171,252,0.4)", background: "rgba(240,171,252,0.08)" }}>
+                <AgentAvatar agent={a.id as AgentKey} size={16} />
+                <span style={{ color: a.color }}>{a.name}</span>
+                <span className="text-[var(--fg-dimmer)]">as</span>
+                <span className="text-[var(--fg)]">{p.name}</span>
+                {p.occupation && <span className="text-[var(--fg-dimmer)]">· {p.occupation}</span>}
+              </span>
+            );
+          })}
+          <button onClick={() => setPersonas({})} title="Drop the personas for this chat"
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--panel-border)] text-[11px] text-[var(--fg-dimmer)] hover:text-[var(--fg-dim)]">
+            <X size={11} /> Clear
+          </button>
+        </div>
+      )}
 
       {/* Composer — kept at the top so it's always reachable */}
       <div className="mb-3 pb-3 border-b border-[var(--panel-border)]">

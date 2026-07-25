@@ -12,6 +12,7 @@ import { AGENTIC_DIR } from "@/lib/vaultWriter";
 import { uniqueSlug, writeItem, type PipelineItem } from "@/lib/pipeline";
 import { config } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
+import { personaPrompt, type Persona } from "@/lib/personas";
 
 const HOME = os.homedir();
 // Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
@@ -338,11 +339,19 @@ export async function executeRoomActions(text: string): Promise<{ clean: string;
 
 // One agent's reply, given the transcript + the user's vault context. Cloud agents
 // fall back to the Hermes default model if their model errors — never stalls.
-export async function roomReply(agent: RoomAgent, transcript: RoomTurn[], context: string, signal?: AbortSignal): Promise<string> {
+export async function roomReply(
+  agent: RoomAgent,
+  transcript: RoomTurn[],
+  context: string,
+  signal?: AbortSignal,
+  persona?: Persona,
+): Promise<string> {
   const ctx = context
     ? `\n\n--- THE USER'S REAL CONTEXT (from their Obsidian vault) ---\n${context}\n--- end context ---\nGround your reply in THIS. Reference their actual business, projects, and notes. Be specific to the user — never give generic advice you could give anyone.`
     : "";
-  const sys = `${ROOM_SYSTEM}\n\nYou are ${agent.name}. ${agent.persona}${ctx}`;
+  // Personas mode: layer a human character (Nemotron) over the agent's own identity.
+  const personaLayer = persona ? `\n\n${personaPrompt(persona)}` : "";
+  const sys = `${ROOM_SYSTEM}\n\nYou are ${agent.name}. ${agent.persona}${personaLayer}${ctx}`;
   const convo = transcript.slice(-14).map((t) => `${t.speaker}: ${t.text}`).join("\n");
   const user = `${convo}\n\n${agent.name}:`;
   // The user's real CLI agents (cursor/pi/antigravity) — no API key.

@@ -1,5 +1,6 @@
 import { roomAgents, roomReply, roomContext, executeRoomActions, mentionedIds, getAgent, type RoomTurn } from "@/lib/agentRoom";
 import { config } from "@/lib/config";
+import { personaByName, type Persona } from "@/lib/personas";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,16 @@ export async function POST(req: Request) {
     : [];
   const transcript: RoomTurn[] = [...history, { speaker: config.userName, text: message }];
 
+  // Personas mode: the client sends { agentId: "Persona Name" } (drawn earlier from
+  // /api/room/personas). Re-hydrate the full record server-side — the browser never
+  // holds the prompt text, and names stay stable if the roster changes mid-chat.
+  const personaByAgent: Record<string, Persona | undefined> = {};
+  if (body.personas && typeof body.personas === "object") {
+    for (const [id, name] of Object.entries(body.personas as Record<string, unknown>)) {
+      if (typeof name === "string") personaByAgent[id] = personaByName(name);
+    }
+  }
+
   const stream = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder();
@@ -46,7 +57,7 @@ export async function POST(req: Request) {
         if (req.signal.aborted) break;
         send({ t: "typing", id: agent.id, name: agent.name, color: agent.color });
         let raw = "";
-        try { raw = await roomReply(agent, transcript, ctx.text, req.signal); }
+        try { raw = await roomReply(agent, transcript, ctx.text, req.signal, personaByAgent[agent.id]); }
         catch (e) { if (req.signal.aborted) break; raw = `(${agent.name} couldn't reply — ${String(e).slice(0, 80)})`; }
         if (!raw) raw = "…";
         // run any NOTE:: / PIPELINE:: actions the agent emitted
