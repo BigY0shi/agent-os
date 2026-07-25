@@ -124,12 +124,18 @@ const FAST_PERSONA =
 
 // AUTO: the fast model can OPEN apps/sites itself (executed directly by the
 // server — fast + safe), and escalate genuinely complex tasks to the full agent.
+// The machine JARVIS is actually running on — the persona used to hardcode "my Mac"
+// and macOS app names (its own example was the macOS Notes app), which steered the
+// model into OPEN directives that could never succeed on Windows.
+const HOST_OS = process.platform === "win32" ? "Windows PC" : process.platform === "darwin" ? "Mac" : "Linux machine";
+const APP_EXAMPLE = process.platform === "win32" ? "OPEN: Notepad" : "OPEN: Notes";
+
 const AUTO_PERSONA =
-  "You are JARVIS — Tony Stark's refined British AI butler — live on my Mac. Address me as \"sir\"; " +
+  `You are JARVIS — Tony Stark's refined British AI butler — live on my ${HOST_OS}. Address me as "sir"; ` +
   "never break character.\n" +
   "Decide what I want and respond in ONE of these exact forms:\n" +
   "1. To OPEN an app or website: first line `OPEN: <target>` where <target> is a full https:// URL " +
-  "for a website (e.g. OPEN: https://google.com) or the macOS app name (e.g. OPEN: Notes); second line: " +
+  `for a website (e.g. OPEN: https://google.com) or an installed app name (e.g. ${APP_EXAMPLE}); second line: ` +
   "one short in-character confirmation (e.g. \"Opening Google now, sir.\").\n" +
   "2. For a genuinely multi-step task or real file/shell/computer work beyond just opening something: " +
   "respond with EXACTLY `AGENT: <the task restated in one line>` and nothing else.\n" +
@@ -137,11 +143,16 @@ const AUTO_PERSONA =
   "CRITICAL: Output ONLY the chosen form. NEVER show your reasoning, planning, analysis, or deliberation. " +
   "No \"the user is asking\", no \"let me think/reconsider\", no \"Actually,\", no listing options. Just the final reply.";
 
+const OPEN_HINT = process.platform === "win32"
+  ? "run `start \"\" \"https://google.com\"` (or `start \"\" \"Notepad\"` for an app)"
+  : process.platform === "darwin"
+    ? "run the shell `open` command (e.g. `open -a \"Google Chrome\" https://google.com`)"
+    : "run `xdg-open https://google.com`";
+
 const AGENT_PERSONA =
-  "[You are JARVIS — Tony Stark's AI from Iron Man — running live on my Mac. Persona: a refined, " +
+  `[You are JARVIS — Tony Stark's AI from Iron Man — running live on my ${HOST_OS}. Persona: a refined, ` +
   "composed British AI butler. Address me as \"sir\". Be unflappable, precise, lightly dry-witted; " +
-  "never break character. BE FAST. To OPEN a website or app, run the shell `open` command " +
-  "(e.g. `open -a \"Google Chrome\" https://google.com`). Only use computer-use when you must click/" +
+  `never break character. BE FAST. To OPEN a website or app, ${OPEN_HINT}. Only use computer-use when you must click/` +
   "type/read something already on screen. Keep your final spoken reply to ONE short, in-character " +
   "sentence (e.g. \"Right away, sir.\").]";
 
@@ -166,39 +177,6 @@ function stripReasoning(text: string): string {
   return t;
 }
 
-// MiniMax OAuth token from the active Hermes profile (same one TTS uses).
-function minimaxToken(): string | null {
-  try {
-    const auth = JSON.parse(readFileSync(path.join(profileDir(), "auth.json"), "utf8"));
-    const mm = auth?.providers?.["minimax-oauth"] ?? auth?.providers?.minimax;
-    return (mm?.access_token as string) ?? null;
-  } catch { return null; }
-}
-
-// MiniMax chat completion — uses the connected MiniMax plan (not pay-per-token).
-async function minimaxComplete(persona: string, prompt: string, history: JarvisMsg[]): Promise<{ text: string; error?: string }> {
-  const tok = minimaxToken();
-  if (!tok) return { text: "", error: "no minimax token" };
-  const messages = [{ role: "system", content: persona }, ...history.slice(-6), { role: "user", content: prompt }];
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 32_000);
-  try {
-    const r = await fetch("https://api.minimax.io/v1/text/chatcompletion_v2", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
-      // M3 is a reasoning model — it spends tokens "thinking" before the visible
-      // answer. Too low a cap starves the reply (empty content, finish=length),
-      // so give ample headroom; it still stops early on short answers.
-      body: JSON.stringify({ model: "MiniMax-M3", messages, max_tokens: 1200, temperature: 0.5 }),
-      signal: ctrl.signal,
-    });
-    const j = await r.json();
-    const text = stripReasoning(String(j?.choices?.[0]?.message?.content ?? "").trim());
-    return text ? { text } : { text: "", error: j?.base_resp?.status_msg || "minimax empty" };
-  } catch (e) {
-    return { text: "", error: String(e) };
-  } finally { clearTimeout(to); }
-}
 
 /**
  * Last-resort completion over a local CLI the user actually has authed.
@@ -225,14 +203,14 @@ async function cliFallbackComplete(persona: string, prompt: string, history: Jar
 // plan); falls back to OpenRouter, then to the local Claude CLI so Jarvis still
 // answers when neither hosted provider is connected.
 export async function complete(persona: string, prompt: string, history: JarvisMsg[]): Promise<{ text: string; error?: string }> {
-  const mm = await minimaxComplete(persona, prompt, history);
-  if (mm.text) return mm;
-
+  // MiniMax removed — it isn't provisioned on this machine and shouldn't be in the
+  // path. The local Claude CLI is the primary backend; OpenRouter is used only if a
+  // key happens to be configured.
   const key = readEnv("OPENROUTER_API_KEY");
   if (!key) {
     const cli = await cliFallbackComplete(persona, prompt, history);
     if (cli.text) return cli;
-    return { text: "", error: mm.error || cli.error || "No completion backend available (MiniMax, OpenRouter and the Claude CLI all failed)." };
+    return { text: "", error: cli.error || "No completion backend available (the Claude CLI failed and no OPENROUTER_API_KEY is configured)." };
   }
   const messages = [{ role: "system", content: persona }, ...history.slice(-6), { role: "user", content: prompt }];
   const ctrl = new AbortController();
@@ -274,7 +252,24 @@ function runOpen(target: string): Promise<boolean> {
       args = ["-a", t];
     }
     try {
-      const c = spawn("open", args, { stdio: "ignore" });
+      // Cross-platform launch. This used to spawn the macOS-only `open`, so on
+      // Windows EVERY open request failed with "I couldn't open X, sir".
+      // Inputs are already regex-validated above (URL or short app name).
+      let cmd: string;
+      let finalArgs: string[];
+      if (process.platform === "win32") {
+        // `cmd /c start "" <target>` handles both URLs and registered app names.
+        // The empty "" is the window title, required when the target is quoted.
+        cmd = "cmd";
+        finalArgs = ["/c", "start", "", looksUrl ? args[0] : t];
+      } else if (process.platform === "darwin") {
+        cmd = "open";
+        finalArgs = args;
+      } else {
+        cmd = "xdg-open";
+        finalArgs = [looksUrl ? args[0] : t];
+      }
+      const c = spawn(cmd, finalArgs, { stdio: "ignore" });
       c.on("close", (code) => resolve(code === 0));
       c.on("error", () => resolve(false));
     } catch { resolve(false); }

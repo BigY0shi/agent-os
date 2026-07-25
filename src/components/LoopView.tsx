@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RotateCw, Square, Check, X, Loader2, Target, FlaskConical, Eye, Code2, ExternalLink, Download, FolderOpen, RefreshCw } from "lucide-react";
 import { useInstalledAgents } from "./AgentPicker";
+import { WORKERS, JUDGES, DEFAULT_WORKER, DEFAULT_JUDGE } from "@/lib/loopModels";
 
 // CLI agents wired into the loop engine (cli:<id>) — see lib/loopEngine.ts LOOP_CLI_AGENTS.
 const LOOP_CLI = ["claude", "codex", "cursor", "pi", "hermes"];
@@ -28,20 +29,8 @@ function extractHtml(text: string): string | null {
 }
 
 const ACCENT = "#2dd4bf";
-const WORKERS = [
-  { id: "nex-agi/nex-n2-pro:free", label: "N2 ✦ · free (OpenRouter)" },
-  { id: "nous:stepfun/step-3.7-flash:free", label: "Step Flash ✦ · free (Nous Portal)" },
-  { id: "z-ai/glm-5.2", label: "GLM 5.2 · cheap workhorse" },
-  { id: "anthropic/claude-opus-4.8", label: "Claude Opus 4.8 · premium" },
-  { id: "moonshotai/kimi-k2.7", label: "Kimi K2.7 · fast" },
-];
-const JUDGES = [
-  { id: "nex-agi/nex-n2-pro:free", label: "N2 ✦ · free", free: true },
-  { id: "local", label: "Local · free, offline", free: true },
-  { id: "z-ai/glm-5.2", label: "GLM 5.2 · cheap", free: false },
-  { id: "openrouter/fusion", label: "Fusion council · premium (paid)", free: false },
-];
-const DEFAULT_JUDGE = "nex-agi/nex-n2-pro:free";
+// Shared with the server engine — these used to be duplicated here and had drifted
+// (offering models the engine doesn't support, defaulting to key-gated ones).
 const CYCLE = ["Check state", "Decide", "Act", "Gather feedback", "Verify / terminate"];
 
 interface Iter { n: number; steps: string[]; detail: string; verdict?: { pass: boolean; score: number; issues: string[]; summary: string }; error?: string }
@@ -50,7 +39,7 @@ interface Build { slug: string; file: string; name: string; bytes: number; mtime
 export default function LoopView() {
   const [goal, setGoal] = useState("");
   const [artifact, setArtifact] = useState("");
-  const [worker, setWorker] = useState(WORKERS[0].id);
+  const [worker, setWorker] = useState(DEFAULT_WORKER);
   const [judge, setJudge] = useState(DEFAULT_JUDGE);
   const [view, setView] = useState<"preview" | "code">("preview");
   const [maxIters, setMaxIters] = useState(4);
@@ -74,7 +63,7 @@ export default function LoopView() {
   useEffect(() => {
     fetch("/api/loop/nous-models").then((r) => r.json()).then((d) => {
       setNous({ loggedIn: !!d.loggedIn, models: Array.isArray(d.models) ? d.models : [] });
-      // Builder defaults to MiniMax M3 (Hermes OAuth, reliable) — see WORKERS[0]. Only
+      // Builder defaults to the Claude CLI (DEFAULT_WORKER) — no key needed. Only
       // Portal ":free"-tier models run without credits, so we never auto-pick models[0] (paid).
     }).catch(() => { /* offline */ });
   }, []);

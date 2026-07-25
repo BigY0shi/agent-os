@@ -321,20 +321,6 @@ export async function fusionVerdict(goal: string, artifact: string, key: string,
   return verdict(goal, artifact, "openrouter/fusion", { orKey: key, nousToken: null }, signal);
 }
 
-// Builder model menu for the UI. MiniMax M3 (Hermes OAuth) is the reliable default.
-export const WORKERS = [
-  { id: "minimax:MiniMax-M3", label: "MiniMax M3 ✦ — your Hermes OAuth (reliable)" },
-  { id: "nex-agi/nex-n2-pro:free", label: "N2 ✦ — free (OpenRouter, throttles)" },
-  { id: "nous:stepfun/step-3.7-flash:free", label: "Step Flash ✦ — free (Nous Portal)" },
-  { id: "z-ai/glm-5.2", label: "GLM 5.2 — cheap workhorse" },
-  { id: "anthropic/claude-opus-4.8", label: "Claude Opus 4.8 — premium builder" },
-];
-
-// Judge (verifier) menu for the UI. The loop defaults to MiniMax M3 (reliable, on the sub).
-export const JUDGES = [
-  { id: "minimax:MiniMax-M3", label: "MiniMax M3 ✦ — your Hermes OAuth (reliable)", free: true },
-  { id: "nex-agi/nex-n2-pro:free", label: "N2 ✦ — free (OpenRouter)", free: true },
-  { id: "local", label: "Local — free, offline (Ollama on this machine)", free: true },
-  { id: "openrouter/fusion", label: "Fusion council — premium (paid)", free: false },
-];
-export const DEFAULT_JUDGE = "minimax:MiniMax-M3";
+// The Builder/Judge menus live in ./loopModels (no node: imports) so the client UI
+// can share the exact same lists instead of hand-duplicating them.
+export { WORKERS, JUDGES, DEFAULT_WORKER, DEFAULT_JUDGE } from "./loopModels";
