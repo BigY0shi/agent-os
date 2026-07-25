@@ -14,7 +14,7 @@ const OR = "https://openrouter.ai/api/v1/chat/completions";
 // agent one-shot (no API key) — print mode → stdout. The HTML extractor (builder) and
 // JSON verdict parser (judge) both tolerate any preamble, so noisy CLI output still works.
 // Only agents with an established non-interactive invocation are wired.
-export const LOOP_CLI_AGENTS = ["claude", "codex", "cursor", "pi", "hermes"] as const;
+export const LOOP_CLI_AGENTS = ["claude", "codex", "cursor", "pi", "hermes", "antigravity"] as const;
 
 // Prompts longer than this can't ride on the command line (the OS/arg limit), and
 // silently dropping them made the loop spin with no instructions. Anything bigger
@@ -34,6 +34,8 @@ export async function cliComplete(agent: string, prompt: string, opts?: { timeou
     case "cursor":  args = viaStdin ? ["-p", "--output-format", "text", "--force", "--trust"] : ["-p", prompt, "--output-format", "text", "--force", "--trust"]; break;
     case "pi":      args = viaStdin ? ["-p", "--mode", "text", "--no-session", "--no-context-files"] : ["-p", prompt, "--mode", "text", "--no-session", "--no-context-files"]; break;
     case "hermes":  args = viaStdin ? ["-z", "-", "--yolo", "--accept-hooks"] : ["-z", prompt, "--yolo", "--accept-hooks"]; break;
+    // Antigravity (Google lineage) — native agy.exe, verified one-shot: `agy -p "<prompt>"`.
+    case "antigravity": args = ["-p", prompt]; break;
     default: throw new Error(`${agent} isn't wired for Loop yet — use Claude, Codex, Cursor, Pi or Hermes.`);
   }
   if (viaStdin && input === undefined) input = prompt;

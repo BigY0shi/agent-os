@@ -4,6 +4,37 @@ Companion docs: `_audit/2026-07-22/` (the audit + front-page repair log).
 
 ---
 
+## 2026-07-25 · Staleness sweep — the same 4 bug classes, repo-wide
+Ran a grep pass for every failure mode found in Jarvis/Loop/Deal Desk, to see what else is stale before the rebuild. **Everything below is the SAME four classes repeated** — this is a macOS-authored codebase running on Windows, and each module that was never exercised here still carries the original assumptions.
+
+### CLASS A — macOS-only commands/paths (breaks outright on Windows)
+| Where | What | Verdict |
+|---|---|---|
+| `api/hermes/realtime/open/route.ts:25` | spawns macOS `open` | **BROKEN** — identical to the Jarvis bug just fixed (this is Realtime voice's "open a site" tool) |
+| `api/seo/research/route.ts:18` | `const PY = "/usr/bin/python3"` absolute | **BROKEN** — GSC keyword research can't run |
+| `api/thumbnails/generate/route.ts:86` | `exec("python3")` | **LIKELY BROKEN** — Windows has `python`/`py`, not `python3` |
+| `lib/pipeline.ts:442` | `spawn("python3", …)` | **LIKELY BROKEN** |
+| `lib/outreach.ts:30` | `~/.browser-use-env/bin/python3` (POSIX venv layout) | **LIKELY BROKEN** — Windows venvs use `Scripts/python.exe` |
+| `lib/hermesPhone.ts:70,92,111,117,120` | `pgrep`/`pkill`/`brew install` | **BROKEN** (module is unmounted, so latent) |
+| `api/openclaw/studio/stt/route.ts:19` | ffmpeg only at Homebrew paths, bare `ffmpeg` fallback | degraded — works only if ffmpeg is on PATH |
+| **PATH corruption** — `codex/goals:58`, `hermes/goals:67`, `opendesign/control:17`, `seo/deploy:18`, `thumbnails/generate:48`, `video/hyperframes/render:62`, `claudeArtifacts.ts:19` | colon-join Homebrew dirs onto `process.env.PATH` | **BROKEN on Windows** — `;`-delimited PATH gets a bogus POSIX blob glued onto the first entry (the exact anti-pattern `runner.ts` documents avoiding) |
+
+### CLASS B — hardcoded local model that isn't pulled
+`freeclaude/build:32`, `video/auto/script:82`, `lib/localModel.ts:8`, `lib/localOllama.ts:6` all default to `xentriom/gemma-4-12B-coder-…`, which **isn't installed** → Ollama 404s. Same bug fixed in `loopEngine` (now queries `/api/tags`). Affects FreeClaude build, Video script-gen, and anything via `localModel`/`localOllama`. Also `local-hermes/run` mentions `llama3.1:8b` while its UI says "Gemma-4 12B Coder".
+
+### CLASS C — MiniMax wired in (user does NOT have it; "shouldn't be wired into anything")
+Still referenced in **20 files**. Highest-impact: **`lib/agentRoom.ts`** — that's the **Agent Council chat the user explicitly wants kept**. Also `api/hermes/talk` (Talk tab), `HermesStudio`, `VideoDirector/Studio/Settings`, `PipelineSettings`, `ConfigMenu`, `TokenUsage`, `loop/run`.
+
+### CLASS D — macOS copy (the "system lies about itself" theme)
+"your Mac" / "on my Mac" in `AgentKanban` (×3), `LocalHermesEngine` (×2), `LocalView` (×2), `JarvisView:817-818` ("Building it on your Mac, sir…"), plus `realtime/session` tool descriptions telling the model to open "macOS app name (e.g. 'Notes', 'Safari')". Cosmetic, but it's what steered Jarvis into the dead path.
+
+### CLASS E — OpenRouter-only, no fallback (key invalid here)
+`fusion/chat` (P0 dead), `freeclaude/build` (N2 engine), `lib/agentRoom.ts`, `lib/leads.ts`. `hermesJarvis` + `loopEngine` now have CLI fallbacks; these don't.
+
+**Takeaway:** nothing new in kind — the audit's "macOS→Windows bug class" is broader than the 5 P0s it named. Fixing it module-by-module is whack-a-mole; the durable fix is a shared cross-platform helper set (`launchTarget()`, `pythonBin()`, `augmentPath()`, `resolveLocalModel()`) that these call instead of each re-implementing POSIX assumptions.
+
+---
+
 ## 2026-07-23 · Session 4 — Jarvis rewired to a stack that actually exists (DONE)
 **Goal:** get Jarvis working, per the plan: drop the dead OpenAI Realtime default → mic → speech-to-text → an LLM we have → **ElevenLabs TTS**. User confirmed ElevenLabs + hermes CLI both work.
 

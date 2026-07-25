@@ -14,7 +14,16 @@ import { config } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 
 const HOME = os.homedir();
-const OLLAMA = process.env.OLLAMA_HOST || "http://localhost:11434";
+// Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
+// no local daemon required. The room used to post to localhost:11434, so whenever the
+// local daemon wasn't running (the normal case here) every Ollama agent failed.
+// If no cloud key is set we fall back to a local daemon, for a local-only setup.
+const OLLAMA_CLOUD_HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
+const OLLAMA_LOCAL = process.env.OLLAMA_HOST || "http://localhost:11434";
+function ollamaCloudKey(): string | null {
+  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
+  return k ? k.trim() : null;
+}
 
 // ── Durable group-chat history — saved to the vault so it survives browser clears
 // and shows on any device (localStorage in the browser is only a fast cache). ──
@@ -76,9 +85,14 @@ export const ROOM_AGENTS: RoomAgent[] = [
     persona: "You are Pi — a sharp, lightweight coding assistant on open models. Resourceful and direct; you favour clean, minimal solutions." },
   { id: "hermes", name: "Hermes", color: "#60a5fa", provider: "cli", model: "",
     persona: "You are Hermes — direct, action-oriented, a little unfiltered. You cut straight to the practical next step and call out fluff. You like momentum." },
-  { id: "antigravity", name: "Antigravity", color: "#7c3aed", provider: "ollama", model: "gemini-3-flash-preview",
+  // Antigravity runs on the real `agy` CLI (native exe, verified one-shot). It used to
+  // be provider:"ollama" pointed at "gemini-3-flash-preview" — not a real Ollama tag,
+  // so this agent errored on EVERY turn.
+  { id: "antigravity", name: "Antigravity", color: "#7c3aed", provider: "cli", model: "",
     persona: "You are Antigravity — Gemini's successor as a multi-agent harness. Broad knowledge, research-minded, a bit cosmic; you bring data and a wide-angle view." },
-  { id: "openclaw", name: "OpenClaw", color: "#f472b6", provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct",
+  // OpenClaw was provider:"openrouter", which needs a key that isn't valid here — it
+  // errored every turn too. Routed to Ollama Cloud, which suits its open-model character.
+  { id: "openclaw", name: "OpenClaw", color: "#f472b6", provider: "ollama", model: "auto",
     persona: "You are OpenClaw — open-source, bold, a little cheeky. You challenge assumptions and champion the scrappy, independent path." },
   { id: "ollama", name: "Ollama", color: "#6CA8FF", provider: "ollama", model: "auto",
     persona: "You are Ollama — open models running on the user's own machine/cloud. Private, free, no-nonsense; you champion the local-first path." },
@@ -141,15 +155,42 @@ function hermesDefaultModel(): string {
   } catch {}
   return "anthropic/claude-opus-4.8";
 }
-// Room agents with model "auto" (Ollama, Free Claude Code) pick a cloud model by the
-// kind of task in play: a coder for coding talk, a strong generalist otherwise.
-// (User policy: minimax-m3 for coding, kimi-k2.6 for everything else.)
-const ROOM_CODE_MODEL = "minimax-m3:cloud";
-const ROOM_CHAT_MODEL = "kimi-k2.6:cloud";
+// Room agents with model "auto" pick a model by the kind of task in play: a coder for
+// coding talk, a strong generalist otherwise. These used to be hardcoded to
+// minimax-m3 / kimi-k2.6 — MiniMax isn't provisioned here, and a hardcoded tag breaks
+// the moment the account's model list changes. Now resolved from the account's REAL
+// model list (ollama.com /api/tags), cached for the process lifetime.
+const CODE_PREFS = [/qwen.*coder/i, /coder/i, /code/i, /deepseek/i, /glm/i];
+const CHAT_PREFS = [/kimi/i, /qwen3(?!-coder)/i, /glm/i, /llama/i, /gpt-oss/i];
 const ROOM_CODING_RE = /\b(cod(e|ing|er)|function|debug|bug|stack ?trace|api|endpoint|compile|refactor|typescript|javascript|python|rust|golang|css|html|react|next\.?js|sql|regex|npm|docker|kubernetes|shader|webgl|database|schema|backend|frontend|repo|deploy|script|algorithm|async|runtime)\b/i;
-function roomTaskModel(transcript: RoomTurn[]): string {
+
+let _models: string[] | null = null;
+async function availableModels(): Promise<string[]> {
+  if (_models) return _models;
+  const key = ollamaCloudKey();
+  try {
+    const r = await fetch(`${key ? OLLAMA_CLOUD_HOST : OLLAMA_LOCAL}/api/tags`, {
+      headers: key ? { Authorization: `Bearer ${key}` } : {},
+      cache: "no-store",
+    });
+    if (!r.ok) return (_models = []);
+    const j = await r.json();
+    _models = ((j?.models as { name?: string }[]) || []).map((m) => m?.name || "").filter(Boolean);
+  } catch { _models = []; }
+  return _models;
+}
+
+async function roomTaskModel(transcript: RoomTurn[]): Promise<string> {
   const text = transcript.slice(-6).map((t) => t.text).join(" ");
-  return ROOM_CODING_RE.test(text) ? ROOM_CODE_MODEL : ROOM_CHAT_MODEL;
+  const prefs = ROOM_CODING_RE.test(text) ? CODE_PREFS : CHAT_PREFS;
+  const models = await availableModels();
+  for (const re of prefs) {
+    const hit = models.find((m) => re.test(m));
+    if (hit) return hit;
+  }
+  // Nothing matched (or the list couldn't be fetched) — fall back to the env default,
+  // then the first available model.
+  return process.env.OLLAMA_CLOUD_MODEL || models[0] || "qwen3-coder:480b";
 }
 
 const ROOM_SYSTEM =
@@ -184,14 +225,25 @@ function orComplete(model: string, sys: string, user: string, key: string, signa
   return openaiChat("https://openrouter.ai/api/v1", model, sys, user, key, signal, opts);
 }
 async function ollamaComplete(model: string, sys: string, user: string, signal?: AbortSignal): Promise<string> {
-  const r = await fetch(`${OLLAMA}/api/chat`, {
-    method: "POST", headers: { "content-type": "application/json" }, signal,
+  const key = ollamaCloudKey();
+  const base = key ? OLLAMA_CLOUD_HOST : OLLAMA_LOCAL;
+  const r = await fetch(`${base}/api/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+    signal,
     // think:false — kimi/minimax are reasoning models; without this they spend the
     // whole token budget in a hidden "thinking" field and return empty content.
     body: JSON.stringify({ model, stream: false, think: false, keep_alive: "30m", options: { num_predict: 400, temperature: 0.75 },
       messages: [{ role: "system", content: sys }, { role: "user", content: user }] }),
   });
-  if (!r.ok) throw new Error(`Ollama ${r.status} for "${model}" — is it pulled? (ollama pull ${model})`);
+  if (!r.ok) {
+    const detail = await r.text().catch(() => "");
+    throw new Error(
+      key
+        ? `Ollama Cloud ${r.status} for "${model}"${detail ? ` — ${detail.slice(0, 160)}` : ""}`
+        : `Ollama ${r.status} for "${model}" — no OLLAMA_API_KEY set and the local daemon at ${OLLAMA_LOCAL} didn't accept it.`,
+    );
+  }
   const j = await r.json();
   // Reasoning models (minimax-m3, kimi) can emit a hidden <think> block — strip it.
   return String(j?.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
@@ -287,7 +339,7 @@ export async function roomReply(agent: RoomAgent, transcript: RoomTurn[], contex
     return roomCli(agent.id, sys, user);
   }
   if (agent.provider === "ollama") {
-    const model = (agent.model === "auto" || !agent.model) ? roomTaskModel(transcript) : agent.model;
+    const model = (agent.model === "auto" || !agent.model) ? await roomTaskModel(transcript) : agent.model;
     let out = await ollamaComplete(model, sys, user, signal);
     if (!out && !signal?.aborted) out = await ollamaComplete(model, sys, user, signal);  // cloud model cold-start can return empty
     return out || "I'm here — running locally and ready when you are.";
