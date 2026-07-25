@@ -18,6 +18,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { pythonBin, venvPython } from "@/lib/platform";
 
 const HOME = os.homedir();
 export const OUTREACH_DIR = path.join(HOME, ".agentic-os", "outreach");
@@ -26,8 +27,14 @@ export const STATE_FILE = path.join(OUTREACH_DIR, "state.json");
 // Working email backend (the proven path).
 export const GMAIL_PY =
   process.env.AGENTIC_OS_GMAIL_PY || path.join(HOME, ".gmail-mcp", "gmail_cli.py");
+// The venv layout differs per OS (POSIX: bin/python3 · Windows: Scripts/python.exe),
+// so hardcoding the POSIX path meant this never resolved on Windows. Prefer the venv
+// if it exists, else any system interpreter.
 export const PY_BIN =
-  process.env.AGENTIC_OS_PY_BIN || path.join(HOME, ".browser-use-env", "bin", "python3");
+  process.env.AGENTIC_OS_PY_BIN
+  || venvPython(path.join(HOME, ".browser-use-env"))
+  || pythonBin()
+  || path.join(HOME, ".browser-use-env", "bin", "python3");
 export const VALIDATOR_PY =
   process.env.AGENTIC_OS_VALIDATOR_PY || path.join(HOME, "backlink-outreach", "email_validator.py");
 

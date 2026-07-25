@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { FCC_SCRATCH_ROOT, ensureProject } from "@/lib/freeClaudeWorkspace";
 import { logTokens, normalizeUsage } from "@/lib/tokenLog";
+import { resolveModel } from "@/lib/localModel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 const OLLAMA = process.env.OLLAMA_HOST || "http://localhost:11434";
 const N2_MODEL = "nex-agi/nex-n2-pro:free";
 
-function localModel(): string {
+async function localModel(): Promise<string> {
   try {
     const env = readFileSync(path.join(os.homedir(), ".fcc", ".env"), "utf8");
     const line = env.split("\n").find((l) => l.startsWith("MODEL="));
@@ -29,7 +30,10 @@ function localModel(): string {
       if (v.startsWith("ollama/")) return v.slice("ollama/".length);
     }
   } catch { /* ignore */ }
-  return "xentriom/gemma-4-12B-coder-fable5-composer2.5-v1";
+  // No MODEL= pin: use a model that's actually installed rather than a fixed tag
+  // (the old hardcoded default isn't present on every machine, so the build 404'd).
+  const { model } = await resolveModel();
+  return model;
 }
 
 // OpenRouter key for the N2 engine — read from ~/.hermes/.env (never committed,
@@ -161,7 +165,7 @@ export async function POST(req: Request) {
             }
           }
         } else {
-          const model = localModel();
+          const model = await localModel();
           const r = await fetch(`${OLLAMA}/api/chat`, {
             method: "POST",
             headers: { "content-type": "application/json" },

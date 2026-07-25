@@ -3,10 +3,11 @@
 
 const PS = "http://127.0.0.1:11434/api/ps";
 const CHAT = "http://127.0.0.1:11434/api/chat";
-const FALLBACK = "xentriom/gemma-4-12B-coder-fable5-composer2.5-v1";
+const TAGS = "http://127.0.0.1:11434/api/tags";
 
-// Use whatever model is ALREADY warm (so we don't load a second one and swap the Mac).
-// Falls back to a known builder if nothing is loaded.
+// Use whatever model is ALREADY warm (so we don't load a second one and thrash RAM).
+// If nothing is warm, pick a model that's actually INSTALLED — this used to return a
+// hardcoded tag that isn't present on every machine, so the follow-up chat call 404'd.
 export async function resolveModel(): Promise<string> {
   if (process.env.LOCAL_MODEL) return process.env.LOCAL_MODEL;
   try {
@@ -17,7 +18,15 @@ export async function resolveModel(): Promise<string> {
       if (loaded.length) return loaded[0];
     }
   } catch { /* ollama down */ }
-  return FALLBACK;
+  try {
+    const r = await fetch(TAGS, { cache: "no-store" });
+    if (r.ok) {
+      const j = await r.json();
+      const names: string[] = ((j?.models as { name?: string }[]) || []).map((m) => m?.name || "").filter(Boolean);
+      if (names.length) return names.find((m) => /coder|code|glm|kimi|qwen|llama/i.test(m)) || names[0];
+    }
+  } catch { /* ollama down */ }
+  throw new Error("No local Ollama model available — is `ollama serve` running with a model pulled?");
 }
 
 interface ChatOpts { format?: "json"; temperature?: number; numCtx?: number }

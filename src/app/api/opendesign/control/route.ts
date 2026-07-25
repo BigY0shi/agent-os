@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { readSettings } from "@/lib/settings";
+import { augmentPath, POSIX_TOOL_DIRS } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,12 +15,14 @@ export const dynamic = "force-dynamic";
 const HOME = os.homedir();
 const MAC_START = path.join(HOME, "open-design", "od-host-start.sh");
 const MAC_STOP = path.join(HOME, "open-design", "od-host-stop.sh");
-const PATH_EXTRA = ["/opt/homebrew/bin", "/usr/local/bin", `${HOME}/.local/bin`].join(":");
+// Platform-correct PATH extension (see lib/platform). The old ":"-join corrupted
+// Windows' ";"-delimited PATH.
+const AUGMENTED_PATH = augmentPath(POSIX_TOOL_DIRS);
 
 // Run a command string through the OS default shell (cmd.exe on Windows, /bin/sh on posix).
 function runCmd(cmd: string, cwd: string | undefined, timeoutMs: number): Promise<{ ok: boolean; out: string }> {
   return new Promise((resolve) => {
-    exec(cmd, { timeout: timeoutMs, cwd: cwd || undefined, env: { ...process.env, PATH: `${PATH_EXTRA}:${process.env.PATH ?? ""}` } },
+    exec(cmd, { timeout: timeoutMs, cwd: cwd || undefined, env: { ...process.env, PATH: AUGMENTED_PATH } },
       (err, stdout, stderr) => resolve({ ok: !err, out: (stdout + stderr).trim().slice(-700) }));
   });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import { CLAUDE_MODEL, config } from "@/lib/config";
+import { resolveModel } from "@/lib/localModel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,7 +80,9 @@ async function authorWithOllama(system: string, topic: string): Promise<string |
     const r = await fetch("http://127.0.0.1:11434/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: process.env.LOCAL_MODEL || "xentriom/gemma-4-12B-coder-fable5-composer2.5-v1",
+        // Resolved from what Ollama actually has — the old hardcoded tag isn't
+        // installed on every machine, so this silently 404'd and returned null.
+        model: process.env.LOCAL_MODEL || (await resolveModel()).model,
         messages: [{ role: "system", content: system }, { role: "user", content: topic }],
         stream: false, format: "json", keep_alive: "30m",
       }),

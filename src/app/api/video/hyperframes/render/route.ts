@@ -5,6 +5,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { config } from "@/lib/config";
+import { augmentPath, POSIX_TOOL_DIRS } from "@/lib/platform";
 import {
   createRenderJob, updateRenderJob, nextRenderOutputPath, VIDEO_ROOT,
 } from "@/lib/videoProjects";
@@ -59,7 +60,7 @@ export async function POST(req: Request) {
     cwd,
     env: {
       ...process.env,
-      PATH: (process.env.PATH ?? "") + ":/opt/homebrew/bin:/usr/local/bin",
+      PATH: augmentPath(POSIX_TOOL_DIRS),
       HOME: process.env.HOME ?? "",
       NO_COLOR: "1",
     },

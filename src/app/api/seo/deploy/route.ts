@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { getSites } from "@/lib/seoPipeline";
 import { startDeploy, finishDeploy } from "@/lib/seoHistory";
+import { augmentPath, POSIX_TOOL_DIRS } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,16 +15,12 @@ export const dynamic = "force-dynamic";
 // makes a bare `spawn("netlify", …)` / `spawn("npx", …)` fail instantly with ENOENT — the
 // real reason "Agent OS SEO deploy" can silently fail. Prepend the common bin dirs so the
 // build + deploy commands always resolve, regardless of how the server was started.
-const DEPLOY_PATH = [
-  "/opt/homebrew/bin",
-  "/opt/homebrew/sbin",
-  "/usr/local/bin",
-  path.join(os.homedir(), ".local/bin"),
-  path.join(os.homedir(), ".npm-global/bin"),
-  process.env.PATH || "",
-]
-  .filter(Boolean)
-  .join(":");
+// augmentPath joins with the platform's own separator and skips POSIX dirs on Windows
+// (the old ":"-join corrupted the first entry of a ";"-delimited Windows PATH).
+const DEPLOY_PATH = augmentPath([
+  ...POSIX_TOOL_DIRS,
+  path.join(os.homedir(), ".npm-global", "bin"),
+]);
 
 // Build + deploy a single site to Netlify, streaming each step's output back as NDJSON events.
 //   1. npx @11ty/eleventy

@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
+import { augmentPath, POSIX_TOOL_DIRS } from "@/lib/platform";
 
 const HOME = os.homedir();
 export const PUBLISHED_DIR = path.join(HOME, ".agentic-os", "published");
@@ -16,7 +17,8 @@ const LOOP_BUILDS = path.join(HOME, ".agentic-os", "loop-builds");
 const CLAUDE_PROJECTS = path.join(HOME, ".agentic-os", "claude-projects");
 
 // netlify CLI needs a real PATH when the dev server was launched detached.
-const DEPLOY_PATH = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", path.join(HOME, ".local/bin"), process.env.PATH || ""].filter(Boolean).join(":");
+// Platform-correct PATH extension — the old ":"-join corrupted Windows' ";"-delimited PATH.
+const DEPLOY_PATH = augmentPath(POSIX_TOOL_DIRS);
 
 export interface ArtifactSite { siteId: string; name: string; baseUrl: string }
 export function artifactSite(): ArtifactSite | null {

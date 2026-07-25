@@ -10,6 +10,7 @@ import path from "node:path";
 import os from "node:os";
 import yaml from "js-yaml";
 import { AGENTIC_DIR, VAULT_AVAILABLE } from "@/lib/vaultWriter";
+import { pythonBin } from "@/lib/platform";
 import { FCC_SCRATCH_ROOT, ensureProject } from "@/lib/freeClaudeWorkspace";
 import { cliComplete } from "@/lib/loopEngine";
 import { readSettings } from "@/lib/settings";
@@ -439,7 +440,9 @@ function runtimeVerify(filePath: string, signal?: AbortSignal): Promise<{ ok: bo
     try {
       const script = path.join(process.cwd(), "scripts", "verify_build.py");
       if (!existsSync(script)) return resolve({ ok: true, problems: [] });
-      const py = spawn("python3", [script, filePath], { signal });
+      const pyBin = pythonBin();
+      if (!pyBin) return resolve({ ok: true, problems: [] }); // no interpreter → don't block the build
+      const py = spawn(pyBin, [script, filePath], { signal });
       let out = "";
       const done = (r: { ok: boolean; problems: string[] }) => { clearTimeout(to); resolve(r); };
       const to = setTimeout(() => { try { py.kill(); } catch { /* */ } done({ ok: true, problems: [] }); }, 40000);

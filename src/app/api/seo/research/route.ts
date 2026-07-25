@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { getSites } from "@/lib/seoPipeline";
+import { pythonBin } from "@/lib/platform";
 
 const pexec = promisify(execFile);
 export const runtime = "nodejs";
@@ -15,7 +16,9 @@ const AOS = path.join(os.homedir(), ".agentic-os");
 const SCRIPT = path.join(AOS, "gsc-research.py");
 const TOKEN = path.join(AOS, "gsc-token.json");
 const LATEST = path.join(AOS, "gsc-latest.json");
-const PY = "/usr/bin/python3"; // has the google-api libs; absolute so launchd PATH can't break it
+// Was hardcoded to "/usr/bin/python3" (macOS absolute path) — guaranteed ENOENT on
+// Windows, so GSC research could never run. Resolved per-platform instead.
+const PY = pythonBin() ?? "python";
 // The user's own sites (from the SEO config menu) as bare domains — the fallback when
 // the fresh GSC pull isn't cached yet. No hardcoded sites.
 function knownSites(): string[] {

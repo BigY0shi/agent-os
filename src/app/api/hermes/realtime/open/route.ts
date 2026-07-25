@@ -1,32 +1,24 @@
 import { NextResponse } from "next/server";
-import { spawn } from "node:child_process";
+import { launchTarget } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/hermes/realtime/open  { target }  → { ok }
-// Opens a website (https URL) or a macOS app by name. Executes ONLY the macOS
-// `open` command with a validated argument (no shell → no injection). Used by the
-// Realtime butler's function-calling so it can actually act, not just talk.
-function runOpen(target: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const t = (target || "").trim();
-    let args: string[];
-    const looksUrl = /^https?:\/\//i.test(t) || /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(t);
-    if (looksUrl) {
-      const url = /^https?:\/\//i.test(t) ? t : `https://${t}`;
-      if (!/^https?:\/\/[\w.\-/?=&%#~+:@]+$/i.test(url)) return resolve(false);
-      args = [url];
-    } else {
-      if (!/^[\w .'&\-]{1,40}$/.test(t)) return resolve(false); // app name only
-      args = ["-a", t];
-    }
-    try {
-      const c = spawn("open", args, { stdio: "ignore" });
-      c.on("close", (code) => resolve(code === 0));
-      c.on("error", () => resolve(false));
-    } catch { resolve(false); }
-  });
+// Opens a website (https URL) or an installed app by name. The target is validated
+// here (no shell is used → no injection) and launched via the cross-platform helper.
+// This used to spawn the macOS-only `open`, so it failed on every request on Windows.
+// Used by the Realtime butler's function-calling so it can actually act, not just talk.
+async function runOpen(target: string): Promise<boolean> {
+  const t = (target || "").trim();
+  const looksUrl = /^https?:\/\//i.test(t) || /^[\w-]+(\.[\w-]+)+(\/.*)?$/.test(t);
+  if (looksUrl) {
+    const url = /^https?:\/\//i.test(t) ? t : `https://${t}`;
+    if (!/^https?:\/\/[\w.\-/?=&%#~+:@]+$/i.test(url)) return false;
+    return launchTarget(url, { isUrl: true });
+  }
+  if (!/^[\w .'&\-]{1,40}$/.test(t)) return false; // app name only
+  return launchTarget(t, { isUrl: false });
 }
 
 export async function POST(req: Request) {
