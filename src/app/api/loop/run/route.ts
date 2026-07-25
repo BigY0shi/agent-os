@@ -25,18 +25,33 @@ let _chrome: string | null | undefined;
 function findChrome(): string | null {
   if (_chrome !== undefined) return _chrome;
   _chrome = null;
-  try {
-    const base = path.join(os.homedir(), "Library", "Caches", "ms-playwright");
-    const fs = require("node:fs") as typeof import("node:fs");
-    for (const d of fs.readdirSync(base)) {
-      if (!d.startsWith("chromium_headless_shell")) continue;
-      const inner = path.join(base, d);
-      for (const sub of fs.readdirSync(inner)) {
-        const bin = path.join(inner, sub, "chrome-headless-shell");
-        if (existsSync(bin)) { _chrome = bin; return _chrome; }
+  const win = process.platform === "win32";
+  // Playwright's cache lives in a different place per OS. Only the macOS path was
+  // checked before, so on Windows this always returned null and the render check
+  // silently no-op'd (reporting "runs clean" without ever opening the page).
+  const bases = win
+    ? [
+        path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "ms-playwright"),
+        path.join(os.homedir(), "AppData", "Local", "ms-playwright"),
+      ]
+    : [
+        path.join(os.homedir(), "Library", "Caches", "ms-playwright"), // macOS
+        path.join(os.homedir(), ".cache", "ms-playwright"),            // linux
+      ];
+  const exe = win ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+  const fs = require("node:fs") as typeof import("node:fs");
+  for (const base of bases) {
+    try {
+      for (const d of fs.readdirSync(base)) {
+        if (!d.startsWith("chromium_headless_shell")) continue;
+        const inner = path.join(base, d);
+        for (const sub of fs.readdirSync(inner)) {
+          const bin = path.join(inner, sub, exe);
+          if (existsSync(bin)) { _chrome = bin; return _chrome; }
+        }
       }
-    }
-  } catch { /* none */ }
+    } catch { /* try the next base */ }
+  }
   return _chrome;
 }
 

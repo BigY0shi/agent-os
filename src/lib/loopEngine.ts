@@ -16,19 +16,28 @@ const OR = "https://openrouter.ai/api/v1/chat/completions";
 // Only agents with an established non-interactive invocation are wired.
 export const LOOP_CLI_AGENTS = ["claude", "codex", "cursor", "pi", "hermes"] as const;
 
+// Prompts longer than this can't ride on the command line (the OS/arg limit), and
+// silently dropping them made the loop spin with no instructions. Anything bigger
+// goes over stdin, which every one of these CLIs accepts.
+const ARG_PROMPT_LIMIT = 30_000;
+
 export async function cliComplete(agent: string, prompt: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<string> {
   const timeoutMs = opts?.timeoutMs ?? 240_000;
+  // The loop embeds the previous artifact in the prompt, so by iteration 2 this is
+  // routinely >30k chars — stdin is the only safe channel.
+  const viaStdin = prompt.length > ARG_PROMPT_LIMIT;
   let args: string[];
   let input: string | undefined;
   switch (agent) {
     case "claude":  args = ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"]; input = prompt; break;
-    case "codex":   args = ["exec", "--skip-git-repo-check", "--ignore-user-config", prompt]; break;
-    case "cursor":  args = ["-p", prompt, "--output-format", "text", "--force", "--trust"]; break;
-    case "pi":      args = ["-p", prompt, "--mode", "text", "--no-session", "--no-context-files"]; break;
-    case "hermes":  args = ["-z", prompt, "--yolo", "--accept-hooks"]; break;
+    case "codex":   args = viaStdin ? ["exec", "--skip-git-repo-check", "--ignore-user-config", "-"] : ["exec", "--skip-git-repo-check", "--ignore-user-config", prompt]; break;
+    case "cursor":  args = viaStdin ? ["-p", "--output-format", "text", "--force", "--trust"] : ["-p", prompt, "--output-format", "text", "--force", "--trust"]; break;
+    case "pi":      args = viaStdin ? ["-p", "--mode", "text", "--no-session", "--no-context-files"] : ["-p", prompt, "--mode", "text", "--no-session", "--no-context-files"]; break;
+    case "hermes":  args = viaStdin ? ["-z", "-", "--yolo", "--accept-hooks"] : ["-z", prompt, "--yolo", "--accept-hooks"]; break;
     default: throw new Error(`${agent} isn't wired for Loop yet — use Claude, Codex, Cursor, Pi or Hermes.`);
   }
-  const res = await run(agent as AgentName, args, { timeoutMs, input });
+  if (viaStdin && input === undefined) input = prompt;
+  const res = await run(agent as AgentName, args, { timeoutMs, input, signal: opts?.signal });
   const out = (res.stdout || "").trim();
   if (!out) throw new Error((res.stderr || `${agent} returned no output (exit ${res.code}).`).slice(-220));
   return out;
@@ -165,7 +174,18 @@ export async function workerAct(goal: string, prev: string, issues: string[], wo
   return orComplete(worker, messages, creds.orKey, { temperature: 0.6, maxTokens: 8000, noReasoning, signal });
 }
 
-export interface Verdict { pass: boolean; score: number; issues: string[]; summary: string; }
+export interface Verdict {
+  pass: boolean;
+  score: number;
+  issues: string[];
+  summary: string;
+  /** Which judge actually produced this verdict (may differ from the one you picked). */
+  judgedBy?: string;
+  /** Set when the chosen judge failed and a fallback graded instead. */
+  fellBackFrom?: string;
+  /** Why the chosen judge failed, when it did. */
+  judgeError?: string;
+}
 
 // The adversarial judging prompt — shared by every verifier backend.
 const JUDGE_SYS = "You are the VERIFICATION GATE in a self-running loop. You do NOT improve the work; you judge it adversarially against the definition of done. Be strict — the builder does not grade its own homework, you do. Find the real flaws. Pass only when the work truly, fully meets the goal.";
@@ -179,7 +199,12 @@ function parseVerdict(raw: string): Verdict | null {
     try {
       const v = JSON.parse(matches[i]) as Partial<Verdict>;
       if (typeof v.pass === "undefined") continue;
-      return { pass: !!v.pass, score: Number(v.score) || 0, issues: Array.isArray(v.issues) ? v.issues.map(String).slice(0, 8) : [], summary: String(v.summary || "") };
+      // A model may emit the STRING "false" — `!!"false"` is true, which would record
+      // a failing build as passed. Only a real boolean true (or the literal "true")
+      // counts as a pass; anything else fails closed.
+      const raw = v.pass as unknown;
+      const pass = raw === true || (typeof raw === "string" && raw.trim().toLowerCase() === "true");
+      return { pass, score: Number(v.score) || 0, issues: Array.isArray(v.issues) ? v.issues.map(String).slice(0, 8) : [], summary: String(v.summary || "") };
     } catch { /* try previous */ }
   }
   return null;
@@ -189,12 +214,32 @@ function parseVerdict(raw: string): Verdict | null {
 // forces a strictly-parseable verdict. Used as the default-free judge AND as the
 // fallback when a free remote endpoint (N2) throttles / returns empty.
 const OLLAMA = "http://127.0.0.1:11434/api/chat";
+
+/**
+ * Pick a local Ollama model that is actually pulled. The old hardcoded default
+ * ("xentriom/gemma-4-12B-...") isn't installed here, so the local judge 404'd and
+ * the loop's safety net was silently dead. Ask the daemon what it has.
+ */
+async function localJudgeModel(signal?: AbortSignal): Promise<string | null> {
+  if (process.env.LOCAL_MODEL) return process.env.LOCAL_MODEL;
+  try {
+    const r = await fetch("http://127.0.0.1:11434/api/tags", { signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const names: string[] = ((j?.models as { name?: string }[]) || []).map((m) => m?.name || "").filter(Boolean);
+    if (!names.length) return null;
+    return names.find((n) => /coder|code|qwen|glm|llama|gemma|mistral/i.test(n)) || names[0];
+  } catch { return null; }
+}
+
 async function ollamaJudge(goal: string, artifact: string, signal?: AbortSignal): Promise<Verdict | null> {
   try {
+    const model = await localJudgeModel(signal);
+    if (!model) return null;
     const r = await fetch(OLLAMA, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: process.env.LOCAL_MODEL || "xentriom/gemma-4-12B-coder-fable5-composer2.5-v1",
+        model,
         messages: [{ role: "system", content: JUDGE_SYS }, { role: "user", content: judgeUser(goal, artifact) }],
         stream: false, format: "json", keep_alive: "30m", options: { temperature: 0.2 },
       }), signal,
@@ -216,11 +261,12 @@ async function ollamaJudge(goal: string, artifact: string, signal?: AbortSignal)
 export async function verdict(goal: string, artifact: string, judge: string, creds: Creds, signal?: AbortSignal): Promise<Verdict> {
   const messages = [{ role: "system", content: JUDGE_SYS }, { role: "user", content: judgeUser(goal, artifact) }];
   let raw = "";
+  let judgeError = "";
   try {
     if (judge === "local") {
       const v = await ollamaJudge(goal, artifact, signal);
-      if (v) return v;
-      return { pass: false, score: 0, issues: ["Local judge (Ollama) unreachable — is `ollama serve` running?"], summary: "no local judge" };
+      if (v) return { ...v, judgedBy: "local" };
+      return { pass: false, score: 0, issues: ["Local judge (Ollama) unreachable — is `ollama serve` running, and is a model pulled?"], summary: "no local judge", judgedBy: "none" };
     } else if (judge.startsWith("cli:")) {
       raw = await cliComplete(judge.slice(4), `${JUDGE_SYS}\n\n${judgeUser(goal, artifact)}`, { timeoutMs: 180_000, signal });
     } else if (judge.startsWith("minimax:")) {
@@ -236,14 +282,38 @@ export async function verdict(goal: string, artifact: string, judge: string, cre
       const noReasoning = /n2|:free|nex-/i.test(judge);
       raw = await orComplete(judge, messages, creds.orKey, { temperature: 0.2, maxTokens: 1200, noReasoning, signal });
     }
-  } catch { /* fall through to local fallback */ }
+  } catch (e) {
+    // Keep the real cause — it used to be swallowed, so a missing key or an auth
+    // failure surfaced as the generic "no parseable verdict".
+    judgeError = (e as Error)?.message || String(e);
+  }
 
   const v = parseVerdict(raw);
-  if (v) return v;
-  // free endpoint gave nothing usable → local fallback so the loop keeps moving
+  if (v) return { ...v, judgedBy: judge };
+
+  // The chosen judge failed. Fall back to the local model so the loop keeps moving —
+  // but SAY SO, rather than silently passing off a local grade as the chosen judge's.
   const local = await ollamaJudge(goal, artifact, signal);
-  if (local) return local;
-  return { pass: false, score: 0, issues: ["Judge returned no parseable verdict (free endpoint throttled and local fallback unavailable)"], summary: raw.slice(0, 180) || "no verdict" };
+  if (local) {
+    return {
+      ...local,
+      judgedBy: "local (fallback)",
+      fellBackFrom: judge,
+      judgeError: judgeError || "returned nothing parseable",
+      issues: [
+        `⚠ Graded by the LOCAL fallback judge, not "${judge}" (${judgeError || "no parseable verdict"}).`,
+        ...local.issues,
+      ],
+    };
+  }
+  return {
+    pass: false,
+    score: 0,
+    issues: [`Judge "${judge}" failed: ${judgeError || "returned no parseable verdict"}. Local fallback unavailable (is ollama running with a model pulled?).`],
+    summary: raw.slice(0, 180) || "no verdict",
+    judgedBy: "none",
+    judgeError: judgeError || undefined,
+  };
 }
 
 // Back-compat: the old Fusion-only entry point now routes through the generic verdict().
@@ -264,7 +334,7 @@ export const WORKERS = [
 export const JUDGES = [
   { id: "minimax:MiniMax-M3", label: "MiniMax M3 ✦ — your Hermes OAuth (reliable)", free: true },
   { id: "nex-agi/nex-n2-pro:free", label: "N2 ✦ — free (OpenRouter)", free: true },
-  { id: "local", label: "Local — free, offline (Ollama on your Mac)", free: true },
+  { id: "local", label: "Local — free, offline (Ollama on this machine)", free: true },
   { id: "openrouter/fusion", label: "Fusion council — premium (paid)", free: false },
 ];
 export const DEFAULT_JUDGE = "minimax:MiniMax-M3";

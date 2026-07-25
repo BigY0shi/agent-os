@@ -127,6 +127,22 @@ function agentEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
 const FLAG_PATTERN = /^[A-Za-z0-9_\-./:=,@+%]+$/;
 const MAX_ARG_LEN = 32_000;
 
+/**
+ * Kill a spawned child AND its descendants. A bare child.kill() only signals the
+ * direct child, so on Windows the CLI's own subprocesses survive as orphans
+ * (zombie agents that keep holding ports/tokens). Use taskkill /T on win32.
+ */
+function killTree(child: { pid?: number; kill: (sig?: NodeJS.Signals) => boolean }) {
+  const pid = child.pid;
+  if (process.platform === "win32" && pid) {
+    try {
+      spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" }).unref();
+      return;
+    } catch { /* fall through to the plain kill below */ }
+  }
+  try { child.kill("SIGKILL"); } catch { /* already gone */ }
+}
+
 export function validateFlagArgs(args: readonly string[]): string[] {
   return args.filter((a) => typeof a === "string" && a.length < MAX_ARG_LEN && FLAG_PATTERN.test(a));
 }
@@ -149,10 +165,25 @@ export interface RunResult {
 export async function run(
   agent: AgentName,
   args: readonly string[],
-  opts: { timeoutMs?: number; cwd?: string; input?: string; extraEnv?: Record<string, string> } = {}
+  opts: { timeoutMs?: number; cwd?: string; input?: string; extraEnv?: Record<string, string>; signal?: AbortSignal } = {}
 ): Promise<RunResult> {
+  // Oversized args used to be silently dropped, which made a CLI run with NO prompt
+  // (the loop then span on garbage). Fail loudly instead — callers should send long
+  // prompts via `input` (stdin), which has no length limit.
+  const oversized = args.find((a) => typeof a === "string" && a.length > MAX_ARG_LEN);
+  if (oversized) {
+    return {
+      ok: false, code: -1, stdout: "",
+      stderr: `Argument too large for the command line (${oversized.length} chars, max ${MAX_ARG_LEN}). Send long prompts via stdin instead of as an argument.`,
+      durationMs: 0,
+    };
+  }
   const cleanArgs = args.map(safeArg).filter((a): a is string => a !== null);
   const started = Date.now();
+
+  if (opts.signal?.aborted) {
+    return { ok: false, code: -1, stdout: "", stderr: "aborted before start", durationMs: 0 };
+  }
 
   let bin: string;
   try { bin = binFor(agent); }
@@ -168,23 +199,46 @@ export async function run(
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    let aborted = false;
     const timeout = setTimeout(() => {
-      try { child.kill("SIGKILL"); } catch {}
+      timedOut = true;
+      killTree(child);
     }, opts.timeoutMs ?? 15_000);
+
+    // Stop/abort must actually reach the child. Without this the caller returns but
+    // the CLI keeps running (and billing) until its timeout expires.
+    const onAbort = () => { aborted = true; killTree(child); };
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const cleanup = () => {
+      clearTimeout(timeout);
+      opts.signal?.removeEventListener("abort", onAbort);
+    };
 
     child.stdout.on("data", (b) => { stdout += b.toString(); });
     child.stderr.on("data", (b) => { stderr += b.toString(); });
     child.on("close", (code) => {
-      clearTimeout(timeout);
-      resolve({ ok: code === 0, code, stdout, stderr, durationMs: Date.now() - started });
+      cleanup();
+      const note = aborted ? "stopped by user" : timedOut ? `timed out after ${opts.timeoutMs ?? 15_000}ms` : "";
+      resolve({
+        ok: code === 0 && !aborted && !timedOut,
+        code,
+        stdout,
+        stderr: note ? `${stderr}${stderr ? "\n" : ""}[${note}]` : stderr,
+        durationMs: Date.now() - started,
+      });
     });
     child.on("error", (e) => {
-      clearTimeout(timeout);
+      cleanup();
       resolve({ ok: false, code: -1, stdout, stderr: String(e), durationMs: Date.now() - started });
     });
 
-    if (opts.input) child.stdin.write(opts.input);
-    try { child.stdin.end(); } catch {}
+    // An unhandled stdin EPIPE (child died early) would crash the server process.
+    child.stdin.on("error", () => { /* child closed stdin — the close handler reports it */ });
+    try {
+      if (opts.input) child.stdin.write(opts.input);
+      child.stdin.end();
+    } catch { /* child already gone */ }
   });
 }
 
