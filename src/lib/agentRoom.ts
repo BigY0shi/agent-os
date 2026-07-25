@@ -160,8 +160,15 @@ function hermesDefaultModel(): string {
 // minimax-m3 / kimi-k2.6 — MiniMax isn't provisioned here, and a hardcoded tag breaks
 // the moment the account's model list changes. Now resolved from the account's REAL
 // model list (ollama.com /api/tags), cached for the process lifetime.
-const CODE_PREFS = [/qwen.*coder/i, /coder/i, /code/i, /deepseek/i, /glm/i];
-const CHAT_PREFS = [/kimi/i, /qwen3(?!-coder)/i, /glm/i, /llama/i, /gpt-oss/i];
+// Ordered by the user's stated model policy (all served via Ollama Cloud):
+//   coding                     → GLM 5.2, Kimi K2.7 Code
+//   non-coding / agentic       → MiniMax M3, Kimi K2.6
+// NOTE: "MiniMax M3" here means the `minimax-m3:cloud` model on Ollama Cloud, which
+// the user DOES use. That is distinct from the MiniMax *direct* API
+// (api.minimax.io + a minimax-oauth token), which is NOT provisioned on this machine
+// and was deliberately removed from the Jarvis path. Don't conflate the two.
+const CODE_PREFS = [/glm-?5\.2/i, /kimi.*k2\.7.*code/i, /kimi.*code/i, /glm/i, /qwen.*coder/i, /coder/i, /code/i, /deepseek/i];
+const CHAT_PREFS = [/minimax.*m3/i, /kimi.*k2\.6/i, /minimax/i, /kimi(?!.*code)/i, /glm/i, /qwen3(?!-coder)/i, /llama/i];
 const ROOM_CODING_RE = /\b(cod(e|ing|er)|function|debug|bug|stack ?trace|api|endpoint|compile|refactor|typescript|javascript|python|rust|golang|css|html|react|next\.?js|sql|regex|npm|docker|kubernetes|shader|webgl|database|schema|backend|frontend|repo|deploy|script|algorithm|async|runtime)\b/i;
 
 let _models: string[] | null = null;

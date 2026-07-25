@@ -1,10 +1,10 @@
 {
   "collection": "ms_agent_os_9227e236",
   "failed_files": [],
-  "last_completed_at": "2026-07-25T13:42:19.531230Z",
+  "last_completed_at": "2026-07-25T13:48:11.252212Z",
   "last_error": "RuntimeError: milvus-lite does not support Windows (no wheels on PyPI).\nUse a remote Milvus server instead:\n  docker run -d -p 19530:19530 milvusdb/milvus:latest standalone\n  MemSearch(milvus_uri='http://localhost:19530')\nOr run memsearch inside WSL2: https://learn.microsoft.com/en-us/windows/wsl/install",
-  "last_failed_at": "2026-07-25T13:42:19.531230Z",
-  "last_started_at": "2026-07-25T13:42:17.165956Z",
+  "last_failed_at": "2026-07-25T13:48:11.252212Z",
+  "last_started_at": "2026-07-25T13:48:08.712094Z",
   "milvus_uri": "~/.memsearch/milvus.db",
   "operation": "index",
   "paths": [
@@ -12,5 +12,5 @@
   ],
   "schema_version": 1,
   "status": "error",
-  "updated_at": "2026-07-25T13:42:19.531230Z"
+  "updated_at": "2026-07-25T13:48:11.252212Z"
 }
