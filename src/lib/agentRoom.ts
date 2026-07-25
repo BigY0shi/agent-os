@@ -85,9 +85,13 @@ export const ROOM_AGENTS: RoomAgent[] = [
     persona: "You are Pi — a sharp, lightweight coding assistant on open models. Resourceful and direct; you favour clean, minimal solutions." },
   { id: "hermes", name: "Hermes", color: "#60a5fa", provider: "cli", model: "",
     persona: "You are Hermes — direct, action-oriented, a little unfiltered. You cut straight to the practical next step and call out fluff. You like momentum." },
-  // Antigravity runs on the real `agy` CLI (native exe, verified one-shot). It used to
-  // be provider:"ollama" pointed at "gemini-3-flash-preview" — not a real Ollama tag,
-  // so this agent errored on EVERY turn.
+  // Antigravity runs on the real `agy` CLI (native exe; verified one-shot here).
+  // NOTE: its previous model, "gemini-3-flash-preview", IS a real Ollama model
+  // (ollama.com/library/gemini-3-flash-preview) — the breakage was the localhost:11434
+  // routing, not the tag. Kept on the CLI because it needs no API key, is verified
+  // working, and is genuinely Antigravity rather than the underlying Google model.
+  // To go back: provider:"ollama", model:"gemini-3-flash-preview" (now that the
+  // Ollama path points at the cloud API, that would work too).
   { id: "antigravity", name: "Antigravity", color: "#7c3aed", provider: "cli", model: "",
     persona: "You are Antigravity — Gemini's successor as a multi-agent harness. Broad knowledge, research-minded, a bit cosmic; you bring data and a wide-angle view." },
   // OpenClaw was provider:"openrouter", which needs a key that isn't valid here — it
@@ -161,14 +165,14 @@ function hermesDefaultModel(): string {
 // the moment the account's model list changes. Now resolved from the account's REAL
 // model list (ollama.com /api/tags), cached for the process lifetime.
 // Ordered by the user's stated model policy (all served via Ollama Cloud):
-//   coding                     → GLM 5.2, Kimi K2.7 Code
-//   non-coding / agentic       → MiniMax M3, Kimi K2.6
+//   coding                     → GLM 5.2, then Kimi K2.7 Code
+//   non-coding / agentic       → Kimi K2.6 (#1), then MiniMax M3 (#2)
 // NOTE: "MiniMax M3" here means the `minimax-m3:cloud` model on Ollama Cloud, which
 // the user DOES use. That is distinct from the MiniMax *direct* API
 // (api.minimax.io + a minimax-oauth token), which is NOT provisioned on this machine
 // and was deliberately removed from the Jarvis path. Don't conflate the two.
 const CODE_PREFS = [/glm-?5\.2/i, /kimi.*k2\.7.*code/i, /kimi.*code/i, /glm/i, /qwen.*coder/i, /coder/i, /code/i, /deepseek/i];
-const CHAT_PREFS = [/minimax.*m3/i, /kimi.*k2\.6/i, /minimax/i, /kimi(?!.*code)/i, /glm/i, /qwen3(?!-coder)/i, /llama/i];
+const CHAT_PREFS = [/kimi.*k2\.6/i, /minimax.*m3/i, /kimi(?!.*code)/i, /minimax/i, /glm/i, /qwen3(?!-coder)/i, /llama/i];
 const ROOM_CODING_RE = /\b(cod(e|ing|er)|function|debug|bug|stack ?trace|api|endpoint|compile|refactor|typescript|javascript|python|rust|golang|css|html|react|next\.?js|sql|regex|npm|docker|kubernetes|shader|webgl|database|schema|backend|frontend|repo|deploy|script|algorithm|async|runtime)\b/i;
 
 let _models: string[] | null = null;

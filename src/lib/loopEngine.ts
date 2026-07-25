@@ -232,7 +232,7 @@ async function localJudgeModel(signal?: AbortSignal): Promise<string | null> {
     if (!names.length) return null;
     // Judging is an analytical (non-coding) task → the user's agentic models first
     // (MiniMax M3, Kimi K2.6 — via Ollama Cloud), then coders, then anything.
-    for (const re of [/minimax.*m3/i, /kimi.*k2\.6/i, /glm-?5\.2/i, /kimi/i, /glm/i, /coder|code/i, /qwen|llama|mistral/i]) {
+    for (const re of [/kimi.*k2\.6/i, /minimax.*m3/i, /glm-?5\.2/i, /kimi/i, /glm/i, /coder|code/i, /qwen|llama|mistral/i]) {
       const hit = names.find((n) => re.test(n));
       if (hit) return hit;
     }
