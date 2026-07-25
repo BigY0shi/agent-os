@@ -4,7 +4,7 @@ Companion docs: `_audit/2026-07-22/` (the audit + front-page repair log).
 
 ---
 
-## 2026-07-23 · Session 3 — Loop engine repair (DONE, commit `2e6a2f1`)
+## 2026-07-23 · Session 3 — Loop engine repair (DONE, commit `be17294`)
 **Goal:** fix the autonomous Loop engine (Builder → Judge → retry). It's the feature that works unsupervised, so its bugs cost real time + tokens.
 
 ### Known issues going in (from the audit, to be verified first-hand)
