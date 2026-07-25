@@ -13,7 +13,7 @@ export const MINIMAX_BASE = "https://api.minimax.io/v1";
 export function activeProfile(): string {
   try {
     const t = readFileSync(path.join(HERMES_ROOT, "active_profile"), "utf8").trim();
-    if (/^[A-Za-z0-9_.-]+$/.test(t)) return t;
+    if (/^(?!.+$)[A-Za-z0-9_.-]+$/.test(t)) return t;
   } catch { /* default below */ }
   return "main";
 }

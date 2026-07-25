@@ -11,7 +11,7 @@ const CODEX_SCRATCH_ROOT = process.env.AGENTIC_OS_CODEX_SCRATCH
   ?? path.join(os.homedir(), "codex-scratch");
 
 async function ensureCodexProject(name: string): Promise<string | null> {
-  if (!/^[A-Za-z0-9_.-]+$/.test(name)) return null;
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(name)) return null;
   if (!existsSync(CODEX_SCRATCH_ROOT)) await mkdir(CODEX_SCRATCH_ROOT, { recursive: true });
   const dir = path.join(CODEX_SCRATCH_ROOT, name);
   if (!existsSync(dir)) await mkdir(dir, { recursive: true });
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   // generated assets) lands somewhere the Workspace tab can find. Same pattern
   // as the Free Claude Code chat endpoint.
   let cwd: string | undefined;
-  if (typeof body.project === "string" && /^[A-Za-z0-9_.-]+$/.test(body.project)) {
+  if (typeof body.project === "string" && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(body.project)) {
     cwd = (await ensureCodexProject(body.project)) ?? undefined;
   } else if (typeof body.cwd === "string") {
     cwd = body.cwd;

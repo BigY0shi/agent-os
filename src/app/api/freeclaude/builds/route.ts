@@ -38,7 +38,7 @@ const NICE: Record<string, string> = {
 const EXAMPLE_FILES = new Set(Object.keys(NICE));
 
 function safeProject(p: string | null): string {
-  return p && /^[A-Za-z0-9_.-]+$/.test(p) ? p : DEFAULT_PROJECT;
+  return p && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(p) ? p : DEFAULT_PROJECT;
 }
 function buildsPath(project: string): string {
   return path.join(FCC_SCRATCH_ROOT, project, ".builds.json");

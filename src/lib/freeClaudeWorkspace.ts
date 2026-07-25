@@ -66,7 +66,7 @@ export async function ensureScratchRoot(): Promise<void> {
 }
 
 export async function ensureProject(name: string): Promise<string | null> {
-  if (!/^[A-Za-z0-9_.-]+$/.test(name)) return null;
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(name)) return null;
   await ensureScratchRoot();
   const dir = path.join(FCC_SCRATCH_ROOT, name);
   if (!existsSync(dir)) await mkdir(dir, { recursive: true });
@@ -93,7 +93,7 @@ export async function listProjects(): Promise<FccProject[]> {
 }
 
 export async function listProjectFiles(project: string, maxFiles = 100): Promise<{ root: string; files: FccFile[] } | null> {
-  if (!/^[A-Za-z0-9_.-]+$/.test(project)) return null;
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) return null;
   const projectRoot = path.join(FCC_SCRATCH_ROOT, project);
   if (!existsSync(projectRoot)) return null;
 
@@ -130,7 +130,7 @@ export async function listProjectFiles(project: string, maxFiles = 100): Promise
 }
 
 export async function readProjectFile(project: string, relPath: string): Promise<{ path: string; content: string; bytes: number; mtime: number; truncated: boolean } | null> {
-  if (!/^[A-Za-z0-9_.-]+$/.test(project)) return null;
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) return null;
   const base = path.join(FCC_SCRATCH_ROOT, project);
   const abs = path.resolve(base, relPath);
   if (abs !== base && !abs.startsWith(base + path.sep)) return null;

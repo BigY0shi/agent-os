@@ -46,7 +46,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
   if (kind !== "scratch" && kind !== "brain") {
     return new Response("kind must be scratch or brain", { status: 400 });
   }
-  if (!/^[A-Za-z0-9_.-]+$/.test(project)) {
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) {
     return new Response("invalid project name", { status: 400 });
   }
   const rel = restSegs.join("/");

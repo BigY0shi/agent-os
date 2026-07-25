@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const startedAt = Number(body.startedAt) || Date.now();
   const endedAt = body.endedAt != null ? Number(body.endedAt) : undefined;
 
-  if (!/^[A-Za-z0-9_.-]+$/.test(id)) {
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) {
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
   }
   if (turns.length === 0) {

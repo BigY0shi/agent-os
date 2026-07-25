@@ -132,7 +132,7 @@ export async function createProject(prompt: string, customSlug?: string): Promis
 // Find a project's absolute file path with containment check — used by the
 // preview route so users can't escape the project dir via "../../etc/passwd".
 export function resolveProjectFile(slug: string, relPath: string): string | null {
-  if (!/^[A-Za-z0-9_.-]+$/.test(slug)) return null;
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(slug)) return null;
   const cwd = path.join(VIDEO_ROOT, slug);
   if (!existsSync(cwd)) return null;
   const abs = path.resolve(cwd, relPath);

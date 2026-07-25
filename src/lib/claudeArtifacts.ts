@@ -167,7 +167,7 @@ export async function publish(id: string, customTitle?: string): Promise<{ ok: b
 }
 
 export async function unpublish(slug: string): Promise<{ ok: boolean; error?: string }> {
-  if (!/^[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
+  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
   const items = (await readManifest()).filter((i) => i.slug !== slug);
   try { await rm(path.join(PUBLISHED_DIR, slug), { recursive: true, force: true }); } catch {}
   await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(items), "utf8");
