@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Square, Users, History, Plus, Trash2, Drama, X, Eye, EyeOff } from "lucide-react";
+import { Send, Square, Users, History, Plus, Trash2, Drama, X, Eye, EyeOff, Dices } from "lucide-react";
 import AgentAvatar, { type AgentKey } from "./AgentAvatar";
 
 interface Agent { id: string; name: string; color: string; model: string; provider: string }
@@ -25,6 +25,8 @@ export default function GroupChatView() {
   // Personas mode: agentId → the persona that agent is playing for THIS chat.
   const [personas, setPersonas] = useState<Record<string, PersonaView>>({});
   const [personaLoading, setPersonaLoading] = useState(false);
+  const [rolling, setRolling] = useState<string | null>(null); // agentId mid-draw
+  const [castOpen, setCastOpen] = useState(false); // show the cast row even with no personas yet
   const hasPersonas = Object.keys(personas).length > 0;
   // Incognito: agents run with no user/project memory (CLAUDE.md, rules), no MCP,
   // no session persistence, and no vault grounding — a clean-room council.
@@ -79,6 +81,7 @@ export default function GroupChatView() {
   // the NAMES back with each message, and the server re-hydrates the full record.
   async function newPersonaChat() {
     setMsgs([]); setCurrentId("c" + Date.now()); setShowHistory(false);
+    setCastOpen(true);
     setPersonaLoading(true);
     try {
       const ids = [...present];
@@ -91,6 +94,33 @@ export default function GroupChatView() {
       }
     } catch { setPersonas({}); }
     finally { setPersonaLoading(false); }
+  }
+
+  // Draw / re-roll the persona for ONE agent, leaving the rest of the cast alone.
+  // `exclude` carries the names already in play so we can't deal a duplicate.
+  async function rollPersona(agentId: string) {
+    setRolling(agentId);
+    try {
+      const inUse = Object.entries(personas)
+        .filter(([id]) => id !== agentId)
+        .map(([, p]) => p.name);
+      const qs = new URLSearchParams({ agents: agentId });
+      if (inUse.length) qs.set("exclude", inUse.join(","));
+      const r = await fetch(`/api/room/personas?${qs}`, { cache: "no-store" });
+      const j = await r.json();
+      const drawn = j?.personas?.[agentId] as PersonaView | undefined;
+      if (j?.ok && drawn) setPersonas((prev) => ({ ...prev, [agentId]: drawn }));
+    } catch { /* leave the existing persona in place */ }
+    finally { setRolling(null); }
+  }
+
+  // Drop just this agent's persona (it goes back to being plain itself).
+  function clearPersona(agentId: string) {
+    setPersonas((prev) => {
+      const next = { ...prev };
+      delete next[agentId];
+      return next;
+    });
   }
   function loadConvo(c: Convo) { setMsgs(c.msgs); setCurrentId(c.id); setShowHistory(false); keyRef.current = Math.max(keyRef.current, ...c.msgs.map((m) => m.key), 0); }
   function deleteConvo(id: string) { setConvos((prev) => { const u = prev.filter((c) => c.id !== id); try { localStorage.setItem(CONVOS_KEY, JSON.stringify(u)); } catch {} return u; }); fetch(`/api/room/history?id=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {}); if (id === currentId) newChat(); }
@@ -175,6 +205,18 @@ export default function GroupChatView() {
             <Drama size={13} /> {personaLoading ? "Casting…" : "New chat with Personas"}
           </button>
           <button
+            onClick={() => setCastOpen((v) => !v)}
+            title="Cast — give, re-roll or drop a persona for one agent at a time"
+            className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg border text-[12px]"
+            style={{
+              borderColor: castOpen ? "#f0abfc" : "var(--panel-border)",
+              color: castOpen ? "#f0abfc" : "var(--fg-dim)",
+              background: castOpen ? "rgba(240,171,252,0.10)" : "transparent",
+            }}
+          >
+            <Dices size={13} /> Cast
+          </button>
+          <button
             onClick={() => setIncognito((v) => !v)}
             title={incognito
               ? "Incognito ON — agents run with no CLAUDE.md/rules, no MCP, no session history and no vault context. Full for Claude/Hermes/Codex; Cursor + Antigravity get a neutral working dir only."
@@ -222,27 +264,54 @@ export default function GroupChatView() {
         })}
       </div>
 
-      {/* Personas cast — who each agent is playing this chat */}
-      {hasPersonas && (
+      {/* Personas cast — per-agent. Each present agent can be given, re-rolled or
+          dropped independently; you don't have to redraw the whole cast. */}
+      {(hasPersonas || castOpen) && (
         <div className="flex items-start gap-2 flex-wrap mb-3 pb-3 border-b border-[var(--panel-border)]">
-          <span className="text-[10px] uppercase tracking-widest text-[var(--fg-dimmer)] mr-1 mt-1.5" style={{ color: "#f0abfc" }}>Cast</span>
-          {agents.filter((a) => personas[a.id]).map((a) => {
+          <span className="text-[10px] uppercase tracking-widest mr-1 mt-1.5" style={{ color: "#f0abfc" }}>Cast</span>
+          {agents.filter((a) => present.has(a.id)).map((a) => {
             const p = personas[a.id];
+            const busyRoll = rolling === a.id;
             return (
-              <span key={a.id} title={p.summary}
-                className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full border text-[11.5px]"
-                style={{ borderColor: "rgba(240,171,252,0.4)", background: "rgba(240,171,252,0.08)" }}>
+              <span key={a.id} title={p ? p.summary : `${a.name} has no persona — click the dice to draw one`}
+                className="inline-flex items-center gap-1.5 pl-1 pr-1 py-1 rounded-full border text-[11.5px]"
+                style={{
+                  borderColor: p ? "rgba(240,171,252,0.4)" : "var(--panel-border)",
+                  background: p ? "rgba(240,171,252,0.08)" : "transparent",
+                  opacity: p ? 1 : 0.65,
+                }}>
                 <AgentAvatar agent={a.id as AgentKey} size={16} />
                 <span style={{ color: a.color }}>{a.name}</span>
-                <span className="text-[var(--fg-dimmer)]">as</span>
-                <span className="text-[var(--fg)]">{p.name}</span>
-                {p.occupation && <span className="text-[var(--fg-dimmer)]">· {p.occupation}</span>}
+                {p ? (
+                  <>
+                    <span className="text-[var(--fg-dimmer)]">as</span>
+                    <span className="text-[var(--fg)]">{p.name}</span>
+                    {p.occupation && <span className="text-[var(--fg-dimmer)]">· {p.occupation}</span>}
+                  </>
+                ) : (
+                  <span className="text-[var(--fg-dimmer)]">— as itself</span>
+                )}
+                <button
+                  onClick={() => rollPersona(a.id)}
+                  disabled={busyRoll}
+                  title={p ? `Draw a different persona for ${a.name}` : `Draw a persona for ${a.name}`}
+                  className="grid place-items-center w-5 h-5 rounded-full hover:bg-[rgba(240,171,252,0.18)] disabled:opacity-50"
+                  style={{ color: "#f0abfc" }}
+                >
+                  <Dices size={12} className={busyRoll ? "animate-spin" : ""} />
+                </button>
+                {p && (
+                  <button onClick={() => clearPersona(a.id)} title={`Drop ${a.name}'s persona`}
+                    className="grid place-items-center w-5 h-5 rounded-full text-[var(--fg-dimmer)] hover:text-[var(--fg)] hover:bg-[rgba(255,255,255,0.06)]">
+                    <X size={11} />
+                  </button>
+                )}
               </span>
             );
           })}
-          <button onClick={() => setPersonas({})} title="Drop the personas for this chat"
+          <button onClick={() => setPersonas({})} title="Drop every persona for this chat"
             className="inline-flex items-center gap-1 px-2 py-1 rounded-full border border-[var(--panel-border)] text-[11px] text-[var(--fg-dimmer)] hover:text-[var(--fg-dim)]">
-            <X size={11} /> Clear
+            <X size={11} /> Clear all
           </button>
         </div>
       )}

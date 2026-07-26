@@ -46,7 +46,12 @@ export function personaLabel(p: Persona): string {
  * gets the same cast (nice for reloads); omit the seed for true randomness.
  */
 export function pickPersonas(n: number, seed?: string): Persona[] {
-  const pool = [...PERSONAS];
+  return pickFrom(PERSONAS, n, seed);
+}
+
+/** Pick `n` distinct personas from an arbitrary pool (shared by the callers above). */
+function pickFrom(source: Persona[], n: number, seed?: string): Persona[] {
+  const pool = [...source];
   let rnd: () => number;
   if (seed) {
     // Small deterministic PRNG (mulberry32) from a string hash.
@@ -84,9 +89,18 @@ export function personaByName(name: string): Persona | undefined {
   return BY_NAME.get(String(name || "").trim().toLowerCase());
 }
 
-/** Assign a distinct persona to each agent id. */
-export function assignPersonas(agentIds: string[], seed?: string): Record<string, Persona> {
-  const picked = pickPersonas(agentIds.length, seed);
+/**
+ * Assign a distinct persona to each agent id.
+ * `exclude` holds persona NAMES already in play (so re-rolling one agent can't
+ * hand it a persona another agent is already wearing).
+ */
+export function assignPersonas(
+  agentIds: string[],
+  opts?: { seed?: string; exclude?: string[] },
+): Record<string, Persona> {
+  const taken = new Set((opts?.exclude ?? []).map((s) => s.trim().toLowerCase()));
+  const pool = taken.size ? PERSONAS.filter((p) => !taken.has(p.n.toLowerCase())) : PERSONAS;
+  const picked = pickFrom(pool, agentIds.length, opts?.seed);
   const out: Record<string, Persona> = {};
   agentIds.forEach((id, i) => { if (picked[i]) out[id] = picked[i]; });
   return out;
