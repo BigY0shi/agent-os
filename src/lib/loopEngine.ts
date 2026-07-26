@@ -28,8 +28,12 @@ const ARG_PROMPT_LIMIT = 30_000;
  *
  * Coverage differs per CLI, and this is what each one ACTUALLY supports (verified
  * against `--help` + a live probe on 2026-07-25 — do not add flags unverified):
- *   claude      FULL    --setting-sources "" --strict-mcp-config
+ *   claude      FULL    --setting-sources= --strict-mcp-config
  *                       --no-session-persistence --system-prompt <generic>
+ *                       (NOTE the equals form. "--setting-sources" followed by a
+ *                        separate "" arg does NOT work here: runner.ts safeArg()
+ *                        drops zero-length args, so claude then read the NEXT flag
+ *                        as the value → "Invalid setting source: --strict-mcp-config".)
  *                       (probe: normal run quoted the user's Learned Rules; with
  *                        these flags it reported no memory loaded)
  *   hermes      FULL    --ignore-user-config --ignore-rules
@@ -76,7 +80,7 @@ export async function cliComplete(agent: string, prompt: string, opts?: { timeou
   if (incog) {
     switch (agent) {
       case "claude":
-        args = [...args, "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--system-prompt", INCOGNITO_SYS];
+        args = [...args, "--setting-sources=", "--strict-mcp-config", "--no-session-persistence", "--system-prompt", INCOGNITO_SYS];
         break;
       case "hermes":
         args = [...args, "--ignore-user-config", "--ignore-rules"];
