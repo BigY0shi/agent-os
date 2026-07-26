@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Send, Square, Users, History, Plus, Trash2, Drama, X, Eye, EyeOff, Dices } from "lucide-react";
 import AgentAvatar, { type AgentKey } from "./AgentAvatar";
 
@@ -12,6 +12,43 @@ interface Convo { id: string; title: string; ts: number; msgs: Msg[] }
 // stays server-side; we hold this to render the chips and post the name back.
 interface PersonaView { name: string; label: string; occupation: string; age: number | null; location: string | null; summary: string }
 const CONVOS_KEY = "agentroom/conversations/v1";
+
+/**
+ * Typing indicator — a slow, staggered "breathing" wave.
+ *
+ * Replaces Tailwind's `animate-bounce`, whose bounce curve overshoots and reads
+ * as dated/jittery. This eases symmetrically (a quad-ish in-out), and moves three
+ * properties a small amount each — a 2.5px lift, opacity, and a slight scale —
+ * so it has depth without being loud. Slower than a bounce on purpose: it should
+ * feel like the agent is thinking, not vibrating.
+ */
+function TypingDots({ color }: { color: string }) {
+  const reduce = useReducedMotion();
+  return (
+    <span className="flex items-center gap-[3px]" aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="rounded-full"
+          style={{ width: 5, height: 5, background: color }}
+          // Respect prefers-reduced-motion: hold a static, staggered opacity
+          // instead of animating.
+          initial={false}
+          animate={reduce
+            ? { opacity: 0.45 + i * 0.15 }
+            : { opacity: [0.28, 1, 0.28], scale: [0.82, 1.12, 0.82], y: [0, -2.5, 0] }}
+          transition={reduce ? { duration: 0 } : {
+            duration: 1.15,
+            times: [0, 0.45, 1],
+            ease: [0.45, 0, 0.55, 1],
+            repeat: Infinity,
+            delay: i * 0.16,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
 
 export default function GroupChatView() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -364,11 +401,7 @@ export default function GroupChatView() {
             <span className="shrink-0"><AgentAvatar agent={typing.id as AgentKey} size={26} /></span>
             <div className="text-[12px] flex items-center gap-1.5" style={{ color: typing.color }}>
               {typing.name} is typing
-              <span className="flex gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: typing.color, animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: typing.color, animationDelay: "120ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: typing.color, animationDelay: "240ms" }} />
-              </span>
+              <TypingDots color={typing.color} />
             </div>
           </div>
         )}
