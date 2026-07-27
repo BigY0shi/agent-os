@@ -1,4 +1,5 @@
 import { refillPlan, setStatus, LEADS_DIR } from "@/lib/upworkDesk";
+import { startBriefBatch } from "@/lib/briefBatch";
 import { spawn } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -44,7 +45,17 @@ export async function POST(req: Request) {
       for (const id of toPitch) await setStatus(id, "new");
     }
 
-    return Response.json({ ok: true, dismissed: toDismiss.length, pitched, newBefore: newCount, target: t, pitchError });
+    // 4) Do the same for the feed side. refillPlan only reads board.json, so everything
+    //    above is Upwork-only — RemoteOK/WWR leads have no pitch pass and would stay
+    //    unanalysed in New forever. Top-up mode, so reviewing 5 pulls in 5 rather than
+    //    another full batch. Not awaited: it runs for ~a minute and the button should
+    //    return now; the client polls /api/deals/brief-batch for progress.
+    const brief = await startBriefBatch({ target: t });
+
+    return Response.json({
+      ok: true, dismissed: toDismiss.length, pitched, newBefore: newCount, target: t, pitchError,
+      briefing: brief.started ? brief.total : 0,
+    });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }

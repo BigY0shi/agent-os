@@ -32,6 +32,10 @@ interface DeskStore {
   scrapeResult: string | null;
   startScrape: () => Promise<void>;
   pollScrape: () => Promise<void>;
+  briefingBatch: boolean;
+  briefBatchResult: string | null;
+  briefTop: () => Promise<void>;
+  pollBriefs: () => Promise<void>;
   pullingFeeds: boolean;
   feedsResult: string | null;
   pullFeeds: () => Promise<void>;
@@ -57,6 +61,8 @@ export const useDesk = create<DeskStore>((set, get) => ({
   refillResult: null,
   scraping: false,
   scrapeResult: null,
+  briefingBatch: false,
+  briefBatchResult: null,
   pullingFeeds: false,
   feedsResult: null,
 
@@ -195,6 +201,9 @@ export const useDesk = create<DeskStore>((set, get) => ({
       const j = await r.json();
       if (j.ok) {
         set({ refillResult: `Cleared ${j.dismissed} passed · added ${j.pitched} to New (target ${j.target})${j.pitchError ? " · pitch error" : ""}` });
+        // Refill now also tops up the feed side by briefing unanalysed leads. That runs
+        // server-side for ~a minute after this response, so follow it.
+        if (j.briefing) { set({ briefingBatch: true, briefBatchResult: `Analysing ${j.briefing} feed leads…` }); get().pollBriefs(); }
         await get().fetchDeals();
       } else {
         set({ refillResult: j.error || "Refill failed" });
@@ -250,6 +259,44 @@ export const useDesk = create<DeskStore>((set, get) => ({
     tick();
   },
 
+  briefTop: async () => {
+    try {
+      const r = await fetch("/api/deals/brief-batch", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      });
+      const j = await r.json();
+      if (!j.ok) { set({ briefBatchResult: j.error || "Could not start the brief pass" }); return; }
+      if (!j.started) { set({ briefBatchResult: "Every lead already has a brief." }); return; }
+      set({ briefingBatch: true, briefBatchResult: `Analysing ${j.total} leads…` });
+      get().pollBriefs();
+    } catch (e) {
+      set({ briefBatchResult: (e as Error).message });
+    }
+  },
+
+  pollBriefs: async () => {
+    const tick = async () => {
+      try {
+        const j = await (await fetch("/api/deals/brief-batch", { cache: "no-store" })).json();
+        if (j.running) {
+          set({ briefingBatch: true, briefBatchResult: `Analysing leads… ${j.done}/${j.total}` });
+          setTimeout(tick, 4000);
+          return;
+        }
+        // Never ran this server lifetime — stay quiet rather than report a phantom result.
+        if (!j.total) { set({ briefingBatch: false }); return; }
+        set({
+          briefingBatch: false,
+          briefBatchResult: `Analysed ${j.succeeded} of ${j.total} leads${j.failed ? ` · ${j.failed} failed` : ""}.`,
+        });
+        await get().fetchDeals();
+      } catch {
+        set({ briefingBatch: false });
+      }
+    };
+    tick();
+  },
+
   pullFeeds: async () => {
     set({ pullingFeeds: true, feedsResult: null });
     try {
@@ -259,6 +306,9 @@ export const useDesk = create<DeskStore>((set, get) => ({
         const bs = j.bySource || {};
         set({ feedsResult: `Pulled ${j.relevant} remote leads (RemoteOK ${bs.remoteok || 0} · WWR ${bs.wwr || 0} · Reddit ${bs.reddit || 0})` });
         await get().fetchDeals();
+        // The pull now kicks off a brief pass server-side; follow it so the cards
+        // visibly fill in rather than appearing blank and silently changing later.
+        if (j.briefing) { set({ briefingBatch: true, briefBatchResult: `Analysing ${j.briefing} new leads…` }); get().pollBriefs(); }
       } else {
         set({ feedsResult: j.error || "Feed pull failed" });
       }

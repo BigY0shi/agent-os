@@ -326,7 +326,7 @@ function CookieModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function DealDesk() {
-  const { deals, columns, loading, error, fetchDeals, move, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape } = useDesk();
+  const { deals, columns, loading, error, fetchDeals, move, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
@@ -335,6 +335,9 @@ export default function DealDesk() {
   // A scrape runs for 10–20 minutes on the server, which easily outlives a page view.
   // Re-attach to one already in flight so a reload doesn't look like nothing happened.
   useEffect(() => { pollScrape(); }, [pollScrape]);
+  // Same reasoning for the brief pass — it is kicked off by a feed pull and runs for
+  // minutes, so a reload must re-attach rather than show a stale blank column.
+  useEffect(() => { pollBriefs(); }, [pollBriefs]);
 
   const approvedCount = deals.filter((d) => d.status === "approved").length;
 
@@ -408,6 +411,7 @@ export default function DealDesk() {
       {refillResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#c084fc" }}>{refillResult}</div>}
       {feedsResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#60a5fa" }}>{feedsResult}</div>}
       {scrapeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#d97757" }}>{scrapeResult}</div>}
+      {briefBatchResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#f59e0b" }}>{briefBatchResult}</div>}
 
       {error && <div className="panel p-3 mb-4 text-[12.5px]" style={{ color: "#f87171" }}>{error}</div>}
       {!loading && !error && deals.length === 0 && (
