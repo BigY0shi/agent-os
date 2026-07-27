@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Factory, RefreshCw, Loader2, ExternalLink, Sparkles, X, Check, Archive } from "lucide-react";
+import { Factory, RefreshCw, Loader2, ExternalLink, Sparkles, X, Check, Archive, Building2 } from "lucide-react";
 import { MACHINES, MACHINE_ORDER, machineFor, type MachineKey } from "@/lib/hireMachines";
 import type { HireLead, HireStatus } from "@/lib/hireDesk";
 
@@ -33,6 +33,7 @@ export default function HireEngine() {
   const [scanning, setScanning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [filter, setFilter] = useState<MachineKey | "all">("all");
+  const [enriching, setEnriching] = useState(false);
   const [open, setOpen] = useState<HireLead | null>(null);
 
   const load = useCallback(async () => {
@@ -55,6 +56,23 @@ export default function HireEngine() {
       if (j.ok) await load();
     } catch (e) { setNote((e as Error).message); }
     setScanning(false);
+  }
+
+  async function enrichApproved() {
+    setEnriching(true);
+    setNote("Looking up company size for approved leads…");
+    try {
+      const j = await (await fetch("/api/hire/enrich", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
+      })).json();
+      if (!j.ok) { setNote(j.error || "Enrichment failed"); }
+      else {
+        const poor = (j.results || []).filter((r: { fit?: string }) => r.fit === "poor").length;
+        setNote(`Enriched ${j.enriched}${j.failed ? ` · ${j.failed} failed` : ""}${poor ? ` · ${poor} flagged too large` : ""}`);
+        await load();
+      }
+    } catch (e) { setNote((e as Error).message); }
+    setEnriching(false);
   }
 
   async function setStatus(id: string, status: HireStatus) {
@@ -86,6 +104,12 @@ export default function HireEngine() {
             style={{ background: "rgba(251,146,60,0.16)", color: "#fb923c" }}
             title="Re-scan remotive / jobicy / himalayas for new postings (no account needed)">
             {scanning ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Scan job boards
+          </button>
+          <button onClick={enrichApproved} disabled={enriching}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(34,211,238,0.16)", color: "#22d3ee" }}
+            title="Look up headcount and public/private for leads you've approved, before writing outreach">
+            {enriching ? <Loader2 size={13} className="animate-spin" /> : <Building2 size={13} />} Enrich approved
           </button>
           <button onClick={load}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">
@@ -153,6 +177,15 @@ export default function HireEngine() {
                 {l.salaryNum && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
                     style={{ background: "rgba(52,211,153,0.18)", color: "#34d399" }}>{money(l.salaryNum)}/yr</span>
+                )}
+                {l.firmo?.fit && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+                    style={l.firmo.fit === "ideal" ? { background: "rgba(52,211,153,0.18)", color: "#34d399" }
+                      : l.firmo.fit === "poor" ? { background: "rgba(248,113,113,0.18)", color: "#f87171" }
+                      : { background: "rgba(251,191,36,0.18)", color: "#fbbf24" }}
+                    title={l.firmo.fitWhy}>
+                    {l.firmo.employees ?? l.firmo.fit}
+                  </span>
                 )}
                 {l.pitch && (
                   <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
@@ -233,6 +266,27 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
             </a>
           )}
         </div>
+
+        {lead.firmo && !lead.firmo.error && (
+          <div className="rounded-lg p-3 mb-4" style={{ background: "rgba(34,211,238,0.10)" }}>
+            <div className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: "#22d3ee" }}>
+              Company · {lead.firmo.fit ?? "unknown"} fit
+            </div>
+            <div className="text-[12.5px] text-white/80">
+              {lead.firmo.domain ?? "?"}
+              {lead.firmo.employees ? ` · ${lead.firmo.employees} staff` : ""}
+              {lead.firmo.type ? ` · ${lead.firmo.type}` : ""}
+              {lead.firmo.foundedYear ? ` · founded ${lead.firmo.foundedYear}` : ""}
+            </div>
+            {lead.firmo.fitWhy && <p className="text-[11.5px] text-white/55 mt-1.5 leading-relaxed">{lead.firmo.fitWhy}</p>}
+            {lead.firmo.email && <p className="text-[11.5px] text-white/45 mt-1.5">contact: {lead.firmo.email}</p>}
+          </div>
+        )}
+        {lead.firmo?.error && (
+          <div className="rounded-lg p-3 mb-4 text-[12px]" style={{ background: "rgba(248,113,113,0.10)", color: "#f87171" }}>
+            Company lookup failed: {lead.firmo.error}
+          </div>
+        )}
 
         {/* What the machine actually covers — the reason this lead is here at all. */}
         <div className="rounded-lg p-3 mb-4" style={{ background: `${m.accent}14` }}>

@@ -50,6 +50,20 @@ export async function POST(req: Request) {
     ? `They have published a salary of roughly $${lead.salaryNum.toLocaleString()}. Anchor against it — the machine is a fraction of one year of that role.`
     : "No salary is published. Do NOT invent one; anchor on the cost of the role generally, or on time rather than money.";
 
+  // Firmographics only exist if the lead has been enriched. When they do they are the
+  // single most decisive input: this offer lands with an SMB and is mis-sized for an
+  // enterprise, and the model cannot infer that from a job posting alone.
+  const f = lead.firmo;
+  const firmoLine = f && !f.error
+    ? `COMPANY SIZE (looked up, treat as reliable)\n` +
+      `Domain: ${f.domain ?? "?"} · Headcount: ${f.employees ?? "unknown"} · Type: ${f.type ?? "unknown"}` +
+      `${f.foundedYear ? ` · Founded ${f.foundedYear}` : ""}\n` +
+      `Verdict: ${f.fit ?? "unknown"} — ${f.fitWhy ?? ""}\n` +
+      (f.fit === "poor"
+        ? "Because the verdict is POOR, say so in `read` and recommend skipping. Still write the pitch, but keep it short and do not oversell.\n"
+        : "")
+    : "COMPANY SIZE: not looked up. Do NOT guess at their headcount or maturity in the pitch.\n";
+
   const builtLine = m.built
     ? "This machine IS BUILT and deployable — say so plainly, and offer a demo built from their own public material."
     : `This machine is NOT built yet. Do NOT claim it exists. Pitch it as a build we would do with them as the first client in this category, and be honest that they would be first.`;
@@ -71,6 +85,7 @@ export async function POST(req: Request) {
     `Employment: ${lead.employment ?? "?"} · Location: ${lead.location ?? "?"}\n` +
     `${salaryLine}\n` +
     `Description: ${(lead.desc || "").slice(0, 2500)}\n\n` +
+    firmoLine + "\n" +
     "Return ONLY minified JSON, no code fences, with EXACTLY these keys:\n" +
     '{"read":"...","pitch":"..."}\n\n' +
     "read  — 2–3 sentences for ME, not the prospect: which parts of THIS posting the machine actually covers, which parts it does not, and whether this is genuinely worth sending. If it is a poor fit, say so plainly; a false positive costs more than a skipped lead.\n" +

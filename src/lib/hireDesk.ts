@@ -29,6 +29,31 @@ export interface HireRecord {
   coverage: number; budget: number; commitment: number; composite: number;
 }
 
+/**
+ * Firmographics, fetched on demand when you enrich an approved lead.
+ *
+ * This is the signal the scrape CANNOT provide: the job boards give a company NAME and
+ * nothing else, so a 12-person shop and a public enterprise posting the same $40k
+ * support role score identically. Size is what separates them, and it decides whether
+ * the pitch is even coherent — a $1,500-2,500 machine augmenting one hire lands with an
+ * SMB and is mis-sized for a company with procurement and an existing support stack.
+ */
+export interface Firmo {
+  domain?: string;
+  /** Hunter's headcount band, e.g. "11-50", "251-1K". */
+  employees?: string;
+  /** "public" is a strong disqualifier for this offer. */
+  type?: string;
+  foundedYear?: number;
+  /** A contact address, if domain-search happened to surface one. */
+  email?: string;
+  /** Our verdict, derived from the above — see sizeFit(). */
+  fit?: "ideal" | "workable" | "poor";
+  fitWhy?: string;
+  at?: number;
+  error?: string;
+}
+
 export interface HireState {
   status?: HireStatus;
   notes?: string;
@@ -36,7 +61,30 @@ export interface HireState {
   pitch?: string;
   /** Why this role is (or is not) a fit for the machine. */
   read?: string;
+  firmo?: Firmo;
   updatedAt?: number;
+}
+
+/**
+ * Turn a headcount band into a buy verdict for THIS offer.
+ * Bands come from Hunter as strings like "1-10", "51-200", "1K-5K".
+ */
+export function sizeFit(f: { employees?: string; type?: string }): { fit: "ideal" | "workable" | "poor"; fitWhy: string } {
+  if (f.type === "public") {
+    return { fit: "poor", fitWhy: "Public company — procurement cycles and an existing tooling stack make a $1.5-2.5k augmentation a mis-sized pitch." };
+  }
+  const band = (f.employees || "").toLowerCase();
+  if (!band) return { fit: "workable", fitWhy: "No headcount available — treat as unknown rather than good." };
+  // Anything expressed in thousands is out of range for this offer.
+  if (/\bk\b|\dk/.test(band) || /^\s*(1001|5001|10001)/.test(band)) {
+    return { fit: "poor", fitWhy: `Roughly ${f.employees} staff — too large; they buy platforms, not a one-hire augmentation.` };
+  }
+  const first = parseInt(band, 10);
+  if (Number.isNaN(first)) return { fit: "workable", fitWhy: `Headcount "${f.employees}" not parseable.` };
+  if (first >= 501) return { fit: "poor", fitWhy: `Roughly ${f.employees} staff — too large for this offer.` };
+  if (first >= 201) return { fit: "workable", fitWhy: `Roughly ${f.employees} staff — upper edge; likely has some tooling already.` };
+  if (first >= 11) return { fit: "ideal", fitWhy: `Roughly ${f.employees} staff — the sweet spot: big enough to hire, small enough that one hire hurts.` };
+  return { fit: "workable", fitWhy: `Roughly ${f.employees} staff — may not have the budget or the ticket volume yet.` };
 }
 
 export interface HireLead extends HireRecord {
@@ -44,6 +92,7 @@ export interface HireLead extends HireRecord {
   notes: string;
   pitch: string | null;
   read: string | null;
+  firmo: Firmo | null;
   updatedAt: number | null;
 }
 
@@ -82,6 +131,7 @@ export async function listHireLeads(): Promise<HireLead[]> {
       notes: st.notes ?? "",
       pitch: st.pitch ?? null,
       read: st.read ?? null,
+      firmo: st.firmo ?? null,
       updatedAt: st.updatedAt ?? null,
     });
   }
@@ -99,6 +149,10 @@ export async function setHireStatus(id: string, status: HireStatus): Promise<Hir
 
 export async function setHireNotes(id: string, notes: string): Promise<HireState> {
   return patch(id, (s) => ({ ...s, notes }));
+}
+
+export async function setHireFirmo(id: string, firmo: Firmo): Promise<HireState> {
+  return patch(id, (s) => ({ ...s, firmo: { ...firmo, at: Date.now() } }));
 }
 
 export async function setHirePitch(id: string, pitch: string, read?: string): Promise<HireState> {
