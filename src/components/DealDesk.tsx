@@ -20,6 +20,43 @@ const SOURCE_META: Record<string, { label: string; color: string }> = {
 const srcKey = (d: Deal) => (d.source ? d.source.toLowerCase() : "upwork");
 const srcLabel = (k: string) => SOURCE_META[k]?.label ?? k;
 
+/** "3h ago" / "12d ago" — derived from an absolute instant, never from a stored phrase. */
+function agoLabel(ms: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60); if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24); if (d < 7) return `${d}d ago`;
+  const w = Math.round(d / 7); if (d < 60) return `${w}w ago`;
+  return `${Math.round(d / 30)}mo ago`;
+}
+
+/**
+ * Live "posted" label. The old card printed deal.posted verbatim, which for Upwork is a
+ * phrase frozen at scrape time — a month-old lead kept insisting it was two hours old.
+ * This re-derives from deal.postedAt and re-renders on a timer so it stays honest.
+ */
+function PostedAgo({ deal }: { deal: Deal }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (deal.postedAt == null) return;
+    // A minute is finer than any label we render, so nothing can visibly go stale.
+    const t = setInterval(() => tick((n) => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, [deal.postedAt]);
+
+  if (deal.postedAt == null) {
+    // Unparseable — show the raw string rather than inventing a time.
+    return <span className="opacity-70">{deal.posted || ""}</span>;
+  }
+  const days = (Date.now() - deal.postedAt) / 86_400_000;
+  return (
+    <span title={new Date(deal.postedAt).toLocaleString()} style={days > 21 ? { color: "#fb923c" } : undefined}>
+      {agoLabel(deal.postedAt)}
+    </span>
+  );
+}
+
 function Chip({ label, value }: { label: string; value: number }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono"
@@ -64,7 +101,7 @@ function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
       </div>
       <div className="flex items-center justify-between mt-2 text-[10.5px] text-white/45">
         <span>{deal.budget || "—"} {deal.jobType || ""}</span>
-        <span>{deal.posted || ""}</span>
+        <PostedAgo deal={deal} />
       </div>
       <div className="mt-1 text-[10.5px] text-white/40">
         {fmtMoney(deal.clientTotalSpent)} · {deal.clientRating ?? "?"}★ · {deal.clientHires ?? "?"}h
@@ -75,12 +112,13 @@ function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
 }
 
 function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
-  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, ask } = useDesk();
+  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask } = useDesk();
   const [notes, setNotes] = useState(deal.notes);
   const [pitch, setPitch] = useState(deal.pitch || "");
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [drafting, setDrafting] = useState(false);
+  const [briefing, setBriefing] = useState(false);
 
   useEffect(() => { setNotes(deal.notes); setPitch(deal.pitch || ""); }, [deal.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -90,6 +128,12 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
     await ask(deal.id, question.trim());
     setQuestion("");
     setAsking(false);
+  };
+
+  const runBrief = async () => {
+    setBriefing(true);
+    await generateBrief(deal.id);
+    setBriefing(false);
   };
 
   const draftFull = async () => {
@@ -148,6 +192,23 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           <div className="rounded-lg p-3 mb-4" style={{ background: "rgba(245,158,11,0.08)", borderLeft: "3px solid rgba(245,158,11,0.55)" }}>
             <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "#f59e0b" }}>Project summary</div>
             <p className="text-[13px] text-white/85 leading-relaxed">{deal.summary}</p>
+          </div>
+        )}
+
+        {/* No analysis yet. Upwork leads get it from the offline pitch pass; RemoteOK
+            and WWR leads never go through that, so offer to generate it on demand. */}
+        {!deal.summary && (
+          <div className="rounded-lg p-3 mb-4 flex items-center justify-between gap-3" style={{ background: "rgba(255,255,255,0.03)" }}>
+            <span className="text-[12px] text-white/50">
+              No analysis yet{deal.source ? ` — ${srcLabel(srcKey(deal))} leads aren't pre-pitched` : ""}.
+            </span>
+            <button onClick={runBrief} disabled={briefing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40 shrink-0"
+              style={{ background: "rgba(245,158,11,0.16)", color: "#f59e0b" }}
+              title="Generate summary, fit rationale, approach and a crash course for this lead">
+              {briefing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              {briefing ? "Analysing…" : "Generate brief"}
+            </button>
           </div>
         )}
 

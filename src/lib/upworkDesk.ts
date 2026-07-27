@@ -41,6 +41,11 @@ interface BoardRecord {
   id: string; subId?: string; title: string; url: string;
   budget: string | null; jobType: string | null; experienceLevel: string | null;
   duration: string | null; posted: string | null; description: string | null;
+  // `posted` is whatever the source emitted and is NOT comparable across sources:
+  // Upwork writes a relative string ("Posted 2 hours ago") that was true only at
+  // scrape time, RemoteOK writes ISO 8601, WWR writes RFC 2822. The two fields below
+  // exist on Upwork records and let us recover an absolute instant; see resolvePostedAt.
+  datePosted?: string | null; _scrapedAt?: string | null;
   tags: string[]; clientCountry: string | null; clientTotalSpent: number | null;
   clientRating: number | null; clientHires: number | null; clientMemberSince: string | null;
   easiness: number; winnability: number; fit: number; composite: number; _query?: string;
@@ -53,6 +58,16 @@ export interface Answer { q: string; a: string; ts: number }
 export interface DealState {
   status?: DealStatus; notes?: string; needsInfo?: boolean; editedPitch?: string;
   answers?: Answer[]; enrichment?: Enrichment; updatedAt?: number;
+  /**
+   * On-demand equivalent of a pitches.json entry. Upwork leads get summary/why/
+   * approach/crashCourse from the offline pitch pass; RemoteOK and WWR leads never
+   * went through it, so those fields were pinned to null forever and feed cards
+   * looked second-class. Generating a brief fills them for ANY source.
+   */
+  brief?: Brief;
+}
+export interface Brief {
+  summary?: string; why?: string; approach?: string; crashCourse?: string; at?: number;
 }
 export interface Enrichment { proposals?: string | number | null; paymentVerified?: boolean | null; hireRate?: number | null; at?: number }
 type StateStore = Record<string, DealState>;
@@ -60,6 +75,8 @@ type StateStore = Record<string, DealState>;
 export interface Deal extends BoardRecord {
   status: DealStatus;
   source?: string;
+  /** Absolute post time (epoch ms) normalised across sources; null if unknowable. */
+  postedAt: number | null;
   automatable?: boolean;
   summary: string | null;
   why: string | null; pitch: string | null; approach: string | null; crashCourse: string | null;
@@ -141,6 +158,53 @@ async function writeState(s: StateStore): Promise<void> {
 }
 
 // ── Merge board + pitches + state → Deal[] ──────────────────────────────────────
+// ── Posted time ────────────────────────────────────────────────────────────────
+// Every source states "when was this posted" differently, and one of them states it
+// in a way that rots: Upwork's "Posted 2 hours ago" was accurate the moment it was
+// scraped and has been drifting ever since. Cards rendered that string verbatim, so
+// a month-old lead still claimed to be two hours old.
+//
+// Resolve all three shapes to one absolute epoch, and let the UI derive the relative
+// label live from that.
+
+const REL_UNITS: Record<string, number> = {
+  minute: 60_000, hour: 3_600_000, day: 86_400_000,
+  week: 604_800_000, month: 2_592_000_000, year: 31_536_000_000,
+};
+
+/** "Posted 2 hours ago" → 7_200_000. Null when the text isn't a relative phrase. */
+function relativeOffsetMs(text: string): number | null {
+  const t = text.toLowerCase();
+  const m = t.match(/(\d+)\s*(minute|hour|day|week|month|year)s?\s+ago/);
+  if (m) return Number(m[1]) * REL_UNITS[m[2]];
+  // Upwork also emits these word forms, which the numeric pattern above misses.
+  if (/\byesterday\b/.test(t)) return REL_UNITS.day;
+  if (/\blast week\b/.test(t)) return REL_UNITS.week;
+  if (/\blast month\b/.test(t)) return REL_UNITS.month;
+  if (/\bjust now\b|\bmoments? ago\b/.test(t)) return 0;
+  return null;
+}
+
+/**
+ * Absolute post time in epoch ms, or null when it genuinely can't be known.
+ * Order matters: an explicit timestamp always beats a phrase we have to reconstruct.
+ */
+export function resolvePostedAt(rec: Partial<BoardRecord>): number | null {
+  // 1. Upwork's own absolute field (present on ~90% of board records).
+  if (rec.datePosted) { const t = Date.parse(rec.datePosted); if (!Number.isNaN(t)) return t; }
+  const posted = (rec.posted || "").trim();
+  if (!posted) return null;
+  // 2. RemoteOK (ISO 8601) and WWR (RFC 2822) both parse directly.
+  const direct = Date.parse(posted);
+  if (!Number.isNaN(direct)) return direct;
+  // 3. A relative phrase is only meaningful against the moment it was captured.
+  const off = relativeOffsetMs(posted);
+  if (off === null) return null;
+  const anchor = rec._scrapedAt ? Date.parse(rec._scrapedAt) : NaN;
+  if (Number.isNaN(anchor)) return null;
+  return anchor - off;
+}
+
 export async function listDeals(): Promise<Deal[]> {
   const [board, pitches, state] = await Promise.all([
     readJson<BoardRecord[]>(BOARD_FILE, []),
@@ -163,14 +227,16 @@ export async function listDeals(): Promise<Deal[]> {
     deals.push({
       ...b,
       description: formatDescription(b.description),
+      postedAt: resolvePostedAt(b),
       composite,
       effectiveFit,
       status: st.status || defaultStatus,
-      summary: p.summary ?? null,
-      why: p.why ?? null,
+      // A generated brief is newer than the offline pitch pass, so it wins.
+      summary: st.brief?.summary ?? p.summary ?? null,
+      why: st.brief?.why ?? p.why ?? null,
       pitch: st.editedPitch ?? p.pitch ?? null,
-      approach: p.approach ?? null,
-      crashCourse: p.crashCourse ?? null,
+      approach: st.brief?.approach ?? p.approach ?? null,
+      crashCourse: st.brief?.crashCourse ?? p.crashCourse ?? null,
       notes: st.notes ?? "",
       needsInfo: st.needsInfo ?? false,
       editedPitch: st.editedPitch ?? null,
@@ -191,9 +257,15 @@ export async function listDeals(): Promise<Deal[]> {
     deals.push({
       ...f,
       description: formatDescription(f.description),
+      postedAt: resolvePostedAt(f),
       composite, effectiveFit,
       status: st.status || (effectiveFit <= 3 ? "parked" : "new"),
-      summary: null, why: null, pitch: st.editedPitch ?? null, approach: null, crashCourse: null,
+      // Feed leads skip the offline pitch pass entirely, so these come from the
+      // on-demand brief if one has been generated — previously hardcoded to null,
+      // which is why RemoteOK/WWR cards never showed the analysis Upwork cards did.
+      summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
+      pitch: st.editedPitch ?? null,
+      approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
       answers: st.answers ?? [], enrichment: st.enrichment ?? null, updatedAt: st.updatedAt ?? null,
     });
@@ -235,6 +307,10 @@ export async function addAnswer(id: string, q: string, a: string): Promise<DealS
 }
 export async function setEnrichment(id: string, e: Enrichment): Promise<DealState> {
   return patch(id, (s) => ({ ...s, enrichment: { ...e, at: Date.now() } }));
+}
+
+export async function setBrief(id: string, b: Brief): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, brief: { ...b, at: Date.now() } }));
 }
 
 // Plan a "clear passed & refill" pass. Goal: keep the NEW column topped up to `target`.

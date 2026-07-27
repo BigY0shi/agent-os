@@ -16,6 +16,8 @@ interface DeskStore {
   toggleNeedsInfo: (id: string) => Promise<void>;
   savePitch: (id: string, pitch: string) => Promise<void>;
   draftProposal: (id: string) => Promise<string | null>;
+  /** Fill summary/why/approach/crashCourse for a lead that has none (feed leads never get pitched offline). */
+  generateBrief: (id: string) => Promise<boolean>;
   ask: (id: string, question: string) => Promise<string | null>;
   cookie: { set: boolean; hint: string };
   enriching: boolean;
@@ -106,6 +108,21 @@ export const useDesk = create<DeskStore>((set, get) => ({
       return null;
     } catch {
       return null;
+    }
+  },
+
+  generateBrief: async (id) => {
+    try {
+      const r = await fetch("/api/deals/brief", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+      });
+      const j = await r.json();
+      // Refetch rather than patching locally: the server merges the brief with the
+      // pitch pass, and that precedence is its call to make, not the client's.
+      if (j.ok) { await get().fetchDeals(); return true; }
+      return false;
+    } catch {
+      return false;
     }
   },
 
