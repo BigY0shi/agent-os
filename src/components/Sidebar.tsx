@@ -64,9 +64,14 @@ const LS_ORDER = "agentos.sidebar.order";
 const LS_HIDDEN = "agentos.sidebar.hidden";
 
 // Sidebar grouping. Mission Control sits under the top "Workspace" header;
-// Paperclip + AI Agent Mastermind + Pipeline + Deal Desk + Agent Kanban get their own "Agent Orchestration" group;
-// the model agents under "Agents"; everything else under "Self".
-const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/agent-kanban"]);
+// Paperclip + AI Agent Mastermind + Pipeline + Deal Desk + Hire Engine + Agent Kanban get
+// their own "Agent Orchestration" group; the model agents under "Agents"; everything else
+// under "Self".
+//
+// NOTE: membership here is what decides the group — NOT position in NAV and not the saved
+// drag order. A route missing from this set silently lands in "Self" no matter where it
+// sits in the array, so add new orchestration modules here as well as to NAV.
+const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/agent-kanban"]);
 function sectionOf(href: string): string {
   if (href === "/") return "Workspace";
   if (ORCHESTRATION_ROUTES.has(href)) return "Agent Orchestration";
