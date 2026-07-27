@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss,
+  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download,
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
@@ -326,12 +326,15 @@ function CookieModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function DealDesk() {
-  const { deals, columns, loading, error, fetchDeals, move, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult } = useDesk();
+  const { deals, columns, loading, error, fetchDeals, move, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
 
   useEffect(() => { fetchDeals(); fetchCookie(); }, [fetchDeals, fetchCookie]);
+  // A scrape runs for 10–20 minutes on the server, which easily outlives a page view.
+  // Re-attach to one already in flight so a reload doesn't look like nothing happened.
+  useEffect(() => { pollScrape(); }, [pollScrape]);
 
   const approvedCount = deals.filter((d) => d.status === "approved").length;
 
@@ -388,6 +391,12 @@ export default function DealDesk() {
             title="Pull remote gig feeds (RemoteOK / We Work Remotely) into the desk">
             {pullingFeeds ? <Loader2 size={13} className="animate-spin" /> : <Rss size={13} />} Pull feeds
           </button>
+          <button onClick={startScrape} disabled={scraping}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(217,119,87,0.16)", color: "#d97757" }}
+            title="Re-scrape Upwork and rebuild the board (opens a browser, takes 10–20 minutes)">
+            {scraping ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Re-scrape Upwork
+          </button>
           <button onClick={fetchDeals} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Reload
           </button>
@@ -398,6 +407,7 @@ export default function DealDesk() {
       {enrichResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#22d3ee" }}>{enrichResult}</div>}
       {refillResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#c084fc" }}>{refillResult}</div>}
       {feedsResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#60a5fa" }}>{feedsResult}</div>}
+      {scrapeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#d97757" }}>{scrapeResult}</div>}
 
       {error && <div className="panel p-3 mb-4 text-[12.5px]" style={{ color: "#f87171" }}>{error}</div>}
       {!loading && !error && deals.length === 0 && (

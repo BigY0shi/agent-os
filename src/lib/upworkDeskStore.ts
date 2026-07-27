@@ -28,6 +28,10 @@ interface DeskStore {
   refilling: boolean;
   refillResult: string | null;
   refill: () => Promise<void>;
+  scraping: boolean;
+  scrapeResult: string | null;
+  startScrape: () => Promise<void>;
+  pollScrape: () => Promise<void>;
   pullingFeeds: boolean;
   feedsResult: string | null;
   pullFeeds: () => Promise<void>;
@@ -51,6 +55,8 @@ export const useDesk = create<DeskStore>((set, get) => ({
   enrichResult: null,
   refilling: false,
   refillResult: null,
+  scraping: false,
+  scrapeResult: null,
   pullingFeeds: false,
   feedsResult: null,
 
@@ -198,6 +204,50 @@ export const useDesk = create<DeskStore>((set, get) => ({
     } finally {
       set({ refilling: false });
     }
+  },
+
+  // Upwork re-scrape. Unlike the other actions this is a long job (10–20 min of real
+  // browser work), so POST only starts it and we poll GET until it settles.
+  startScrape: async () => {
+    set({ scrapeResult: null });
+    try {
+      const r = await fetch("/api/deals/scrape", { method: "POST" });
+      const j = await r.json();
+      if (!j.ok) { set({ scrapeResult: j.error || "Could not start the scrape" }); return; }
+      set({ scraping: true, scrapeResult: "Scraping Upwork… this takes 10–20 minutes." });
+      get().pollScrape();
+    } catch (e) {
+      set({ scrapeResult: (e as Error).message });
+    }
+  },
+
+  pollScrape: async () => {
+    // Self-rescheduling rather than setInterval: one request in flight at a time, and
+    // it stops itself the moment the job settles.
+    const tick = async () => {
+      try {
+        const r = await fetch("/api/deals/scrape", { cache: "no-store" });
+        const j = await r.json();
+        if (j.running) {
+          set({ scraping: true, scrapeResult: `${j.stage === "scoring" ? "Scoring" : "Scraping"}… ${j.scraped} jobs captured (${Math.round(j.elapsedMs / 60000)}m)` });
+          setTimeout(tick, 5000);
+          return;
+        }
+        // "idle" means no scrape has run this server lifetime — that is the normal
+        // state on a page load, so say nothing rather than reporting a phantom failure.
+        if (j.stage === "idle") { set({ scraping: false }); return; }
+        set({
+          scraping: false,
+          scrapeResult: j.stage === "done"
+            ? `Board rebuilt from ${j.scraped} freshly scraped jobs.`
+            : j.error || "Scrape stopped unexpectedly.",
+        });
+        if (j.stage === "done") await get().fetchDeals();
+      } catch {
+        set({ scraping: false, scrapeResult: "Lost contact with the scrape job." });
+      }
+    };
+    tick();
   },
 
   pullFeeds: async () => {
