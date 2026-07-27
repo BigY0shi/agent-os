@@ -1,6 +1,7 @@
-import { getDeal, addAnswer } from "@/lib/upworkDesk";
+import { getDeal, addAnswer, LEADS_DIR } from "@/lib/upworkDesk";
 import { run } from "@/lib/runner";
 import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeBuilderArgs } from "@/lib/agentPowers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,11 @@ export async function POST(req: Request) {
   try {
     // `--model` is required (a bare `claude -p` resolves a "default" alias that
     // errors), and the prompt goes over stdin since it embeds the job description.
-    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"], { timeoutMs: 120_000, input: prompt });
+    // Rooted in LEADS_DIR with tools unlocked so it can actually open the corpus it
+    // is being asked about (board.json, contacts, prior pitches) instead of
+    // answering from the 1500 chars we paste in. No orchestrate: this is a single
+    // question, not a build.
+    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: prompt, cwd: LEADS_DIR });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }

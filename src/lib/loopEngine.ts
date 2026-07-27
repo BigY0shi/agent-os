@@ -7,6 +7,7 @@ import path from "node:path";
 import os from "node:os";
 import { run, type AgentName } from "./runner";
 import { CLAUDE_MODEL } from "./config";
+import { ORCHESTRATION_DIRECTIVE, claudeBuilderArgs } from "./agentPowers";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -56,12 +57,38 @@ function scratchCwd(): string {
 
 const INCOGNITO_SYS = "You are a participant in a group conversation. Follow the instructions given in the message.";
 
-export async function cliComplete(agent: string, prompt: string, opts?: { timeoutMs?: number; signal?: AbortSignal; incognito?: boolean }): Promise<string> {
+export async function cliComplete(
+  agent: string,
+  prompt: string,
+  opts?: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    incognito?: boolean;
+    /** Let the agent actually use its tools — see agentPowers.ts. */
+    fullAccess?: boolean;
+    /** Push it to delegate via the multi-agent-mcp-orchestration skill. */
+    orchestrate?: boolean;
+    /** Root the agent somewhere real, so it can read the files it reasons about. */
+    cwd?: string;
+  },
+): Promise<string> {
   const timeoutMs = opts?.timeoutMs ?? 240_000;
   const incog = !!opts?.incognito;
+  // Incognito is the exact opposite posture — a clean-room opinion with no memory,
+  // no tools and no project context. If both are somehow set, incognito wins.
+  const orchestrate = !incog && !!opts?.orchestrate;
+  const fullAccess = !incog && (!!opts?.fullAccess || orchestrate);
+
+  // claude takes the directive as a system-prompt APPEND, which keeps it out of the
+  // visible conversation. No other CLI here has a verified equivalent flag, so they
+  // get it inlined ahead of the prompt.
+  let text = prompt;
+  if (orchestrate && agent !== "claude") text = `${ORCHESTRATION_DIRECTIVE}\n\n---\n\n${prompt}`;
+
   // The loop embeds the previous artifact in the prompt, so by iteration 2 this is
   // routinely >30k chars — stdin is the only safe channel.
-  const viaStdin = prompt.length > ARG_PROMPT_LIMIT;
+  const viaStdin = text.length > ARG_PROMPT_LIMIT;
+  prompt = text;
   let args: string[];
   let input: string | undefined;
   switch (agent) {
@@ -92,9 +119,16 @@ export async function cliComplete(agent: string, prompt: string, opts?: { timeou
     }
   }
 
+  // Builder powers. Claude-only for now: the other CLIs' bypass flags aren't
+  // verified on this machine, and hermes already runs --yolo.
+  if (fullAccess && agent === "claude") {
+    args = [...args, ...claudeBuilderArgs({ orchestrate })];
+  }
+
   const res = await run(agent as AgentName, args, {
     timeoutMs, input, signal: opts?.signal,
-    ...(incog ? { cwd: scratchCwd() } : {}),
+    // Incognito's scratch cwd is what makes it clean-room, so it outranks a caller's cwd.
+    ...(incog ? { cwd: scratchCwd() } : opts?.cwd ? { cwd: opts.cwd } : {}),
   });
   const out = (res.stdout || "").trim();
   if (!out) throw new Error((res.stderr || `${agent} returned no output (exit ${res.code}).`).slice(-220));

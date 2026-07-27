@@ -1,9 +1,13 @@
-import { getDeal, setEditedPitch } from "@/lib/upworkDesk";
+import { getDeal, setEditedPitch, LEADS_DIR } from "@/lib/upworkDesk";
 import { run } from "@/lib/runner";
 import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeBuilderArgs } from "@/lib/agentPowers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Delegating to worker agents costs wall-clock that a single pass didn't — the old
+// 120s ceiling would now read as "agent returned nothing" on a working run.
+export const maxDuration = 600;
 
 // POST { id } → generate a complete, submit-ready Upwork proposal for this deal, weaving in
 // the operator's own Notes, and save it into the editable proposal box (editedPitch).
@@ -35,7 +39,11 @@ export async function POST(req: Request) {
   try {
     // `--model` is required (a bare `claude -p` resolves a "default" alias that
     // errors), and the prompt goes over stdin since it embeds the listing + pitch.
-    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"], { timeoutMs: 120_000, input: prompt });
+    // Rooted in LEADS_DIR with tools unlocked, so a proposal can be grounded in the
+    // real corpus — prior winning pitches, the portfolio, contacts. orchestrate is on:
+    // a proposal is research + positioning + copy, which is worth splitting across
+    // agents rather than one model doing all three passes alone.
+    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs({ orchestrate: true })], { timeoutMs: 300_000, input: prompt, cwd: LEADS_DIR });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }
