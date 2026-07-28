@@ -5,7 +5,8 @@ import {
   Factory, RefreshCw, Loader2, ExternalLink, Sparkles, X, Archive, Building2, HelpCircle,
 } from "lucide-react";
 import { MACHINES, MACHINE_ORDER, machineFor, type MachineKey } from "@/lib/hireMachines";
-import { HIRE_COLUMNS, type HireLead, type HireStatus } from "@/lib/hireDesk";
+import { HIRE_COLUMNS } from "@/lib/hireDeskColumns";
+import type { HireLead, HireStatus } from "@/lib/hireDesk";
 
 // Hire Engine — companies mid-hire for a role one of our machines already covers.
 // The Deal Desk works freelance gigs; this works salaried job postings, because the

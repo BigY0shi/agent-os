@@ -20,14 +20,8 @@ const STATE_FILE = path.join(LEADS_DIR, "hire-state.json");
 
 export const HIRE_STATUSES = ["new", "researching", "approved", "sent", "parked", "dismissed"] as const;
 export type HireStatus = (typeof HIRE_STATUSES)[number];
-
-/** Kanban columns, left → right — same shape as the Deal Desk's DESK_COLUMNS. */
-export const HIRE_COLUMNS: { key: HireStatus; label: string; accent: string }[] = [
-  { key: "new", label: "New", accent: "#a855f7" },
-  { key: "researching", label: "Researching", accent: "#22d3ee" },
-  { key: "approved", label: "Approved", accent: "#fbbf24" },
-  { key: "sent", label: "Sent", accent: "#34d399" },
-];
+// Kanban columns live in hireDeskColumns.ts — the client needs that value, and
+// this module's node:fs imports must not reach the client bundle.
 
 /** One row as hire.mjs writes it. */
 export interface HireRecord {
