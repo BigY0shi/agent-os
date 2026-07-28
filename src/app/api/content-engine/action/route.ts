@@ -1,5 +1,4 @@
-import { patchItem, readEngine, writeEngine, insightsPrompt, type ItemStatus, type Metrics } from "@/lib/contentEngine";
-import { cliComplete } from "@/lib/loopEngine";
+import { patchItem, readEngine, writeEngine, insightsPrompt, multiModelComplete, type ItemStatus, type Metrics } from "@/lib/contentEngine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,9 +21,11 @@ export async function POST(req: Request) {
   try {
     if (action === "insights") {
       const state = await readEngine();
-      const text = (await cliComplete("claude", insightsPrompt(state), { timeoutMs: 240_000 })).trim();
-      if (!text) return Response.json({ ok: false, error: "analyst returned nothing" }, { status: 502 });
-      state.insights = { text, at: Date.now() };
+      // Cross-lineage check: codex grades the content so the model reading the
+      // numbers is never the one that planned the calendar (claude fallback).
+      const { text, by } = await multiModelComplete("codex", insightsPrompt(state));
+      if (!text.trim()) return Response.json({ ok: false, error: "analyst returned nothing" }, { status: 502 });
+      state.insights = { text: text.trim(), at: Date.now(), by };
       await writeEngine(state);
       return Response.json({ ok: true, insights: state.insights });
     }

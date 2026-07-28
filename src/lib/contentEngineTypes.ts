@@ -21,6 +21,8 @@ export interface Materials {
   imagePrompt?: string;
   /** Present for video-shaped formats. */
   videoScript?: string;
+  /** Which model actually generated this ("codex" | "kimi" | "claude"). */
+  by?: string;
   at?: number;
 }
 
@@ -46,5 +48,5 @@ export interface EngineState {
   plan: { goals: string; channels: Channel[]; perWeek: number; weeks: number; at: number } | null;
   items: ContentItem[];
   /** Latest AI performance read. */
-  insights: { text: string; at: number } | null;
+  insights: { text: string; at: number; by?: string } | null;
 }

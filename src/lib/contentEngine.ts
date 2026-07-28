@@ -16,6 +16,42 @@ import os from "node:os";
 import type { Channel, ContentItem, EngineState } from "./contentEngineTypes";
 export { CHANNELS } from "./contentEngineTypes";
 export type { Channel, ContentItem, EngineState, ItemStatus, Metrics, Materials } from "./contentEngineTypes";
+import { seatComplete, type CouncilSeat } from "./brainstorm";
+
+// ── Multi-model mandate (per /multi-agent-mcp-orchestration) ────────────────────
+// Claude is the MANAGER (plans the calendar, owns the merge) but must not be the
+// only model working. Generation rotates across lineages per item — codex
+// (OpenAI) → kimi (Ollama Cloud) → claude (Anthropic) — and insights run on
+// codex so the model grading the content is never the one that planned it.
+// A failed seat falls back to Claude and the artifact records who actually made it.
+
+const GEN_ROTATION: CouncilSeat[] = ["codex", "kimi", "claude"];
+
+/** Stable seat per item — hash of the id, so regenerate hits the same seat. */
+export function seatForItem(id: string): CouncilSeat {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return GEN_ROTATION[h % GEN_ROTATION.length];
+}
+
+/**
+ * Run a prompt on the preferred seat, falling back to Claude if it fails.
+ * Returns the text and which seat ACTUALLY answered — never claim codex wrote
+ * something Claude had to rescue.
+ */
+export async function multiModelComplete(preferred: CouncilSeat, prompt: string): Promise<{ text: string; by: CouncilSeat }> {
+  // seatComplete resolves the live Kimi model itself when the seat is kimi.
+  const { resolveKimiModel } = await import("./brainstorm");
+  try {
+    const kimiModel = preferred === "kimi" ? await resolveKimiModel() : "";
+    const text = await seatComplete(preferred, prompt, kimiModel);
+    return { text, by: preferred };
+  } catch {
+    if (preferred === "claude") throw new Error("claude seat failed");
+    const text = await seatComplete("claude", prompt, "");
+    return { text, by: "claude" };
+  }
+}
 
 const DIR = path.join(os.homedir(), ".agentic-os", "content-engine");
 const FILE = path.join(DIR, "state.json");

@@ -71,14 +71,14 @@ export async function POST(req: Request) {
             },
             output: { voice },
           },
-          // Lets the butler actually act on the user's Mac (handled client-side → /realtime/open).
+          // Lets the butler actually act on the user's machine (handled client-side → /realtime/open).
           tools: [{
             type: "function",
             name: "open_app_or_site",
-            description: "Open a website or a macOS application on the user's Mac. Call this whenever they ask to open, launch, go to, or pull up something.",
+            description: "Open a website or an installed application on the user's computer. Call this whenever they ask to open, launch, go to, or pull up something.",
             parameters: {
               type: "object",
-              properties: { target: { type: "string", description: "A full https:// URL for a website (e.g. 'https://google.com'), or a macOS app name (e.g. 'Notes', 'Safari')." } },
+              properties: { target: { type: "string", description: `A full https:// URL for a website (e.g. 'https://google.com'), or an installed app name (e.g. ${process.platform === "win32" ? "'Notepad', 'Opera'" : "'Notes', 'Safari'"}).` } },
               required: ["target"],
             },
           }],
