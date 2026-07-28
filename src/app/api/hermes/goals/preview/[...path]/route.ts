@@ -38,7 +38,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
     return new Response("path must be /<goalId>/<...rel>", { status: 400 });
   }
   const [goalId, ...restSegs] = segments;
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(goalId)) {
+  if (!/^(?!\.+$)[A-Za-z0-9_.-]+$/.test(goalId)) {
     return new Response("invalid goal id", { status: 400 });
   }
   const goal = await getGoal(goalId);

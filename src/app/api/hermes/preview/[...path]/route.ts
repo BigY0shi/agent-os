@@ -41,7 +41,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
   }
 
   const [bucket, ...restSegs] = segments;
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(bucket)) {
+  if (!/^(?!\.+$)[A-Za-z0-9_.-]+$/.test(bucket)) {
     return new Response("invalid bucket id", { status: 400 });
   }
   const rel = restSegs.join("/");

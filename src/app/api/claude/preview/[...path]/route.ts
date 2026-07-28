@@ -35,7 +35,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ path: string[] 
     return new Response("path must be /project/...rel", { status: 400 });
   }
   const [project, ...restSegs] = segments;
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) {
+  if (!/^(?!\.+$)[A-Za-z0-9_.-]+$/.test(project)) {
     return new Response("invalid project name", { status: 400 });
   }
   const rel = restSegs.join("/");
