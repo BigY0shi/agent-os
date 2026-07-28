@@ -4,6 +4,14 @@ Newest entry at the top. Every change lists its commit and rollback.
 
 ---
 
+## 01:00 PDT (07-28) · Local Kokoro TTS — free butler voice + lifecycle wiring (commit `c2be605`)
+Replaces ElevenLabs as the default butler voice with a LOCAL model; hosted providers stay as fallbacks.
+- **Install:** `~/.agentic-os/kokoro-tts/` — venv (Python 3.11, CUDA torch cu121, ~5-6GB disk) + `server.py` (FastAPI, port 8880) + `start-kokoro.cmd`. Model: hexgrad/Kokoro-82M (Apache-2.0, ~330MB, ~1GB VRAM on the 4070 Ti Super). Voice `bm_george` (KOKORO_VOICE overrides; bm_fable/bm_lewis/bm_daniel available).
+- **Route:** `/api/hermes/tts` gains `provider:"local"` and `provider:"auto"` (local → ElevenLabs → OpenAI, first audio wins; `LOCAL_TTS_URL` override). JarvisView `speak()` + Kimi K3 loop now send `auto`.
+- **Lifecycle:** new `kokoro-start.ps1` (idempotent, hidden, logs `~/.agentic-os/kokoro-tts*.log`) called from `Start Agent OS.bat` + `agentos-restart.ps1`; `agentos-stop.ps1` and restart's stop phase kill port 8880 alongside 3737. No-op when not installed.
+- **Verified live:** `/health` → `{ok, device:"cuda", voice:"bm_george"}`; cold synth 2.26s (voice-pack load), **warm synth 253ms**; real WAV audio returned. Dashboard-route end-to-end pends the next restart (running server is the old build; unauthenticated curl 401s at the LAN gate, as designed).
+**Rollback:** `git revert c2be605`; exile `~/.agentic-os/kokoro-tts/` to reclaim ~6GB. Voice falls back to ElevenLabs automatically.
+
 ## 00:55 PDT (07-28) · Jarvis three-way voice provider (commit `7be052c`)
 Realtime panel now has a persisted toggle (localStorage `jarvis.voiceProvider`):
 - **GPT Realtime** — existing WebRTC path, untouched (native S2S, OpenAI API-billed).
