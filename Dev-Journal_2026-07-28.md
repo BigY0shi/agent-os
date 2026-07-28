@@ -1,5 +1,45 @@
 # Dev Journal — 2026-07-28
 
+## Agents module — Phases 2–4: curator, triggers, direct-HTTP tier
+
+**Commits:** `64981ab` (curator) · `b1544ce` (triggers) · `823a9b4` (HTTP tier)
+**Rollback:** revert in reverse order; `~/.agentic-os/agents/` data survives.
+
+- **Phase 2 — Curator (Tier 1 learning).** After every successful task run and on
+  user feedback (thumbs + comment → feedback route), a bounded curator run
+  maintains the agent's own files: dated journal entries with multi-resolution
+  compaction, durable facts, conservative `system.md` refinements. Hard
+  allowlist gate (read only inside the agent dir; write only `system.md`,
+  `skills/*.md`, `memory/*.md` — regex verified against 7 path cases; no shell,
+  no MCP). Every `system.md` change is line-diffed into the run events +
+  `curator-log.md` — no silent drift.
+- **Phase 3 — Triggers.** One 60s scheduler loop booted by `src/instrumentation.ts`
+  at server start. `gmail` = interval check-run with agent-side seen-list and
+  NOTHING-NEW early exit (min 10m; each check is a model call); `webwatch` =
+  server-side fetch + normalized sha256, fires only on change; `filewatch` =
+  mtime scan (poll-based — fs.watch is unreliable on Windows); `schedule` =
+  croner (due-check semantics verified live). Change-cursors only advance when a
+  run actually starts → busy agents re-fire next tick, no dropped events.
+  Webhooks: `POST /api/agents/hook/<id>`, timing-safe `x-agent-secret`; the path
+  is exempt from the LAN gate because the secret IS the auth. Drawer grew a
+  triggers editor. New dep: `croner`.
+- **Phase 4 — Direct-HTTP tier.** Generic `http_request` tool (in-process SDK MCP
+  server) + per-service skill docs (`skills/apis/*.md`, template seeded at agent
+  creation). Secrets ride as `{{secret:NAME}}` placeholders resolved server-side
+  from `~/.agentic-os/secrets.json`/env — never in prompts or transcripts. Gate:
+  mutating calls to send/pay endpoints are constitution-gated in every mode;
+  other mutating HTTP queues in gated mode. Prompt switched to generator form
+  (custom SDK tools require streaming input).
+
+**Verified live:** curator path-allowlist regex (7/7 cases); croner due-check;
+`mcpServers` option MERGES with the settings fleet (31 = 30 user servers +
+`http`); model called `mcp__http__http_request` through the gate; real GET → 200.
+All four phases `tsc --noEmit` clean. Full UI click-through pends the next
+rebuild — after restart the scheduler boots via instrumentation, so pollers run
+without the dashboard open.
+
+---
+
 ## Agents module — Phase 1 core runtime (the local Tasklet)
 
 **Commit:** `cde17ba` · **Rollback:** `git revert cde17ba` (agent data lives outside
