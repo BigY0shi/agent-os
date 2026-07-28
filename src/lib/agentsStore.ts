@@ -76,11 +76,26 @@ export async function createAgent(input: {
     createdAt: now,
     updatedAt: now,
   };
-  for (const sub of ["", "skills", "memory", "runs", "workspace"]) await ensure(path.join(agentDir(id), sub));
+  for (const sub of ["", "skills", path.join("skills", "apis"), "memory", "runs", "workspace"]) await ensure(path.join(agentDir(id), sub));
   await writeFile(path.join(agentDir(id), "agent.json"), JSON.stringify(def, null, 2), "utf8");
   await writeFile(path.join(agentDir(id), "system.md"), input.instructions.trim() + "\n", "utf8");
   await writeFile(path.join(agentDir(id), "memory", "facts.md"), "# Facts\n", "utf8");
   await writeFile(path.join(agentDir(id), "memory", "journal.md"), "# Journal\n", "utf8");
+  await writeFile(path.join(agentDir(id), "skills", "apis", "_template.md"),
+    `# <Service name> API
+
+How to call this API with the http_request tool. The curator (or you) refines
+this file as lessons accumulate — that's the point: instructions beat schemas.
+
+- Base URL: https://api.example.com/v1
+- Auth header: \`Authorization: Bearer {{secret:EXAMPLE_API_KEY}}\`
+  (the placeholder resolves server-side from ~/.agentic-os/secrets.json — never
+  paste real keys in here)
+- Endpoints that matter, with the exact request shapes that WORK:
+  - GET /things?limit=20 — list things
+- Gotchas learned the hard way:
+  - (add as discovered)
+`, "utf8");
   return def;
 }
 

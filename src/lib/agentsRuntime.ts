@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { CLAUDE_MODEL } from "./config";
+import { makeHttpServer, HTTP_TOOL_NAME, SENSITIVE_HTTP_RE } from "./agentsHttpTool";
 import type { AgentDef, AgentIntelligence, ApprovalReq, ApprovalReason, McpServerHealth, RunEvent, RunMeta } from "./agentsTypes";
 import {
   appendRunEvent, loadRunMeta, readApprovals, readRunEvents, readSystemPrompt,
@@ -124,6 +125,7 @@ const CONST_SHELL_QUEUE = [
 
 const SHELL_TOOLS = /^(Bash|PowerShell|mcp__.*(powershell|shell|exec).*)$/i;
 const WRITE_TOOLS = /^(Write|Edit|NotebookEdit)$/;
+const MUTATING_HTTP = /^(POST|PUT|PATCH|DELETE)$/i;
 
 type GateDecision =
   | { verdict: "allow" }
@@ -138,6 +140,18 @@ export function gate(def: AgentDef, toolName: string, input: Record<string, unkn
     for (const p of CONST_SHELL_QUEUE) if (p.re.test(cmd)) return { verdict: "queue", reason: "constitution", why: p.why };
   }
   for (const p of CONST_TOOL) if (p.re.test(toolName)) return { verdict: "queue", reason: "constitution", why: p.why };
+
+  // Direct-HTTP tier: a mutating call to a messaging/payment endpoint is an
+  // outbound send in API clothing — constitution, every mode. Other mutating
+  // calls are gated-mode approvals; GET/HEAD is plain research.
+  if (toolName === HTTP_TOOL_NAME) {
+    const method = String(input.method ?? "GET");
+    const url = String(input.url ?? "");
+    if (MUTATING_HTTP.test(method)) {
+      if (SENSITIVE_HTTP_RE.test(url)) return { verdict: "queue", reason: "constitution", why: `outbound ${method} to a send/pay endpoint` };
+      if (def.permissionMode === "gated") return { verdict: "queue", reason: "gated", why: `mutating HTTP ${method}` };
+    }
+  }
 
   if (def.permissionMode === "ask") return { verdict: "queue", reason: "ask", why: "ask mode — every call is reviewed" };
 
@@ -320,13 +334,22 @@ async function execute(def: AgentDef, runId: string, trigger: string, extraPromp
     `Read memory/facts.md and memory/journal.md (one level up from your cwd) first if past context could matter — pull only what's relevant.`;
 
   try {
+    // Custom SDK MCP tools (the http server) require streaming input mode — a
+    // plain string prompt "will not work" per the SDK docs, so wrap in a
+    // one-shot async generator.
+    async function* oneShot() {
+      yield { type: "user" as const, message: { role: "user" as const, content: prompt }, parent_tool_use_id: null, session_id: "" };
+    }
     const stream = query({
-      prompt,
+      prompt: oneShot(),
       options: {
         cwd: workspaceDir(def.id),
         model: MODEL_FOR[def.intelligence],
+        mcpServers: { http: makeHttpServer() },
         systemPrompt: { type: "preset", preset: "claude_code", append:
-          `\n\nYou are "${def.name}", a standing background agent in the user's Agent OS.\n${system}` },
+          `\n\nYou are "${def.name}", a standing background agent in the user's Agent OS.\n${system}\n\n` +
+          `Direct-HTTP tier: the http_request tool calls any API. Per-service instructions live in ../skills/apis/*.md (relative to your cwd) — read the relevant one before calling. ` +
+          `Credentials are referenced as {{secret:NAME}} placeholders (resolved server-side); never ask for or echo raw keys.` },
         // "user" pulls the user's own settings — including their locally
         // configured MCP servers. This is the "inherit the fleet" decision.
         settingSources: def.tools.mcp === "inherit" ? ["user"] : [],
