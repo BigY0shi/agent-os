@@ -1,5 +1,50 @@
 # Dev Journal — 2026-07-28
 
+## Agents module — Phase 1 core runtime (the local Tasklet)
+
+**Commit:** `cde17ba` · **Rollback:** `git revert cde17ba` (agent data lives outside
+the repo in `~/.agentic-os/agents/` and survives a revert).
+
+**What:** New top-level module "Agents" — reusable background agents à la Tasklet,
+running locally on the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk` 0.3.220,
+subscription-billed via CLI OAuth, no API key). Spec hammered out and approved
+first: `_specs/agents-module.md` (design session + the Perplexity "Cloning
+Tasklet" blueprint reconciled — two-tier curator/runner design adopted;
+Docker/LiteLLM/pgvector deliberately skipped).
+
+Phase 1 ships: agent CRUD (per-agent dir under `~/.agentic-os/agents/<id>/` with
+`agent.json`, `system.md`, `memory/`, `runs/*.jsonl`, `workspace/`), SDK runner
+with a polled event stream into the UI, permission dial **bypass / gated / ask**
+plus a code-enforced **constitution** (outbound send, public post, financial,
+credential grant, deletion → approval in every mode; shell deletions hard-deny
+with exile guidance), a global approvals inbox that parks runs mid-flight
+(unresolved `canUseTool` promise) and resumes on Approve, per-run kill switch,
+and MCP fleet inheritance with per-server health. Sidebar: "Agents" is its own
+top-level section; the model CLI group was renamed "CLI Agents" to free the name.
+
+**Verified (live evidence, scratchpad `smoke-agent-sdk.mjs`):**
+- Subscription auth: `query()` succeeded with no `ANTHROPIC_API_KEY` in env.
+- **Gate hole found by testing:** in default permission mode the CLI auto-allowed
+  Bash with **0** `canUseTool` calls — a callback-only permission design would
+  have silently skipped the constitution. Fix: a `PreToolUse` hook fires on every
+  tool call; `deny` blocks, `ask` escalates. Chain proven live:
+  `[hook] PreToolUse: Bash` → `[gate] canUseTool fired: Bash` → `SMOKE-OK`.
+- MCP inheritance via `settingSources: ["user"]`: 30 servers with real statuses
+  (Gmail/Upwork/Indeed connected; Slack/Notion needs-auth; fleet failed).
+- Intelligence-dial model ids resolve on the CLI: `claude-sonnet-5` (standard),
+  `claude-haiku-4-5` (fast); deep = pinned `CLAUDE_MODEL`.
+- `npx tsc --noEmit` exit 0.
+
+**Known limits (in spec):** pending approvals die with the server process; no
+triggers yet (Phase 3); curator learning is Phase 2; UI click-through pends the
+next rebuild.
+
+Also this morning: `326d81e` checkpointed the memsearch memory journals
+(07-25 → 07-28). Left untracked on purpose: `nul` (stray redirect artifact),
+`.memsearch/.index.pid` (runtime PID).
+
+---
+
 ## Audit Console module (feat-004 of the Business Audit Engine harness)
 
 New sidebar module under **Agent Orchestration**: start and watch Business Audit Engine
