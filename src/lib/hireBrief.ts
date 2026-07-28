@@ -44,6 +44,60 @@ async function claudeJson(prompt: string, timeoutMs: number): Promise<{ ok: true
   catch { return { ok: false, error: "malformed JSON from agent" }; }
 }
 
+// Stage-1 triage rides the cheap tier — verified to resolve on the CLI 2026-07-28.
+const TRIAGE_MODEL = "claude-haiku-4-5";
+const TRIAGE_CHUNK = 12;
+
+/**
+ * Cheap batched pursue/skip triage over many leads at once — the funnel's first
+ * stage, so the expensive full brief (opus) only runs on listings worth pursuing.
+ * One haiku call judges TRIAGE_CHUNK postings; ~12x cheaper and faster than
+ * briefing everything.
+ */
+export async function triageHireLeads(leads: HireLead[]): Promise<Record<string, { pursue: boolean; reason: string }>> {
+  const out: Record<string, { pursue: boolean; reason: string }> = {};
+
+  for (let i = 0; i < leads.length; i += TRIAGE_CHUNK) {
+    const chunk = leads.slice(i, i + TRIAGE_CHUNK);
+    const digests = chunk.map((l) => {
+      const m = machineFor(l.machineKey);
+      return `id: ${l.id}\nmachine: ${m.name} (${m.built ? "built" : "not built"}) · coverage score ${l.coverage}/5\n` +
+        `role: ${l.title} @ ${l.company ?? "?"} · ${l.employment ?? "?"} · salary ${l.salary ?? "unpublished"}\n` +
+        `posting: ${(l.desc || "").replace(/\s+/g, " ").slice(0, 600)}`;
+    }).join("\n\n---\n\n");
+
+    const prompt =
+      "You triage job postings for a RevOps / automation consultancy that sells productized machines to companies mid-hire " +
+      "(the machine AUGMENTS the hire: drafts everything, the human approves). For each posting below, decide: is this worth " +
+      "a full analysis and outreach (pursue), or not (skip)?\n\n" +
+      "PURSUE when the machine credibly covers a large share of the role's actual duties and the company looks like it could buy a $1.5-2.5k augmentation.\n" +
+      "SKIP when the role is mostly judgment/relationship work the machine can't draft, the posting is an agency/staffing repost, the org is obviously enterprise-scale, or the listing is too vague to assess.\n" +
+      "Be selective — a false pursue wastes an expensive analysis, a false skip is recoverable (the human can overrule).\n\n" +
+      "Return ONLY a minified JSON array, no prose, no code fences, one entry per posting:\n" +
+      '[{"id":"...","pursue":true,"reason":"one plain sentence"}]\n\n' +
+      digests;
+
+    const r = await run(
+      "claude",
+      ["-p", "--model", TRIAGE_MODEL, "--output-format", "text", ...claudeBuilderArgs()],
+      { timeoutMs: 120_000, input: prompt, cwd: LEADS_DIR },
+    );
+    const raw = (r.stdout || "").trim();
+    const mm = raw.match(/\[[\s\S]*\]/);
+    if (!mm) continue; // a failed chunk stays un-triaged and is retried next pass
+    try {
+      const arr = JSON.parse(mm[0]) as { id?: string; pursue?: boolean; reason?: string }[];
+      const valid = new Set(chunk.map((l) => l.id));
+      for (const v of arr) {
+        if (v.id && valid.has(v.id) && typeof v.pursue === "boolean") {
+          out[v.id] = { pursue: v.pursue, reason: String(v.reason ?? "").slice(0, 300) };
+        }
+      }
+    } catch { /* malformed chunk — retried next pass */ }
+  }
+  return out;
+}
+
 /** Generate the analysis block (summary / why / approach / crash course) for one lead. */
 export async function generateHireBrief(lead: HireLead): Promise<HireBrief | { error: string }> {
   const m = machineFor(lead.machineKey);

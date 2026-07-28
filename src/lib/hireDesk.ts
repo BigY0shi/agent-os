@@ -69,6 +69,13 @@ export interface HireBrief {
   summary?: string; why?: string; approach?: string; crashCourse?: string; at?: number;
 }
 
+/**
+ * Stage-1 verdict from the cheap triage pass: should this listing get the full
+ * analysis + eventually a pitch, or is it not worth the spend? "skip" cards keep
+ * the verdict + reason visible so the human can overrule with the drawer button.
+ */
+export interface HireTriage { pursue: boolean; reason: string; at: number }
+
 export interface HireState {
   status?: HireStatus;
   notes?: string;
@@ -77,6 +84,7 @@ export interface HireState {
   /** Why this role is (or is not) a fit for the machine. */
   read?: string;
   firmo?: Firmo;
+  triage?: HireTriage;
   brief?: HireBrief;
   answers?: HireAnswer[];
   updatedAt?: number;
@@ -110,6 +118,7 @@ export interface HireLead extends HireRecord {
   pitch: string | null;
   read: string | null;
   firmo: Firmo | null;
+  triage: HireTriage | null;
   summary: string | null;
   why: string | null;
   approach: string | null;
@@ -184,6 +193,7 @@ export async function listHireLeads(): Promise<HireLead[]> {
       pitch: st.pitch ?? null,
       read: st.read ?? null,
       firmo,
+      triage: st.triage ?? null,
       summary: st.brief?.summary ?? null,
       why: st.brief?.why ?? null,
       approach: st.brief?.approach ?? null,
@@ -218,6 +228,17 @@ export async function setHirePitch(id: string, pitch: string, read?: string): Pr
 
 export async function setHireBrief(id: string, brief: HireBrief): Promise<HireState> {
   return patch(id, (s) => ({ ...s, brief: { ...brief, at: Date.now() } }));
+}
+
+/** Batch triage write — one read-modify-write for a whole pass, not N file writes. */
+export async function setHireTriages(verdicts: Record<string, { pursue: boolean; reason: string }>): Promise<void> {
+  const store = await readState();
+  const now = Date.now();
+  for (const [id, v] of Object.entries(verdicts)) {
+    store[id] = { ...(store[id] || {}), triage: { ...v, at: now }, updatedAt: now };
+  }
+  await mkdir(path.dirname(STATE_FILE), { recursive: true }).catch(() => {});
+  await writeFile(STATE_FILE, JSON.stringify(store, null, 1));
 }
 
 export async function addHireAnswer(id: string, q: string, a: string): Promise<HireState> {

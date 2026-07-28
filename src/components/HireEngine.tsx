@@ -93,6 +93,17 @@ function Card({ lead, onOpen }: { lead: HireLead; onOpen: (l: HireLead) => void 
             <Sparkles size={9} /> brief
           </span>
         )}
+        {/* Triage verdict — the stage-1 read. Skip cards keep the reason visible so
+            you can overrule with the drawer's Generate brief button. */}
+        {!lead.summary && lead.triage && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+            style={lead.triage.pursue
+              ? { background: "rgba(52,211,153,0.18)", color: "#34d399" }
+              : { background: "rgba(148,163,184,0.16)", color: "#94a3b8" }}
+            title={lead.triage.reason}>
+            {lead.triage.pursue ? "pursue" : "skip"}
+          </span>
+        )}
         {lead.pitch && (
           <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
             style={{ background: "rgba(168,85,247,0.18)", color: "#c084fc" }}>pitched</span>
@@ -225,7 +236,11 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
         )}
         {!lead.summary && (
           <div className="rounded-lg p-3 mb-4 flex items-center justify-between gap-3" style={{ background: "rgba(255,255,255,0.03)" }}>
-            <span className="text-[12px] text-white/50">No analysis yet — hire leads aren&apos;t pre-pitched.</span>
+            <span className="text-[12px] text-white/50">
+              {lead.triage
+                ? <>Triage said <b style={{ color: lead.triage.pursue ? "#34d399" : "#94a3b8" }}>{lead.triage.pursue ? "pursue" : "skip"}</b>: {lead.triage.reason}{!lead.triage.pursue && " — overrule with the button if you disagree."}</>
+                : "Not yet analysed — the next scan triages the whole board, or do this one now."}
+            </span>
             <button onClick={runBrief} disabled={briefing}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40 shrink-0"
               style={{ background: "rgba(245,158,11,0.16)", color: "#f59e0b" }}
@@ -360,18 +375,24 @@ export default function HireEngine() {
   useEffect(() => { load(); }, [load]);
 
   // Poll a running brief/pitch pass and live-refresh the board as analysis lands.
+  // Drain passes can cover a whole board (~18s/lead), so watch for up to 30 min.
   const watchBatch = useCallback(async (kind: "brief" | "pitch") => {
-    for (let i = 0; i < 120; i++) {
+    for (let i = 0; i < 360; i++) {
       await new Promise((r) => setTimeout(r, 5000));
       try {
         const j = await (await fetch("/api/hire/brief-batch", { cache: "no-store" })).json();
         const job = kind === "brief" ? j.brief : j.pitch;
         if (!job) return;
         if (job.running) {
-          setNote(`${kind === "brief" ? "Analysing" : "Writing pitches for"} ${job.done}/${job.total}…`);
+          if (kind === "brief" && job.phase === "triage") setNote("Triaging the board — pursue/skip on every card…");
+          else setNote(`${kind === "brief" ? "Full analysis" : "Writing pitches"} ${job.done}/${job.total}…`);
           if (job.done > 0 && job.done % 3 === 0) await load();
         } else {
-          if (job.total > 0) setNote(`${kind === "brief" ? "Analysed" : "Pitched"} ${job.succeeded}/${job.total}${job.failed ? ` · ${job.failed} failed` : ""}`);
+          if (kind === "brief" && (job.triaged || job.total)) {
+            setNote(`Triaged ${job.triaged ?? 0} · pursuing ${job.pursued ?? 0} · briefed ${job.succeeded}/${job.total}${job.failed ? ` · ${job.failed} failed` : ""}`);
+          } else if (job.total > 0) {
+            setNote(`Pitched ${job.succeeded}/${job.total}${job.failed ? ` · ${job.failed} failed` : ""}`);
+          }
           await load();
           return;
         }

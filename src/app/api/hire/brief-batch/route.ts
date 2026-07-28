@@ -10,12 +10,11 @@ export function GET() {
   return Response.json({ ...hireBatchStatus(), ok: true });
 }
 
-// POST { limit?: number }
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({})) as { limit?: number };
-  const r = await startHireBriefBatch(body.limit);
+// POST → triage everything un-judged, then full-brief the pursue pile.
+export async function POST() {
+  const r = await startHireBriefBatch();
   if (!r.started && r.reason === "already running") {
-    return Response.json({ ...hireBatchStatus(), ok: false, error: "A brief pass is already running." }, { status: 409 });
+    return Response.json({ ...hireBatchStatus(), ok: false, error: "An analysis pass is already running." }, { status: 409 });
   }
   return Response.json({ ...hireBatchStatus(), ...r, ok: true });
 }
