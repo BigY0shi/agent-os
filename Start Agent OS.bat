@@ -15,6 +15,10 @@ if %errorlevel% neq 0 (
 )
 
 :: 2 · Start Paperclip in its own window (reuses the standalone bat — one source of truth)
+:: Clear PORT first: `set PORT=3737` (below) survives in this cmd window, so running
+:: this bat twice from the same window handed Paperclip the dashboard's port — an
+:: Express "Cannot GET /" squatting on 3737 while Next failed to bind (seen 2026-07-28).
+set "PORT="
 echo   📎 Launching Paperclip in a separate window...
 start "Paperclip Server" "%~dp0Start Paperclip Server.bat"
 
