@@ -6,7 +6,7 @@
 // cards when a gated/constitution action wants out.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2 } from "lucide-react";
+import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { AgentDef, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
 import { INTELLIGENCE_META, MODE_META, STATUS_COLORS } from "@/lib/agentsTypes";
 
@@ -445,6 +445,38 @@ function RunView({ agentId, runId }: { agentId: string; runId: string }) {
           </div>
         )}
       </div>
+      {meta && (meta.status === "done" || meta.status === "error") && meta.trigger !== "curator" && meta.trigger !== "feedback" && (
+        <FeedbackRow agentId={agentId} runId={runId} />
+      )}
+    </div>
+  );
+}
+
+// Thumbs feed the curator: a rating (plus optional note) fires a feedback-weighted
+// curation pass that can refine the agent's instructions.
+function FeedbackRow({ agentId, runId }: { agentId: string; runId: string }) {
+  const [comment, setComment] = useState("");
+  const [sent, setSent] = useState<string | null>(null);
+
+  async function send(verdict: "up" | "down") {
+    setSent(verdict);
+    await fetch(`/api/agents/${agentId}/runs/${runId}/feedback`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verdict, comment }),
+    }).catch(() => {});
+  }
+
+  if (sent) return (
+    <div className="px-3.5 py-2 border-t text-[11px] font-mono" style={{ borderColor: `${VIOLET}22`, color: "var(--fg-dimmer)" }}>
+      Feedback sent — the curator is folding it into the agent&apos;s memory.
+    </div>
+  );
+  return (
+    <div className="flex items-center gap-2 px-3.5 py-2 border-t" style={{ borderColor: `${VIOLET}22` }}>
+      <button onClick={() => send("up")} title="Good run — reinforce this" className="p-1.5 rounded-md hover:bg-emerald-500/15 text-emerald-300"><ThumbsUp size={13} /></button>
+      <button onClick={() => send("down")} title="Bad run — the curator will adjust" className="p-1.5 rounded-md hover:bg-rose-500/15 text-rose-300"><ThumbsDown size={13} /></button>
+      <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="What should it do differently? (optional, sent with the thumb)"
+        className="flex-1 bg-black/30 border rounded-lg px-3 h-8 text-[11.5px] outline-none" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
     </div>
   );
 }

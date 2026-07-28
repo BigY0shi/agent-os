@@ -124,6 +124,11 @@ export async function listRuns(agentId: string, limit = 30): Promise<RunMeta[]> 
   return out.sort((a, b) => b.startedAt - a.startedAt).slice(0, limit);
 }
 
+export async function saveFeedback(agentId: string, runId: string, fb: { verdict: "up" | "down"; comment?: string }): Promise<void> {
+  await ensure(runsDir(agentId));
+  await writeFile(path.join(runsDir(agentId), `${runId}.feedback.json`), JSON.stringify({ ...fb, ts: Date.now() }, null, 2), "utf8");
+}
+
 export async function appendRunEvent(agentId: string, runId: string, ev: RunEvent): Promise<void> {
   await ensure(runsDir(agentId));
   await appendFile(path.join(runsDir(agentId), `${runId}.jsonl`), JSON.stringify(ev) + "\n", "utf8");

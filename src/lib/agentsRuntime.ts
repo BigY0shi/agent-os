@@ -1,5 +1,6 @@
-// Agents module — the Tier-2 runner. Wraps the Claude Agent SDK: one query() per
-// run, streaming events into an in-memory registry (mirrored to JSONL on disk).
+// Agents module — the Tier-2 runner + Tier-1 curator. Wraps the Claude Agent SDK:
+// one query() per run, streaming events into an in-memory registry (mirrored to
+// JSONL on disk).
 //
 // PERMISSIONS DESIGN — one gate, enforced twice:
 // a PreToolUse hook fires on EVERY tool call (verified 2026-07-28: in default
@@ -11,17 +12,23 @@
 // approval. The SDK's native bypassPermissions mode is never used — the dial
 // (bypass/gated/ask) is implemented in gate() itself.
 //
-// The constitution (send / publish / pay / credential / delete) queues for human
-// approval in ALL modes. A queued call parks the run mid-flight — the canUseTool
-// promise simply doesn't resolve until the user decides in the Approvals inbox.
+// CURATOR (Phase 2) — the "learns on the job" tier. After every successful task
+// run (and on explicit user feedback), a bounded curator run reviews the
+// transcript and may edit ONLY the agent's own instruction/memory files. Its
+// gate is a hard allowlist: read anywhere inside the agent dir, write only to
+// system.md / skills/*.md / memory/*.md. No shell, no MCP, no network. Any
+// system.md change is diffed into the run events + memory/curator-log.md, so
+// drift is always visible.
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { randomUUID } from "node:crypto";
+import { readFile, appendFile } from "node:fs/promises";
+import path from "node:path";
 import { CLAUDE_MODEL } from "./config";
 import type { AgentDef, AgentIntelligence, ApprovalReq, ApprovalReason, McpServerHealth, RunEvent, RunMeta } from "./agentsTypes";
 import {
   appendRunEvent, loadRunMeta, readApprovals, readRunEvents, readSystemPrompt,
-  saveRunMeta, workspaceDir, writeApprovals, agentDir,
+  saveRunMeta, workspaceDir, writeApprovals, agentDir, loadAgent,
 } from "./agentsStore";
 
 // Model ids verified live on the claude CLI 2026-07-28 ("Reply OK" probes).
@@ -31,10 +38,15 @@ const MODEL_FOR: Record<AgentIntelligence, string> = {
   deep: CLAUDE_MODEL,
 };
 
-const RUN_TIMEOUT_MS = 30 * 60 * 1000;      // wall clock per run
+const RUN_TIMEOUT_MS = 30 * 60 * 1000;      // wall clock per task run
+const CURATOR_TIMEOUT_MS = 8 * 60 * 1000;   // curator is bounded much tighter
 const APPROVAL_TIMEOUT_MS = 4 * 60 * 60 * 1000; // then the call is denied + run parks
 const MAX_TURNS = 150;
+const CURATOR_MAX_TURNS = 25;
 const GLOBAL_CONCURRENCY = 2;
+
+/** Trigger values that mean "this IS the curator" — they never re-trigger curation. */
+const CURATOR_TRIGGERS = new Set(["curator", "feedback"]);
 
 interface LiveRun {
   meta: RunMeta;
@@ -112,7 +124,6 @@ const CONST_SHELL_QUEUE = [
 
 const SHELL_TOOLS = /^(Bash|PowerShell|mcp__.*(powershell|shell|exec).*)$/i;
 const WRITE_TOOLS = /^(Write|Edit|NotebookEdit)$/;
-const READONLY_TOOLS = /^(Read|Grep|Glob|WebFetch|WebSearch|TodoWrite|Task|ListMcpResourcesTool|ReadMcpResourceTool)$/;
 
 type GateDecision =
   | { verdict: "allow" }
@@ -143,9 +154,28 @@ export function gate(def: AgentDef, toolName: string, input: Record<string, unkn
     return { verdict: "allow" };
   }
 
-  // bypass
-  void READONLY_TOOLS; // (kept for future fine-graining; bypass allows the rest)
+  // bypass — constitution already handled above; the rest runs free.
   return { verdict: "allow" };
+}
+
+// The curator's gate is not a dial — it's a hard allowlist. It exists so the
+// "self-improving" tier can never become an unsupervised actor: no shell, no
+// MCP, no network, writes only to the agent's own instruction/memory files.
+const CURATOR_EDITABLE = /(^|[\\/])(system\.md|curator-log\.md|skills[\\/][^\\/]+\.md|memory[\\/][^\\/]+\.md)$/i;
+
+function curatorGate(def: AgentDef, toolName: string, input: Record<string, unknown>): GateDecision {
+  const home = agentDir(def.id).replace(/\\/g, "/").toLowerCase();
+  const target = String(input.file_path ?? input.path ?? "").replace(/\\/g, "/").toLowerCase();
+  if (/^(Read|Grep|Glob)$/.test(toolName)) {
+    if (!target || target.startsWith(home)) return { verdict: "allow" };
+    return { verdict: "deny", why: "curator reads stay inside the agent directory" };
+  }
+  if (/^(Write|Edit)$/.test(toolName)) {
+    if (target.startsWith(home) && CURATOR_EDITABLE.test(target)) return { verdict: "allow" };
+    return { verdict: "deny", why: "curator may only edit system.md, skills/*.md and memory/*.md" };
+  }
+  if (/^TodoWrite$/.test(toolName)) return { verdict: "allow" };
+  return { verdict: "deny", why: `curator has no access to ${toolName}` };
 }
 
 // ---- approvals ------------------------------------------------------------
@@ -196,7 +226,63 @@ async function queueApproval(def: AgentDef, runId: string, toolName: string, inp
   return allowed;
 }
 
-// ---- the runner -----------------------------------------------------------
+// ---- shared stream consumer ----------------------------------------------
+
+async function consume(runId: string, stream: AsyncIterable<{ type: string; subtype?: string; [k: string]: unknown }>): Promise<void> {
+  const r = live(runId)!;
+  for await (const msg of stream) {
+    if (msg.type === "system" && msg.subtype === "init") {
+      const servers = (msg as { mcp_servers?: { name: string; status: string }[] }).mcp_servers ?? [];
+      r.mcpHealth = servers.map((s) => ({ name: s.name, status: s.status }));
+      push(runId, { kind: "init", detail: `model ${(msg as { model?: string }).model ?? "?"} · MCP: ${servers.map((s) => `${s.name}:${s.status}`).join(", ") || "none"}` });
+    } else if (msg.type === "assistant") {
+      const content = (msg as { message?: { content?: { type: string; text?: string; name?: string; input?: unknown }[] } }).message?.content ?? [];
+      for (const block of content) {
+        if (block.type === "text" && block.text?.trim()) push(runId, { kind: "text", text: block.text });
+        else if (block.type === "tool_use") push(runId, { kind: "tool", toolName: block.name, detail: preview(block.input) });
+      }
+    } else if (msg.type === "user") {
+      const content = (msg as { message?: { content?: unknown } }).message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content as { type: string; content?: unknown; is_error?: boolean }[]) {
+          if (block.type === "tool_result") {
+            push(runId, { kind: "tool-result", detail: preview(block.content, 300), text: block.is_error ? "error" : undefined });
+          }
+        }
+      }
+    } else if (msg.type === "result") {
+      const res = msg as { subtype: string; result?: string; total_cost_usd?: number; num_turns?: number };
+      r.meta.status = res.subtype === "success" ? "done" : "error";
+      r.meta.result = res.result ?? "";
+      r.meta.costUsd = res.total_cost_usd;
+      r.meta.numTurns = res.num_turns;
+      r.meta.endedAt = Date.now();
+      if (res.subtype !== "success") r.meta.error = res.subtype;
+      push(runId, { kind: "result", text: res.result ?? res.subtype });
+    }
+  }
+}
+
+function makeHooks(def: AgentDef, runId: string, gateFn: (def: AgentDef, t: string, i: Record<string, unknown>) => GateDecision) {
+  return {
+    PreToolUse: [{
+      hooks: [async (input: { hook_event_name: string; tool_name?: string; tool_input?: unknown }) => {
+        const toolName = input.tool_name ?? "";
+        const d = gateFn(def, toolName, (input.tool_input ?? {}) as Record<string, unknown>);
+        if (d.verdict === "deny") {
+          push(runId, { kind: "status", detail: `blocked ${toolName}: ${d.why}` });
+          return { hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "deny" as const, permissionDecisionReason: d.why } };
+        }
+        if (d.verdict === "queue") {
+          return { hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "ask" as const, permissionDecisionReason: d.why } };
+        }
+        return {};
+      }],
+    }],
+  };
+}
+
+// ---- the task runner ------------------------------------------------------
 
 export async function startRun(def: AgentDef, trigger: string, extraPrompt?: string): Promise<{ runId: string } | { error: string }> {
   if (!def.enabled) return { error: "agent is disabled" };
@@ -231,7 +317,7 @@ async function execute(def: AgentDef, runId: string, trigger: string, extraPromp
     `Trigger: ${trigger}.\n` +
     (extraPrompt ? `\n${extraPrompt}\n` : "") +
     `\nCarry out your standing instructions for this trigger. Your workspace directory is your cwd — keep scratch work and artifacts there. ` +
-    `Read memory/facts.md and memory/journal.md first if past context could matter (agentic search — pull only what's relevant).`;
+    `Read memory/facts.md and memory/journal.md (one level up from your cwd) first if past context could matter — pull only what's relevant.`;
 
   try {
     const stream = query({
@@ -247,25 +333,10 @@ async function execute(def: AgentDef, runId: string, trigger: string, extraPromp
         permissionMode: "default",
         maxTurns: MAX_TURNS,
         abortController: r.abort,
+        stderr: (d: string) => { if (d.trim()) push(runId, { kind: "stderr", text: d.trim().slice(0, 500) }); },
         // The deterministic half of the gate — see the header comment. Without
         // this, default-mode auto-allows skip canUseTool entirely.
-        hooks: {
-          PreToolUse: [{
-            hooks: [async (input: { hook_event_name: string; tool_name?: string; tool_input?: unknown }) => {
-              const toolName = input.tool_name ?? "";
-              const d = gate(def, toolName, (input.tool_input ?? {}) as Record<string, unknown>);
-              if (d.verdict === "deny") {
-                push(runId, { kind: "status", detail: `blocked ${toolName}: ${d.why}` });
-                return { hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "deny" as const, permissionDecisionReason: d.why } };
-              }
-              if (d.verdict === "queue") {
-                return { hookSpecificOutput: { hookEventName: "PreToolUse" as const, permissionDecision: "ask" as const, permissionDecisionReason: d.why } };
-              }
-              return {};
-            }],
-          }],
-        },
-        stderr: (d: string) => { if (d.trim()) push(runId, { kind: "stderr", text: d.trim().slice(0, 500) }); },
+        hooks: makeHooks(def, runId, gate),
         canUseTool: async (toolName: string, input: Record<string, unknown>) => {
           const d = gate(def, toolName, input);
           if (d.verdict === "deny") return { behavior: "deny" as const, message: d.why };
@@ -280,36 +351,7 @@ async function execute(def: AgentDef, runId: string, trigger: string, extraPromp
       },
     });
 
-    for await (const msg of stream) {
-      if (msg.type === "system" && msg.subtype === "init") {
-        const servers = (msg as unknown as { mcp_servers?: { name: string; status: string }[] }).mcp_servers ?? [];
-        r.mcpHealth = servers.map((s) => ({ name: s.name, status: s.status }));
-        push(runId, { kind: "init", detail: `model ${(msg as unknown as { model?: string }).model ?? "?"} · MCP: ${servers.map((s) => `${s.name}:${s.status}`).join(", ") || "none"}` });
-      } else if (msg.type === "assistant") {
-        for (const block of msg.message.content) {
-          if (block.type === "text" && block.text.trim()) push(runId, { kind: "text", text: block.text });
-          else if (block.type === "tool_use") push(runId, { kind: "tool", toolName: block.name, detail: preview(block.input) });
-        }
-      } else if (msg.type === "user") {
-        const content = (msg as unknown as { message?: { content?: unknown } }).message?.content;
-        if (Array.isArray(content)) {
-          for (const block of content as { type: string; content?: unknown; is_error?: boolean }[]) {
-            if (block.type === "tool_result") {
-              push(runId, { kind: "tool-result", detail: preview(block.content, 300), text: block.is_error ? "error" : undefined });
-            }
-          }
-        }
-      } else if (msg.type === "result") {
-        const res = msg as unknown as { subtype: string; result?: string; total_cost_usd?: number; num_turns?: number };
-        r.meta.status = res.subtype === "success" ? "done" : "error";
-        r.meta.result = res.result ?? "";
-        r.meta.costUsd = res.total_cost_usd;
-        r.meta.numTurns = res.num_turns;
-        r.meta.endedAt = Date.now();
-        if (res.subtype !== "success") r.meta.error = res.subtype;
-        push(runId, { kind: "result", text: res.result ?? res.subtype });
-      }
-    }
+    await consume(runId, stream as AsyncIterable<{ type: string; subtype?: string }>);
   } catch (e) {
     if (r.abort.signal.aborted && r.meta.status !== "done") {
       r.meta.status = "killed";
@@ -324,8 +366,132 @@ async function execute(def: AgentDef, runId: string, trigger: string, extraPromp
       r.meta.endedAt = Date.now();
     }
     await saveRunMeta(r.meta);
+    // Tier 1 kicks in: successful task runs get a curation pass. Small delay so
+    // the run registry + JSONL settle first.
+    if (r.meta.status === "done" && !CURATOR_TRIGGERS.has(trigger)) {
+      setTimeout(() => { void startCurator(def.id, runId).catch(() => {}); }, 2000);
+    }
   }
 }
+
+// ---- the curator (Tier 1) -------------------------------------------------
+
+/** Tiny dependency-free line diff — enough to make drift visible, not pretty. */
+function diffLines(before: string, after: string, cap = 30): string {
+  const b = before.split(/\r?\n/), a = after.split(/\r?\n/);
+  const bSet = new Set(b), aSet = new Set(a);
+  const removed = b.filter((l) => !aSet.has(l) && l.trim());
+  const added = a.filter((l) => !bSet.has(l) && l.trim());
+  if (!removed.length && !added.length) return "";
+  const lines = [...removed.map((l) => `- ${l}`), ...added.map((l) => `+ ${l}`)];
+  return lines.slice(0, cap).join("\n") + (lines.length > cap ? `\n… ${lines.length - cap} more lines` : "");
+}
+
+export async function startCurator(agentId: string, forRunId: string, feedback?: { verdict: "up" | "down"; comment?: string }): Promise<{ runId: string } | { error: string }> {
+  const def = await loadAgent(agentId);
+  if (!def) return { error: "agent not found" };
+  if (agentHasActiveRun(agentId)) return { error: "agent busy" };
+  if (runningCount() >= GLOBAL_CONCURRENCY) return { error: "global run limit reached" };
+
+  const trigger = feedback ? "feedback" : "curator";
+  const runId = randomUUID();
+  const meta: RunMeta = { id: runId, agentId, trigger, status: "running", startedAt: Date.now() };
+  const abort = new AbortController();
+  RUNS.set(runId, { meta, events: [], seq: 0, abort, pending: new Map(), mcpHealth: [] });
+  await saveRunMeta(meta);
+
+  void executeCurator(def, runId, forRunId, feedback).catch(async (e) => {
+    const r = live(runId);
+    if (r && r.meta.status === "running") {
+      r.meta.status = "error";
+      r.meta.error = String((e as Error)?.message || e);
+      r.meta.endedAt = Date.now();
+      push(runId, { kind: "error", text: r.meta.error });
+      await saveRunMeta(r.meta);
+    }
+  });
+  return { runId };
+}
+
+async function executeCurator(def: AgentDef, runId: string, forRunId: string, feedback?: { verdict: "up" | "down"; comment?: string }): Promise<void> {
+  const r = live(runId)!;
+  const systemBefore = await readSystemPrompt(def.id);
+  const timeout = setTimeout(() => r.abort.abort(), CURATOR_TIMEOUT_MS);
+
+  const prompt =
+    `You are the CURATOR for the agent "${def.name}". A run just finished: runs/${forRunId}.jsonl (its result is in runs/${forRunId}.meta.json).\n` +
+    (feedback ? `\nTHE USER GAVE FEEDBACK on that run: ${feedback.verdict === "up" ? "thumbs UP" : "thumbs DOWN"}${feedback.comment ? ` — "${feedback.comment}"` : ""}. Weight this heavily.\n` : "") +
+    `\nYour duties, in order:\n` +
+    `1. Read the run transcript (skim — pull only what matters) and the current memory files.\n` +
+    `2. Append a dated entry to memory/journal.md: 2-4 lines on what the run did, what worked, what didn't. Newest entries at the top.\n` +
+    `3. If journal.md has grown past ~150 lines, compress the OLDEST entries into one-line summaries (multi-resolution memory: recent = full fidelity, old = headlines).\n` +
+    `4. Update memory/facts.md only with durable, reusable facts learned this run (contacts, formats that worked, gotchas). No run-by-run noise.\n` +
+    `5. Refine system.md ONLY if there is a clear, recurring lesson or explicit user feedback. Make the smallest edit that captures it. Never rewrite wholesale, never change the agent's core mission.\n` +
+    `\nYou can only edit this agent's own files. Finish with a one-line summary of what you changed (or "no changes needed").`;
+
+  try {
+    const stream = query({
+      prompt,
+      options: {
+        cwd: agentDir(def.id),
+        model: MODEL_FOR.standard,
+        systemPrompt: { type: "preset", preset: "claude_code", append: "\n\nYou are a careful curator of a background agent's instructions and memory. Conservative edits only." },
+        settingSources: [],
+        permissionMode: "default",
+        maxTurns: CURATOR_MAX_TURNS,
+        abortController: r.abort,
+        stderr: (d: string) => { if (d.trim()) push(runId, { kind: "stderr", text: d.trim().slice(0, 500) }); },
+        hooks: makeHooks(def, runId, curatorGate),
+        canUseTool: async (toolName: string, input: Record<string, unknown>) => {
+          // The hook already denied everything off-limits; anything escalated
+          // here is unexpected — deny rather than park a background curator.
+          const d = curatorGate(def, toolName, input);
+          return d.verdict === "allow"
+            ? { behavior: "allow" as const, updatedInput: input }
+            : { behavior: "deny" as const, message: "why" in d ? d.why : "not permitted" };
+        },
+      },
+    });
+
+    await consume(runId, stream as AsyncIterable<{ type: string; subtype?: string }>);
+  } catch (e) {
+    if (r.abort.signal.aborted && r.meta.status !== "done") {
+      r.meta.status = "killed";
+      r.meta.endedAt = Date.now();
+      push(runId, { kind: "status", detail: "curator run timed out" });
+    } else { throw e; }
+  } finally {
+    clearTimeout(timeout);
+    if (r.meta.status === "running") {
+      r.meta.status = "error";
+      r.meta.error = r.meta.error ?? "curator stream ended without a result";
+      r.meta.endedAt = Date.now();
+    }
+    // Drift visibility: any system.md change is diffed into the events + log.
+    try {
+      const systemAfter = await readSystemPrompt(def.id);
+      const diff = diffLines(systemBefore, systemAfter);
+      if (diff) {
+        push(runId, { kind: "status", detail: `system.md changed:\n${diff}` });
+        await appendFile(
+          path.join(agentDir(def.id), "curator-log.md"),
+          `\n## ${new Date().toISOString()} (run ${forRunId.slice(0, 8)})\n\n\`\`\`diff\n${diff}\n\`\`\`\n`,
+          "utf8",
+        );
+      }
+    } catch { /* diff is best-effort */ }
+    await saveRunMeta(r.meta);
+  }
+}
+
+/** Read a run's stored feedback (if any) — used by the detail API. */
+export async function readFeedback(agentId: string, runId: string): Promise<{ verdict: string; comment?: string } | null> {
+  try {
+    return JSON.parse(await readFile(path.join(agentDir(agentId), "runs", `${runId}.feedback.json`), "utf8"));
+  } catch { return null; }
+}
+
+// ---- controls -------------------------------------------------------------
 
 export function killRun(runId: string): boolean {
   const r = live(runId);
