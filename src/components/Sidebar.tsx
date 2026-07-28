@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -18,6 +18,9 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/",         label: "Mission Control", icon: <LayoutGrid size={16} />, accent: "#a855f7", dim: "rgba(168,85,247,0.16)" },
+  // The local Tasklet: reusable background agents (SDK runtime, triggers, approvals).
+  // Top-level on purpose — this is the OS's core primitive, not another module.
+  { href: "/agents",   label: "Agents", icon: <Bot size={16} />, accent: "#a78bfa", dim: "rgba(167,139,250,0.16)" },
   { href: "/paperclip", label: "Paperclip", icon: <Building2 size={16} />, accent: "#d4a574", dim: "rgba(212,165,116,0.16)" },
   { href: "/room",     label: "AI Agent Mastermind", icon: <MessagesSquare size={16} />, accent: "#a855f7", dim: "rgba(168,85,247,0.16)" },
   { href: "/pipeline", label: "Pipeline", icon: <Workflow size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
@@ -81,8 +84,11 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/audit", "/brainstorm", "/jarvis", "/agent-kanban"]);
 function sectionOf(href: string): string {
   if (href === "/") return "Workspace";
+  // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
+  // model CLI routes were renamed to "CLI Agents" to make room (2026-07-28).
+  if (href === "/agents") return "Agents";
   if (ORCHESTRATION_ROUTES.has(href)) return "Agent Orchestration";
-  if (AGENT_ROUTES.has(href)) return "Agents";
+  if (AGENT_ROUTES.has(href)) return "CLI Agents";
   return "Self";
 }
 
@@ -116,7 +122,7 @@ export default function Sidebar() {
   const visible = customize ? fullOrder : fullOrder.filter((h) => !hidden.includes(h));
   // group by section so each header shows ONCE and all its items sit together,
   // no matter how the saved drag-order interleaves them (fixes duplicate section labels)
-  const SECTION_ORDER = ["Workspace", "Agent Orchestration", "Agents", "Self"];
+  const SECTION_ORDER = ["Workspace", "Agents", "Agent Orchestration", "CLI Agents", "Self"];
   const list = SECTION_ORDER.flatMap((sec) => visible.filter((h) => sectionOf(h) === sec));
 
   function move(from: string, to: string) {

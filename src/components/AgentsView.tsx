@@ -1,0 +1,463 @@
+"use client";
+
+// Agents — the local Tasklet. Reusable background agents on the Claude Agent SDK:
+// create an agent (instructions + permission dial + intelligence dial), fire it
+// manually (triggers arrive in Phase 3), watch the run live, and answer approval
+// cards when a gated/constitution action wants out.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2 } from "lucide-react";
+import type { AgentDef, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
+import { INTELLIGENCE_META, MODE_META, STATUS_COLORS } from "@/lib/agentsTypes";
+
+const VIOLET = "#a78bfa";
+
+type AgentCard = AgentDef & { lastRun: RunMeta | null; active: boolean };
+
+function ago(ts: number): string {
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
+
+export default function AgentsView() {
+  const [agents, setAgents] = useState<AgentCard[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalReq[]>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const j = await fetch("/api/agents").then((r) => r.json());
+      if (Array.isArray(j.agents)) setAgents(j.agents);
+      setLoaded(true);
+    } catch { /* server asleep — next tick */ }
+  }, []);
+
+  const refreshApprovals = useCallback(async () => {
+    try {
+      const j = await fetch("/api/agents/approvals").then((r) => r.json());
+      if (Array.isArray(j.approvals)) setApprovals(j.approvals);
+    } catch { /* fine */ }
+  }, []);
+
+  useEffect(() => {
+    void refresh(); void refreshApprovals();
+    const a = setInterval(refresh, 5000);
+    const b = setInterval(refreshApprovals, 3000);
+    return () => { clearInterval(a); clearInterval(b); };
+  }, [refresh, refreshApprovals]);
+
+  async function decide(id: string, decision: "allow" | "deny") {
+    setApprovals((l) => l.filter((x) => x.id !== id));
+    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }) }).catch(() => {});
+  }
+
+  async function runNow(id: string) {
+    await fetch(`/api/agents/${id}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => {});
+    void refresh();
+    setOpenId(id);
+  }
+
+  return (
+    <div className="p-6 max-w-[1200px] mx-auto">
+      <div className="flex items-center justify-between mb-1">
+        <h1 className="text-xl font-semibold flex items-center gap-2.5" style={{ color: "var(--fg)" }}>
+          <Bot size={20} style={{ color: VIOLET }} /> Agents
+        </h1>
+        <button onClick={() => setCreating(true)}
+          className="px-3.5 h-9 rounded-lg border text-[13px] flex items-center gap-1.5 transition hover:brightness-125"
+          style={{ borderColor: `${VIOLET}66`, color: VIOLET, background: "rgba(167,139,250,0.10)" }}>
+          <Plus size={14} /> New agent
+        </button>
+      </div>
+      <p className="text-[12.5px] mb-5" style={{ color: "var(--fg-dimmer)" }}>
+        Reusable background agents — your tools, your subscriptions, your machine. Runs pause for approval before anything leaves the box.
+      </p>
+
+      {approvals.length > 0 && (
+        <div className="mb-5 rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.06)" }}>
+          <div className="text-[11px] font-mono uppercase tracking-widest flex items-center gap-2 text-amber-300">
+            <ShieldAlert size={13} /> Waiting on you — {approvals.length} pending action{approvals.length > 1 ? "s" : ""}
+          </div>
+          {approvals.map((a) => (
+            <div key={a.id} className="rounded-xl border p-3" style={{ borderColor: "rgba(251,191,36,0.3)", background: "rgba(0,0,0,0.25)" }}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-[13px]" style={{ color: "var(--fg)" }}>
+                  <b>{a.agentName}</b> wants <code className="text-amber-300">{a.toolName}</code>
+                  <span className="ml-2 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}>{a.reason}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => decide(a.id, "allow")} className="px-3 h-8 rounded-lg border text-[12px] text-emerald-300" style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>Approve</button>
+                  <button onClick={() => decide(a.id, "deny")} className="px-3 h-8 rounded-lg border text-[12px] text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)" }}>Deny</button>
+                </div>
+              </div>
+              <pre className="mt-2 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all max-h-32 overflow-y-auto" style={{ color: "var(--fg-dim)" }}>{a.inputPreview}</pre>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loaded && agents.length === 0 && !creating && (
+        <div className="rounded-2xl border border-dashed p-10 text-center" style={{ borderColor: "var(--panel-border)" }}>
+          <Bot size={28} className="mx-auto mb-3" style={{ color: VIOLET }} />
+          <div className="text-[14px] mb-1" style={{ color: "var(--fg)" }}>No agents yet</div>
+          <div className="text-[12.5px] mb-4" style={{ color: "var(--fg-dimmer)" }}>
+            Describe a standing job in plain English — triage my inbox, watch this feed, keep this report fresh.
+          </div>
+          <button onClick={() => setCreating(true)} className="px-4 h-9 rounded-lg border text-[13px]" style={{ borderColor: `${VIOLET}66`, color: VIOLET }}>Create the first one</button>
+        </div>
+      )}
+
+      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+        {agents.map((a) => (
+          <button key={a.id} onClick={() => setOpenId(a.id)}
+            className="text-left rounded-2xl border p-4 transition hover:brightness-110 relative overflow-hidden"
+            style={{ borderColor: a.active ? `${STATUS_COLORS.running}66` : "var(--panel-border)", background: "rgba(255,255,255,0.02)", opacity: a.enabled ? 1 : 0.55 }}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[14px] font-medium truncate" style={{ color: "var(--fg)" }}>{a.name}</span>
+              <span className="text-[9.5px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+                style={{ borderColor: `${MODE_META[a.permissionMode].color}55`, color: MODE_META[a.permissionMode].color }}>
+                {MODE_META[a.permissionMode].label}
+              </span>
+            </div>
+            {a.description && <div className="text-[12px] mb-2 line-clamp-2" style={{ color: "var(--fg-dim)" }}>{a.description}</div>}
+            <div className="flex items-center gap-2 text-[10.5px] font-mono" style={{ color: "var(--fg-dimmer)" }}>
+              <span>{INTELLIGENCE_META[a.intelligence].label}</span>
+              <span>·</span>
+              {a.active ? (
+                <span className="flex items-center gap-1" style={{ color: STATUS_COLORS.running }}>
+                  <Loader2 size={10} className="animate-spin" /> running
+                </span>
+              ) : a.lastRun ? (
+                <span style={{ color: STATUS_COLORS[a.lastRun.status] }}>{a.lastRun.status} · {ago(a.lastRun.startedAt)}</span>
+              ) : (
+                <span>never run</span>
+              )}
+              {!a.enabled && <><span>·</span><span>disabled</span></>}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {creating && <CreateModal onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); void refresh(); setOpenId(id); }} />}
+      {openId && <AgentDrawer id={openId} onClose={() => { setOpenId(null); void refresh(); }} onRun={runNow} />}
+    </div>
+  );
+}
+
+// ---- create ---------------------------------------------------------------
+
+function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
+  const [mode, setMode] = useState<AgentDef["permissionMode"]>("gated");
+  const [intel, setIntel] = useState<AgentDef["intelligence"]>("standard");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function create() {
+    if (!name.trim() || !instructions.trim()) { setErr("Name and instructions are required."); return; }
+    setBusy(true); setErr(null);
+    try {
+      const j = await fetch("/api/agents", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description, instructions, permissionMode: mode, intelligence: intel }),
+      }).then((r) => r.json());
+      if (j.agent?.id) onCreated(j.agent.id);
+      else setErr(j.error || "create failed");
+    } catch (e) { setErr(String((e as Error)?.message || e)); }
+    setBusy(false);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-xl rounded-2xl border p-5 space-y-3.5" style={{ borderColor: `${VIOLET}44`, background: "rgba(14,16,26,0.98)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <span className="text-[15px] font-medium" style={{ color: "var(--fg)" }}>New agent</span>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5" style={{ color: "var(--fg-dim)" }}><X size={15} /></button>
+        </div>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name — e.g. Inbox Triage"
+          className="w-full bg-black/30 border rounded-lg px-3.5 h-10 text-sm outline-none" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="One-liner for the card (optional)"
+          className="w-full bg-black/30 border rounded-lg px-3.5 h-10 text-sm outline-none" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+        <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={6}
+          placeholder={"Standing instructions — what this agent does every time it runs.\nBe concrete: what to check, what good output looks like, where to leave results."}
+          className="w-full bg-black/30 border rounded-lg px-3.5 py-2.5 text-sm outline-none resize-y" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+        <div className="grid grid-cols-2 gap-3">
+          <ModePicker value={mode} onChange={setMode} />
+          <IntelPicker value={intel} onChange={setIntel} />
+        </div>
+        {err && <div className="text-[12px] text-rose-300">{err}</div>}
+        <button onClick={create} disabled={busy}
+          className="w-full h-10 rounded-lg border text-[13px] disabled:opacity-40 flex items-center justify-center gap-2"
+          style={{ borderColor: `${VIOLET}66`, color: VIOLET, background: "rgba(167,139,250,0.10)" }}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Create agent
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; onChange: (m: AgentDef["permissionMode"]) => void }) {
+  return (
+    <div>
+      <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Permissions</div>
+      <div className="flex gap-1.5">
+        {(Object.keys(MODE_META) as AgentDef["permissionMode"][]).map((m) => (
+          <button key={m} onClick={() => onChange(m)} title={MODE_META[m].blurb}
+            className="flex-1 h-8 rounded-lg border text-[11.5px] transition"
+            style={{
+              borderColor: value === m ? MODE_META[m].color : "var(--panel-border)",
+              color: value === m ? MODE_META[m].color : "var(--fg-dim)",
+              background: value === m ? `${MODE_META[m].color}18` : "transparent",
+            }}>
+            {MODE_META[m].label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function IntelPicker({ value, onChange }: { value: AgentDef["intelligence"]; onChange: (m: AgentDef["intelligence"]) => void }) {
+  return (
+    <div>
+      <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Intelligence</div>
+      <div className="flex gap-1.5">
+        {(Object.keys(INTELLIGENCE_META) as AgentDef["intelligence"][]).map((m) => (
+          <button key={m} onClick={() => onChange(m)} title={INTELLIGENCE_META[m].blurb}
+            className="flex-1 h-8 rounded-lg border text-[11.5px] transition"
+            style={{
+              borderColor: value === m ? VIOLET : "var(--panel-border)",
+              color: value === m ? VIOLET : "var(--fg-dim)",
+              background: value === m ? "rgba(167,139,250,0.12)" : "transparent",
+            }}>
+            {INTELLIGENCE_META[m].label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- drawer ---------------------------------------------------------------
+
+function AgentDrawer({ id, onClose, onRun }: { id: string; onClose: () => void; onRun: (id: string) => void }) {
+  const [agent, setAgent] = useState<AgentDef | null>(null);
+  const [system, setSystem] = useState("");
+  const [runs, setRuns] = useState<RunMeta[]>([]);
+  const [active, setActive] = useState(false);
+  const [openRun, setOpenRun] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [note, setNote] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const j = await fetch(`/api/agents/${id}`).then((r) => r.json());
+      if (j.agent) { setAgent(j.agent); setSystem(j.system ?? ""); setRuns(j.runs ?? []); setActive(!!j.active); }
+    } catch { /* fine */ }
+  }, [id]);
+
+  useEffect(() => {
+    void load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [load]);
+
+  // Auto-open the newest live run so "Run now" lands you in the transcript.
+  useEffect(() => {
+    if (active && !openRun && runs[0] && (runs[0].status === "running" || runs[0].status === "waiting")) setOpenRun(runs[0].id);
+  }, [active, runs, openRun]);
+
+  async function patch(p: Record<string, unknown>) {
+    await fetch(`/api/agents/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).catch(() => {});
+    void load();
+  }
+
+  async function exile() {
+    if (!confirm(`Exile "${agent?.name}"? The agent and its history move to the exile folder (recoverable).`)) return;
+    await fetch(`/api/agents/${id}`, { method: "DELETE" }).catch(() => {});
+    onClose();
+  }
+
+  if (!agent) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/50" onClick={onClose}>
+      <div className="w-full max-w-2xl h-full overflow-y-auto border-l p-5 space-y-4" style={{ borderColor: `${VIOLET}33`, background: "rgba(12,14,22,0.99)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Bot size={17} style={{ color: VIOLET }} />
+            <span className="text-[16px] font-medium truncate" style={{ color: "var(--fg)" }}>{agent.name}</span>
+            <span className="text-[9.5px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+              style={{ borderColor: `${MODE_META[agent.permissionMode].color}55`, color: MODE_META[agent.permissionMode].color }}>
+              {MODE_META[agent.permissionMode].label}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => onRun(id)} disabled={active}
+              className="px-3 h-8 rounded-lg border text-[12px] flex items-center gap-1.5 disabled:opacity-40 text-emerald-300"
+              style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>
+              <Play size={12} /> Run now
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5" style={{ color: "var(--fg-dim)" }}><X size={15} /></button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <ModePicker value={agent.permissionMode} onChange={(m) => void patch({ permissionMode: m })} />
+          <IntelPicker value={agent.intelligence} onChange={(m) => void patch({ intelligence: m })} />
+          <label className="flex items-center gap-2 text-[12px] mt-5 cursor-pointer" style={{ color: "var(--fg-dim)" }}>
+            <input type="checkbox" checked={agent.enabled} onChange={(e) => void patch({ enabled: e.target.checked })} /> Enabled
+          </label>
+          <button onClick={exile} className="mt-5 text-[11px] text-rose-300/70 hover:text-rose-300 transition">Exile agent</button>
+        </div>
+
+        <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--panel-border)", background: "rgba(255,255,255,0.02)" }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-mono uppercase tracking-widest" style={{ color: "var(--fg-dimmer)" }}>Instructions (system.md)</span>
+            {!editing ? (
+              <button onClick={() => { setDraft(system); setEditing(true); }} className="text-[11px]" style={{ color: VIOLET }}>Edit</button>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={async () => { await patch({ instructions: draft }); setSystem(draft); setEditing(false); }} className="text-[11px] text-emerald-300">Save</button>
+                <button onClick={() => setEditing(false)} className="text-[11px]" style={{ color: "var(--fg-dim)" }}>Cancel</button>
+              </div>
+            )}
+          </div>
+          {editing ? (
+            <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={8}
+              className="w-full bg-black/30 border rounded-lg px-3 py-2 text-[12.5px] outline-none resize-y font-mono" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+          ) : (
+            <pre className="text-[12.5px] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto" style={{ color: "var(--fg-dim)" }}>{system || "(empty)"}</pre>
+          )}
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <input value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note for the next run…"
+              className="flex-1 bg-black/30 border rounded-lg px-3 h-9 text-[12.5px] outline-none" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+            <button
+              onClick={async () => {
+                await fetch(`/api/agents/${id}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note }) }).catch(() => {});
+                setNote(""); void load();
+              }}
+              disabled={active}
+              className="px-3 h-9 rounded-lg border text-[12px] disabled:opacity-40" style={{ borderColor: `${VIOLET}55`, color: VIOLET }}>
+              Run with note
+            </button>
+          </div>
+
+          <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Runs</div>
+          {runs.length === 0 && <div className="text-[12px]" style={{ color: "var(--fg-dimmer)" }}>No runs yet.</div>}
+          <div className="space-y-1.5">
+            {runs.map((r) => (
+              <button key={r.id} onClick={() => setOpenRun(openRun === r.id ? null : r.id)}
+                className="w-full text-left rounded-lg border px-3 py-2 text-[12px] flex items-center gap-2.5 transition hover:brightness-110"
+                style={{ borderColor: openRun === r.id ? `${VIOLET}55` : "var(--panel-border)", background: "rgba(255,255,255,0.02)" }}>
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: STATUS_COLORS[r.status] }} />
+                <span style={{ color: "var(--fg-dim)" }}>{r.trigger}</span>
+                <span className="font-mono text-[10.5px]" style={{ color: STATUS_COLORS[r.status] }}>{r.status}</span>
+                <span className="font-mono text-[10.5px] ml-auto" style={{ color: "var(--fg-dimmer)" }}>
+                  {ago(r.startedAt)}{typeof r.numTurns === "number" ? ` · ${r.numTurns} turns` : ""}
+                </span>
+                <ChevronRight size={12} style={{ color: "var(--fg-dimmer)", transform: openRun === r.id ? "rotate(90deg)" : "none" }} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {openRun && <RunView agentId={id} runId={openRun} />}
+      </div>
+    </div>
+  );
+}
+
+// ---- live run transcript --------------------------------------------------
+
+function RunView({ agentId, runId }: { agentId: string; runId: string }) {
+  const [meta, setMeta] = useState<RunMeta | null>(null);
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [mcp, setMcp] = useState<McpServerHealth[]>([]);
+  const seqRef = useRef(-1);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    seqRef.current = -1;
+    setEvents([]);
+    let stop = false;
+    async function poll() {
+      try {
+        const j = await fetch(`/api/agents/${agentId}/runs/${runId}?after=${seqRef.current}`).then((r) => r.json());
+        if (stop) return;
+        if (j.meta) setMeta(j.meta);
+        if (Array.isArray(j.mcpHealth) && j.mcpHealth.length) setMcp(j.mcpHealth);
+        if (Array.isArray(j.events) && j.events.length) {
+          setEvents((prev) => [...prev, ...j.events]);
+          seqRef.current = j.events[j.events.length - 1].seq;
+        }
+      } catch { /* next tick */ }
+    }
+    void poll();
+    const t = setInterval(poll, 1500);
+    return () => { stop = true; clearInterval(t); };
+  }, [agentId, runId]);
+
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [events]);
+
+  const liveStatus = meta?.status === "running" || meta?.status === "waiting";
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: `${VIOLET}33` }}>
+      <div className="flex items-center justify-between px-3.5 py-2 border-b" style={{ borderColor: `${VIOLET}22`, background: "rgba(167,139,250,0.05)" }}>
+        <span className="text-[11px] font-mono flex items-center gap-2" style={{ color: VIOLET }}>
+          {liveStatus && <Loader2 size={11} className="animate-spin" />}
+          RUN · {meta?.status?.toUpperCase() ?? "…"}
+          {typeof meta?.costUsd === "number" && <span style={{ color: "var(--fg-dimmer)" }}>· ${meta.costUsd.toFixed(3)}</span>}
+        </span>
+        <div className="flex items-center gap-2">
+          {mcp.length > 0 && (
+            <span className="text-[10px] font-mono" title={mcp.map((s) => `${s.name}: ${s.status}`).join("\n")} style={{ color: "var(--fg-dimmer)" }}>
+              MCP {mcp.filter((s) => s.status === "connected").length}/{mcp.length}
+            </span>
+          )}
+          {liveStatus && (
+            <button onClick={() => fetch(`/api/agents/${agentId}/runs/${runId}`, { method: "DELETE" }).catch(() => {})}
+              className="px-2.5 h-7 rounded-md border text-[11px] flex items-center gap-1 text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)" }}>
+              <Square size={10} /> Kill
+            </button>
+          )}
+        </div>
+      </div>
+      <div ref={scrollRef} className="px-3.5 py-3 space-y-2 overflow-y-auto font-mono text-[11.5px] leading-relaxed" style={{ maxHeight: 380, background: "rgba(0,0,0,0.25)" }}>
+        {events.length === 0 && <div className="flex items-center gap-2" style={{ color: "var(--fg-dimmer)" }}><RefreshCw size={11} className="animate-spin" /> waiting for events…</div>}
+        {events.map((ev) => <EventLine key={ev.seq} ev={ev} />)}
+        {meta?.result && meta.status === "done" && (
+          <div className="mt-2 rounded-lg border p-3 whitespace-pre-wrap" style={{ borderColor: "rgba(52,211,153,0.35)", background: "rgba(52,211,153,0.06)", color: "var(--fg)" }}>
+            {meta.result}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EventLine({ ev }: { ev: RunEvent }) {
+  if (ev.kind === "text") return <div style={{ color: "var(--fg)" }} className="whitespace-pre-wrap">{ev.text}</div>;
+  if (ev.kind === "tool") return <div style={{ color: "#7dd3fc" }}>▸ {ev.toolName} <span style={{ color: "var(--fg-dimmer)" }}>{ev.detail}</span></div>;
+  if (ev.kind === "tool-result") return <div style={{ color: ev.text === "error" ? "#f87171" : "var(--fg-dimmer)" }} className="pl-3 break-all">{ev.detail}</div>;
+  if (ev.kind === "approval") return <div className="text-amber-300">⏸ {ev.toolName}: {ev.detail}</div>;
+  if (ev.kind === "status") return <div style={{ color: "var(--fg-dimmer)" }}>· {ev.detail}</div>;
+  if (ev.kind === "init") return <div style={{ color: "var(--fg-dimmer)" }}>⚙ {ev.detail}</div>;
+  if (ev.kind === "error") return <div className="text-rose-300">✖ {ev.text}</div>;
+  if (ev.kind === "stderr") return <div style={{ color: "#f59e0b99" }} className="break-all">{ev.text}</div>;
+  if (ev.kind === "result") return null; // rendered as the green result box
+  return null;
+}
