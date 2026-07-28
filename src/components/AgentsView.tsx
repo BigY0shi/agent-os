@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
-import type { AgentDef, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
+import type { AgentDef, AgentTrigger, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
 import { INTELLIGENCE_META, MODE_META, STATUS_COLORS } from "@/lib/agentsTypes";
 
 const VIOLET = "#a78bfa";
@@ -339,6 +339,8 @@ function AgentDrawer({ id, onClose, onRun }: { id: string; onClose: () => void; 
           )}
         </div>
 
+        <TriggersEditor agent={agent} onSave={(triggers) => void patch({ triggers })} />
+
         <div>
           <div className="flex items-center gap-2 mb-2">
             <input value={note} onChange={(e) => setNote(e.target.value)}
@@ -376,6 +378,97 @@ function AgentDrawer({ id, onClose, onRun }: { id: string; onClose: () => void; 
 
         {openRun && <RunView agentId={id} runId={openRun} />}
       </div>
+    </div>
+  );
+}
+
+// ---- triggers editor ------------------------------------------------------
+
+function trigSummary(t: AgentTrigger): string {
+  switch (t.type) {
+    case "manual": return "Manual";
+    case "webhook": return "Webhook";
+    case "gmail": return `Gmail · "${t.query}" · every ${t.intervalMin}m`;
+    case "webwatch": return `Watch · ${t.url} · every ${t.intervalMin}m`;
+    case "filewatch": return `Files · ${t.path}${t.glob ? ` · ${t.glob}` : ""}`;
+    case "schedule": return `Cron · ${t.cron}`;
+  }
+}
+
+function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentTrigger[]) => void }) {
+  const [adding, setAdding] = useState<AgentTrigger["type"] | null>(null);
+  const [f1, setF1] = useState("");  // query / url / path / cron
+  const [f2, setF2] = useState("");  // interval / glob
+
+  function remove(i: number) {
+    onSave(agent.triggers.filter((_, idx) => idx !== i));
+  }
+
+  function add() {
+    let t: AgentTrigger | null = null;
+    const iv = Math.max(parseInt(f2) || 30, 5);
+    if (adding === "webhook") t = { type: "webhook", secret: crypto.randomUUID().replace(/-/g, "") };
+    else if (adding === "gmail" && f1.trim()) t = { type: "gmail", query: f1.trim(), intervalMin: Math.max(iv, 10) };
+    else if (adding === "webwatch" && f1.trim()) t = { type: "webwatch", url: f1.trim(), intervalMin: iv };
+    else if (adding === "filewatch" && f1.trim()) t = { type: "filewatch", path: f1.trim(), glob: f2.trim() || undefined };
+    else if (adding === "schedule" && f1.trim()) t = { type: "schedule", cron: f1.trim() };
+    if (!t) return;
+    onSave([...agent.triggers, t]);
+    setAdding(null); setF1(""); setF2("");
+  }
+
+  const webhook = agent.triggers.find((t): t is Extract<AgentTrigger, { type: "webhook" }> => t.type === "webhook");
+
+  return (
+    <div className="rounded-xl border p-3.5" style={{ borderColor: "var(--panel-border)", background: "rgba(255,255,255,0.02)" }}>
+      <div className="text-[10px] font-mono uppercase tracking-widest mb-2" style={{ color: "var(--fg-dimmer)" }}>Triggers</div>
+      <div className="space-y-1.5 mb-2.5">
+        {agent.triggers.map((t, i) => (
+          <div key={i} className="flex items-center gap-2 text-[12px] rounded-lg border px-2.5 py-1.5" style={{ borderColor: "var(--panel-border)" }}>
+            <span className="flex-1 truncate font-mono text-[11.5px]" style={{ color: "var(--fg-dim)" }}>{trigSummary(t)}</span>
+            {t.type !== "manual" && (
+              <button onClick={() => remove(i)} title="Remove trigger" className="p-1 rounded hover:bg-rose-500/15 text-rose-300/70"><X size={12} /></button>
+            )}
+          </div>
+        ))}
+      </div>
+      {webhook && (
+        <div className="mb-2.5 text-[11px] font-mono rounded-lg border px-2.5 py-2 break-all" style={{ borderColor: `${VIOLET}33`, color: "var(--fg-dim)" }}>
+          POST <span style={{ color: VIOLET }}>/api/agents/hook/{agent.id}</span><br />
+          header <span style={{ color: VIOLET }}>x-agent-secret: {webhook.secret}</span>
+        </div>
+      )}
+      {!adding ? (
+        <div className="flex gap-1.5 flex-wrap">
+          {(["gmail", "webwatch", "filewatch", "schedule", "webhook"] as const).map((ty) => (
+            <button key={ty} onClick={() => { setAdding(ty); setF1(""); setF2(""); }}
+              disabled={ty === "webhook" && !!webhook}
+              className="px-2.5 h-7 rounded-md border text-[11px] disabled:opacity-30" style={{ borderColor: `${VIOLET}44`, color: VIOLET }}>
+              + {ty}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {adding !== "webhook" && (
+            <input value={f1} onChange={(e) => setF1(e.target.value)} autoFocus
+              placeholder={adding === "gmail" ? "Gmail search query — e.g. is:unread from:client.com" : adding === "webwatch" ? "URL to watch" : adding === "filewatch" ? "Folder path to watch" : "Cron — e.g. 0 8 * * * (8am daily)"}
+              className="w-full bg-black/30 border rounded-lg px-3 h-9 text-[12px] outline-none font-mono" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+          )}
+          {(adding === "gmail" || adding === "webwatch") && (
+            <input value={f2} onChange={(e) => setF2(e.target.value)} placeholder={adding === "gmail" ? "Interval minutes (min 10 — each check is a model call)" : "Interval minutes (min 5)"}
+              className="w-full bg-black/30 border rounded-lg px-3 h-9 text-[12px] outline-none font-mono" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+          )}
+          {adding === "filewatch" && (
+            <input value={f2} onChange={(e) => setF2(e.target.value)} placeholder="Glob (optional) — e.g. *.pdf"
+              className="w-full bg-black/30 border rounded-lg px-3 h-9 text-[12px] outline-none font-mono" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
+          )}
+          <div className="flex gap-2">
+            <button onClick={add} className="px-3 h-8 rounded-lg border text-[12px]" style={{ borderColor: `${VIOLET}55`, color: VIOLET }}>Add {adding}</button>
+            <button onClick={() => setAdding(null)} className="px-3 h-8 rounded-lg text-[12px]" style={{ color: "var(--fg-dim)" }}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

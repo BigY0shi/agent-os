@@ -18,9 +18,12 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Always let the login screen, the auth API, and framework/static assets through.
+  // Agent webhooks are also exempt: external systems can't hold a session cookie,
+  // and the route enforces its own per-agent secret (x-agent-secret header).
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/api/agents/hook/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt"
