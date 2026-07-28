@@ -1,4 +1,5 @@
 import { LEADS_DIR } from "@/lib/hireDesk";
+import { startHireBriefBatch } from "@/lib/hireBatch";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -28,10 +29,16 @@ export async function POST() {
   if (res.code !== 0 && stats.candidates == null) {
     return Response.json({ ok: false, error: res.err.slice(-300) || "hire scan failed" }, { status: 502 });
   }
+
+  // Deal-Desk parity: a scan kicks off the brief pass so cards arrive analysed
+  // (summary/why/approach/crashCourse) instead of waiting on per-card buttons.
+  const brief = await startHireBriefBatch();
+
   return Response.json({
     ok: true,
     raw: stats.raw ?? 0,
     candidates: stats.candidates ?? 0,
     byMachine: stats.byMachine ?? {},
+    briefing: brief.started ? brief.total : 0,
   });
 }

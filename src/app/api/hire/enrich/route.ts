@@ -1,4 +1,5 @@
 import { listHireLeads, setHireFirmo, sizeFit, type Firmo } from "@/lib/hireDesk";
+import { startHirePitchBatch } from "@/lib/hireBatch";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -147,5 +148,15 @@ export async function POST(req: Request) {
     }
   }));
 
-  return Response.json({ ok: true, enriched: done, failed, skipped: Math.max(0, pool.length - targets.length), results });
+  // Enrichment is exactly the input the pitch needs (size verdict decides the
+  // framing), so chain the outreach pass for what just landed — the approved
+  // column fills with pitches without another button.
+  const pitch = await startHirePitchBatch(targets.map((l) => l.id));
+
+  return Response.json({
+    ok: true, enriched: done, failed,
+    skipped: Math.max(0, pool.length - targets.length),
+    pitching: pitch.started ? pitch.total : 0,
+    results,
+  });
 }

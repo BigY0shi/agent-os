@@ -359,13 +359,37 @@ export default function HireEngine() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Poll a running brief/pitch pass and live-refresh the board as analysis lands.
+  const watchBatch = useCallback(async (kind: "brief" | "pitch") => {
+    for (let i = 0; i < 120; i++) {
+      await new Promise((r) => setTimeout(r, 5000));
+      try {
+        const j = await (await fetch("/api/hire/brief-batch", { cache: "no-store" })).json();
+        const job = kind === "brief" ? j.brief : j.pitch;
+        if (!job) return;
+        if (job.running) {
+          setNote(`${kind === "brief" ? "Analysing" : "Writing pitches for"} ${job.done}/${job.total}…`);
+          if (job.done > 0 && job.done % 3 === 0) await load();
+        } else {
+          if (job.total > 0) setNote(`${kind === "brief" ? "Analysed" : "Pitched"} ${job.succeeded}/${job.total}${job.failed ? ` · ${job.failed} failed` : ""}`);
+          await load();
+          return;
+        }
+      } catch { /* transient — keep polling */ }
+    }
+  }, [load]);
+
   async function rescan() {
     setScanning(true);
     setNote("Scanning job boards…");
     try {
       const j = await (await fetch("/api/hire/scrape", { method: "POST" })).json();
-      setNote(j.ok ? `Scanned ${j.raw} postings · ${j.candidates} candidates` : j.error || "Scan failed");
-      if (j.ok) await load();
+      setNote(j.ok ? `Scanned ${j.raw} postings · ${j.candidates} candidates${j.briefing ? ` · analysing ${j.briefing}…` : ""}` : j.error || "Scan failed");
+      if (j.ok) {
+        await load();
+        // A scan auto-starts the brief pass (Deal Desk parity) — watch it land.
+        if (j.briefing) void watchBatch("brief");
+      }
     } catch (e) { setNote((e as Error).message); }
     setScanning(false);
   }
@@ -380,8 +404,10 @@ export default function HireEngine() {
       if (!j.ok) { setNote(j.error || "Enrichment failed"); }
       else {
         const poor = (j.results || []).filter((r: { fit?: string }) => r.fit === "poor").length;
-        setNote(`Enriched ${j.enriched}${j.failed ? ` · ${j.failed} failed` : ""}${poor ? ` · ${poor} flagged too large` : ""}`);
+        setNote(`Enriched ${j.enriched}${j.failed ? ` · ${j.failed} failed` : ""}${poor ? ` · ${poor} flagged too large` : ""}${j.pitching ? ` · writing ${j.pitching} pitches…` : ""}`);
         await load();
+        // Enrichment chains the outreach pass for what just landed — watch it.
+        if (j.pitching) void watchBatch("pitch");
       }
     } catch (e) { setNote((e as Error).message); }
     setEnriching(false);
