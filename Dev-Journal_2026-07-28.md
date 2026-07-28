@@ -1,5 +1,29 @@
 # Dev Journal — 2026-07-28
 
+## Hire Engine — auto-brief at scan, auto-pitch after enrich
+
+**Commit:** `0b28805` · **Rollback:** `git revert 0b28805`.
+
+User report: cards had scoring/visuals but "no proposal pitches, no summaries,
+no crash course." Root cause: all of it existed but only behind per-card drawer
+buttons — Deal Desk briefs at ingest, the Hire Engine never got that half.
+Fix mirrors deals' `briefBatch`: generation extracted to `lib/hireBrief.ts`
+(prompts verbatim), `lib/hireBatch.ts` runs two background jobs — every scan
+auto-briefs the best-scoring un-analysed leads; "Enrich approved" chains a pitch
+pass over what it just enriched (firmographics decide pitch framing). New
+`/api/hire/brief-batch` for polling/manual re-runs; scan/enrich notes show live
+progress. `tsc` clean; behavior verified structurally against the deals flow —
+first real pass lands with the user's next scan after rebuild.
+
+Also diagnosed this morning: post-rebuild "server doesn't come up" was a stale
+broken `.next` (start bat skips rebuilding when `.next` exists); a clean build
+fixed it — verified live boot + gate on a test port. Content Engine "Cannot GET"
+report: dashboard verified healthy end-to-end through the login gate
+(`/content-engine` 200, list API ok) — "Cannot GET" is an Express 404 string,
+i.e. a request that hit Paperclip's port, not Next.
+
+---
+
 ## Agents module — Phases 2–4: curator, triggers, direct-HTTP tier
 
 **Commits:** `64981ab` (curator) · `b1544ce` (triggers) · `823a9b4` (HTTP tier)
