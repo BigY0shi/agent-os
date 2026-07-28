@@ -4,6 +4,13 @@ Newest entry at the top. Every change lists its commit and rollback.
 
 ---
 
+## ~23:55 PDT · Content Engine multi-model mandate + Jarvis voice answer (commit `e4bca9e`)
+- **Content Engine, per `/multi-agent-mcp-orchestration`:** Claude stays manager (plan + merge), but generation now rotates per item across lineages — codex → kimi (Ollama Cloud) → claude — via `seatForItem()` (stable id hash) + `multiModelComplete()` in `lib/contentEngine.ts` (reuses brainstorm's `seatComplete`). Insights run on **codex** (cross-lineage check: the grader ≠ the planner). Failed seat → Claude fallback, and `materials.by` / `insights.by` record who ACTUALLY wrote it — badges on card, drawer, and the performance read.
+- **Jarvis voice question answered:** the Realtime tab already speaks to `gpt-realtime` — the same model behind ChatGPT's Advanced Voice Mode — over WebRTC (`api/hermes/realtime/session`). Caveat: bills `OPENAI_API_KEY` per-minute; the consumer ChatGPT voice mode has no API and codex CLI is text-only. Standard mic loop remains STT → codex/claude → OpenAI TTS butler voice.
+- **Class D fix in passing:** realtime tool description said "on the user's Mac" with macOS app examples — now host-neutral with per-platform examples.
+**Verified:** tsc clean, build compiled.
+**Rollback:** `git revert e4bca9e`.
+
 ## ~00:15 (7-28 local, same session) · Jarvis → Codex Voice + standalone (commit `b7f37ad`)
 - **Backend swap:** `agent()` in `lib/hermesJarvis.ts` now runs `codex exec --full-auto --skip-git-repo-check --ignore-user-config -` (prompt over stdin) instead of `hermes -z`. Same tool powers, ChatGPT subscription. Fast/auto completion chain untouched (OpenRouter-if-keyed → Claude CLI).
 - **Standalone:** new `/jarvis` page + Sidebar entry (Agent Orchestration); Hermes-Jarvis tab removed from `/hermes` (union, valid list, tab button, render branch); `/hermes?tab=jarvis` deep-links redirect to `/jarvis`.
