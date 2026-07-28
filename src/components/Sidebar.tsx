@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -24,6 +24,8 @@ const NAV: NavItem[] = [
   { href: "/deals",    label: "Deal Desk", icon: <CheckCircle2 size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
   // Sibling of Deal Desk: same pipeline, pointed at salaried job postings instead of gigs.
   { href: "/hire",     label: "Hire Engine", icon: <Factory size={16} />, accent: "#fb923c", dim: "rgba(251,146,60,0.16)" },
+  // Three-seat ideation council (Claude + ChatGPT + Kimi) — topic in, project brief out.
+  { href: "/brainstorm", label: "Brainstorm", icon: <Lightbulb size={16} />, accent: "#fbbf24", dim: "rgba(251,191,36,0.16)" },
   // Agents — use real avatar logos
   { href: "/claude",   label: "Claude",   icon: <AgentAvatar agent="claude" size={22} />,   accent: "#d97757", dim: "rgba(217,119,87,0.16)" },
   { href: "/openclaw", label: "OpenClaw", icon: <AgentAvatar agent="openclaw" size={22} />, accent: "#f472b6", dim: "rgba(244,114,182,0.16)" },
@@ -71,7 +73,7 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // NOTE: membership here is what decides the group — NOT position in NAV and not the saved
 // drag order. A route missing from this set silently lands in "Self" no matter where it
 // sits in the array, so add new orchestration modules here as well as to NAV.
-const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/agent-kanban"]);
+const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/brainstorm", "/agent-kanban"]);
 function sectionOf(href: string): string {
   if (href === "/") return "Workspace";
   if (ORCHESTRATION_ROUTES.has(href)) return "Agent Orchestration";
