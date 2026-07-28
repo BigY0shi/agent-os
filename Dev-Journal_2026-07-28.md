@@ -1,5 +1,23 @@
 # Dev Journal — 2026-07-28
 
+## Hire Engine — two-stage funnel (triage everything, full-brief the pursue pile)
+
+**Commit:** `7628d6f` · **Rollback:** `git revert 7628d6f` (triage verdicts in
+`hire-state.json` survive harmlessly).
+
+Iterated with the user in-session: first "drain the whole board" (every card
+gets the full monty), then refined to a funnel — analyse ALL cards cheaply,
+spend the expensive analysis only where it's warranted. Stage 1: batched haiku
+triage (12 postings/call) stamps every un-judged card pursue/skip + one-line
+reason. Stage 2: opus full brief for the pursue pile, best-composite first.
+Skip cards keep the verdict visible (chip + drawer line) and are overruled with
+the per-card Generate brief. Also this hour: verified the first live batch runs
+(20/20 then 35/35, 0 failures → 81/81 leads briefed via API-driven passes), and
+fixed the "Cannot GET /" on 3737 — `set PORT=3737` persisted in the cmd window,
+handing Paperclip the dashboard's port on a second bat run (`d21fa98` clears it).
+
+---
+
 ## Audit Console: client creation + brief editor (parity with the standalone console)
 
 The /audit module can now onboard clients, not just run them. Contract kept: agent-os
