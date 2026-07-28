@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Send, Zap, Cpu, Radio, Maximize2, X, Newspaper, Target, ListChecks, Trophy, CheckCircle2, TrendingUp, Sparkles, FileText, Brain, Circle, Globe, History } from "lucide-react";
 import JarvisBuilds from "./JarvisBuilds";
 import JarvisRealtime from "./JarvisRealtime";
+import JarvisGeminiLive from "./JarvisGeminiLive";
+import JarvisKimiVoice from "./JarvisKimiVoice";
 
 const CYAN = "#22d3ee";
 const TEAL = "#34d399";
@@ -648,6 +650,14 @@ export default function JarvisView() {
   // (tap-to-talk / Live / wake word) and claimed "voice is live" regardless.
   // The working stack is browser speech-recognition → Jarvis → ElevenLabs TTS.
   const [realtime, setRealtime] = useState(false);
+  // Which live-voice backend drives the Realtime panel; persisted across visits.
+  const [voiceProvider, setVoiceProvider] = useState<"openai" | "gemini" | "kimi">("openai");
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("jarvis.voiceProvider");
+      if (v === "openai" || v === "gemini" || v === "kimi") setVoiceProvider(v);
+    } catch { /* default stands */ }
+  }, []);
   const [wake, setWake] = useState(false);
   const [wall, setWall] = useState(false);
   const [status, setStatus] = useState("Tap the core and speak — or enable the wake word.");
@@ -1191,7 +1201,28 @@ export default function JarvisView() {
 
       {realtime && (
         <div className="mt-4">
-          <JarvisRealtime voice={voice} onClose={() => setRealtime(false)} />
+          {/* Voice backend picker — three ways to talk to the same butler:
+              gpt-realtime (native S2S, OpenAI API-billed) · Gemini Live (native
+              S2S, free tier / AI Pro limits) · Kimi K3 (turn-based STT→LLM→TTS,
+              Ollama Cloud + ElevenLabs). Choice sticks in localStorage. */}
+          <div className="flex items-center gap-1.5 mb-2">
+            {([["openai", "GPT Realtime", "#22d3ee"], ["gemini", "Gemini Live", "#60a5fa"], ["kimi", "Kimi K3", "#f472b6"]] as const).map(([key, label, color]) => (
+              <button key={key} onClick={() => { setVoiceProvider(key); try { localStorage.setItem("jarvis.voiceProvider", key); } catch { /* fine */ } }}
+                className="px-2.5 py-1 rounded-full border text-[11.5px] transition"
+                style={voiceProvider === key
+                  ? { borderColor: color, color, background: `${color}1f` }
+                  : { borderColor: "var(--panel-border)", color: "var(--fg-dim)" }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {voiceProvider === "gemini" ? (
+            <JarvisGeminiLive onClose={() => setRealtime(false)} />
+          ) : voiceProvider === "kimi" ? (
+            <JarvisKimiVoice voice={voice} onClose={() => setRealtime(false)} />
+          ) : (
+            <JarvisRealtime voice={voice} onClose={() => setRealtime(false)} />
+          )}
         </div>
       )}
 
