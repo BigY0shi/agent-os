@@ -795,9 +795,9 @@ export default function JarvisView() {
     try {
       const r = await fetch("/api/hermes/tts", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        // ElevenLabs: the key that's actually configured here (the OpenAI TTS path
-        // needs an OPENAI_API_KEY this box doesn't have).
-        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: "elevenlabs" }),
+        // "auto": local Kokoro first (free, offline, ~/.agentic-os/kokoro-tts),
+        // then ElevenLabs (the keyed hosted provider here), then OpenAI.
+        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: "auto" }),
       });
       const j = await r.json();
       if (j.audio && audioRef.current) {

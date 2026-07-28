@@ -7,6 +7,8 @@ $ids = @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Exp
 $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
   Where-Object { $_.CommandLine -match 'next.dist.bin.next start' } |
   Select-Object -Expand ProcessId)
+# Kokoro local TTS rides the same lifecycle — port-scoped so only OUR server dies.
+$ids += @(Get-NetTCPConnection -LocalPort 8880 -State Listen | Select-Object -Expand OwningProcess -Unique)
 $ids = $ids | Sort-Object -Unique
 
 if ($ids) {

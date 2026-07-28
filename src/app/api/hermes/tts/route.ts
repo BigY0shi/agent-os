@@ -10,6 +10,10 @@ export const dynamic = "force-dynamic";
 
 // POST /api/hermes/tts  { text, voiceId?, provider? }  → { audio: dataURI } | { error }
 // Speaks arbitrary text. provider:
+//   "local"                       — Kokoro-82M on this machine (~/.agentic-os/kokoro-tts,
+//                                   port 8880, British bm_george). Free, offline, GPU-fast.
+//   "auto"                        — local first, then ElevenLabs, then OpenAI — the first
+//                                   backend that actually produces audio wins.
 //   "openai" (default for Jarvis) — gpt-4o-mini-tts, steered to a refined English butler.
 //   "elevenlabs"                  — Flash v2.5.
 //   "minimax"                     — speech-02-turbo (legacy fallback).
@@ -100,6 +104,26 @@ async function minimaxTts(text: string, voiceId: string): Promise<NextResponse> 
   return NextResponse.json({ audio: `data:audio/mp3;base64,${Buffer.from(hex, "hex").toString("base64")}` });
 }
 
+// Local Kokoro server (see ~/.agentic-os/kokoro-tts). Only kokoro-style voice
+// names (bm_george, af_bella, …) are forwarded; an ElevenLabs id falls back to
+// the server's default butler voice.
+const LOCAL_TTS_URL = process.env.LOCAL_TTS_URL || "http://127.0.0.1:8880";
+
+async function localTts(text: string, voiceId: string): Promise<NextResponse> {
+  const voice = /^[ab][fm]_[a-z]+$/.test(voiceId) ? voiceId : undefined;
+  const r = await fetch(`${LOCAL_TTS_URL}/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: text.slice(0, 1200), ...(voice ? { voice } : {}) }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j?.audio) {
+    return NextResponse.json({ error: `local TTS ${r.status}`, detail: j?.error }, { status: 502 });
+  }
+  return NextResponse.json({ audio: j.audio });
+}
+
 export async function POST(req: Request) {
   const { text, voiceId, provider } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
@@ -107,6 +131,17 @@ export async function POST(req: Request) {
   }
   try {
     const v = typeof voiceId === "string" ? voiceId : "";
+    if (provider === "local") return await localTts(text, v);
+    if (provider === "auto") {
+      // First backend that actually yields audio wins: free local Kokoro, then
+      // ElevenLabs (keyed on this box), then OpenAI. Errors cascade silently —
+      // the caller only cares that SOMETHING speaks.
+      for (const fn of [localTts, elevenTts, openaiTts]) {
+        const res = await fn(text, v);
+        if (res.ok) return res;
+      }
+      return NextResponse.json({ error: "no TTS backend produced audio (local server down, no ElevenLabs/OpenAI key?)" }, { status: 502 });
+    }
     if (provider === "minimax") return await minimaxTts(text, v);
     if (provider === "elevenlabs") return await elevenTts(text, v || "onwK4e9ZLuTAKqWW03F9");
     return await openaiTts(text, v);   // default — OpenAI English butler

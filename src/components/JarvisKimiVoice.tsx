@@ -51,9 +51,9 @@ export default function JarvisKimiVoice({ voice, onClose }: { voice?: string; on
     try {
       const j = await fetch("/api/hermes/tts", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        // ElevenLabs is the provider that's actually keyed on this box (route
-        // default voice: Daniel, British) — the butler character survives.
-        body: JSON.stringify({ text: text.slice(0, 600), ...(voice ? { voiceId: voice } : {}), provider: "elevenlabs" }),
+        // "auto": local Kokoro (bm_george) first, then ElevenLabs (Daniel), then
+        // OpenAI — the butler character survives every hop.
+        body: JSON.stringify({ text: text.slice(0, 600), ...(voice ? { voiceId: voice } : {}), provider: "auto" }),
       }).then((r) => r.json());
       if (j.audio && audioRef.current) {
         await new Promise<void>((done) => {

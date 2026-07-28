@@ -10,6 +10,8 @@ $ids = @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Exp
 $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
   Where-Object { $_.CommandLine -match 'next.dist.bin.next start' } |
   Select-Object -Expand ProcessId)
+# Kokoro local TTS restarts with the dashboard (port-scoped; relaunched below).
+$ids += @(Get-NetTCPConnection -LocalPort 8880 -State Listen | Select-Object -Expand OwningProcess -Unique)
 $ids = $ids | Sort-Object -Unique
 foreach ($procId in ($ids | Where-Object { $_ })) {
   try { Stop-Process -Id $procId -Force -ErrorAction Stop; Write-Host "        killed PID $procId" -ForegroundColor Yellow } catch {}
@@ -22,6 +24,8 @@ Start-Process -WindowStyle Hidden -FilePath 'node' `
   -WorkingDirectory $dir `
   -RedirectStandardOutput (Join-Path $logDir 'agentos-server.log') `
   -RedirectStandardError  (Join-Path $logDir 'agentos-server.err.log')
+
+& (Join-Path $dir 'kokoro-start.ps1')
 
 Write-Host "  [3/3] Waiting for it to come online..."
 $ok = $false
