@@ -11,6 +11,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { machineFor, type MachineKey } from "./hireMachines";
+import { formatDescription } from "./upworkDesk";
 
 export const LEADS_DIR =
   process.env.UPWORK_LEADS_DIR || path.join(os.homedir(), "Documents", "Upwork-Leads");
@@ -19,6 +20,14 @@ const STATE_FILE = path.join(LEADS_DIR, "hire-state.json");
 
 export const HIRE_STATUSES = ["new", "researching", "approved", "sent", "parked", "dismissed"] as const;
 export type HireStatus = (typeof HIRE_STATUSES)[number];
+
+/** Kanban columns, left → right — same shape as the Deal Desk's DESK_COLUMNS. */
+export const HIRE_COLUMNS: { key: HireStatus; label: string; accent: string }[] = [
+  { key: "new", label: "New", accent: "#a855f7" },
+  { key: "researching", label: "Researching", accent: "#22d3ee" },
+  { key: "approved", label: "Approved", accent: "#fbbf24" },
+  { key: "sent", label: "Sent", accent: "#34d399" },
+];
 
 /** One row as hire.mjs writes it. */
 export interface HireRecord {
@@ -54,6 +63,18 @@ export interface Firmo {
   error?: string;
 }
 
+/** One Ask-AI exchange, kept on the lead like the Deal Desk's answers. */
+export interface HireAnswer { q: string; a: string; ts: number }
+
+/**
+ * On-demand analysis block — the Hire Engine's equivalent of a Deal Desk brief.
+ * hire.mjs only scrapes; nothing pre-pitches these leads, so without this every
+ * card stays a bare posting forever.
+ */
+export interface HireBrief {
+  summary?: string; why?: string; approach?: string; crashCourse?: string; at?: number;
+}
+
 export interface HireState {
   status?: HireStatus;
   notes?: string;
@@ -62,6 +83,8 @@ export interface HireState {
   /** Why this role is (or is not) a fit for the machine. */
   read?: string;
   firmo?: Firmo;
+  brief?: HireBrief;
+  answers?: HireAnswer[];
   updatedAt?: number;
 }
 
@@ -93,7 +116,39 @@ export interface HireLead extends HireRecord {
   pitch: string | null;
   read: string | null;
   firmo: Firmo | null;
+  summary: string | null;
+  why: string | null;
+  approach: string | null;
+  crashCourse: string | null;
+  answers: HireAnswer[];
+  /** Deal-Desk-style axes, derived — see deriveScores(). */
+  effectiveFit: number;
+  easiness: number;
+  winnability: number;
   updatedAt: number | null;
+}
+
+/**
+ * Map the scrape's coverage/budget/commitment onto the Deal Desk's Fit/Ease/Win
+ * axes so both desks read the same way. Nothing is invented:
+ *   Fit  = coverage (share of the role the machine does), capped at 3 when
+ *          enrichment says the company is too large — the offer itself stops fitting.
+ *   Ease = is the machine built? Deploying an existing machine is easy; pitching a
+ *          first-client build is not. Part-time roles shave a point (weaker anchor).
+ *   Win  = the salary buying-signal, nudged by company-size fit once known.
+ * Composite uses the Deal Desk weights (0.4 E + 0.4 W + 0.2 F).
+ */
+function deriveScores(r: HireRecord, firmo: Firmo | null): { effectiveFit: number; easiness: number; winnability: number; composite: number } {
+  const m = machineFor(r.machineKey);
+  let effectiveFit = r.coverage;
+  if (firmo?.fit === "poor") effectiveFit = Math.min(effectiveFit, 3);
+  let easiness = m.built ? 9 : 5;
+  if (r.commitment <= 6) easiness = Math.max(1, easiness - 1); // part-time
+  let winnability = r.budget;
+  if (firmo?.fit === "ideal") winnability = Math.min(10, winnability + 1);
+  if (firmo?.fit === "poor") winnability = Math.min(winnability, 3);
+  const composite = +(0.4 * easiness + 0.4 * winnability + 0.2 * effectiveFit).toFixed(2);
+  return { effectiveFit, easiness, winnability, composite };
 }
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
@@ -125,13 +180,21 @@ export async function listHireLeads(): Promise<HireLead[]> {
   for (const r of records) {
     const st = state[r.id] || {};
     if (st.status === "dismissed") continue;
+    const firmo = st.firmo ?? null;
     out.push({
       ...r,
+      ...deriveScores(r, firmo),
+      desc: formatDescription(r.desc),
       status: st.status || "new",
       notes: st.notes ?? "",
       pitch: st.pitch ?? null,
       read: st.read ?? null,
-      firmo: st.firmo ?? null,
+      firmo,
+      summary: st.brief?.summary ?? null,
+      why: st.brief?.why ?? null,
+      approach: st.brief?.approach ?? null,
+      crashCourse: st.brief?.crashCourse ?? null,
+      answers: st.answers ?? [],
       updatedAt: st.updatedAt ?? null,
     });
   }
@@ -157,6 +220,14 @@ export async function setHireFirmo(id: string, firmo: Firmo): Promise<HireState>
 
 export async function setHirePitch(id: string, pitch: string, read?: string): Promise<HireState> {
   return patch(id, (s) => ({ ...s, pitch, ...(read ? { read } : {}) }));
+}
+
+export async function setHireBrief(id: string, brief: HireBrief): Promise<HireState> {
+  return patch(id, (s) => ({ ...s, brief: { ...brief, at: Date.now() } }));
+}
+
+export async function addHireAnswer(id: string, q: string, a: string): Promise<HireState> {
+  return patch(id, (s) => ({ ...s, answers: [...(s.answers || []), { q, a, ts: Date.now() }].slice(-20) }));
 }
 
 /** Counts per machine, for the portfolio strip. */

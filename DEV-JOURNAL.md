@@ -4,6 +4,22 @@ Companion docs: `_audit/2026-07-22/` (the audit + front-page repair log).
 
 ---
 
+## 2026-07-27 · Hire Engine brought to Deal Desk parity
+User: "it is supposed to mimic the Deal Desk" — it was a flat card grid with none of the review tooling. Changes:
+- **Kanban board** — `HIRE_COLUMNS` (New / Researching / Approved / Sent + trailing Parked) in `lib/hireDesk.ts`; `HireEngine.tsx` rebuilt as drag-and-drop columns like `DealDesk.tsx`. Machine strip kept as the filter above the board.
+- **F/E/W scoring** — `deriveScores()` maps the scrape's coverage/budget/commitment onto Deal-Desk axes: Fit = coverage (capped 3 when firmo says company too large), Ease = machine built? (9/5, −1 part-time), Win = salary signal (±firmo fit). Composite reweighted 0.4E+0.4W+0.2F. Displayed as chips on card + drawer.
+- **Brief** — new `POST /api/hire/brief` (mirrors deals/brief): summary/why/approach/crashCourse via `claude -p`, stored in `hire-state.json` under `brief`. Drawer shows amber Project Summary box, Approach, Crash Course sections + "Generate brief" CTA when missing.
+- **Ask AI** — new `POST /api/hire/ask` (mirrors deals/ask), answers persisted per lead (`answers[]`, last 20), Q&A section in drawer.
+- **Notes** — drawer textarea wired to existing `notes` action (was API-only, no UI).
+- **Pitch edits persist** — new `action:"pitch"` in `/api/hire/action`; the drawer textarea previously dropped hand edits on close.
+- **Enriched cue** — cards show cyan Building2 chip (headcount) when firmo present, red `enrich ✗` on lookup failure, amber `brief` sparkle when analysed, purple `pitched`.
+- **Description** — now run through `formatDescription()` (shared from upworkDesk) so postings render with bullets/sections instead of one flat line.
+- Sidebar move (Self → Agent Orchestration) was already at HEAD (60e66de); needs only a rebuild.
+**Rollback:** revert `src/lib/hireDesk.ts`, `src/components/HireEngine.tsx`, `src/app/api/hire/action/route.ts`; exile `src/app/api/hire/brief/`, `src/app/api/hire/ask/`. State file gains `brief`/`answers` keys — ignored by old code, safe.
+**Verified:** `npx tsc --noEmit` clean; all hireDesk consumers are inside the hire module (grep).
+
+---
+
 ## 2026-07-25 · Staleness sweep — the same 4 bug classes, repo-wide
 Ran a grep pass for every failure mode found in Jarvis/Loop/Deal Desk, to see what else is stale before the rebuild. **Everything below is the SAME four classes repeated** — this is a macOS-authored codebase running on Windows, and each module that was never exercised here still carries the original assumptions.
 

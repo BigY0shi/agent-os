@@ -1,9 +1,9 @@
-import { setHireStatus, setHireNotes, HIRE_STATUSES, type HireStatus } from "@/lib/hireDesk";
+import { setHireStatus, setHireNotes, setHirePitch, HIRE_STATUSES, type HireStatus } from "@/lib/hireDesk";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST { action: "status" | "notes", id, value }
+// POST { action: "status" | "notes" | "pitch", id, value }
 export async function POST(req: Request) {
   const { action, id, value } = await req.json().catch(() => ({})) as
     { action?: string; id?: string; value?: string };
@@ -17,6 +17,9 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, state: await setHireStatus(id, value as HireStatus) });
     }
     if (action === "notes") return Response.json({ ok: true, state: await setHireNotes(id, value ?? "") });
+    // Manual edits to the outreach box — without this the drawer textarea silently
+    // dropped every hand edit the moment it closed.
+    if (action === "pitch") return Response.json({ ok: true, state: await setHirePitch(id, String(value ?? "").slice(0, 8000)) });
     return Response.json({ ok: false, error: `unknown action "${action}"` }, { status: 400 });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
