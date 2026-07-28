@@ -814,7 +814,7 @@ export default function JarvisView() {
     busyRef.current = true; setBusy(true); setBuilding(true); setPhase("thinking");
     try { wakeRef.current?.stop(); } catch {}
     const youId = ++idRef.current; const hermesId = ++idRef.current;
-    setTurns((t) => [{ id: hermesId, who: "hermes", text: "Building it on your Mac, sir…", working: true }, { id: youId, who: "you", text: prompt }, ...t]);
+    setTurns((t) => [{ id: hermesId, who: "hermes", text: "Building it now, sir…", working: true }, { id: youId, who: "you", text: prompt }, ...t]);
     setStatus("Building it on your Mac, sir…");
     let file: string | null = null, err: string | null = null;
     try {
@@ -940,7 +940,7 @@ export default function JarvisView() {
       logTurn(p, reply, mode === "agent" ? "agent" : "chat");
       if (j.ok !== false) speak(reply); else { setPhase("idle"); if (wakeOnRef.current) restartWake(); }
     } catch (e) {
-      setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: "Error reaching Hermes: " + String(e), working: false } : x));
+      setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: "Error reaching Jarvis: " + String(e), working: false } : x));
       setStatus("Something went wrong reaching the agent."); setPhase("idle");
     }
     busyRef.current = false; setBusy(false);
@@ -991,7 +991,7 @@ export default function JarvisView() {
     if (!rec) {
       rec = new C(); rec.continuous = true; rec.interimResults = false; rec.maxAlternatives = 1;
       rec.lang = (typeof navigator !== "undefined" && navigator.language) || "en-US";
-      rec.onstart = () => { wakeRunningRef.current = true; if (phaseRef.current === "idle" && !busyRef.current) setStatus('Standing by — say "Jarvis" or "Hermes".'); };
+      rec.onstart = () => { wakeRunningRef.current = true; if (phaseRef.current === "idle" && !busyRef.current) setStatus('Standing by — say "Jarvis".'); };
       rec.onerror = (e) => {
         const err = e?.error || "";
         if (err === "not-allowed" || err === "service-not-allowed") {
@@ -1077,7 +1077,7 @@ export default function JarvisView() {
         <Radio size={13} className={wake ? "animate-pulse" : ""} /> Wake word {wake ? "ON" : "OFF"}
       </button>
       <button onClick={() => setMode((m) => (m === "auto" ? "agent" : "auto"))}
-        title={mode === "auto" ? "Auto: instant answers, opens apps/sites, escalates big tasks. Click for Agent." : "Agent: full Hermes agent with tools (~28s). Click for Auto."}
+        title={mode === "auto" ? "Auto: instant answers, opens apps/sites, escalates big tasks. Click for Agent." : "Agent: full Codex agent with tools. Click for Auto."}
         className="px-3 h-9 rounded-lg border text-[12px] flex items-center gap-1.5 transition"
         style={{ borderColor: mode === "auto" ? TEAL : "#60a5fa", color: mode === "auto" ? TEAL : "#60a5fa", background: mode === "auto" ? "rgba(52,211,153,0.10)" : "rgba(96,165,250,0.10)" }}>
         {mode === "auto" ? <><Zap size={13} /> Auto</> : <><Cpu size={13} /> Agent</>}
@@ -1119,7 +1119,7 @@ export default function JarvisView() {
             <Mic size={20} />
           </div>
           <div>
-            <h1 className="text-2xl font-medium tracking-tight">Hermes-<span style={{ color: CYAN }}>Jarvis</span></h1>
+            <h1 className="text-2xl font-medium tracking-tight"><span style={{ color: CYAN }}>Jarvis</span></h1>
             <div className="text-[12px] text-[var(--fg-dim)] font-mono">NEURAL LINK · {phaseLabel} · {clock}</div>
           </div>
         </div>

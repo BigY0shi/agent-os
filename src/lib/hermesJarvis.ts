@@ -1,14 +1,15 @@
-// Fast Jarvis voice pipeline.
+// Jarvis voice pipeline — Codex Voice edition (2026-07-27).
 //
-// The old path spawned `hermes -z` per turn — a full agent COLD BOOT (~28s).
-// This routes Jarvis two ways instead:
-//   - "fast"  : a DIRECT chat completion — MiniMax-M3 first, OpenRouter
-//               (Claude 5 / profile default) as fallback — no agent overhead.
-//   - "agent" : the WARM Hermes API server on :8642 (~8s) — keeps tools so it
-//               can actually open apps / run commands on the Mac.
+// Three modes:
+//   - "fast"  : a DIRECT chat completion (small model / CLI fallback) — no agent
+//               overhead, for live voice back-and-forth.
+//   - "agent" : the codex CLI (`codex exec --full-auto`) — replaced `hermes -z`
+//               per the operator's call; same tool powers (open apps, run
+//               commands, touch files) on the ChatGPT subscription.
+//   - "auto"  : fast model decides — answer / OPEN directly / escalate to agent.
 //
-// Keys/model are read SERVER-SIDE from the active Hermes profile, never returned
-// to the browser.
+// Keys/model are still read SERVER-SIDE from the active Hermes profile .env when
+// present (that's just where the keys live), never returned to the browser.
 
 import { readFileSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -311,14 +312,17 @@ async function fast(prompt: string, history: JarvisMsg[]): Promise<JarvisResult>
   return { ok: !!text, text, ms: Date.now() - started, mode: "fast", error };
 }
 
-// AGENT: the reliable full Hermes CLI (executes tools — verified). ~28s.
+// AGENT: the codex CLI with tools unlocked (`--full-auto`) — Codex Voice.
+// Replaced `hermes -z` 2026-07-27: same tool powers (open apps, run commands,
+// touch files), runs on the ChatGPT subscription. Prompt goes over stdin ("-")
+// so a long persona + history can never blow the arg-length limit.
 async function agent(prompt: string, history: JarvisMsg[]): Promise<JarvisResult> {
   const started = Date.now();
   const ctx = history.slice(-4).map((m) => `${m.role === "user" ? "Me" : "You"}: ${m.content}`).join("\n");
   const full = `${AGENT_PERSONA}\n\n${ctx ? ctx + "\n\n" : ""}Command: ${prompt}`;
-  const out = await run("hermes", ["-z", full, "--yolo", "--accept-hooks"], { timeoutMs: 6 * 60 * 1000 });
+  const out = await run("codex", ["exec", "--full-auto", "--skip-git-repo-check", "--ignore-user-config", "-"], { timeoutMs: 6 * 60 * 1000, input: full });
   const text = out.stdout.replace(/\x1b\[[0-9;?]*[a-zA-Z]|\x1b\]\d+;[^\x07\x1b]*(\x07|\x1b\\)/g, "").trim();
-  return { ok: out.ok && !!text, text: text || "(no reply — check `hermes status`)", ms: Date.now() - started, mode: "agent", error: text ? undefined : out.stderr.slice(-300) };
+  return { ok: out.ok && !!text, text: text || "(no reply — check `codex login status`)", ms: Date.now() - started, mode: "agent", error: text ? undefined : out.stderr.slice(-300) };
 }
 
 // AUTO: fast model decides — answer (fast), OPEN an app/site (fast direct exec),

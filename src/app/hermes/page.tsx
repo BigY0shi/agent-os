@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cpu, MessageSquare, Terminal, Layers, Target, Plug, Sparkles, History, AudioLines, LayoutDashboard, Mic, Radar, Mail, Moon} from "lucide-react";
+import { Cpu, MessageSquare, Terminal, Layers, Target, Plug, Sparkles, History, AudioLines, LayoutDashboard, Radar, Mail, Moon} from "lucide-react";
 import AgentRoom from "@/components/AgentRoom";
 import HermesOutreach from "@/components/HermesOutreach";
 import NewsView from "@/components/NewsView";
@@ -16,9 +16,9 @@ import HermesManage from "@/components/HermesManage";
 // Phone tab intentionally NOT mounted in the dashboard — the phone agent runs
 // standalone (see ~/.agentic-os/phone-go-live.sh). Component kept on disk.
 // import HermesPhone from "@/components/HermesPhone";
-import JarvisView from "@/components/JarvisView";
+// Jarvis moved to its own /jarvis route (2026-07-27) — no longer a Hermes tab.
 
-type HermesTab = "chat" | "oracle" | "radar" | "talk" | "jarvis" | "studio" | "sessions" | "goals" | "workspace" | "mcps" | "manage" | "control" | "outreach";
+type HermesTab = "chat" | "oracle" | "radar" | "talk" | "studio" | "sessions" | "goals" | "workspace" | "mcps" | "manage" | "control" | "outreach";
 interface HmVitals { ok: boolean; model: string; provider: string; }
 
 
@@ -28,9 +28,11 @@ export default function HermesRoute() {
 
   // Deep-link: /hermes?tab=manage opens that sub-tab directly.
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get("tab") as HermesTab | null;
-    const valid: HermesTab[] = ["chat", "oracle", "radar", "talk", "jarvis", "studio", "sessions", "goals", "workspace", "mcps", "manage", "control", "outreach"];
-    if (t && valid.includes(t)) setTab(t);
+    const t = new URLSearchParams(window.location.search).get("tab");
+    // Old bookmarks/deep-links to the retired Jarvis tab land on the standalone page.
+    if (t === "jarvis") { window.location.replace("/jarvis"); return; }
+    const valid: HermesTab[] = ["chat", "oracle", "radar", "talk", "studio", "sessions", "goals", "workspace", "mcps", "manage", "control", "outreach"];
+    if (t && valid.includes(t as HermesTab)) setTab(t as HermesTab);
   }, []);
 
   useEffect(() => {
@@ -53,7 +55,6 @@ export default function HermesRoute() {
         {([
           { key: "chat",      label: "Chat",         icon: <MessageSquare size={14} /> },
           { key: "talk",      label: "Talk",         icon: <AudioLines size={14} /> },
-          { key: "jarvis",    label: "Hermes-Jarvis", icon: <Mic size={14} /> },
           { key: "oracle",    label: "Hermes Oracle", icon: <Moon size={14} /> },
           { key: "radar",     label: "News Radar",    icon: <Radar size={14} /> },
           { key: "studio",    label: "Studio",       icon: <Sparkles size={14} /> },
@@ -91,8 +92,6 @@ export default function HermesRoute() {
         <NewsView />
       ) : tab === "talk" ? (
         <MiniMaxVoiceAgent accent="#60a5fa" />
-      ) : tab === "jarvis" ? (
-        <JarvisView />
       ) : tab === "studio" ? (
         <HermesStudio />
       ) : tab === "goals" ? (
