@@ -32,6 +32,28 @@ export function engineQuery(args: string[]): Promise<unknown> {
   });
 }
 
+/**
+ * Engine query that feeds the CLI on stdin — used by `intake <slug> --set`, which is the
+ * surface that lets this side edit a brief WITHOUT ever writing engine files itself.
+ */
+export function engineQueryStdin(args: string[], input: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [ENGINE_CLI, ...args], { cwd: ENGINE_DIR });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (d) => { stdout += String(d); });
+    child.stderr.on("data", (d) => { stderr += String(d); });
+    child.on("error", (e) => reject(e));
+    child.on("close", () => {
+      const parsed = lastJson(stdout);
+      if (parsed) resolve(parsed);
+      else reject(new Error(stderr.trim() || "engine returned no JSON"));
+    });
+    child.stdin.on("error", () => {});
+    child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
 export type AuditAction = "run" | "distill" | "warroom";
 type JobStage = "idle" | "running" | "done" | "failed";
 

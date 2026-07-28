@@ -1,5 +1,31 @@
 # Dev Journal — 2026-07-28
 
+## Audit Console: client creation + brief editor (parity with the standalone console)
+
+The /audit module can now onboard clients, not just run them. Contract kept: agent-os
+NEVER writes engine files — everything goes through the engine's new `cli.mjs intake`
+surface (engine commit 6eb1c8b).
+
+- `auditEngine.ts` + `engineQueryStdin()` — pipes the intake JSON to
+  `cli.mjs intake <slug> --set` on stdin, so validation is the engine's own.
+- `POST /api/audit` — create a client (shells `cli.mjs new`; create-or-open semantics).
+- `GET/POST /api/audit/intake` — brief read (includes BRIEF_FIELDS so the form renders
+  from the engine contract, zero drift) and save-with-verdict.
+- `AuditBrief.tsx` — same editor behavior as the standalone console: lists one-per-line,
+  funnel_metrics/channel_history as JSON with live parse feedback, save never blocks,
+  missing/vague fields outlined amber with the run-gate verdict, audit_passes +
+  optional_modules (1A/3A/3B) exposed.
+- `AuditConsole.tsx` — "+ New client" (create -> brief opens) and a "Brief" button per
+  row; simple view toggle, no route change.
+
+`npx tsc --noEmit` exit 0. Live click-through pends the next rebuild. Design hook's
+recurring side-tab findings remain classified intentional (house status idiom).
+
+Rollback: revert this commit; the engine's intake command stays (it is also the
+standalone console's dependency-free path).
+
+---
+
 ## Hire Engine — auto-brief at scan, auto-pitch after enrich
 
 **Commit:** `0b28805` · **Rollback:** `git revert 0b28805`.

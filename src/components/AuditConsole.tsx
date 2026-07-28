@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Radar, Play, Loader2, FlaskConical, FileText, ExternalLink, RefreshCw, AlertTriangle,
+  Radar, Play, Loader2, FlaskConical, FileText, ExternalLink, RefreshCw, AlertTriangle, Plus, ClipboardList,
 } from "lucide-react";
+import AuditBrief from "./AuditBrief";
 
 // Audit Console — start and watch Business Audit Engine runs (feat-004).
 // The engine is standalone; this page shells to its CLI through /api/audit/* and never
@@ -51,6 +52,53 @@ function fmtElapsed(ms: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+function NewClient({ onCreated }: { onCreated: (slug: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function create() {
+    if (!name.trim()) return;
+    setBusy(true); setErr("");
+    try {
+      const j = await (await fetch("/api/audit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      })).json() as { ok: boolean; error?: string; slug?: string };
+      if (j.ok && j.slug) { setOpen(false); setName(""); onCreated(j.slug); }
+      else setErr(j.error || "Could not create the client");
+    } catch (e) { setErr((e as Error).message); }
+    setBusy(false);
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 text-[12px] px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition">
+        <Plus size={12} /> New client
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 flex-1 min-w-0">
+      <input type="text" placeholder="Business name" autoFocus value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") void create(); }}
+        className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded px-3 py-1.5 text-[13px] outline-none focus:border-emerald-500/60" />
+      <button disabled={busy || !name.trim()} onClick={() => void create()}
+        className="text-[12px] px-3 py-1.5 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition disabled:opacity-40">
+        {busy ? "Creating…" : "Create"}
+      </button>
+      <button onClick={() => { setOpen(false); setErr(""); }}
+        className="text-[12px] px-2.5 py-1.5 rounded-md border border-white/10 text-white/60 hover:text-white/90 transition">
+        Cancel
+      </button>
+      {err && <span className="text-[12px]" style={{ color: "#f87171" }}>{err}</span>}
+    </div>
+  );
+}
+
 export default function AuditConsole() {
   const [clients, setClients] = useState<EngineClient[]>([]);
   const [job, setJob] = useState<Job | null>(null);
@@ -59,6 +107,7 @@ export default function AuditConsole() {
   const [passes, setPasses] = useState(3);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+  const [brief, setBrief] = useState<string | null>(null);   // slug whose brief is open, or null
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadClients = useCallback(async () => {
@@ -173,9 +222,14 @@ export default function AuditConsole() {
         </div>
       )}
 
+      {brief ? (
+        <AuditBrief slug={brief} onClose={(saved) => { setBrief(null); if (saved) void loadClients(); }} />
+      ) : (
+      <>
       {/* Controls */}
-      <div className="panel p-3 mb-4 flex items-center gap-3 text-[13px]">
-        <span className="text-white/50">Ensemble passes</span>
+      <div className="panel p-3 mb-4 flex items-center gap-3 text-[13px] flex-wrap">
+        <NewClient onCreated={(slug) => { setBrief(slug); void loadClients(); }} />
+        <span className="text-white/50 ml-2">Ensemble passes</span>
         <input type="number" min={1} max={6} value={passes}
           onChange={(e) => setPasses(Math.max(1, Math.min(6, Number(e.target.value) || 1)))}
           className="w-14 bg-black/30 border border-white/10 rounded px-2 py-1 text-[13px] outline-none focus:border-emerald-500/60" />
@@ -237,6 +291,10 @@ export default function AuditConsole() {
                         className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/15 text-white/70 hover:bg-white/5 transition">
                         <ExternalLink size={11} /> View
                       </a>
+                      <button onClick={() => setBrief(c.slug)} title="Edit the client brief"
+                        className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-white/15 text-white/70 hover:bg-white/5 transition">
+                        <ClipboardList size={11} /> Brief
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -244,6 +302,8 @@ export default function AuditConsole() {
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
     </div>
   );
