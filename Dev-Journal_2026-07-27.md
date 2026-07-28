@@ -4,6 +4,15 @@ Newest entry at the top. Every change lists its commit and rollback.
 
 ---
 
+## 00:55 PDT (07-28) · Jarvis three-way voice provider (commit `7be052c`)
+Realtime panel now has a persisted toggle (localStorage `jarvis.voiceProvider`):
+- **GPT Realtime** — existing WebRTC path, untouched (native S2S, OpenAI API-billed).
+- **Gemini Live** (new) — native speech-to-speech over WebSocket via `@google/genai` (new dep). `api/hermes/realtime/gemini-session` mints a v1alpha EPHEMERAL token (real `GEMINI_API_KEY` stays server-side); `JarvisGeminiLive.tsx` streams mic 16kHz PCM16 in, queues 24kHz PCM16 out, barge-in via `serverContent.interrupted`, butler persona + vault About-Me + `open_app_or_site` tool, Charon voice. Model default `gemini-live-2.5-flash-preview` (doc-verified), `GEMINI_LIVE_MODEL` override. Free tier; the user's Google AI Pro sub raises AI Studio limits (verified via search — Apr 2026 change). **Needs `GEMINI_API_KEY` in `.env.local`** (aistudio.google.com).
+- **Kimi K3 + Butler TTS** (new) — turn-based: browser STT → `api/hermes/realtime/kimi-turn` (kimi-k3 via brainstorm's Ollama seat) → ElevenLabs butler voice via existing `/api/hermes/tts` (ElevenLabs is the keyed provider on this box; OpenAI TTS is not). No barge-in; no metered cost.
+SDK contracts verified via context7 (`/googleapis/js-genai`): ephemeral tokens require `apiVersion: "v1alpha"`; `sendRealtimeInput`/`sendToolResponse`/`sendClientContent`.
+**Verified:** tsc clean; build green (both new routes in manifest). Live-call testing pends the GEMINI_API_KEY.
+**Rollback:** `git revert 7be052c` (also removes the dep from package.json).
+
 ## ~23:55 PDT · Content Engine multi-model mandate + Jarvis voice answer (commit `e4bca9e`)
 - **Content Engine, per `/multi-agent-mcp-orchestration`:** Claude stays manager (plan + merge), but generation now rotates per item across lineages — codex → kimi (Ollama Cloud) → claude — via `seatForItem()` (stable id hash) + `multiModelComplete()` in `lib/contentEngine.ts` (reuses brainstorm's `seatComplete`). Insights run on **codex** (cross-lineage check: the grader ≠ the planner). Failed seat → Claude fallback, and `materials.by` / `insights.by` record who ACTUALLY wrote it — badges on card, drawer, and the performance read.
 - **Jarvis voice question answered:** the Realtime tab already speaks to `gpt-realtime` — the same model behind ChatGPT's Advanced Voice Mode — over WebRTC (`api/hermes/realtime/session`). Caveat: bills `OPENAI_API_KEY` per-minute; the consumer ChatGPT voice mode has no API and codex CLI is text-only. Standard mic loop remains STT → codex/claude → OpenAI TTS butler voice.
