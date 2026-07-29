@@ -1,5 +1,21 @@
 # Dev Journal — 2026-07-28
 
+## Model policy correction + per-module model settings menus
+
+**Commit:** `48d70a0` · **Rollback:** `git revert 48d70a0` (settings.json values
+survive harmlessly).
+
+User correction: "all the Kimi K3's need to be Kimi K2.6 (chat/agentic) and
+K2.7 (coding)" — the k3-first resolver violated the standing model policy.
+`resolveKimiModel(preferred?)` now errors loudly on a configured-but-missing
+tag and falls back k2.6-first; both policy tags live-verified on Ollama Cloud.
+New shared `ModelSettings` menu (on the existing ConfigMenu/useSettings
+foundation) in Brainstorm, Jarvis, Content Engine, Agents (fast/standard/deep
+dial), and Hire Engine (triage/brief models). Settings are read at request
+time — model changes apply to the next call with no rebuild.
+
+---
+
 ## Hire Engine — two-stage funnel (triage everything, full-brief the pursue pile)
 
 **Commit:** `7628d6f` · **Rollback:** `git revert 7628d6f` (triage verdicts in
