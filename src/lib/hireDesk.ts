@@ -87,6 +87,8 @@ export interface HireState {
   triage?: HireTriage;
   brief?: HireBrief;
   answers?: HireAnswer[];
+  /** Set when a Gmail DRAFT was created for this lead (never auto-sent). */
+  outreach?: { at: number; to: string; subject: string; ok: boolean; detail?: string };
   updatedAt?: number;
 }
 
@@ -119,6 +121,7 @@ export interface HireLead extends HireRecord {
   read: string | null;
   firmo: Firmo | null;
   triage: HireTriage | null;
+  outreach: HireState["outreach"] | null;
   summary: string | null;
   why: string | null;
   approach: string | null;
@@ -194,6 +197,7 @@ export async function listHireLeads(): Promise<HireLead[]> {
       read: st.read ?? null,
       firmo,
       triage: st.triage ?? null,
+      outreach: st.outreach ?? null,
       summary: st.brief?.summary ?? null,
       why: st.brief?.why ?? null,
       approach: st.brief?.approach ?? null,
@@ -239,6 +243,10 @@ export async function setHireTriages(verdicts: Record<string, { pursue: boolean;
   }
   await mkdir(path.dirname(STATE_FILE), { recursive: true }).catch(() => {});
   await writeFile(STATE_FILE, JSON.stringify(store, null, 1));
+}
+
+export async function setHireOutreach(id: string, o: NonNullable<HireState["outreach"]>): Promise<HireState> {
+  return patch(id, (s) => ({ ...s, outreach: o }));
 }
 
 export async function addHireAnswer(id: string, q: string, a: string): Promise<HireState> {

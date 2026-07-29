@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Factory, RefreshCw, Loader2, ExternalLink, Sparkles, X, Archive, Building2, HelpCircle,
+  Factory, RefreshCw, Loader2, ExternalLink, Sparkles, X, Archive, Building2, HelpCircle, Mail,
 } from "lucide-react";
 import { MACHINES, MACHINE_ORDER, machineFor, type MachineKey } from "@/lib/hireMachines";
 import { HIRE_COLUMNS } from "@/lib/hireDeskColumns";
@@ -109,11 +109,69 @@ function Card({ lead, onOpen }: { lead: HireLead; onOpen: (l: HireLead) => void 
           <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
             style={{ background: "rgba(168,85,247,0.18)", color: "#c084fc" }}>pitched</span>
         )}
+        {lead.outreach?.ok && (
+          <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded font-semibold"
+            style={{ background: "rgba(34,211,238,0.18)", color: "#22d3ee" }}
+            title={`Gmail draft → ${lead.outreach.to}`}>
+            <Mail size={9} /> drafted
+          </span>
+        )}
       </div>
       <div className="flex items-center justify-between mt-2 text-[10.5px] text-white/40">
         <span>{lead.employment ?? ""}</span>
         <span>{lead.source} · {ago(lead.posted)}</span>
       </div>
+    </div>
+  );
+}
+
+// The last link in the loop: pitch → a DRAFT in the operator's Gmail. Never
+// sends — review and send from Gmail. To defaults to the Hunter contact email.
+function DraftRow({ lead, hasPitch, onSaved }: { lead: HireLead; hasPitch: boolean; onSaved: () => void }) {
+  const [to, setTo] = useState(lead.firmo?.email || "");
+  const [drafting, setDrafting] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => { setTo(lead.firmo?.email || ""); setMsg(""); }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function draft() {
+    setDrafting(true); setMsg("");
+    try {
+      const j = await (await fetch("/api/hire/draft", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: lead.id, to }),
+      })).json();
+      setMsg(j.ok ? `Draft created in Gmail → ${to}` : j.error || j.results?.[0]?.detail || "Draft failed");
+      if (j.ok) onSaved();
+    } catch (e) { setMsg((e as Error).message); }
+    setDrafting(false);
+  }
+
+  if (lead.outreach?.ok) {
+    return (
+      <div className="mt-2 text-[11.5px] font-mono flex items-center gap-1.5" style={{ color: "#22d3ee" }}>
+        <Mail size={12} /> Drafted in Gmail → {lead.outreach.to} · {ago(new Date(lead.outreach.at).toISOString())} — review and send from Gmail
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <div className="flex gap-2 items-center">
+        <input value={to} onChange={(e) => setTo(e.target.value)}
+          placeholder={lead.firmo ? "No contact email found — paste one" : "Enrich first, or paste a contact email"}
+          className="flex-1 panel bg-transparent px-2.5 h-9 text-[12px] font-mono" />
+        <button onClick={draft} disabled={drafting || !hasPitch || !to.trim()}
+          title="Create a DRAFT in your Gmail with this pitch — nothing is sent; you review and send from Gmail"
+          className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-medium disabled:opacity-40 shrink-0"
+          style={{ background: "rgba(34,211,238,0.16)", color: "#22d3ee" }}>
+          {drafting ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
+          {drafting ? "Drafting…" : "Create Gmail draft"}
+        </button>
+      </div>
+      {msg && <div className="text-[11.5px] mt-1.5" style={{ color: msg.startsWith("Draft created") ? "#22d3ee" : "#f87171" }}>{msg}</div>}
+      {lead.outreach && !lead.outreach.ok && !msg && (
+        <div className="text-[11.5px] mt-1.5 text-rose-300/80">Last attempt failed: {lead.outreach.detail}</div>
+      )}
     </div>
   );
 }
@@ -300,6 +358,7 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
           <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => act("pitch", pitch)}
             rows={8} placeholder="No outreach written yet."
             className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
+          <DraftRow lead={lead} hasPitch={!!pitch.trim()} onSaved={onSaved} />
         </Section>
 
         {lead.approach && lead.approach !== "n/a" && (
@@ -416,6 +475,25 @@ export default function HireEngine() {
     setScanning(false);
   }
 
+  const [draftingAll, setDraftingAll] = useState(false);
+
+  // Batch Gmail drafts for the approved column. One claude session drafts them
+  // all (MCP init is the slow part) — expect ~1-2 min, never anything sent.
+  async function draftApproved() {
+    setDraftingAll(true);
+    setNote("Creating Gmail drafts for approved leads (nothing sends)…");
+    try {
+      const j = await (await fetch("/api/hire/draft", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ all: true }),
+      })).json();
+      if (j.drafted != null) setNote(`Gmail drafts created: ${j.drafted}${j.failed ? ` · ${j.failed} failed` : ""} — review and send from Gmail`);
+      else setNote(j.error || "Drafting failed");
+      await load();
+    } catch (e) { setNote((e as Error).message); }
+    setDraftingAll(false);
+  }
+
   async function enrichApproved() {
     setEnriching(true);
     setNote("Looking up company size for approved leads…");
@@ -481,6 +559,12 @@ export default function HireEngine() {
             style={{ background: "rgba(34,211,238,0.16)", color: "#22d3ee" }}
             title="Look up headcount and public/private for leads you've approved, before writing outreach">
             {enriching ? <Loader2 size={13} className="animate-spin" /> : <Building2 size={13} />} Enrich approved
+          </button>
+          <button onClick={draftApproved} disabled={draftingAll}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(34,211,238,0.16)", color: "#22d3ee" }}
+            title="Create Gmail DRAFTS for approved + pitched leads with a contact email. Nothing sends — you review in Gmail.">
+            {draftingAll ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />} Draft approved
           </button>
           <button onClick={load}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">
