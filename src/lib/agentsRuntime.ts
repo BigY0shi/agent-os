@@ -25,6 +25,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, appendFile } from "node:fs/promises";
 import path from "node:path";
 import { CLAUDE_MODEL } from "./config";
+import { readSettings } from "./settings";
 import { makeHttpServer, HTTP_TOOL_NAME, SENSITIVE_HTTP_RE } from "./agentsHttpTool";
 import type { AgentDef, AgentIntelligence, ApprovalReq, ApprovalReason, McpServerHealth, RunEvent, RunMeta } from "./agentsTypes";
 import {
@@ -32,12 +33,19 @@ import {
   saveRunMeta, workspaceDir, writeApprovals, agentDir, loadAgent,
 } from "./agentsStore";
 
-// Model ids verified live on the claude CLI 2026-07-28 ("Reply OK" probes).
-const MODEL_FOR: Record<AgentIntelligence, string> = {
-  fast: "claude-haiku-4-5",
-  standard: "claude-sonnet-5",
-  deep: CLAUDE_MODEL,
-};
+// Intelligence dial → model id. User-tunable from the Agents settings menu
+// (settings.agentsModels); the fallbacks are the ids verified live on the CLI
+// 2026-07-28 ("Reply OK" probes). Read at run start, so a settings change
+// applies to the next run without a restart.
+function modelFor(intel: AgentIntelligence): string {
+  const s = readSettings().agentsModels;
+  const fallback: Record<AgentIntelligence, string> = {
+    fast: "claude-haiku-4-5",
+    standard: "claude-sonnet-5",
+    deep: CLAUDE_MODEL,
+  };
+  return (s[intel] || "").trim() || fallback[intel];
+}
 
 const RUN_TIMEOUT_MS = 30 * 60 * 1000;      // wall clock per task run
 const CURATOR_TIMEOUT_MS = 8 * 60 * 1000;   // curator is bounded much tighter
@@ -344,7 +352,7 @@ async function execute(def: AgentDef, runId: string, trigger: string, extraPromp
       prompt: oneShot(),
       options: {
         cwd: workspaceDir(def.id),
-        model: MODEL_FOR[def.intelligence],
+        model: modelFor(def.intelligence),
         mcpServers: { http: makeHttpServer() },
         systemPrompt: { type: "preset", preset: "claude_code", append:
           `\n\nYou are "${def.name}", a standing background agent in the user's Agent OS.\n${system}\n\n` +
@@ -457,7 +465,7 @@ async function executeCurator(def: AgentDef, runId: string, forRunId: string, fe
       prompt,
       options: {
         cwd: agentDir(def.id),
-        model: MODEL_FOR.standard,
+        model: modelFor("standard"),
         systemPrompt: { type: "preset", preset: "claude_code", append: "\n\nYou are a careful curator of a background agent's instructions and memory. Conservative edits only." },
         settingSources: [],
         permissionMode: "default",

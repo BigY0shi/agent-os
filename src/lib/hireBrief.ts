@@ -7,7 +7,18 @@ import { LEADS_DIR, type HireBrief, type HireLead } from "./hireDesk";
 import { machineFor } from "./hireMachines";
 import { run } from "./runner";
 import { CLAUDE_MODEL } from "./config";
+import { readSettings } from "./settings";
 import { claudeBuilderArgs } from "./agentPowers";
+
+// Analysis models, user-tunable from the Hire Engine settings menu. Blank =
+// the built-in defaults (haiku triage sweep, pinned CLAUDE_MODEL full briefs).
+function hireModels(): { triage: string; brief: string } {
+  const s = readSettings().hire;
+  return {
+    triage: (s.triageModel || "").trim() || "claude-haiku-4-5",
+    brief: (s.briefModel || "").trim() || CLAUDE_MODEL,
+  };
+}
 
 /**
  * Strip em/en dashes from outgoing copy.
@@ -31,7 +42,7 @@ export function deDash(s: string): string {
 async function claudeJson(prompt: string, timeoutMs: number): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
   const r = await run(
     "claude",
-    ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()],
+    ["-p", "--model", hireModels().brief, "--output-format", "text", ...claudeBuilderArgs()],
     { timeoutMs, input: prompt, cwd: LEADS_DIR },
   );
   const out = (r.stdout || "").trim();
@@ -44,8 +55,6 @@ async function claudeJson(prompt: string, timeoutMs: number): Promise<{ ok: true
   catch { return { ok: false, error: "malformed JSON from agent" }; }
 }
 
-// Stage-1 triage rides the cheap tier — verified to resolve on the CLI 2026-07-28.
-const TRIAGE_MODEL = "claude-haiku-4-5";
 const TRIAGE_CHUNK = 12;
 
 /**
@@ -79,7 +88,7 @@ export async function triageHireLeads(leads: HireLead[]): Promise<Record<string,
 
     const r = await run(
       "claude",
-      ["-p", "--model", TRIAGE_MODEL, "--output-format", "text", ...claudeBuilderArgs()],
+      ["-p", "--model", hireModels().triage, "--output-format", "text", ...claudeBuilderArgs()],
       { timeoutMs: 120_000, input: prompt, cwd: LEADS_DIR },
     );
     const raw = (r.stdout || "").trim();

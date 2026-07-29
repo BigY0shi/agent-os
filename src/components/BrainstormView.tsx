@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Lightbulb, Loader2, Plus, Send, FileText, AlertTriangle } from "lucide-react";
 import AgentAvatar, { agentColor, type AgentKey } from "./AgentAvatar";
+import ModelSettings from "./ModelSettings";
 
 // Brainstorm Council — Claude + ChatGPT (codex) + Kimi (Ollama Cloud) ideate on a
 // topic in structured rounds (diverge → converge → chair synthesis), then take
@@ -150,6 +151,11 @@ export default function BrainstormView() {
           <span className="text-[11px] text-white/40">
             three-seat council{kimiModel ? ` · kimi seat: ${kimiModel}` : ""}
           </span>
+          <div className="ml-auto">
+            <ModelSettings section="brainstorm" title="Brainstorm models" accent="#fbbf24"
+              fields={[{ key: "kimiModel", label: "Kimi seat (Ollama Cloud)", placeholder: "kimi-k2.6",
+                hint: "Chat/agentic seat — policy default kimi-k2.6. Must exist on your Ollama Cloud plan." }]} />
+          </div>
         </div>
         <p className="text-sm text-white/45 mb-4">
           Give the council a topic, idea, or goal. They diverge, cross-examine, and the chair writes a working project brief. Keep talking to steer it.

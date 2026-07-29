@@ -17,10 +17,11 @@ interface SR extends EventTarget {
   onerror: ((e: { error?: string }) => void) | null;
 }
 
-// Voice provider #3: Kimi-K3 + Butler TTS. Turn-based — browser STT hears you,
-// kimi-k3 (Ollama Cloud) thinks, ElevenLabs speaks the reply in the British
-// butler voice. No barge-in (that needs native speech-to-speech), but zero
-// per-minute billing: it rides the Ollama Cloud plan + ElevenLabs.
+// Voice provider #3: Kimi + Butler TTS. Turn-based — browser STT hears you,
+// Kimi (Ollama Cloud; model from the Jarvis settings menu, default kimi-k2.6
+// per the user's model policy) thinks, and the butler voice speaks the reply.
+// No barge-in (that needs native speech-to-speech), but zero per-minute
+// billing: it rides the Ollama Cloud plan + local/ElevenLabs TTS.
 export default function JarvisKimiVoice({ voice, onClose }: { voice?: string; onClose?: () => void }) {
   const [status, setStatus] = useState<Status>("idle");
   const [err, setErr] = useState<string | null>(null);
@@ -139,7 +140,7 @@ export default function JarvisKimiVoice({ voice, onClose }: { voice?: string; on
       <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: `${PINK}33` }}>
         <span className="text-[12px] font-mono flex items-center gap-2" style={{ color: PINK }}>
           <span className="w-2 h-2 rounded-full" style={{ background: dot, boxShadow: status === "listening" ? `0 0 8px ${TEAL}` : undefined }} />
-          KIMI K3 · {label}{model ? ` · ${model}` : ""}
+          KIMI · {label}{model ? ` · ${model}` : ""}
         </span>
         <div className="flex items-center gap-2">
           {!live ? (

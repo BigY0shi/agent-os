@@ -7,8 +7,8 @@
 //
 // Deliberately self-contained: no vault grounding, no MiniMax, no OpenRouter.
 // Claude/codex ride the user's own CLI subscriptions via cliComplete(); Kimi is
-// the one HTTP call (Ollama Cloud), resolved live from /api/tags so a future
-// kimi-k3 tag is picked up without a code change.
+// the one HTTP call (Ollama Cloud), resolved live from /api/tags against the
+// user's model policy (kimi-k2.6 for chat/agentic; settings-overridable).
 
 import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -73,15 +73,20 @@ function ollamaKey(): string | null {
   return process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY || null;
 }
 
-let kimiCache: { model: string; at: number } | null = null;
+let kimiCache: { key: string; model: string; at: number } | null = null;
 
 /**
- * Newest Kimi CHAT model on Ollama Cloud. Preference order: a k3-generation tag
- * (doesn't exist yet — the user asked for "Kimi K3", so claim it the moment it
- * ships), then k2.x chat, then any kimi that isn't a code model.
+ * Resolve the Kimi seat's model on Ollama Cloud, honouring the user's model
+ * policy (2026-07-28 correction): chat/agentic work rides Kimi K2.6, coding
+ * rides K2.7 Code — NOT a "newest kimi" guess (the old k3-first preference
+ * grabbed kimi-k3 the moment it shipped, which was wrong).
+ *
+ * `preferred` (from each module's settings menu) wins when it matches an
+ * available tag; otherwise fall back k2.6 → other k2.x chat → any non-code kimi.
  */
-export async function resolveKimiModel(): Promise<string> {
-  if (kimiCache && Date.now() - kimiCache.at < 10 * 60_000) return kimiCache.model;
+export async function resolveKimiModel(preferred?: string): Promise<string> {
+  const cacheKey = preferred || "_default";
+  if (kimiCache && kimiCache.key === cacheKey && Date.now() - kimiCache.at < 10 * 60_000) return kimiCache.model;
   const key = ollamaKey();
   if (!key) throw new Error("No Ollama Cloud key (set OLLAMA_API_KEY in .env.local)");
   const r = await fetch(`${OLLAMA_HOST}/api/tags`, {
@@ -90,10 +95,19 @@ export async function resolveKimiModel(): Promise<string> {
   if (!r.ok) throw new Error(`Ollama Cloud /api/tags ${r.status}`);
   const j = await r.json() as { models?: { name?: string; model?: string }[] };
   const names = (j.models || []).map((m) => m.model || m.name || "").filter(Boolean);
-  const prefs = [/kimi[-\s]?k?3/i, /kimi[-\s]?k?2\.\d+(?!.*code)/i, /kimi(?!.*code)/i, /kimi/i];
+
+  if (preferred?.trim()) {
+    const want = preferred.trim().toLowerCase();
+    const hit = names.find((n) => n.toLowerCase() === want) ?? names.find((n) => n.toLowerCase().startsWith(want));
+    if (hit) { kimiCache = { key: cacheKey, model: hit, at: Date.now() }; return hit; }
+    // A configured model that doesn't exist should be loud, not silently swapped.
+    throw new Error(`Configured Kimi model "${preferred}" not found on Ollama Cloud`);
+  }
+
+  const prefs = [/kimi[-\s]?k?2\.6/i, /kimi[-\s]?k?2\.\d+(?!.*code)/i, /kimi(?!.*code)/i, /kimi/i];
   for (const re of prefs) {
     const hit = names.find((n) => re.test(n));
-    if (hit) { kimiCache = { model: hit, at: Date.now() }; return hit; }
+    if (hit) { kimiCache = { key: cacheKey, model: hit, at: Date.now() }; return hit; }
   }
   throw new Error("No Kimi model found on Ollama Cloud");
 }

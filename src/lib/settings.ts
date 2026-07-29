@@ -95,6 +95,18 @@ export interface Settings {
     minimaxKey?: string;      // for MiniMax: the API key
   };
 
+  // ── Model dials for the 2026-07 modules ─────────────────────────────────────
+  // User model policy: Kimi K2.6 for chat/agentic seats, K2.7 Code for coding.
+  // Empty string = the module's built-in default (blank kimiModel = auto-resolve
+  // preferring k2.6; blank claude models = the pinned CLAUDE_MODEL).
+  brainstorm: { kimiModel?: string };                       // the council's Kimi seat
+  jarvis: { kimiModel?: string };                           // Kimi voice provider's brain
+  contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
+  // The Agents module's intelligence dial → concrete claude model ids.
+  agentsModels: { fast?: string; standard?: string; deep?: string };
+  // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer.
+  hire: { triageModel?: string; briefModel?: string };
+
   [extra: string]: unknown;
 }
 
@@ -112,6 +124,11 @@ export const DEFAULT_SETTINGS: Settings = {
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
+  brainstorm: { kimiModel: "kimi-k2.6" },
+  jarvis: { kimiModel: "kimi-k2.6" },
+  contentEngine: { kimiModel: "kimi-k2.6" },
+  agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
+  hire: { triageModel: "claude-haiku-4-5", briefModel: "" },
 };
 
 function settingsPath(): string {

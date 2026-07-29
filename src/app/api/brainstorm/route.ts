@@ -4,6 +4,7 @@ import {
   resolveKimiModel, seatComplete,
   divergePrompt, critiquePrompt, synthesisPrompt, steerPrompt, resynthesisPrompt,
 } from "@/lib/brainstorm";
+import { readSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
         let kimiModel = session.kimiModel || "";
         let seats: CouncilSeat[] = [...COUNCIL_SEATS];
         try {
-          kimiModel = await resolveKimiModel();
+          kimiModel = await resolveKimiModel(readSettings().brainstorm.kimiModel);
           session.kimiModel = kimiModel;
           emit({ t: "seat", agent: "kimi", model: kimiModel });
         } catch (e) {

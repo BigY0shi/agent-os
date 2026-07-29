@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
 import type { AgentDef, AgentTrigger, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
 import { INTELLIGENCE_META, MODE_META, STATUS_COLORS } from "@/lib/agentsTypes";
+import ModelSettings from "./ModelSettings";
 
 const VIOLET = "#a78bfa";
 
@@ -68,11 +69,19 @@ export default function AgentsView() {
         <h1 className="text-xl font-semibold flex items-center gap-2.5" style={{ color: "var(--fg)" }}>
           <Bot size={20} style={{ color: VIOLET }} /> Agents
         </h1>
-        <button onClick={() => setCreating(true)}
-          className="px-3.5 h-9 rounded-lg border text-[13px] flex items-center gap-1.5 transition hover:brightness-125"
-          style={{ borderColor: `${VIOLET}66`, color: VIOLET, background: "rgba(167,139,250,0.10)" }}>
-          <Plus size={14} /> New agent
-        </button>
+        <div className="flex items-center gap-2">
+          <ModelSettings section="agentsModels" title="Agents intelligence dial" accent={VIOLET}
+            fields={[
+              { key: "fast", label: "Fast tier", placeholder: "claude-haiku-4-5", hint: "Cheap triage/routing runs." },
+              { key: "standard", label: "Standard tier", placeholder: "claude-sonnet-5", hint: "The default for most agents; also the curator." },
+              { key: "deep", label: "Deep tier", placeholder: "blank = pinned CLAUDE_MODEL", hint: "Research and judgment-heavy agents." },
+            ]} />
+          <button onClick={() => setCreating(true)}
+            className="px-3.5 h-9 rounded-lg border text-[13px] flex items-center gap-1.5 transition hover:brightness-125"
+            style={{ borderColor: `${VIOLET}66`, color: VIOLET, background: "rgba(167,139,250,0.10)" }}>
+            <Plus size={14} /> New agent
+          </button>
+        </div>
       </div>
       <p className="text-[12.5px] mb-5" style={{ color: "var(--fg-dimmer)" }}>
         Reusable background agents — your tools, your subscriptions, your machine. Runs pause for approval before anything leaves the box.

@@ -7,6 +7,7 @@ import JarvisBuilds from "./JarvisBuilds";
 import JarvisRealtime from "./JarvisRealtime";
 import JarvisGeminiLive from "./JarvisGeminiLive";
 import JarvisKimiVoice from "./JarvisKimiVoice";
+import ModelSettings from "./ModelSettings";
 
 const CYAN = "#22d3ee";
 const TEAL = "#34d399";
@@ -1133,10 +1134,15 @@ export default function JarvisView() {
             <div className="text-[12px] text-[var(--fg-dim)] font-mono">NEURAL LINK · {phaseLabel} · {clock}</div>
           </div>
         </div>
-        <button onClick={() => setWall(true)} title="Wall mode — fullscreen HUD"
-          className="px-3 h-9 rounded-lg border border-[var(--panel-border)] hover:border-[var(--panel-border-hot)] text-[12px] text-[var(--fg-dim)] flex items-center gap-1.5 transition">
-          <Maximize2 size={13} /> Wall mode
-        </button>
+        <div className="flex items-center gap-2">
+          <ModelSettings section="jarvis" title="Jarvis models" accent={CYAN}
+            fields={[{ key: "kimiModel", label: "Kimi voice brain (Ollama Cloud)", placeholder: "kimi-k2.6",
+              hint: "The model behind the Kimi voice provider. Chat tier — policy default kimi-k2.6." }]} />
+          <button onClick={() => setWall(true)} title="Wall mode — fullscreen HUD"
+            className="px-3 h-9 rounded-lg border border-[var(--panel-border)] hover:border-[var(--panel-border-hot)] text-[12px] text-[var(--fg-dim)] flex items-center gap-1.5 transition">
+            <Maximize2 size={13} /> Wall mode
+          </button>
+        </div>
       </div>
 
       {/* Reactor */}
@@ -1203,10 +1209,10 @@ export default function JarvisView() {
         <div className="mt-4">
           {/* Voice backend picker — three ways to talk to the same butler:
               gpt-realtime (native S2S, OpenAI API-billed) · Gemini Live (native
-              S2S, free tier / AI Pro limits) · Kimi K3 (turn-based STT→LLM→TTS,
+              S2S, free tier / AI Pro limits) · Kimi (turn-based STT→LLM→TTS,
               Ollama Cloud + ElevenLabs). Choice sticks in localStorage. */}
           <div className="flex items-center gap-1.5 mb-2">
-            {([["openai", "GPT Realtime", "#22d3ee"], ["gemini", "Gemini Live", "#60a5fa"], ["kimi", "Kimi K3", "#f472b6"]] as const).map(([key, label, color]) => (
+            {([["openai", "GPT Realtime", "#22d3ee"], ["gemini", "Gemini Live", "#60a5fa"], ["kimi", "Kimi", "#f472b6"]] as const).map(([key, label, color]) => (
               <button key={key} onClick={() => { setVoiceProvider(key); try { localStorage.setItem("jarvis.voiceProvider", key); } catch { /* fine */ } }}
                 className="px-2.5 py-1 rounded-full border text-[11.5px] transition"
                 style={voiceProvider === key

@@ -7,6 +7,7 @@ import {
 import { MACHINES, MACHINE_ORDER, machineFor, type MachineKey } from "@/lib/hireMachines";
 import { HIRE_COLUMNS } from "@/lib/hireDeskColumns";
 import type { HireLead, HireStatus } from "@/lib/hireDesk";
+import ModelSettings from "./ModelSettings";
 
 // Hire Engine — companies mid-hire for a role one of our machines already covers.
 // The Deal Desk works freelance gigs; this works salaried job postings, because the
@@ -485,6 +486,11 @@ export default function HireEngine() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Reload
           </button>
+          <ModelSettings section="hire" title="Hire Engine models" accent="#fb923c"
+            fields={[
+              { key: "triageModel", label: "Triage sweep", placeholder: "claude-haiku-4-5", hint: "Cheap pursue/skip pass over the whole board (12 postings per call)." },
+              { key: "briefModel", label: "Brief + pitch writer", placeholder: "blank = pinned CLAUDE_MODEL", hint: "The full analysis and outreach writer." },
+            ]} />
         </div>
       </div>
       <p className="text-sm text-white/45 mb-4">

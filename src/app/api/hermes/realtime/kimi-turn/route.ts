@@ -1,16 +1,17 @@
 import { seatComplete, resolveKimiModel } from "@/lib/brainstorm";
+import { readSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-// POST { prompt, history? } → one butler turn on Kimi-K3 (Ollama Cloud).
+// POST { prompt, history? } → one butler turn on Kimi (Ollama Cloud; model from
+// the Jarvis settings menu, default kimi-k2.6 per the user's model policy).
 //
 // The third voice provider: browser STT captures the words, this route thinks
-// on kimi-k3, and the client speaks the reply through /api/hermes/tts (the
-// "ash" butler voice). Turn-based rather than native speech-to-speech — no
-// barge-in — but it costs nothing beyond the Ollama Cloud plan and keeps the
-// OpenAI-voiced butler character.
+// on Kimi, and the client speaks the reply through /api/hermes/tts. Turn-based
+// rather than native speech-to-speech — no barge-in — but it costs nothing
+// beyond the Ollama Cloud plan and keeps the butler character.
 
 const PERSONA =
   "You are JARVIS — Tony Stark's AI from Iron Man — speaking live through a voice assistant. " +
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   if (!prompt?.trim()) return Response.json({ ok: false, error: "prompt required" }, { status: 400 });
 
   try {
-    const model = await resolveKimiModel();
+    const model = await resolveKimiModel(readSettings().jarvis.kimiModel);
     const convo = (history || []).slice(-8).map((m) => `${m.role === "user" ? "Me" : "You"}: ${m.content}`).join("\n");
     const full = `${PERSONA}\n\n${convo ? `Recent conversation:\n${convo}\n\n` : ""}Me: ${prompt.trim()}\n\nReply in character, briefly.`;
     const started = Date.now();

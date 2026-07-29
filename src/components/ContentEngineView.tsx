@@ -5,6 +5,7 @@ import {
   CalendarDays, Loader2, RefreshCw, Sparkles, X, Trash2, BarChart3, ExternalLink, PenLine,
 } from "lucide-react";
 import { CHANNELS, type Channel, type ContentItem, type EngineState, type ItemStatus } from "@/lib/contentEngineTypes";
+import ModelSettings from "./ModelSettings";
 
 // Content Engine — plan a posting calendar, generate the materials, log how the
 // posts performed, and let the analyst read the numbers. Server: /api/content-engine/*.
@@ -111,6 +112,9 @@ export default function ContentEngineView() {
         <h1 className="text-xl font-semibold">Content Engine</h1>
         <span className="text-[12px] text-white/40">{state.items.length} slots · {postedCount} posted · {withMetrics} measured</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <ModelSettings section="contentEngine" title="Content Engine models" accent="#e879f9"
+            fields={[{ key: "kimiModel", label: "Kimi rotation slot (Ollama Cloud)", placeholder: "kimi-k2.6",
+              hint: "The kimi seat in the codex→kimi→claude generation rotation. Policy default kimi-k2.6." }]} />
           <button onClick={() => setShowPlanner((v) => !v)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium"
             style={{ background: "rgba(232,121,249,0.16)", color: "#e879f9" }}>

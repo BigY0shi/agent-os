@@ -40,10 +40,12 @@ export function seatForItem(id: string): CouncilSeat {
  * something Claude had to rescue.
  */
 export async function multiModelComplete(preferred: CouncilSeat, prompt: string): Promise<{ text: string; by: CouncilSeat }> {
-  // seatComplete resolves the live Kimi model itself when the seat is kimi.
+  // The Kimi seat honours the Content Engine's own settings dial (default
+  // kimi-k2.6 — chat/agentic tier per the user's model policy).
   const { resolveKimiModel } = await import("./brainstorm");
+  const { readSettings } = await import("./settings");
   try {
-    const kimiModel = preferred === "kimi" ? await resolveKimiModel() : "";
+    const kimiModel = preferred === "kimi" ? await resolveKimiModel(readSettings().contentEngine.kimiModel) : "";
     const text = await seatComplete(preferred, prompt, kimiModel);
     return { text, by: preferred };
   } catch {
