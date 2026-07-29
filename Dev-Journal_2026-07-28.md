@@ -1,5 +1,22 @@
 # Dev Journal — 2026-07-28
 
+## Hire Engine — pitch → Gmail draft queue (the loop's last link)
+
+**Commit:** `0539019` · **Rollback:** `git revert 0539019` (drafts already in
+Gmail are the operator's to keep or discard).
+
+The money loop dead-ended at a written pitch. Now: per-lead "Create Gmail
+draft" (To defaults to the Hunter contact email captured at enrichment —
+previously unused) + a "Draft approved" batch button. Mechanism: headless
+`claude -p --dangerously-skip-permissions` with the Gmail MCP (the legacy
+python gmail_cli.py path doesn't exist on this box); one session drafts the
+whole batch under a strict verbatim-body protocol; unreported items count as
+failures. **Nothing ever sends** — drafts land in Gmail for the operator to
+review and send. Verified live end-to-end: a real draft created in the
+operator's Drafts folder (`OK smoke1`), protocol parses, tsc clean.
+
+---
+
 ## Brainstorm — Accept brief (persistence is a button, not a conversation)
 
 **Commit:** `ce9fdbc` · **Rollback:** `git revert ce9fdbc` (accepted notes in the
