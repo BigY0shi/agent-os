@@ -1,5 +1,26 @@
 # Dev Journal — 2026-07-28
 
+## Brainstorm — Accept brief (persistence is a button, not a conversation)
+
+**Commit:** `ce9fdbc` · **Rollback:** `git revert ce9fdbc` (accepted notes in the
+vault survive harmlessly).
+
+User report: the council's chair offered to push the brief to Honcho/the vault,
+but saying "yes" just ran a steer round — the offer was the claude seat reading
+the operator's global context and improvising an ability the module doesn't
+have. Fix: synthesis/resynthesis prompts now forbid offering persistence, and
+the brief panel has a real **Accept brief** button → `/api/brainstorm/accept`
+writes `Agentic OS/Project Briefs/<date> <topic>.md` to the Obsidian vault
+(root verified live: `~/.agentic-os/agentos`), marks the session accepted, and
+logs to the daily memory stream. Re-accept after steering saves a fresh note.
+
+Also this evening: documented the Agent OS estate in the Launchworks war-room
+archive (BusinessAuditEngine repo `4158316` + `d9bf843` — new
+`05_current-state/agent-os-and-modules.md` inventory, Briefing-A §2b,
+Compendium-B PART VII).
+
+---
+
 ## Model policy correction + per-module model settings menus
 
 **Commit:** `48d70a0` · **Rollback:** `git revert 48d70a0` (settings.json values
