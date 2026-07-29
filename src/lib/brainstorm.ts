@@ -36,6 +36,8 @@ export interface BrainstormSession {
   brief: string | null;
   /** Which model actually filled the Kimi seat (resolved live). */
   kimiModel?: string;
+  /** Set when the operator accepts the brief — it's been written to the vault. */
+  accepted?: { at: number; notePath: string };
 }
 
 const DIR = path.join(os.homedir(), ".agentic-os", "brainstorm");
@@ -186,7 +188,9 @@ export function synthesisPrompt(topic: string, critiques: { seat: CouncilSeat; t
     "BUILD PLAN: (numbered steps, one line each, max 6)\n" +
     "RISKS: (2-3 bullet lines)\n" +
     "FIRST ACTION: (one sentence — what the operator should do today)\n" +
-    "Under 350 words. Take the council's best thinking; where they disagreed, decide."
+    "Under 350 words. Take the council's best thinking; where they disagreed, decide. " +
+    "End at FIRST ACTION. Do NOT offer to save, push, or write the brief anywhere (no Honcho, no vault, no files, no follow-up questions) — " +
+    "you have no such ability here; the dashboard's Accept button handles persistence."
   );
 }
 
@@ -212,6 +216,8 @@ export function resynthesisPrompt(session: BrainstormSession, message: string, r
     (session.brief ? `Current working brief:\n${session.brief}\n\n` : "") +
     `The operator's new steer:\n${message}\n\nThe council's responses:\n\n${r}\n\n` +
     "Rewrite the working project brief incorporating the steer and the council's best points. Same format as before — " +
-    "CONCEPT / WHY IT WORKS / MVP SCOPE / BUILD PLAN / RISKS / FIRST ACTION, plain text, under 350 words."
+    "CONCEPT / WHY IT WORKS / MVP SCOPE / BUILD PLAN / RISKS / FIRST ACTION, plain text, under 350 words. " +
+    "End at FIRST ACTION. Do NOT offer to save, push, or write the brief anywhere — you have no such ability here; " +
+    "the dashboard's Accept button handles persistence."
   );
 }

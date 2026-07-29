@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Lightbulb, Loader2, Plus, Send, FileText, AlertTriangle } from "lucide-react";
+import { Lightbulb, Loader2, Plus, Send, FileText, AlertTriangle, Check } from "lucide-react";
 import AgentAvatar, { agentColor, type AgentKey } from "./AgentAvatar";
 import ModelSettings from "./ModelSettings";
 
@@ -34,6 +34,9 @@ export default function BrainstormView() {
   const [running, setRunning] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [input, setInput] = useState("");
+  const [accepted, setAccepted] = useState<{ at: number; notePath: string } | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [acceptErr, setAcceptErr] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const loadSessions = useCallback(async () => {
@@ -51,12 +54,28 @@ export default function BrainstormView() {
       if (j.ok) {
         setSessionId(id); setMsgs(j.session.msgs); setBrief(j.session.brief);
         setKimiModel(j.session.kimiModel || null); setErrors([]); setPhase(null);
+        setAccepted(j.session.accepted || null); setAcceptErr(null);
       }
     } catch { /* stays where it was */ }
   }
 
   function newSession() {
     setSessionId(null); setMsgs([]); setBrief(null); setErrors([]); setPhase(null); setKimiModel(null);
+    setAccepted(null); setAcceptErr(null);
+  }
+
+  async function acceptBrief() {
+    if (!sessionId || accepting) return;
+    setAccepting(true); setAcceptErr(null);
+    try {
+      const j = await (await fetch("/api/brainstorm/accept", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sessionId }),
+      })).json();
+      if (j.ok) setAccepted(j.accepted);
+      else setAcceptErr(j.error || "Accept failed");
+    } catch (e) { setAcceptErr((e as Error).message); }
+    setAccepting(false);
   }
 
   async function submit() {
@@ -214,8 +233,29 @@ export default function BrainstormView() {
               <div className="flex items-center gap-2 mb-2">
                 <FileText size={14} style={{ color: "#34d399" }} />
                 <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "#34d399" }}>Working project brief</span>
+                <div className="ml-auto">
+                  {accepted ? (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-mono" style={{ color: "#34d399" }} title={accepted.notePath}>
+                      <Check size={12} /> Accepted · {accepted.notePath.split(/[\\/]/).pop()}
+                    </span>
+                  ) : (
+                    <button onClick={acceptBrief} disabled={accepting || running}
+                      title="Write this brief to the Obsidian vault (Agentic OS/Project Briefs) and mark the session accepted"
+                      className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-[12px] font-medium disabled:opacity-40"
+                      style={{ background: "rgba(52,211,153,0.16)", color: "#34d399", border: "1px solid rgba(52,211,153,0.4)" }}>
+                      {accepting ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                      {accepting ? "Saving…" : "Accept brief"}
+                    </button>
+                  )}
+                </div>
               </div>
+              {acceptErr && <div className="text-[11.5px] text-rose-300 mb-2">{acceptErr}</div>}
               <div className="text-[13px] text-white/85 whitespace-pre-wrap leading-relaxed">{brief}</div>
+              {accepted && (
+                <div className="text-[11px] mt-2 text-white/40">
+                  Steering further updates the working brief — Accept again to save a fresh note.
+                </div>
+              )}
             </div>
           )}
           <div ref={endRef} />
