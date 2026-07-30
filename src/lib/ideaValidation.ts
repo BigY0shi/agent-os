@@ -25,6 +25,7 @@ import {
   type Sourced, type ValidationRun, type SeatName,
 } from "./ideaEngineTypes";
 import { IDEA_DIR, logSeat, sanitizeScore, sanitizeSourced, saveDossier, saveRun } from "./ideaEngine";
+import { patchCandidate } from "./ideaRadar";
 
 const g = globalThis as unknown as { __ideaRuns?: Map<string, ValidationRun> };
 const RUNS: Map<string, ValidationRun> = (g.__ideaRuns ??= new Map());
@@ -33,6 +34,20 @@ export function liveRun(id: string): ValidationRun | undefined { return RUNS.get
 export function anyRunning(): boolean {
   for (const r of RUNS.values()) if (r.status === "running") return true;
   return false;
+}
+
+/** Cancel a running council. Frees the one-at-a-time lock immediately; seats
+ *  already in flight die on their own CLI timeouts (they can't publish — every
+ *  stage boundary in execute() re-checks the status before proceeding). */
+export async function cancelValidation(id: string): Promise<boolean> {
+  const r = RUNS.get(id);
+  if (!r || r.status !== "running") return false;
+  r.status = "error";
+  r.error = "cancelled by user";
+  r.endedAt = Date.now();
+  await saveRun(r);
+  if (r.candidateId) await patchCandidate(r.candidateId, { status: "new" }).catch(() => {});
+  return true;
 }
 
 function models() {
@@ -174,12 +189,14 @@ export async function startValidation(idea: string, candidateId?: string): Promi
   };
   RUNS.set(runObj.id, runObj);
   await saveRun(runObj);
+  if (candidateId) await patchCandidate(candidateId, { status: "validating" }).catch(() => {});
 
   void execute(runObj).catch(async (e) => {
     runObj.status = "error";
     runObj.error = String((e as Error)?.message || e);
     runObj.endedAt = Date.now();
     await saveRun(runObj);
+    if (candidateId) await patchCandidate(candidateId, { status: "new" }).catch(() => {});
   });
 
   return { runId: runObj.id };
@@ -223,6 +240,8 @@ async function execute(runObj: ValidationRun): Promise<void> {
   try { if (painRaw) pain = extractJson<PainOut>(painRaw); } catch { degraded.push("painMiner:parse"); }
   try { if (marketRaw) market = extractJson<MarketOut>(marketRaw); } catch { degraded.push("marketMapper:parse"); }
 
+  if (runObj.status !== "running") return; // cancelled mid-research
+
   const evidencePack =
     `PAIN EVIDENCE:\n${JSON.stringify(pain, null, 1)}\n\nMARKET MAP:\n${JSON.stringify(market, null, 1)}`;
 
@@ -242,6 +261,8 @@ async function execute(runObj: ValidationRun): Promise<void> {
   if (!sizingRaw) degraded.push("sizingAnalyst");
   try { if (sizingRaw) sizing = extractJson<SizingOut>(sizingRaw); } catch { degraded.push("sizingAnalyst:parse"); }
 
+  if (runObj.status !== "running") return; // cancelled during sizing
+
   // Kill pass — codex, MUST be a different lineage (spec invariant #5).
   const killCase = await seatWrap(runObj, "killPass", () =>
     cliComplete("codex", killPrompt(idea, evidencePack + `\n\nSIZING:\n${JSON.stringify(sizing)}`), { timeoutMs: 300_000 }));
@@ -256,6 +277,8 @@ async function execute(runObj: ValidationRun): Promise<void> {
   seatsUsed.judge = m.research;
   if (!judgeRaw) degraded.push("judge");
   try { if (judgeRaw) judge = extractJson<JudgeOut>(judgeRaw); } catch { degraded.push("judge:parse"); }
+
+  if (runObj.status !== "running") return; // cancelled before the writer
 
   // Writer — assembles the dossier.
   interface WriterOut {
@@ -273,17 +296,21 @@ async function execute(runObj: ValidationRun): Promise<void> {
       judge: JSON.stringify(judge),
     }), 480_000));
   seatsUsed.writer = m.writer;
+  if (runObj.status !== "running") return; // cancelled during the writer
   if (!writerRaw) {
     runObj.status = "error";
     runObj.error = "writer seat failed — no dossier";
     runObj.endedAt = Date.now();
     await saveRun(runObj);
+    if (runObj.candidateId) await patchCandidate(runObj.candidateId, { status: "new" }).catch(() => {});
     return;
   }
   let w: WriterOut = {};
   try { w = extractJson<WriterOut>(writerRaw); } catch {
     runObj.status = "error"; runObj.error = "writer returned unparseable output"; runObj.endedAt = Date.now();
-    await saveRun(runObj); return;
+    await saveRun(runObj);
+    if (runObj.candidateId) await patchCandidate(runObj.candidateId, { status: "new" }).catch(() => {});
+    return;
   }
 
   // Assemble + ENFORCE invariants in code (sanitizers drop unsourced numerics
@@ -348,9 +375,13 @@ async function execute(runObj: ValidationRun): Promise<void> {
     },
   };
 
+  if (runObj.status !== "running") return; // cancelled during assembly — don't publish
   await saveDossier(dossier);
   runObj.status = "done";
   runObj.dossierId = dossier.id;
   runObj.endedAt = Date.now();
   await saveRun(runObj);
+  // Candidate-originated runs (manual "Validate ↑" or the daily loop) mark the
+  // board entry validated here, so the daily picker never re-spends on it.
+  if (runObj.candidateId) await patchCandidate(runObj.candidateId, { status: "validated", dossierId: dossier.id }).catch(() => {});
 }

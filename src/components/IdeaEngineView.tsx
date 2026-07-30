@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Telescope, Loader2, Send, X, ShieldAlert, FileText, ChevronRight } from "lucide-react";
+import { Telescope, Loader2, Send, X, ShieldAlert, FileText, ChevronRight, Trash2 } from "lucide-react";
 import {
   CANDIDATE_COLUMNS, SEAT_LABELS, VERDICT_META,
   type IdeaDossier, type SeatName, type TrendCandidate, type ValidationRun,
@@ -26,6 +26,9 @@ export default function IdeaEngineView() {
   const [daily, setDaily] = useState<{ lastRunDate: string | null; dossierId: string | null; candidateTopic: string | null; note: string | null } | null>(null);
   const [running, setRunning] = useState(false);
   const [idea, setIdea] = useState("");
+  // Set when the idea came from a radar card ("Validate ↑") — passed through so the
+  // candidate's board status tracks the run. Cleared if the field is emptied.
+  const [candId, setCandId] = useState<string | null>(null);
   const [run, setRun] = useState<ValidationRun | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export default function IdeaEngineView() {
     try {
       const j = await (await fetch("/api/idea-engine/validate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idea: text }),
+        body: JSON.stringify({ idea: text, candidateId: candId ?? undefined }),
       })).json();
       if (!j.ok) { setErr(j.error || "could not start"); return; }
       setRunning(true);
@@ -98,6 +101,13 @@ export default function IdeaEngineView() {
         tries to kill it, and writes the dossier. Unsourced numbers are dropped in code — gaps say so.
       </p>
 
+      {/* Daily run that spent its slot without producing a dossier — say why. */}
+      {daily && !daily.dossierId && daily.note && daily.lastRunDate === new Date().toISOString().slice(0, 10) && (
+        <div className="mb-4 text-[11.5px] text-white/40 font-mono">
+          daily idea · {daily.candidateTopic ? `${daily.candidateTopic} — ` : ""}{daily.note}
+        </div>
+      )}
+
       {/* Idea of the Day */}
       {daily?.dossierId && daily.lastRunDate === new Date().toISOString().slice(0, 10) && (
         <button onClick={() => setOpenId(daily.dossierId)}
@@ -114,7 +124,7 @@ export default function IdeaEngineView() {
 
       {/* Validate input */}
       <div className="flex gap-2 mb-5">
-        <textarea value={idea} onChange={(e) => setIdea(e.target.value)} rows={2}
+        <textarea value={idea} onChange={(e) => { setIdea(e.target.value); if (!e.target.value.trim()) setCandId(null); }} rows={2}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void validate(); } }}
           placeholder='Idea to validate — e.g. "AI intake assistant for powersports dealership service departments"'
           className="flex-1 panel bg-transparent px-3 py-2 text-[13px] leading-relaxed resize-none" />
@@ -135,7 +145,19 @@ export default function IdeaEngineView() {
             <span className="text-[12px] font-mono uppercase tracking-wider" style={{ color: AMBER }}>
               {run.status === "running" ? "Council in session" : run.status === "done" ? "Dossier ready" : `Run failed: ${run.error || "unknown"}`}
             </span>
-            <span className="text-[11px] text-white/40 ml-auto truncate max-w-[50%]">{run.idea}</span>
+            <span className="text-[11px] text-white/40 ml-auto truncate max-w-[45%]">{run.idea}</span>
+            {run.status === "running" && (
+              <button onClick={async () => {
+                await fetch(`/api/idea-engine/validate?id=${run.id}`, { method: "DELETE" }).catch(() => {});
+                setRunning(false);
+                setRun((r) => (r ? { ...r, status: "error", error: "cancelled by user" } : r));
+                if (pollRef.current) clearInterval(pollRef.current);
+                void load();
+              }}
+                className="shrink-0 px-2 py-0.5 rounded text-[10.5px] text-rose-300/80 hover:bg-rose-500/10 border border-rose-500/25">
+                Cancel
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {(Object.keys(SEAT_LABELS) as SeatName[]).map((s) => (
@@ -152,6 +174,7 @@ export default function IdeaEngineView() {
       {/* Trend Radar board */}
       <RadarBoard onValidate={(c) => {
         setIdea(`${c.topic} — ${c.thesis}`);
+        setCandId(c.id);
         window.scrollTo({ top: 0, behavior: "smooth" });
       }} busy={running} />
 
@@ -167,8 +190,9 @@ export default function IdeaEngineView() {
           const v = VERDICT_META[d.verdict?.call ?? "watch"];
           const opp = d.scores?.opportunity?.value;
           return (
-            <button key={d.id} onClick={() => setOpenId(d.id)}
-              className="w-full text-left panel p-3 flex items-center gap-3 hover:brightness-110 transition">
+            <div key={d.id} role="button" tabIndex={0} onClick={() => setOpenId(d.id)}
+              onKeyDown={(e) => { if (e.key === "Enter") setOpenId(d.id); }}
+              className="w-full text-left panel p-3 flex items-center gap-3 hover:brightness-110 transition cursor-pointer">
               <span className="text-[10px] font-mono font-bold px-2 py-1 rounded" style={{ background: `${v.color}22`, color: v.color }}>{v.label}</span>
               <div className="min-w-0 flex-1">
                 <div className="text-[13.5px] font-medium truncate">{d.identity?.title}</div>
@@ -176,8 +200,16 @@ export default function IdeaEngineView() {
               </div>
               {typeof opp === "number" && <span className="text-[11px] font-mono text-white/50 shrink-0">opp {opp}/10</span>}
               <span className="text-[10.5px] text-white/35 shrink-0">{(d.generated_at || "").slice(0, 10)}</span>
+              <button title="Exile dossier (recoverable from .exile/)" onClick={async (e) => {
+                e.stopPropagation();
+                if (!window.confirm(`Exile "${d.identity?.title}"? It moves to .exile/, not deleted.`)) return;
+                await fetch(`/api/idea-engine/dossier?id=${d.id}`, { method: "DELETE" }).catch(() => {});
+                void load();
+              }} className="shrink-0 p-1 rounded text-white/25 hover:text-rose-300 hover:bg-rose-500/10">
+                <Trash2 size={12} />
+              </button>
               <ChevronRight size={13} className="text-white/30 shrink-0" />
-            </button>
+            </div>
           );
         })}
       </div>

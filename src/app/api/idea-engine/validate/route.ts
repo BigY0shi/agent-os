@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadRun, safeId } from "@/lib/ideaEngine";
-import { liveRun, startValidation } from "@/lib/ideaValidation";
+import { cancelValidation, liveRun, startValidation } from "@/lib/ideaValidation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +13,15 @@ export async function POST(req: Request) {
   const res = await startValidation(body.idea, body.candidateId);
   if ("error" in res) return NextResponse.json({ ok: false, ...res }, { status: 409 });
   return NextResponse.json({ ok: true, ...res });
+}
+
+// DELETE ?id=<runId> → cancel a running council and free the one-run lock.
+export async function DELETE(req: Request) {
+  const id = safeId(new URL(req.url).searchParams.get("id") || "");
+  if (!id) return NextResponse.json({ ok: false, error: "id required" }, { status: 400 });
+  const cancelled = await cancelValidation(id);
+  if (!cancelled) return NextResponse.json({ ok: false, error: "no running validation with that id" }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }
 
 // GET ?id=<runId> → run status (live registry first, disk after restart).

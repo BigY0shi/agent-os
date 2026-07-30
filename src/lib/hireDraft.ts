@@ -12,10 +12,14 @@
 import { run } from "./runner";
 import { claudeBuilderArgs } from "./agentPowers";
 import { LEADS_DIR } from "./hireDesk";
+import { readSettings } from "./settings";
 
-// Sonnet-tier — verified to resolve on the CLI 2026-07-28. Tool use needs more
-// competence than haiku; opus would be wasted on a clerical task.
-const DRAFT_MODEL = "claude-sonnet-5";
+// Sonnet-tier default — verified to resolve on the CLI 2026-07-28. Tool use needs
+// more competence than haiku; opus would be wasted on a clerical task. User-tunable
+// from the Hire Engine gear (settings.hire.draftModel), read at call time.
+function draftModel(): string {
+  return (readSettings().hire.draftModel || "").trim() || "claude-sonnet-5";
+}
 
 export interface DraftItem {
   /** Caller's reference (lead id) — echoed back in the result protocol. */
@@ -55,7 +59,7 @@ export async function createGmailDrafts(items: DraftItem[]): Promise<DraftResult
 
   const r = await run(
     "claude",
-    ["-p", "--model", DRAFT_MODEL, "--output-format", "text", ...claudeBuilderArgs()],
+    ["-p", "--model", draftModel(), "--output-format", "text", ...claudeBuilderArgs()],
     { timeoutMs: 420_000, input: prompt, cwd: LEADS_DIR },
   );
 

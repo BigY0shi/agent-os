@@ -104,8 +104,9 @@ export interface Settings {
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
-  // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer.
-  hire: { triageModel?: string; briefModel?: string };
+  // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer
+  // + the Gmail draft clerk (tool-use competent, sonnet-tier by default).
+  hire: { triageModel?: string; briefModel?: string; draftModel?: string };
   // Idea Engine: model dials per seat tier + radar/daily config.
   ideaEngine: {
     kimiModel?: string;        // sizing/clustering seat (Ollama Cloud)
@@ -138,7 +139,7 @@ export const DEFAULT_SETTINGS: Settings = {
   jarvis: { kimiModel: "kimi-k2.6" },
   contentEngine: { kimiModel: "kimi-k2.6" },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
-  hire: { triageModel: "claude-haiku-4-5", briefModel: "" },
+  hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
   ideaEngine: {
     kimiModel: "kimi-k2.6",
     researchModel: "claude-sonnet-5",

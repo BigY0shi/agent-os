@@ -7,7 +7,7 @@
 //   signals.json         radar raw signals (Phase 2)
 //   candidates.json      radar candidate board (Phase 2)
 
-import { readFile, writeFile, mkdir, readdir, appendFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, appendFile, rename } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import {
@@ -76,6 +76,19 @@ export async function listDossiers(): Promise<Pick<IdeaDossier, "id" | "generate
   }
   out.sort((a, b) => (b.generated_at || "").localeCompare(a.generated_at || ""));
   return out.map(({ id, generated_at, identity, verdict, scores }) => ({ id, generated_at, identity, verdict, scores }));
+}
+
+/** Remove a dossier from the archive by EXILING it (house rule: nothing is ever
+ *  hard-deleted). Both the JSON and the rendered md move to .exile/<ts>/. */
+export async function exileDossier(id: string): Promise<boolean> {
+  const exDir = path.join(IDEA_DIR, ".exile", new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"));
+  await ensure(exDir);
+  let moved = false;
+  for (const ext of [".json", ".md"]) {
+    const from = path.join(DOSSIER_DIR, `${id}${ext}`);
+    try { await rename(from, path.join(exDir, `${id}${ext}`)); moved = true; } catch { /* absent is fine */ }
+  }
+  return moved;
 }
 
 export function safeId(id: string): string | null {
