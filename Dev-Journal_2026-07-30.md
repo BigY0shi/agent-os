@@ -1,5 +1,17 @@
 # Dev Journal — 2026-07-30
 
+## launchworks.io email — Google Workspace live
+
+robby@launchworks.io created (Business Starter). DNS in Namecheap, all verified
+on 8.8.8.8: MX @→smtp.google.com prio 1 (Custom MX), SPF
+`v=spf1 include:_spf.google.com ~all`, DKIM google._domainkey 2048-bit
+(admin console: "Authenticating email with DKIM"), DMARC `p=none;
+rua=robby@launchworks.io`. Domain-release case 73818186 closed; its CNAME left
+in place. **Rollback:** MAIL SETTINGS back to Private Email preset + restore
+`v=spf1 include:spf.privateemail.com ~all`; DKIM/DMARC TXTs are inert if unused.
+**Open:** Hire Engine Gmail-MCP drafts still author from robbyjdenton@gmail.com —
+send-as alias vs MCP-on-Workspace not yet decided. New-domain warm-up applies.
+
 ## Adversarial pass before rebuild — lifecycle gaps closed
 
 **Commit:** `d347e4b` · **Rollback:** revert it (pure additions + one dial).
