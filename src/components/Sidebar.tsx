@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -30,6 +30,8 @@ const NAV: NavItem[] = [
   { href: "/audit",    label: "Audit Console", icon: <Radar size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
   // Three-seat ideation council (Claude + ChatGPT + Kimi) — topic in, project brief out.
   { href: "/brainstorm", label: "Brainstorm", icon: <Lightbulb size={16} />, accent: "#fbbf24", dim: "rgba(251,191,36,0.16)" },
+  // Trend surfacing + evidence-first validation + IdeaBrowser-style dossiers.
+  { href: "/idea-engine", label: "Idea Engine", icon: <Telescope size={16} />, accent: "#f59e0b", dim: "rgba(245,158,11,0.16)" },
   // Voice butler, standalone since 2026-07-27 (was a Hermes tab); agent mode = Codex.
   { href: "/jarvis",   label: "Jarvis", icon: <Mic size={16} />, accent: "#22d3ee", dim: "rgba(34,211,238,0.16)" },
   // Agents — use real avatar logos
@@ -81,7 +83,7 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // NOTE: membership here is what decides the group — NOT position in NAV and not the saved
 // drag order. A route missing from this set silently lands in "Self" no matter where it
 // sits in the array, so add new orchestration modules here as well as to NAV.
-const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/audit", "/brainstorm", "/jarvis", "/agent-kanban"]);
+const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
 function sectionOf(href: string): string {
   if (href === "/") return "Workspace";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the

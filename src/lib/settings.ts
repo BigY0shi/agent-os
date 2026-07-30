@@ -106,6 +106,16 @@ export interface Settings {
   agentsModels: { fast?: string; standard?: string; deep?: string };
   // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer.
   hire: { triageModel?: string; briefModel?: string };
+  // Idea Engine: model dials per seat tier + radar/daily config.
+  ideaEngine: {
+    kimiModel?: string;        // sizing/clustering seat (Ollama Cloud)
+    researchModel?: string;    // web research + judge (claude)
+    writerModel?: string;      // dossier writer; blank = pinned CLAUDE_MODEL
+    redditSubs?: string;       // comma-separated, radar pain mining
+    seedTerms?: string;        // comma-separated seeds for trends/autocomplete
+    dailyEnabled?: boolean;
+    dailyHour?: number;        // local hour 0-23
+  };
 
   [extra: string]: unknown;
 }
@@ -129,6 +139,15 @@ export const DEFAULT_SETTINGS: Settings = {
   contentEngine: { kimiModel: "kimi-k2.6" },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "" },
+  ideaEngine: {
+    kimiModel: "kimi-k2.6",
+    researchModel: "claude-sonnet-5",
+    writerModel: "",
+    redditSubs: "smallbusiness,Entrepreneur,SaaS,sweatystartup,agency",
+    seedTerms: "ai automation,revops,local service software",
+    dailyEnabled: false,
+    dailyHour: 7,
+  },
 };
 
 function settingsPath(): string {
