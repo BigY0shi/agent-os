@@ -6,5 +6,8 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { ensureScheduler } = await import("./lib/agentsTriggers");
     ensureScheduler();
+    // Idea Engine's daily scan/validate loop (hard-capped at one run per day).
+    const { ensureIdeaDaily } = await import("./lib/ideaDaily");
+    ensureIdeaDaily();
   }
 }

@@ -8,7 +8,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Telescope, Loader2, Send, X, ShieldAlert, FileText, ChevronRight } from "lucide-react";
 import {
-  SEAT_LABELS, VERDICT_META, type IdeaDossier, type SeatName, type ValidationRun,
+  CANDIDATE_COLUMNS, SEAT_LABELS, VERDICT_META,
+  type IdeaDossier, type SeatName, type TrendCandidate, type ValidationRun,
 } from "@/lib/ideaEngineTypes";
 import ModelSettings from "./ModelSettings";
 
@@ -22,6 +23,7 @@ function seatDot(state: string): string {
 
 export default function IdeaEngineView() {
   const [dossiers, setDossiers] = useState<DossierMeta[]>([]);
+  const [daily, setDaily] = useState<{ lastRunDate: string | null; dossierId: string | null; candidateTopic: string | null; note: string | null } | null>(null);
   const [running, setRunning] = useState(false);
   const [idea, setIdea] = useState("");
   const [run, setRun] = useState<ValidationRun | null>(null);
@@ -32,7 +34,7 @@ export default function IdeaEngineView() {
   const load = useCallback(async () => {
     try {
       const j = await (await fetch("/api/idea-engine/list", { cache: "no-store" })).json();
-      if (j.ok) { setDossiers(j.dossiers); setRunning(j.running); }
+      if (j.ok) { setDossiers(j.dossiers); setRunning(j.running); setDaily(j.daily ?? null); }
     } catch { /* empty state covers it */ }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -84,8 +86,10 @@ export default function IdeaEngineView() {
               { key: "researchModel", label: "Research + judge (claude)", placeholder: "claude-sonnet-5", hint: "Web-capable seats: pain miner, market mapper, verdict judge." },
               { key: "writerModel", label: "Dossier writer", placeholder: "blank = pinned CLAUDE_MODEL", hint: "Assembles the final dossier." },
               { key: "kimiModel", label: "Sizing seat (Ollama Cloud)", placeholder: "kimi-k2.6", hint: "Evidence-only sizing; falls back to codex if unreachable." },
-              { key: "redditSubs", label: "Radar: reddit subs", placeholder: "smallbusiness,Entrepreneur,SaaS", hint: "Comma-separated — pain mining sources (Phase 2)." },
-              { key: "seedTerms", label: "Radar: seed terms", placeholder: "ai automation,revops", hint: "Trends + autocomplete seeds (Phase 2)." },
+              { key: "redditSubs", label: "Radar: reddit subs", placeholder: "smallbusiness,Entrepreneur,SaaS", hint: "Comma-separated — pain mining sources." },
+              { key: "seedTerms", label: "Radar: seed terms", placeholder: "ai automation,revops", hint: "Trends + autocomplete seeds." },
+              { key: "dailyEnabled", label: "Daily idea (true/false)", placeholder: "false", hint: "At the hour below: one scan + one auto-validation. Hard-capped at 1/day." },
+              { key: "dailyHour", label: "Daily hour (0-23)", placeholder: "7", hint: "Local hour for the daily run." },
             ]} />
         </div>
       </div>
@@ -93,6 +97,20 @@ export default function IdeaEngineView() {
         Type an idea (or a trend, or a hunch). The council mines real pain evidence, maps the market, sizes it honestly,
         tries to kill it, and writes the dossier. Unsourced numbers are dropped in code — gaps say so.
       </p>
+
+      {/* Idea of the Day */}
+      {daily?.dossierId && daily.lastRunDate === new Date().toISOString().slice(0, 10) && (
+        <button onClick={() => setOpenId(daily.dossierId)}
+          className="w-full text-left mb-4 rounded-xl border p-3.5 flex items-center gap-3 hover:brightness-110 transition"
+          style={{ borderColor: "rgba(245,158,11,0.5)", background: "rgba(245,158,11,0.07)" }}>
+          <Telescope size={16} style={{ color: AMBER }} />
+          <div className="min-w-0">
+            <div className="text-[10.5px] font-mono uppercase tracking-widest" style={{ color: AMBER }}>Idea of the Day</div>
+            <div className="text-[13.5px] font-medium truncate">{daily.candidateTopic}</div>
+          </div>
+          <ChevronRight size={14} className="ml-auto text-white/40 shrink-0" />
+        </button>
+      )}
 
       {/* Validate input */}
       <div className="flex gap-2 mb-5">
@@ -131,6 +149,12 @@ export default function IdeaEngineView() {
         </div>
       )}
 
+      {/* Trend Radar board */}
+      <RadarBoard onValidate={(c) => {
+        setIdea(`${c.topic} — ${c.thesis}`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }} busy={running} />
+
       {/* Archive */}
       <div className="text-[11px] font-semibold uppercase tracking-wide text-white/45 mb-2">Dossiers</div>
       {dossiers.length === 0 && !run && (
@@ -159,6 +183,104 @@ export default function IdeaEngineView() {
       </div>
 
       {openId && <DossierDrawer id={openId} onClose={() => setOpenId(null)} />}
+    </div>
+  );
+}
+
+// ---- Trend Radar ----------------------------------------------------------
+
+interface ScanJob { running: boolean; sources: Record<string, string>; newSignals: number; error: string | null; finishedAt: number | null }
+
+function RadarBoard({ onValidate, busy }: { onValidate: (c: TrendCandidate) => void; busy: boolean }) {
+  const [candidates, setCandidates] = useState<TrendCandidate[]>([]);
+  const [scan, setScan] = useState<ScanJob | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const j = await (await fetch("/api/idea-engine/radar", { cache: "no-store" })).json();
+      if (j.ok) { setCandidates(j.candidates); setScan(j.scan); return j.scan as ScanJob; }
+    } catch { /* fine */ }
+    return null;
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  async function startScan() {
+    try {
+      const j = await (await fetch("/api/idea-engine/radar", { method: "POST" })).json();
+      if (j.ok) {
+        setScan(j.scan);
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = setInterval(async () => {
+          const s = await load();
+          if (s && !s.running && pollRef.current) clearInterval(pollRef.current);
+        }, 5000);
+      }
+    } catch { /* fine */ }
+  }
+
+  async function move(id: string, status: string) {
+    setCandidates((cs) => cs.map((c) => (c.id === id ? { ...c, status: status as TrendCandidate["status"] } : c)));
+    await fetch("/api/idea-engine/radar", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status }),
+    }).catch(() => {});
+  }
+
+  const srcSummary = scan && Object.keys(scan.sources).length
+    ? Object.entries(scan.sources).map(([k, v]) => `${k} ${v.startsWith("ok") ? "✓" : "✗"}`).join(" · ")
+    : null;
+
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-white/45">Trend Radar</span>
+        <button onClick={() => void startScan()} disabled={scan?.running}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] font-medium disabled:opacity-40"
+          style={{ background: "rgba(245,158,11,0.14)", color: AMBER }}>
+          {scan?.running ? <Loader2 size={11} className="animate-spin" /> : <Telescope size={11} />}
+          {scan?.running ? "Scanning sources…" : "Scan now"}
+        </button>
+        {srcSummary && <span className="text-[10.5px] font-mono text-white/35 truncate" title={JSON.stringify(scan?.sources, null, 1)}>{srcSummary}{scan && !scan.running ? ` · +${scan.newSignals} signals` : ""}</span>}
+      </div>
+
+      {candidates.length === 0 ? (
+        <div className="panel border-dashed p-5 text-center text-[12px] text-white/40">
+          No trend candidates yet — run a scan. Sources and seed terms live in the settings gear.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {CANDIDATE_COLUMNS.filter((col) => candidates.some((c) => c.status === col.key)).map((col) => (
+            <div key={col.key}>
+              <div className="text-[10px] font-mono uppercase tracking-widest mb-1" style={{ color: col.accent }}>{col.label}</div>
+              {candidates.filter((c) => c.status === col.key).sort((a, b) => (b.scores.momentum.value ?? 0) - (a.scores.momentum.value ?? 0)).map((c) => (
+                <div key={c.id} className="panel p-3 mb-1.5 flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-medium">{c.topic}</div>
+                    <div className="text-[11.5px] text-white/50 line-clamp-2">{c.thesis}</div>
+                    <div className="flex gap-2 mt-1.5 text-[10px] font-mono text-white/45">
+                      <span title={c.scores.momentum.inputs.map((i) => `${i.name}: ${i.value}`).join("\n")}>momentum {c.scores.momentum.value ?? "—"}</span>
+                      <span title={c.scores.pain.inputs.map((i) => `${i.name}: ${i.value}`).join("\n")}>pain {c.scores.pain.value ?? "—"}</span>
+                      <span title={c.scores.builders.inputs.map((i) => `${i.name}: ${i.value}`).join("\n")}>builders {c.scores.builders.value ?? "—"}</span>
+                      <span>· {c.signalIds.length} signals</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button onClick={() => onValidate(c)} disabled={busy}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-medium disabled:opacity-40"
+                      style={{ background: "rgba(245,158,11,0.16)", color: AMBER }}>Validate ↑</button>
+                    <div className="flex gap-1">
+                      {c.status !== "watching" && <button onClick={() => void move(c.id, "watching")} className="px-1.5 py-0.5 rounded text-[10px] text-cyan-300/80 hover:bg-cyan-500/10">watch</button>}
+                      {c.status !== "parked" && <button onClick={() => void move(c.id, "parked")} className="px-1.5 py-0.5 rounded text-[10px] text-white/40 hover:bg-white/5">park</button>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
