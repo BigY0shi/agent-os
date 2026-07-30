@@ -1,5 +1,28 @@
 # Dev Journal — 2026-07-30
 
+## Adversarial pass before rebuild — lifecycle gaps closed
+
+**Commit:** `d347e4b` · **Rollback:** revert it (pure additions + one dial).
+
+Pre-rebuild sweep of the whole delta found 5 gaps, all lifecycle (undo/abort/
+visibility), none happy-path:
+1. No cancel for a running council → `cancelValidation` + DELETE on
+   /api/idea-engine/validate + UI Cancel button; execute() re-checks status at
+   every stage boundary so a cancelled run can never publish a dossier.
+2. No dossier removal → `exileDossier` (house rule: moved to
+   `~/.agentic-os/idea-engine/.exile/<ts>/`, never deleted) + DELETE route +
+   trash icon w/ confirm. Live-verified via bundled smoke (moved, archive clean).
+3. Manual "Validate ↑" never linked the candidate → daily loop could re-burn
+   its 1/day slot on an already-validated candidate. candidateId now flows
+   UI → route → run; candidate patched validating/validated/reverted in the
+   engine itself (both flows benefit; daily's own patches stay, idempotent).
+4. Daily run failures were invisible (banner needed a dossierId) → muted note
+   line now surfaces daily.note when today's slot was spent without a dossier.
+5. Hire Gmail draft model was hardcoded → `settings.hire.draftModel` dial
+   (default claude-sonnet-5), read at call time, gear field added.
+
+`tsc --noEmit` clean.
+
 ## Idea Engine — trend surfacing + validation council + evidence-first dossiers
 
 **Commits:** `18434af` (Phase 1: spine) · `778711b` (Phases 2+3: radar + daily)
