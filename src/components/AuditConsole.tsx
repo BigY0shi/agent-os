@@ -18,6 +18,7 @@ interface EngineClient {
   state: string;
   stage: string | null;
   intake_ok: boolean;
+  intake_mode?: "full" | "lean" | "blocked";
 }
 
 interface Job {
@@ -266,13 +267,15 @@ export default function AuditConsole() {
                   </td>
                   <td className="px-4 py-2.5 font-mono text-[11px]" style={{ color: stateColor(c.state) }}>{c.state}</td>
                   <td className="px-4 py-2.5 font-mono text-[11px] text-white/50">{c.stage ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-[11px]" style={{ color: c.intake_ok ? "#34d399" : "#f87171" }}>
-                    {c.intake_ok ? "ready" : "incomplete"}
+                  <td className="px-4 py-2.5 text-[11px]" style={{ color: !c.intake_ok ? "#f87171" : c.intake_mode === "lean" ? "#fbbf24" : "#34d399" }}>
+                    {!c.intake_ok ? "blocked" : c.intake_mode === "lean" ? "lean" : "ready"}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5 justify-end">
                       <button disabled={running || !c.intake_ok} onClick={() => void start("run", c.slug)}
-                        title={c.intake_ok ? `Run Machine 1 (${passes} passes)` : "Fill the client brief first"}
+                        title={!c.intake_ok ? "Need a business name + website, geography or industry"
+                          : c.intake_mode === "lean" ? `Run outside-in on public evidence (${passes} passes)`
+                            : `Run Machine 1 (${passes} passes)`}
                         className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10 transition disabled:opacity-35 disabled:cursor-not-allowed">
                         <Play size={11} /> Audit
                       </button>
