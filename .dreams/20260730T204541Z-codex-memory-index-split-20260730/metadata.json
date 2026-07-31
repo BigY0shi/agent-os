@@ -1,0 +1,19 @@
+{
+  "created_at_utc": "20260730T204541Z",
+  "mode": "review",
+  "memory_root": "C:\\Users\\Yoshi\\.codex\\memories",
+  "dream_root": "C:\\Users\\Yoshi\\Documents\\JulianGolde - AgenticOS\\agent-os\\.dreams",
+  "run_dir": "C:\\Users\\Yoshi\\Documents\\JulianGolde - AgenticOS\\agent-os\\.dreams\\20260730T204541Z-codex-memory-index-split-20260730",
+  "label": "codex-memory-index-split-20260730",
+  "adapter": "codex",
+  "current_date": "2026-07-30",
+  "sessions_searched": "0 full sessions; inspected MEMORY.md, memory_summary.md, and rollout_summary_files pointers only",
+  "orientation": {
+    "memory_index_lines_before": 889,
+    "memory_index_lines_after": 46,
+    "task_groups_split": 15
+  },
+  "review_only": true,
+  "changed_text_files": 16,
+  "diffed_at_utc": "20260730T204651Z"
+}
