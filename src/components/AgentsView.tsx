@@ -461,7 +461,7 @@ function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentT
         <div className="space-y-2">
           {adding !== "webhook" && (
             <input value={f1} onChange={(e) => setF1(e.target.value)} autoFocus
-              placeholder={adding === "gmail" ? "Gmail search query — e.g. is:unread from:client.com" : adding === "webwatch" ? "URL to watch" : adding === "filewatch" ? "Folder path to watch" : "Cron — e.g. 0 8 * * * (8am daily)"}
+              placeholder={adding === "gmail" ? "Gmail search query — e.g. is:unread from:client.com" : adding === "webwatch" ? "URL to watch" : adding === "filewatch" ? "Folder path to watch" : "Cron ('0 8 * * *') or a phrase: '8am daily', 'every 15 minutes', 'weekdays 9am'"}
               className="w-full bg-black/30 border rounded-lg px-3 h-9 text-[12px] outline-none font-mono" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
           )}
           {(adding === "gmail" || adding === "webwatch") && (

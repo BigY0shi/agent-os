@@ -116,17 +116,95 @@ async function evalTrigger(def: AgentDef, t: AgentTrigger, cur: TriggerCursor, n
   }
 
   if (t.type === "schedule") {
+    const expr = normalizeSchedule(t.cron);
+    if (!expr) {
+      warnOnce(`schedule "${t.cron}" is neither a cron expression nor a recognizable phrase — this trigger will NEVER fire until it is fixed`);
+      return { cursor: cur };
+    }
     try {
       const from = new Date(cur.lastFire ?? Date.now() - TICK_MS);
-      const next = new Cron(t.cron).nextRun(from);
+      const next = new Cron(expr).nextRun(from);
       if (next && next.getTime() <= now) {
         return { fire: `Scheduled run (${t.cron}). Carry out your standing instructions.`, cursor: { ...cur, lastFire: now } };
       }
-    } catch { /* bad cron expr — ignore rather than crash the loop */ }
+    } catch { warnOnce(`schedule "${t.cron}" (normalized "${expr}") failed in croner — trigger inert`); }
     return { cursor: cur };
   }
 
   return { cursor: cur };
+}
+
+// ── Schedule normalization ─────────────────────────────────────────────────────
+//
+// Root cause of the first silent no-fire (2026-07-31): the UI placeholder read
+// "0 8 * * * (8am daily)" and the operator reasonably typed "8am Daily" — which
+// croner throws on, and the old catch swallowed FOREVER with no trace. Two rules
+// now: common human phrases are accepted, and anything unparseable is loud.
+
+/** Warn once per distinct message per server process — a bad schedule is re-evaluated every minute. */
+function warnOnce(msg: string): void {
+  const g = globalThis as unknown as { __agentsWarned?: Set<string> };
+  (g.__agentsWarned ??= new Set());
+  if (g.__agentsWarned.has(msg)) return;
+  g.__agentsWarned.add(msg);
+  console.warn(`[agents] ${msg}`);
+}
+
+/**
+ * Accept a real cron expression as-is, else translate common natural phrases:
+ *   "8am daily" / "daily at 8:30pm" / "every day at 7am"   -> "m H * * *"
+ *   "hourly" / "every 2 hours" / "every 15 minutes"        -> interval crons
+ *   "midnight" -> 0 0; "noon" -> 0 12 (optionally + "daily")
+ *   "mondays 9am" / "every tuesday at 17:30"               -> "m H * * dow"
+ *   "weekdays 9am" / "weekends noon"                       -> 1-5 / 0,6
+ * Returns a cron string croner accepts, or null when unrecognizable.
+ * Exported for direct verification without a rebuild.
+ */
+export function normalizeSchedule(raw: string): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  // Already valid? croner is the authority.
+  try { new Cron(s); return s; } catch { /* fall through to phrases */ }
+
+  const p = s.toLowerCase().replace(/\s+/g, " ").trim();
+
+  if (/^(hourly|every hour)$/.test(p)) return "0 * * * *";
+  let m = p.match(/^every (\d{1,2}) ?(minutes?|mins?)$/);
+  if (m) return `*/${Math.min(59, Math.max(1, +m[1]))} * * * *`;
+  m = p.match(/^every (\d{1,2}) ?(hours?|hrs?)$/);
+  if (m) return `0 */${Math.min(23, Math.max(1, +m[1]))} * * *`;
+
+  const DOW: Record<string, string> = {
+    sunday: "0", monday: "1", tuesday: "2", wednesday: "3", thursday: "4", friday: "5", saturday: "6",
+  };
+  // Day scope: daily (default), weekdays, weekends, or a named weekday.
+  let dow = "*";
+  let rest = p;
+  const dayWord = p.match(/\b(weekdays|weekends|(?:sun|mon|tues|wednes|thurs|fri|satur)days?)\b/);
+  if (dayWord) {
+    const w = dayWord[1];
+    if (w === "weekdays") dow = "1-5";
+    else if (w === "weekends") dow = "0,6";
+    else dow = DOW[w.replace(/s$/, "")] ?? "*";
+    rest = p.replace(dayWord[0], " ");
+  }
+  rest = rest.replace(/\b(every ?day|everyday|daily|each day|every|at|on)\b/g, " ").replace(/\s+/g, " ").trim();
+
+  // Time: "8am", "8:30pm", "17:30", "noon", "midnight". Bare "8" is ambiguous — reject.
+  if (rest === "noon") return `0 12 * * ${dow}`;
+  if (rest === "midnight") return `0 0 * * ${dow}`;
+  m = rest.match(/^(\d{1,2})(?::(\d{2}))? ?(am|pm)$/);
+  if (m) {
+    let h = +m[1] % 12;
+    if (m[3] === "pm") h += 12;
+    return `${+(m[2] ?? 0)} ${h} * * ${dow}`;
+  }
+  m = rest.match(/^(\d{1,2}):(\d{2})$/);
+  if (m && +m[1] <= 23 && +m[2] <= 59) return `${+m[2]} ${+m[1]} * * ${dow}`;
+  // A pure day phrase with no time ("mondays") defaults to 9am — a sane standup hour.
+  if (rest === "" && dow !== "*") return `0 9 * * ${dow}`;
+
+  return null;
 }
 
 async function tick(): Promise<void> {
