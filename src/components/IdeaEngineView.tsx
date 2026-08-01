@@ -21,6 +21,11 @@ function seatDot(state: string): string {
   return state === "done" ? "#34d399" : state === "running" ? "#22d3ee" : state === "failed" ? "#f87171" : "#5a5d80";
 }
 
+function elapsed(since: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
 export default function IdeaEngineView() {
   const [dossiers, setDossiers] = useState<DossierMeta[]>([]);
   const [daily, setDaily] = useState<{ lastRunDate: string | null; dossierId: string | null; candidateTopic: string | null; note: string | null } | null>(null);
@@ -33,14 +38,9 @@ export default function IdeaEngineView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const j = await (await fetch("/api/idea-engine/list", { cache: "no-store" })).json();
-      if (j.ok) { setDossiers(j.dossiers); setRunning(j.running); setDaily(j.daily ?? null); }
-    } catch { /* empty state covers it */ }
-  }, []);
-  useEffect(() => { void load(); }, [load]);
+  // watchRun's completion handler needs load(), and load() needs watchRun to
+  // resume in-flight runs — a ref breaks the circular useCallback dependency.
+  const loadRef = useRef<() => Promise<void>>(async () => {});
 
   const watchRun = useCallback((runId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -50,13 +50,30 @@ export default function IdeaEngineView() {
         if (!j.ok) return;
         setRun(j.run);
         if (j.run.status !== "running") {
-          if (pollRef.current) clearInterval(pollRef.current);
-          await load();
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+          await loadRef.current();
           if (j.run.dossierId) setOpenId(j.run.dossierId);
         }
       } catch { /* transient */ }
     }, 4000);
-  }, [load]);
+  }, []);
+
+  const load = useCallback(async () => {
+    try {
+      const j = await (await fetch("/api/idea-engine/list", { cache: "no-store" })).json();
+      if (j.ok) {
+        setDossiers(j.dossiers); setRunning(j.running); setDaily(j.daily ?? null);
+        // A run is in flight that this page isn't watching (reload mid-run, or
+        // the daily loop started it) — adopt it so the live panel shows.
+        if (j.active) {
+          setRun((r) => (r && r.id === j.active.id ? r : j.active));
+          if (!pollRef.current) watchRun(j.active.id);
+        }
+      }
+    } catch { /* empty state covers it */ }
+  }, [watchRun]);
+  useEffect(() => { loadRef.current = load; }, [load]);
+  useEffect(() => { void load(); }, [load]);
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   async function validate() {
@@ -145,13 +162,18 @@ export default function IdeaEngineView() {
             <span className="text-[12px] font-mono uppercase tracking-wider" style={{ color: AMBER }}>
               {run.status === "running" ? "Council in session" : run.status === "done" ? "Dossier ready" : `Run failed: ${run.error || "unknown"}`}
             </span>
+            {run.status === "running" && (
+              <span className="text-[10.5px] font-mono text-white/40" title="Full councils typically take 8–12 minutes">
+                {elapsed(run.startedAt)} · ~8–12 min typical
+              </span>
+            )}
             <span className="text-[11px] text-white/40 ml-auto truncate max-w-[45%]">{run.idea}</span>
             {run.status === "running" && (
               <button onClick={async () => {
                 await fetch(`/api/idea-engine/validate?id=${run.id}`, { method: "DELETE" }).catch(() => {});
                 setRunning(false);
                 setRun((r) => (r ? { ...r, status: "error", error: "cancelled by user" } : r));
-                if (pollRef.current) clearInterval(pollRef.current);
+                if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
                 void load();
               }}
                 className="shrink-0 px-2 py-0.5 rounded text-[10.5px] text-rose-300/80 hover:bg-rose-500/10 border border-rose-500/25">
@@ -235,20 +257,24 @@ function RadarBoard({ onValidate, busy }: { onValidate: (c: TrendCandidate) => v
     } catch { /* fine */ }
     return null;
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  const ensurePoll = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      const s = await load();
+      if (s && !s.running && pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    }, 5000);
+  }, [load]);
+
+  // Resume the live view if a scan is already in flight (page reload, daily loop).
+  useEffect(() => {
+    void (async () => { const s = await load(); if (s?.running) ensurePoll(); })();
+  }, [load, ensurePoll]);
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   async function startScan() {
     try {
       const j = await (await fetch("/api/idea-engine/radar", { method: "POST" })).json();
-      if (j.ok) {
-        setScan(j.scan);
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(async () => {
-          const s = await load();
-          if (s && !s.running && pollRef.current) clearInterval(pollRef.current);
-        }, 5000);
-      }
+      if (j.ok) { setScan(j.scan); ensurePoll(); }
     } catch { /* fine */ }
   }
 
@@ -261,7 +287,7 @@ function RadarBoard({ onValidate, busy }: { onValidate: (c: TrendCandidate) => v
   }
 
   const srcSummary = scan && Object.keys(scan.sources).length
-    ? Object.entries(scan.sources).map(([k, v]) => `${k} ${v.startsWith("ok") ? "✓" : "✗"}`).join(" · ")
+    ? Object.entries(scan.sources).map(([k, v]) => `${k} ${v.startsWith("ok") ? "✓" : v.startsWith("running") ? "…" : "✗"}`).join(" · ")
     : null;
 
   return (
@@ -274,8 +300,23 @@ function RadarBoard({ onValidate, busy }: { onValidate: (c: TrendCandidate) => v
           {scan?.running ? <Loader2 size={11} className="animate-spin" /> : <Telescope size={11} />}
           {scan?.running ? "Scanning sources…" : "Scan now"}
         </button>
-        {srcSummary && <span className="text-[10.5px] font-mono text-white/35 truncate" title={JSON.stringify(scan?.sources, null, 1)}>{srcSummary}{scan && !scan.running ? ` · +${scan.newSignals} signals` : ""}</span>}
+        {!scan?.running && srcSummary && <span className="text-[10.5px] font-mono text-white/35 truncate" title={JSON.stringify(scan?.sources, null, 1)}>{srcSummary} · +{scan?.newSignals} signals</span>}
       </div>
+
+      {/* Live scan strip — one chip per source, flipping running… → ✓/✗ as adapters land. */}
+      {scan?.running && (
+        <div className="panel p-2.5 mb-2 flex items-center gap-2 flex-wrap">
+          <Loader2 size={12} className="animate-spin shrink-0" style={{ color: AMBER }} />
+          <span className="text-[11px] font-mono uppercase tracking-wider" style={{ color: AMBER }}>Scanning</span>
+          {Object.entries(scan.sources).map(([k, v]) => (
+            <span key={k} title={v}
+              className="text-[10.5px] font-mono px-1.5 py-0.5 rounded border border-[var(--panel-border)]"
+              style={{ color: v.startsWith("ok") ? "#34d399" : v.startsWith("running") ? "#22d3ee" : "#f87171" }}>
+              {k} {v.startsWith("ok") ? "✓" : v.startsWith("running") ? "…" : "✗"}
+            </span>
+          ))}
+        </div>
+      )}
 
       {candidates.length === 0 ? (
         <div className="panel border-dashed p-5 text-center text-[12px] text-white/40">

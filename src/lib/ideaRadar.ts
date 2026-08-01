@@ -345,6 +345,7 @@ export async function startScan(): Promise<{ started: boolean; reason?: string }
       ];
 
       const gathered: RawSignal[] = [];
+      for (const [name] of adapters) job.sources[name] = "running…";
       await Promise.all(adapters.map(async ([name, fn]) => {
         try {
           const sigs = await fn();
@@ -367,6 +368,7 @@ export async function startScan(): Promise<{ started: boolean; reason?: string }
       // Cluster the fresh signals (cheap tier: kimi, codex fallback).
       const candidates = await readCandidates();
       if (fresh.length >= 5) {
+        job.sources.cluster = "running…";   // model call — the slow tail of the scan
         const prompt = clusterPrompt(fresh, candidates);
         let raw: string;
         try {
@@ -400,6 +402,9 @@ export async function startScan(): Promise<{ started: boolean; reason?: string }
           });
         }
         await writeFile(CANDIDATES_FILE, JSON.stringify(candidates, null, 1), "utf8");
+        if (job.sources.cluster === "running…") {
+          job.sources.cluster = `ok: ${(plan.assign?.length ?? 0)} assigned, ${(plan.create?.length ?? 0)} new`;
+        }
       }
       job.candidates = candidates.length;
     } catch (e) {

@@ -35,6 +35,12 @@ export function anyRunning(): boolean {
   for (const r of RUNS.values()) if (r.status === "running") return true;
   return false;
 }
+/** The in-flight run, if any — lets the UI resume its live panel after a page
+ *  reload, and surface daily-loop runs the page never started itself. */
+export function activeRun(): ValidationRun | null {
+  for (const r of RUNS.values()) if (r.status === "running") return r;
+  return null;
+}
 
 /** Cancel a running council. Frees the one-at-a-time lock immediately; seats
  *  already in flight die on their own CLI timeouts (they can't publish — every
