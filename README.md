@@ -4,7 +4,15 @@ Harness-agnostic command center for agent fleets: agents, skills, tools, memory,
 
 ## Docs
 
-- [docs/agent-os/ECOSYSTEM_STANDUP.md](docs/agent-os/ECOSYSTEM_STANDUP.md) — **greenfield engineering spec** (topology, agent schema, phases, handoff)  
+- [docs/agent-os/DOC_INDEX.md](docs/agent-os/DOC_INDEX.md) — **master documentation map**  
+- [docs/agent-os/EXECUTIVE_OVERVIEW.md](docs/agent-os/EXECUTIVE_OVERVIEW.md) — stakeholder one-pager  
+- [docs/agent-os/PRESENTATION.md](docs/agent-os/PRESENTATION.md) — slide outline, speaker notes, live demo  
+- [docs/agent-os/DIAGRAMS.md](docs/agent-os/DIAGRAMS.md) — Mermaid architecture diagrams  
+- [docs/agent-os/WEEK_1_DEVICE_FIRMWARE.md](docs/agent-os/WEEK_1_DEVICE_FIRMWARE.md) — 7-day Pi kiosk delivery plan  
+- [docs/agent-os/PROJECT_BRIEF.md](docs/agent-os/PROJECT_BRIEF.md) — printable project brief  
+- [docs/agent-os/STAKEHOLDER_FAQ.md](docs/agent-os/STAKEHOLDER_FAQ.md) — presentation Q&A  
+- [docs/agent-os/DEVICE_BOM.md](docs/agent-os/DEVICE_BOM.md) — hardware BOM + handoff card  
+- [docs/agent-os/ECOSYSTEM_STANDUP.md](docs/agent-os/ECOSYSTEM_STANDUP.md) — greenfield engineering spec  
 - [docs/agent-os/ARCHITECTURE.md](docs/agent-os/ARCHITECTURE.md) — control plane layers & threat model  
 - [docs/agent-os/MEMORY_MODEL.md](docs/agent-os/MEMORY_MODEL.md) — shared memory layers  
 - [docs/agent-os/SKILL_PIPELINE_SPEC.md](docs/agent-os/SKILL_PIPELINE_SPEC.md) — pipeline JSON  

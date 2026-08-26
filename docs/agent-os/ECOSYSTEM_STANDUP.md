@@ -566,6 +566,9 @@ Lifecycle **stage**: `ideate → build → test → deploy → observe` (Agent O
 
 | Topic | Doc |
 |-------|-----|
+| **Doc index (start here)** | [DOC_INDEX.md](./DOC_INDEX.md) |
+| Presentation pack | [EXECUTIVE_OVERVIEW.md](./EXECUTIVE_OVERVIEW.md), [PRESENTATION.md](./PRESENTATION.md), [DIAGRAMS.md](./DIAGRAMS.md) |
+| Week device + firmware | [WEEK_1_DEVICE_FIRMWARE.md](./WEEK_1_DEVICE_FIRMWARE.md), [DEVICE_BOM.md](./DEVICE_BOM.md) |
 | Architecture layers | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Proxmox layout | [PROXMOX_RUNTIME_STACK.md](./PROXMOX_RUNTIME_STACK.md) |
 | Honcho | [HONCHO.md](./HONCHO.md) |

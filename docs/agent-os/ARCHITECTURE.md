@@ -53,6 +53,9 @@ Agent runtimes (Hermes Workspace, OpenClaw) and **Honcho** run in separate LXCs;
 
 ## Related docs
 
+- [DOC_INDEX.md](./DOC_INDEX.md) — master documentation map  
+- [EXECUTIVE_OVERVIEW.md](./EXECUTIVE_OVERVIEW.md) · [PRESENTATION.md](./PRESENTATION.md) · [DIAGRAMS.md](./DIAGRAMS.md)  
+- [WEEK_1_DEVICE_FIRMWARE.md](./WEEK_1_DEVICE_FIRMWARE.md) · [DEVICE_BOM.md](./DEVICE_BOM.md)  
 - [PROXMOX_RUNTIME_STACK.md](./PROXMOX_RUNTIME_STACK.md)
 - [HONCHO.md](./HONCHO.md)
 - [MEMORY_MODEL.md](./MEMORY_MODEL.md)

@@ -1,6 +1,17 @@
 # Agent-OS Roadmap
 
-**Last updated:** April 12, 2026
+**Last updated:** August 26, 2026
+
+---
+
+## Near-term — Device + firmware (this week)
+
+See **[docs/agent-os/WEEK_1_DEVICE_FIRMWARE.md](docs/agent-os/WEEK_1_DEVICE_FIRMWARE.md)** and the presentation pack ([DOC_INDEX.md](docs/agent-os/DOC_INDEX.md)).
+
+- [ ] Flash Pi Bookworm 64-bit + deploy Agent OS systemd service
+- [ ] Chromium kiosk autostart (cold boot → UI)
+- [ ] Pass acceptance gates D1–D5 (boot, touch, offline approve, audit, reboot)
+- [ ] Stretch: Hermes/Honcho health pills green on LAN
 
 ---
 
