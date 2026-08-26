@@ -23,6 +23,7 @@ namespace {
 
 uint32_t g_lastDashboardMs = 0;
 uint32_t g_lastStatsMs = 0;
+uint32_t g_lastUplinkMs = 0;
 
 // Button edge/debounce state.
 bool     g_lastButton = HIGH;
@@ -124,6 +125,26 @@ void logSummary() {
   Serial.println("=================================================");
 }
 
+// Forward a compact telemetry summary up the link to Board C (the web hub):
+// this board's WiFi/BLE counts plus the sub-GHz stats relayed from Board B.
+void emitUplink() {
+  CaptureStats s = storeStats();
+  SubGhzState sg = storeSubghz();
+  bool sgAlive = sg.linkSeen && (millis() - sg.lastLinkMs) < LINK_STALE_MS;
+
+  char line[96];
+  snprintf(line, sizeof(line), "WA,%u,%u,%u,%u,%lu,%lu",
+           wifiSnifferChannel(), storeApCount(), storeStationCount(),
+           storeBleCount(), (unsigned long)s.wifiProbeReqs,
+           (unsigned long)s.privacyLeaks);
+  subghzLinkSend(line);
+
+  snprintf(line, sizeof(line), "WS,%d,%ld,%d,%lu",
+           sgAlive ? 1 : 0, sg.lastEnergyKhz, sg.lastEnergyRssi,
+           (unsigned long)sg.ookBursts);
+  subghzLinkSend(line);
+}
+
 }  // namespace
 
 void setup() {
@@ -171,6 +192,11 @@ void loop() {
   if (now - g_lastStatsMs >= STATS_LOG_MS) {
     g_lastStatsMs = now;
     logSummary();
+  }
+
+  if (now - g_lastUplinkMs >= 1000) {
+    g_lastUplinkMs = now;
+    emitUplink();
   }
 
   delay(5);

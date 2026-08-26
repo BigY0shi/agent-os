@@ -11,5 +11,9 @@
 
 void subghzLinkBegin();
 
-// Read and parse any pending link bytes. Call from loop().
+// Read and parse any pending link bytes (from Board B). Call from loop().
 void subghzLinkPump();
+
+// Send a line up the same UART to Board C (the web hub). One line, no newline
+// needed — it is appended. Safe no-op if the link isn't wired.
+void subghzLinkSend(const char* line);

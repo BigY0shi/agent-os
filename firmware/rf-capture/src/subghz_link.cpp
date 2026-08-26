@@ -53,6 +53,10 @@ void subghzLinkBegin() {
   g_len = 0;
 }
 
+void subghzLinkSend(const char* line) {
+  g_link.println(line);
+}
+
 void subghzLinkPump() {
   while (g_link.available()) {
     char c = (char)g_link.read();
