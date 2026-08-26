@@ -10,6 +10,7 @@ enum UiView : uint8_t {
   VIEW_WIFI_APS,      // recent access points
   VIEW_WIFI_LEAKS,    // stations + the networks they probe for (PNL leaks)
   VIEW_BLE,           // recent BLE devices
+  VIEW_SUBGHZ,        // sub-GHz activity from the CC1101 daughterboard
   VIEW_COUNT
 };
 

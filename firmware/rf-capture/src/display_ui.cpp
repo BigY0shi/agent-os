@@ -85,6 +85,28 @@ void renderBle() {
   if (n == 0) g_display.println("(scanning...)");
 }
 
+void renderSubghz() {
+  header("Sub-GHz (CC1101)");
+  SubGhzState s = storeSubghz();
+  bool alive = s.linkSeen && (millis() - s.lastLinkMs) < LINK_STALE_MS;
+  g_display.printf("link:%s\n", alive ? "UP" : (s.linkSeen ? "STALE" : "none"));
+  if (s.energyHits) {
+    g_display.printf("peak:%ld.%02ldMHz\n", s.lastEnergyKhz / 1000,
+                     (s.lastEnergyKhz % 1000) / 10);
+    g_display.printf("     %ddBm hits:%lu\n", s.lastEnergyRssi,
+                     (unsigned long)s.energyHits);
+  } else {
+    g_display.println("peak: (sweeping)");
+  }
+  if (s.ookBursts) {
+    g_display.printf("OOK p:%u s:%luus\n", s.ookPulses,
+                     (unsigned long)s.ookShortestUs);
+    g_display.printf("    bursts:%lu", (unsigned long)s.ookBursts);
+  } else {
+    g_display.println("OOK: (none)");
+  }
+}
+
 }  // namespace
 
 bool displayBegin() {
@@ -115,6 +137,7 @@ void displayRender(uint8_t wifiChannel) {
     case VIEW_WIFI_APS:    renderWifiAps(); break;
     case VIEW_WIFI_LEAKS:  renderWifiLeaks(); break;
     case VIEW_BLE:         renderBle(); break;
+    case VIEW_SUBGHZ:      renderSubghz(); break;
     default: break;
   }
   g_display.display();

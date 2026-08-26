@@ -17,6 +17,7 @@
 #include "wifi_sniffer.h"
 #include "ble_scanner.h"
 #include "display_ui.h"
+#include "subghz_link.h"
 
 namespace {
 
@@ -103,6 +104,23 @@ void logSummary() {
     if (d->appearance)   Serial.printf(" type=%s", d->appearance);
     Serial.println();
   }
+
+  SubGhzState sg = storeSubghz();
+  bool alive = sg.linkSeen && (millis() - sg.lastLinkMs) < LINK_STALE_MS;
+  Serial.printf("-- Sub-GHz link: %s --\n",
+                alive ? "UP" : (sg.linkSeen ? "STALE" : "not connected"));
+  if (sg.energyHits) {
+    Serial.printf("  energy peak %ld kHz %d dBm (hits=%lu)\n",
+                  sg.lastEnergyKhz, sg.lastEnergyRssi,
+                  (unsigned long)sg.energyHits);
+  }
+  if (sg.ookBursts) {
+    Serial.printf("  last OOK %ld kHz %d dBm pulses=%u short=%luus dur=%luus (bursts=%lu)\n",
+                  sg.ookFreqKhz, sg.ookRssi, sg.ookPulses,
+                  (unsigned long)sg.ookShortestUs,
+                  (unsigned long)sg.ookDurationUs,
+                  (unsigned long)sg.ookBursts);
+  }
   Serial.println("=================================================");
 }
 
@@ -129,6 +147,9 @@ void setup() {
   wifiSnifferBegin();
   bleScannerBegin();
 
+  // Optional sub-GHz daughterboard link (Board B). Harmless if none attached.
+  subghzLinkBegin();
+
   Serial.println("Capture started. Press BOOT to cycle OLED views.");
   g_lastDashboardMs = g_lastStatsMs = millis();
 }
@@ -139,6 +160,7 @@ void loop() {
   handleButton(now);
   wifiSnifferHop(now);
   bleScannerPump();
+  subghzLinkPump();
 
   if (now - g_lastDashboardMs >= DASHBOARD_REFRESH_MS) {
     g_lastDashboardMs = now;

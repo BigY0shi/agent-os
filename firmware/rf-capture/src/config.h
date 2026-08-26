@@ -42,6 +42,28 @@
 #define BUTTON_DEBOUNCE_MS 40
 
 // ----------------------------------------------------------------------------
+// UART link from the sub-GHz daughterboard (Board B). One-way: Board B's TX pin
+// wires to this board's LINK_RX_PIN, plus a common ground. Optional — if no
+// daughterboard is attached, nothing is received and the SUBG view stays idle.
+// ----------------------------------------------------------------------------
+#if defined(RFCAP_BOARD_C3)
+  #define LINK_RX_PIN     0
+  #define LINK_TX_PIN     1      // unused (link is one-way) but reserved
+  #define LINK_UART_NUM   1
+#elif defined(RFCAP_BOARD_S3)
+  #define LINK_RX_PIN     18
+  #define LINK_TX_PIN     17
+  #define LINK_UART_NUM   1
+#elif defined(RFCAP_BOARD_CLASSIC)
+  #define LINK_RX_PIN     16
+  #define LINK_TX_PIN     17
+  #define LINK_UART_NUM   2
+#endif
+
+#define LINK_BAUD          115200
+#define LINK_STALE_MS      8000   // no heartbeat/data for this long => link down
+
+// ----------------------------------------------------------------------------
 // WiFi channel hopping. 2.4 GHz channels 1..13 (14 is JP-only and rarely used).
 // Each channel is dwelled on for CHANNEL_DWELL_MS before hopping.
 // ----------------------------------------------------------------------------

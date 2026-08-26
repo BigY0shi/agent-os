@@ -8,6 +8,7 @@ WifiAp       g_aps[MAX_WIFI_APS];
 WifiStation  g_stations[MAX_WIFI_STATIONS];
 BleDevice    g_ble[MAX_BLE_DEVICES];
 CaptureStats g_stats;
+SubGhzState  g_subghz;
 
 // The WiFi promiscuous callback runs in the WiFi driver task, so table writes
 // touched from there are wrapped in this portMUX critical section.
@@ -54,6 +55,7 @@ void storeInit() {
   memset(g_stations, 0, sizeof(g_stations));
   memset(g_ble, 0, sizeof(g_ble));
   memset(&g_stats, 0, sizeof(g_stats));
+  memset(&g_subghz, 0, sizeof(g_subghz));
 }
 
 void storeAddOrUpdateAp(const uint8_t bssid[6], const char* ssid, uint8_t ssidLen,
@@ -193,3 +195,31 @@ static const T* nthUsed(const T* table, uint16_t count, uint16_t visibleIndex) {
 const WifiAp*      storeApAt(uint16_t i)      { return nthUsed(g_aps, MAX_WIFI_APS, i); }
 const WifiStation* storeStationAt(uint16_t i) { return nthUsed(g_stations, MAX_WIFI_STATIONS, i); }
 const BleDevice*   storeBleAt(uint16_t i)     { return nthUsed(g_ble, MAX_BLE_DEVICES, i); }
+
+// ---- sub-GHz link ingest (loop task only; no cross-task access) ------------
+void storeSubghzEnergy(long freqKhz, int rssiDbm) {
+  g_subghz.linkSeen = true;
+  g_subghz.lastLinkMs = millis();
+  g_subghz.lastEnergyKhz = freqKhz;
+  g_subghz.lastEnergyRssi = rssiDbm;
+  g_subghz.energyHits++;
+}
+
+void storeSubghzOok(long freqKhz, int rssiDbm, uint16_t pulses,
+                    uint32_t shortestUs, uint32_t durationUs) {
+  g_subghz.linkSeen = true;
+  g_subghz.lastLinkMs = millis();
+  g_subghz.ookFreqKhz = freqKhz;
+  g_subghz.ookRssi = rssiDbm;
+  g_subghz.ookPulses = pulses;
+  g_subghz.ookShortestUs = shortestUs;
+  g_subghz.ookDurationUs = durationUs;
+  g_subghz.ookBursts++;
+}
+
+void storeSubghzHeartbeat() {
+  g_subghz.linkSeen = true;
+  g_subghz.lastLinkMs = millis();
+}
+
+SubGhzState storeSubghz() { return g_subghz; }

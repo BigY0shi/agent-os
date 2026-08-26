@@ -100,6 +100,18 @@ simultaneous. NimBLE is used instead of Bluedroid so both stacks fit in RAM.
 3. **Probe leaks** — networks devices are probing for (`~` randomized MAC,
    `!` global/real MAC).
 4. **BLE devices** — address-type tag (`pub`/`sta`/`rpa`/`nrp`) + name/vendor.
+5. **Sub-GHz** — link status + latest energy peak and OOK burst from the CC1101
+   daughterboard (see below).
+
+## Sub-GHz daughterboard (Board B)
+
+This unit is **Board A** of a two-board rig. The optional sub-GHz half lives in
+[`../subghz-capture`](../subghz-capture): an ESP32 + CC1101 that captures
+sub-GHz energy and OOK bursts and streams them here over a one-way UART link
+(Board B TX → this board's `LINK_RX_PIN`, plus common ground). Their results
+appear on the `Sub-GHz` OLED view and in the serial summary. No daughterboard?
+Everything else still works; the sub-GHz view just stays idle. Architecture and
+wiring: [`../README.md`](../README.md).
 
 ## Scope & ethics
 

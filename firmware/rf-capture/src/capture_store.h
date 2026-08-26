@@ -77,6 +77,23 @@ struct CaptureStats {
   uint32_t privacyLeaks;   // directed probes + public/static BLE addresses
 };
 
+// ----------------------------------------------------------------------------
+// Sub-GHz state reported by the CC1101 daughterboard over the UART link.
+// ----------------------------------------------------------------------------
+struct SubGhzState {
+  bool     linkSeen;        // any link line ever received
+  uint32_t lastLinkMs;      // millis() of the last line received
+  long     lastEnergyKhz;   // strongest swept frequency
+  int      lastEnergyRssi;
+  uint32_t energyHits;
+  long     ookFreqKhz;      // last OOK burst
+  int      ookRssi;
+  uint16_t ookPulses;
+  uint32_t ookShortestUs;
+  uint32_t ookDurationUs;
+  uint32_t ookBursts;
+};
+
 void storeInit();
 
 // WiFi ingest (called from promiscuous callback context).
@@ -99,3 +116,10 @@ uint16_t storeBleCount();
 const WifiAp* storeApAt(uint16_t visibleIndex);
 const WifiStation* storeStationAt(uint16_t visibleIndex);
 const BleDevice* storeBleAt(uint16_t visibleIndex);
+
+// Sub-GHz link ingest (called from loop task as UART lines arrive).
+void storeSubghzEnergy(long freqKhz, int rssiDbm);
+void storeSubghzOok(long freqKhz, int rssiDbm, uint16_t pulses,
+                    uint32_t shortestUs, uint32_t durationUs);
+void storeSubghzHeartbeat();
+SubGhzState storeSubghz();          // linkAlive is computed against LINK_STALE_MS
