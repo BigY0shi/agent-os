@@ -484,6 +484,84 @@ CREATE TABLE IF NOT EXISTS webmcp_approvals (
 CREATE INDEX IF NOT EXISTS idx_webmcp_approvals_status ON webmcp_approvals(status, created_at DESC);
 `;
 
+const M040_INTEGRATIONS_CORE = `
+-- SPEC-D G2.1: integrations runtime core. Timestamps TEXT UTC ISO (CONVENTIONS
+-- §1.4). Secrets NEVER stored plaintext: config_enc columns hold AES-256-GCM
+-- blobs sealed by integrations/crypto.ts (key at ~/.agentic-os/agentos.key) and
+-- are NEVER serialized into any API response (SPEC-D §8.2).
+-- NOTE: SPEC-D §2's own ingestion_rules DDL is VOID per CONVENTIONS §1.7 —
+-- integration user rules live in SPEC-A's ingestion_rules with source = <account id>.
+CREATE TABLE IF NOT EXISTS integration_definitions (
+  slug        TEXT PRIMARY KEY,              -- matches the in-repo connector slug
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  config_enc  TEXT,                          -- AES-GCM blob: { clientId, clientSecret, webhookSecret, ... }
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS integration_accounts (
+  id              TEXT PRIMARY KEY,          -- crypto.randomUUID()
+  definition_slug TEXT NOT NULL REFERENCES integration_definitions(slug),
+  account_id      TEXT NOT NULL,             -- external identity (email addr, workspace id, npub, login)
+  display_name    TEXT,
+  config_enc      TEXT NOT NULL,             -- AES-GCM blob: tokens / api key / per-account config
+  settings_json   TEXT NOT NULL DEFAULT '{}',-- { state: {...sync watermarks}, autoActivityRead: bool, triggersEnabled: bool }
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (definition_slug, account_id)       -- upsert semantics preserved from upstream
+);
+
+CREATE TABLE IF NOT EXISTS activities (
+  id               TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL REFERENCES integration_accounts(id),
+  text             TEXT NOT NULL,
+  source_url       TEXT,
+  event_type       TEXT,                     -- connector-declared trigger key, e.g. 'GMAIL_MESSAGE_RECEIVED'
+  payload_json     TEXT,                     -- structured event payload for automations (G5)
+  rejection_reason TEXT,                     -- set when a user-rule pre-filter rejects it
+  ingest_status    TEXT NOT NULL DEFAULT 'pending', -- pending|ingested|rejected|failed
+  created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activities_account ON activities(account_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_activities_ingest ON activities(ingest_status);
+
+-- args_json is REDACTED (redactArgs, CONVENTIONS §9.3) — additive vs SPEC-D §2
+-- (the DDL there had no args column; the chunk contract requires redacted call
+-- logging, matching webmcp_call_logs).
+CREATE TABLE IF NOT EXISTS integration_call_logs (
+  id          TEXT PRIMARY KEY,
+  account_id  TEXT NOT NULL,
+  tool_name   TEXT NOT NULL,
+  source      TEXT,                          -- '?source=' tag from /api/mcp, or 'ui' | 'automation:<ruleId>'
+  args_json   TEXT NOT NULL DEFAULT '{}',
+  ok          INTEGER NOT NULL,
+  error       TEXT,
+  duration_ms INTEGER,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_int_call_logs_acct ON integration_call_logs(account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS integration_sync_runs (
+  id               TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL,
+  trigger          TEXT NOT NULL,            -- 'schedule' | 'manual' | 'webhook'
+  started_at       TEXT NOT NULL,
+  finished_at      TEXT,
+  ok               INTEGER,
+  activities_count INTEGER NOT NULL DEFAULT 0,
+  error            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_int_sync_runs_acct ON integration_sync_runs(account_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS oauth_sessions (
+  state           TEXT PRIMARY KEY,          -- crypto.randomBytes(24).toString('base64url')
+  definition_slug TEXT NOT NULL,
+  code_verifier   TEXT,                      -- PKCE
+  redirect_url    TEXT NOT NULL,             -- app page to bounce back to
+  created_at      TEXT NOT NULL              -- rows older than 15 min are purged on read
+);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -560,6 +638,13 @@ export const MIGRATIONS: Migration[] = [
       // C3.6: conversation DELETE is archive/exile semantics, never row
       // destruction (house rule) — archived_at NULL = live.
       db.exec("ALTER TABLE jarvis_conversations ADD COLUMN archived_at TEXT");
+    },
+  },
+  {
+    version: 40,
+    name: "integrations_core",
+    up: (db) => {
+      db.exec(M040_INTEGRATIONS_CORE);
     },
   },
 ];

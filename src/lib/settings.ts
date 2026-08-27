@@ -205,6 +205,12 @@ export interface Settings {
     allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
     llmGetActions?: boolean;   // D1.5: LLM-filtered getActions (default true; off = keyword scorer)
   };
+  // SPEC-D G2 integrations runtime (gear panel lands with the G1 /integrations UI).
+  integrations?: {
+    callbackOrigin?: string;   // OAuth redirect origin — must match provider app registration
+                               // (default http://localhost:3000; redirectUri = <origin>/api/v2/integrations/oauth/callback)
+    syncEnabled?: boolean;     // master kill switch for SCHEDULED syncs (default true; manual sync always runs)
+  };
 
   [extra: string]: unknown;
 }

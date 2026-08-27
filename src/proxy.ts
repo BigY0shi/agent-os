@@ -20,10 +20,14 @@ export function proxy(request: NextRequest) {
   // Always let the login screen, the auth API, and framework/static assets through.
   // Agent webhooks are also exempt: external systems can't hold a session cookie,
   // and the route enforces its own per-agent secret (x-agent-secret header).
+  // /api/hooks/ (SPEC-D §5.9 integration webhooks) follows the same pattern:
+  // the route enforces its own per-definition secret (x-hook-secret header /
+  // connector HMAC) and answers 200-empty for unknown slugs.
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/agents/hook/") ||
+    pathname.startsWith("/api/hooks/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt"
