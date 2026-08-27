@@ -126,6 +126,11 @@ export interface Settings {
   // (all surfaced in the Jarvis gear — rule 16).
   jarvis: {
     kimiModel?: string;                                     // Kimi voice provider's brain
+    // SPEC-C C3 brain engine: "sdk" = warm Claude Agent SDK session with tools
+    // (memory/hub/registry/navigate); "cli" = answer-only fallback via cliComplete
+    // + memory recall, NO tools (clearly meta-tagged in the stream).
+    engine?: "sdk" | "cli";
+    cliAgent?: string;     // cli-lane agent id (claude/codex/cursor/… per cliComplete matrix)
     voice?: {
       provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
       autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
@@ -229,6 +234,8 @@ export const DEFAULT_SETTINGS: Settings = {
   brainstorm: { kimiModel: "kimi-k2.6" },
   jarvis: {
     kimiModel: "kimi-k2.6",
+    engine: "sdk",
+    cliAgent: "claude",
     voice: { provider: "webspeech", autoSend: false, pushToTalk: true },
     hotkey: { key: "F13", enabled: true },
   },

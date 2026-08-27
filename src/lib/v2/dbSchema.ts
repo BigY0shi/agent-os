@@ -438,6 +438,29 @@ CREATE TABLE IF NOT EXISTS webmcp_call_logs (
 CREATE INDEX IF NOT EXISTS idx_webmcp_logs_pkg ON webmcp_call_logs(package_slug, created_at DESC);
 `;
 
+const M031_JARVIS_CONVERSATIONS = `
+-- SPEC-C C3: Jarvis brain conversation persistence. Timestamps TEXT UTC ISO
+-- (CONVENTIONS §1.4). pageContext is NEVER stored here (C5 privacy rule —
+-- per-request only); message content is the user's/assistant's raw text.
+CREATE TABLE IF NOT EXISTS jarvis_conversations (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  channel    TEXT NOT NULL DEFAULT 'overlay' CHECK (channel IN ('overlay','page')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jarvis_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES jarvis_conversations(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  content         TEXT NOT NULL,
+  tool_calls_json TEXT,                      -- [{name, summary, ok}] per assistant turn, else NULL
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jarvis_messages_conv ON jarvis_messages(conversation_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -487,6 +510,13 @@ export const MIGRATIONS: Migration[] = [
     name: "webmcp_core",
     up: (db) => {
       db.exec(M030_WEBMCP_CORE);
+    },
+  },
+  {
+    version: 31,
+    name: "jarvis_conversations",
+    up: (db) => {
+      db.exec(M031_JARVIS_CONVERSATIONS);
     },
   },
 ];

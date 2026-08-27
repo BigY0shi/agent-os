@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import ConfigMenu from "@/components/ConfigMenu";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
+import { useJarvisPageContext } from "@/lib/v2/jarvis/pageContext";
 import EpisodeBrowser from "./EpisodeBrowser";
 import EntityBrowser from "./EntityBrowser";
 import AspectExplorer from "./AspectExplorer";
@@ -52,6 +53,13 @@ export default function MemoryView() {
   const [statsFailed, setStatsFailed] = useState(false);
   const [labels, setLabels] = useState<LabelRow[]>([]);
   const [ingestOpen, setIngestOpen] = useState(false);
+
+  // SPEC-C C5 pilot: active tab + store stats.
+  useJarvisPageContext({
+    route: "/memory",
+    title: "Memory",
+    summary: `Memory V2 page, '${tab}' tab active${stats ? ` — ${stats.episodes} episodes, ${stats.statements} statements, ${stats.entities} entities, ${stats.labels} labels, queue depth ${stats.queueDepth}` : ""}.`,
+  });
 
   const refreshStats = useCallback(async () => {
     try {

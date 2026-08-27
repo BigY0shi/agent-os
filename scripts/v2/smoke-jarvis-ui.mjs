@@ -76,7 +76,10 @@ const overlay = read("src/components/v2/jarvis/ChatboxOverlay.tsx");
   check("onFinalChunk NEVER calls sendBuffer (insert-only)", finalBlock !== "" && !finalBlock.includes("sendBuffer"));
   check("Esc discard confirms long drafts (>80 chars)", /DISCARD_CONFIRM_CHARS = 80/.test(overlay) && /window\.confirm/.test(overlay));
   check("autoSend branch is settings-gated (autoSendRef)", /if \(autoSendRef\.current\) sendBuffer\(\)/.test(overlay));
-  check("overlay reuses the existing brain lane (POST /api/jarvis/brain)", overlay.includes('fetch("/api/jarvis/brain"'));
+  check("overlay uses the C3 V2 ask lane (POST /api/v2/jarvis/ask)", overlay.includes('fetch("/api/v2/jarvis/ask"'));
+  check("overlay ships pageContext from the C5 registry at send time", overlay.includes("getEffectivePageContext()"));
+  check("overlay threads the conversationId from the meta event", overlay.includes("conversationIdRef"));
+  check("overlay handles navigate events via router.push", overlay.includes('ev.type === "navigate"') && overlay.includes("router.push"));
 }
 
 // ── capture hook: capture-only, loud Opera grayout ──────────────────────────

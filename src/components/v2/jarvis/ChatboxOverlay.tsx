@@ -16,15 +16,20 @@
 //      additionally sends the non-empty buffer — the ONLY auto-send path,
 //      replicating the old behavior for those who want it.
 //
-// Answers stream from the EXISTING warm-brain lane: POST /api/jarvis/brain
-// { utterance } → SSE {type:"sentence"|"done"|"error"} (the C3 brain replaces
-// internals next chunk; the request shape is deliberately reused unchanged).
+// Answers stream from the C3 V2 brain lane: POST /api/v2/jarvis/ask
+// { text, conversationId?, pageContext? } → SSE {type:"meta"|"sentence"|"tool"|
+// "navigate"|"done"|"error"}. meta hands back the conversationId (threaded on
+// subsequent sends), tool events render as activity lines, navigate performs a
+// client-side router.push. pageContext comes from the C5 registry at SEND time
+// and is per-request only (never persisted server-side).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Send, Settings as Gear, X, Loader2 } from "lucide-react";
 import type { Settings } from "@/components/ConfigMenu";
 import { useVoiceCapture, providerInfo } from "@/lib/v2/jarvis/useVoiceCapture";
+import { getEffectivePageContext } from "@/lib/v2/jarvis/pageContext";
 import JarvisSettings from "./JarvisSettings";
 
 const ACCENT = "#22d3ee";
@@ -35,6 +40,8 @@ interface SessionTurn {
   role: "user" | "jarvis";
   text: string;
   working?: boolean;
+  /** Tool-activity lines streamed during this turn (C3 tool events). */
+  tools?: string[];
 }
 
 export default function ChatboxOverlay({
@@ -65,6 +72,9 @@ export default function ChatboxOverlay({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [turns, setTurns] = useState<SessionTurn[]>([]);
+  const router = useRouter();
+  // Conversation thread for this overlay session (handed back by the meta event).
+  const conversationIdRef = useRef<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const idRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -160,10 +170,15 @@ export default function ChatboxOverlay({
     const jId = ++idRef.current;
     setTurns((t) => [...t, { id: userId, role: "user", text }, { id: jId, role: "jarvis", text: "", working: true }]);
     try {
-      const res = await fetch("/api/jarvis/brain", {
+      const res = await fetch("/api/v2/jarvis/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ utterance: text }),
+        body: JSON.stringify({
+          text,
+          conversationId: conversationIdRef.current ?? undefined,
+          // C5: what the user currently sees, captured at SEND time (per-request only).
+          pageContext: getEffectivePageContext() ?? undefined,
+        }),
       });
       if (!res.ok || !res.body) throw new Error(`brain ${res.status}`);
       const reader = res.body.getReader();
@@ -180,14 +195,38 @@ export default function ChatboxOverlay({
           const line = frame.split("\n").find((l) => l.startsWith("data: "));
           if (!line) continue;
           try {
-            const ev = JSON.parse(line.slice(6)) as { type?: string; text?: string; error?: string };
-            if (ev.type === "sentence" && ev.text) {
+            const ev = JSON.parse(line.slice(6)) as {
+              type?: string;
+              text?: string;
+              error?: string;
+              message?: string;
+              conversationId?: string;
+              note?: string;
+              name?: string;
+              state?: string;
+              summary?: string;
+              route?: string;
+            };
+            if (ev.type === "meta") {
+              if (ev.conversationId) conversationIdRef.current = ev.conversationId;
+              if (ev.note) setTurns((t) => t.map((x) => (x.id === jId ? { ...x, tools: [...(x.tools ?? []), ev.note!] } : x)));
+            } else if (ev.type === "sentence" && ev.text) {
               answer += (answer ? " " : "") + ev.text;
               setTurns((t) => t.map((x) => (x.id === jId ? { ...x, text: answer } : x)));
+            } else if (ev.type === "tool" && ev.name && ev.state !== "start") {
+              const line = `⚙ ${ev.name}${ev.state === "error" ? " ✗" : ""}${ev.summary ? ` — ${ev.summary}` : ""}`;
+              setTurns((t) => t.map((x) => (x.id === jId ? { ...x, tools: [...(x.tools ?? []), line] } : x)));
+            } else if (ev.type === "navigate" && ev.route && ev.route.startsWith("/")) {
+              try {
+                router.push(ev.route);
+              } catch {
+                window.location.href = ev.route;
+              }
             } else if (ev.type === "error") {
-              answer = answer || `⚠ ${ev.error ?? "brain failure"}`;
+              answer = answer || `⚠ ${ev.message ?? ev.error ?? "brain failure"}`;
               setTurns((t) => t.map((x) => (x.id === jId ? { ...x, text: answer } : x)));
             }
+            // unknown event types are ignored (forward-compat, chunk-1 contract)
           } catch {
             /* malformed frame — skip */
           }
@@ -201,7 +240,7 @@ export default function ChatboxOverlay({
     }
     busyRef.current = false;
     setBusy(false);
-  }, [capture, splice]);
+  }, [capture, splice, router]);
 
   // ── C2b step 6: the ONLY auto-send path — gated on the settings toggle ─────
   const prevCaptureStatusRef = useRef(captureStatus);
@@ -335,6 +374,11 @@ export default function ChatboxOverlay({
                       {t.role === "user" ? "you" : "jarvis"}
                     </span>
                     <span style={{ color: t.role === "user" ? "var(--fg-dim, #9aa)" : "var(--fg, #e8e2f0)" }}>
+                      {t.tools?.map((line, i) => (
+                        <span key={i} className="block text-[11px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                          {line}
+                        </span>
+                      ))}
                       {t.text || (t.working ? "…" : "")}
                       {t.working && <Loader2 size={11} className="inline ml-1 animate-spin" style={{ color: ACCENT }} />}
                     </span>

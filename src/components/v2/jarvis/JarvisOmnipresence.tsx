@@ -17,6 +17,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import { useSettings } from "@/components/ConfigMenu";
+import { setBaselinePageContext } from "@/lib/v2/jarvis/pageContext";
 import ChatboxOverlay from "./ChatboxOverlay";
 
 const ACCENT = "#22d3ee";
@@ -131,6 +132,15 @@ export default function JarvisOmnipresence() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [pathname, openOverlay]);
 
+  // ── C5 baseline page context: every route gets at least {route, title} ─────
+  useEffect(() => {
+    if (pathname === "/login") {
+      setBaselinePageContext(null);
+      return;
+    }
+    setBaselinePageContext({ route: pathname ?? "/", title: document.title });
+  }, [pathname]);
+
   // ── ?jarvis=1 (the helper's zero-subscriber new-tab path) ──────────────────
   useEffect(() => {
     if (pathname === "/login") return;
@@ -144,10 +154,10 @@ export default function JarvisOmnipresence() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
-  // ── Orb status glow from the warm brain ────────────────────────────────────
+  // ── Orb status glow from the V2 ask lane (busy field kept per chunk-1 handoff) ─
   const pollBrain = useCallback(async () => {
     try {
-      const r = await fetch("/api/jarvis/brain", { cache: "no-store" });
+      const r = await fetch("/api/v2/jarvis/ask", { cache: "no-store" });
       const j = await r.json();
       setBrainBusy(!!j?.busy);
     } catch {

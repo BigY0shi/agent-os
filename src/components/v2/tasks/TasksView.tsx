@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ListTodo, Plus, Search, X } from "lucide-react";
 import ConfigMenu from "@/components/ConfigMenu";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
+import { useJarvisPageContext } from "@/lib/v2/jarvis/pageContext";
 import { Eyebrow, inputStyle } from "@/components/v2/memory/shared";
 import { TASKS_ACCENT, type TaskRowClient } from "./shared";
 import TaskListPanel from "./TaskListPanel";
@@ -41,6 +42,13 @@ export default function TasksView() {
   }, [q]);
 
   usePollWhileVisible(refresh, 5000, [q]);
+
+  // SPEC-C C5 pilot: what Jarvis sees when asked "what's on this page?" here.
+  useJarvisPageContext({
+    route: "/tasks",
+    title: "Tasks",
+    summary: `${tasks.length} task(s) visible — ${tasks.filter((t) => t.status === "Todo").length} todo, ${tasks.filter((t) => t.status === "Ready" || t.status === "Working").length} in progress, ${tasks.filter((t) => t.status === "Waiting" || t.status === "Review").length} needing attention, ${tasks.filter((t) => t.status === "Done").length} done${q.trim() ? ` (filtered by search '${q.trim()}')` : ""}.`,
+  });
 
   // ?focus=tk-N deep link (attention.flag route contract).
   useEffect(() => {

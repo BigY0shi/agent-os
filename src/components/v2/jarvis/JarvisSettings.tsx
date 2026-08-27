@@ -32,11 +32,15 @@ export default function JarvisSettings({
   saving: boolean;
 }) {
   const jarvis = (settings?.jarvis ?? {}) as {
+    engine?: "sdk" | "cli";
+    cliAgent?: string;
     voice?: JarvisVoiceSettings;
     hotkey?: JarvisHotkeySettings;
   };
   const voice = jarvis.voice ?? {};
   const hotkey = jarvis.hotkey ?? {};
+  const engine = jarvis.engine ?? "sdk";
+  const cliAgent = jarvis.cliAgent ?? "claude";
   const provider = voice.provider ?? "webspeech";
   const autoSend = voice.autoSend ?? false;
   const pushToTalk = voice.pushToTalk ?? true;
@@ -75,6 +79,38 @@ export default function JarvisSettings({
 
   return (
     <div className="space-y-4 text-[13px]" style={{ color: "var(--fg-dim, #9aa)" }}>
+      {/* ── Brain engine (SPEC-C C3, rule 16) ── */}
+      <div>
+        <span className={label} style={{ color: ACCENT }}>Brain engine</span>
+        <select
+          className={field}
+          value={engine}
+          onChange={(e) => save({ jarvis: { engine: e.target.value } } as Partial<Settings>)}
+          disabled={saving}
+        >
+          <option value="sdk">sdk — warm Claude session with tools (memory, tasks, navigate)</option>
+          <option value="cli">cli — answer-only fallback (no tools)</option>
+        </select>
+        {engine === "cli" && (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              className={field}
+              style={{ maxWidth: 160 }}
+              defaultValue={cliAgent}
+              disabled={saving}
+              onBlur={(e) => {
+                const v = e.target.value.trim() || "claude";
+                if (v !== cliAgent) save({ jarvis: { cliAgent: v } } as Partial<Settings>);
+              }}
+              placeholder="claude"
+            />
+            <span className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+              CLI agent (claude / codex / cursor / …) — answer-only, tools disabled
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* ── Voice capture ── */}
       <div>
         <span className={label} style={{ color: ACCENT }}>Voice provider</span>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
+import { useJarvisPageContext } from "@/lib/v2/jarvis/pageContext";
 import Editor, { TaskStatusContext, type SaveOutcome } from "./Editor";
 import PageHeader from "./PageHeader";
 import CommentBubbles from "./CommentBubble";
@@ -50,6 +51,13 @@ export default function ScratchpadView() {
   useEffect(() => {
     void loadPage(); // default = today in settings tz (server decides)
   }, [loadPage]);
+
+  // SPEC-C C5 pilot: current scratchpad date + open bound-task count.
+  useJarvisPageContext({
+    route: "/today",
+    title: "Daily scratchpad",
+    summary: `Scratchpad page for ${page?.date ?? "today"}${page?.date === todayDate ? " (today)" : ""} — ${Object.values(statuses).filter((s) => s !== "Done").length} open task(s) bound to daily pages.`,
+  });
 
   const refreshComments = useCallback(async () => {
     if (!page?.id) return;
