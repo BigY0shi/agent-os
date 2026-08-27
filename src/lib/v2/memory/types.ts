@@ -91,6 +91,16 @@ export const EpisodeType = {
 export type EpisodeType = (typeof EpisodeType)[keyof typeof EpisodeType];
 
 // ---------------------------------------------------------------------------
+// LLM chat message (A2.1/A2.2) — replaces REF's `ModelMessage` from the "ai"
+// SDK. Client-safe; consumed by llm.ts and every prompts/*.ts template fn.
+// ---------------------------------------------------------------------------
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+// ---------------------------------------------------------------------------
 // Node interfaces — REF graph.entity.ts (Date -> ISO string)
 // ---------------------------------------------------------------------------
 

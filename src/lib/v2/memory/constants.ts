@@ -91,6 +91,12 @@ export const VOICE_SIMILAR_THRESHOLD = 0.75;
  *  REF apps/webapp/app/jobs/labels/label-assignment.logic.ts:22 LABEL_SIMILARITY_THRESHOLD */
 export const LABEL_SEMANTIC_MATCH_THRESHOLD = 0.85;
 
+// ---- Prompts (A2.2) ----
+
+/** Name substituted where REF interpolates a userName into ingestion prompts.
+ *  Single-user install — the owner. (A6.1 persona synthetics reuse this.) */
+export const DEFAULT_USER_NAME = "Yoshi";
+
 // ---- Chunker (A2.3) ----
 // REF apps/webapp/app/services/episodeChunker.server.ts:41-44
 
