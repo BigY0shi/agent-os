@@ -46,6 +46,24 @@ const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax"] as const;
 const EMBED_PROVIDERS = ["ollama-local", "ollama-cloud"] as const;
 const SCOPES = ["files", "coding", "exec"] as const;
 
+// A9.3 — legacy migration sources (POST /api/v2/memory/migrate)
+const MIGRATION_SOURCES = [
+  { source: "memsearch", label: ".memsearch session logs", hint: "repo .memsearch/memory/*.md" },
+  { source: "jarvis", label: "Jarvis voice memory", hint: "~/.agentic-os/jarvis-memory.jsonl (+ pending drains)" },
+  { source: "agents", label: "Agents memory", hint: "~/.agentic-os/agents/<id>/memory/*.md" },
+  { source: "remember", label: ".remember notes", hint: "repo .remember/*.md" },
+] as const;
+
+interface MigrateRowResult {
+  found: number;
+  queued: number;
+  imported: number;
+  skipped: number;
+  dryRun: boolean;
+  full: boolean;
+  error?: string;
+}
+
 function Toggle({
   label, hint, checked, disabled, onChange,
 }: { label: string; hint?: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
@@ -79,6 +97,8 @@ export default function MemorySettings() {
   const [secretCopied, setSecretCopied] = useState(false);
   const [secretErr, setSecretErr] = useState(false);
   const [jobs, setJobs] = useState<JobRowClient[] | null>(null);
+  const [migrating, setMigrating] = useState<string | null>(null); // "<source>:<dry|import>"
+  const [migrateResults, setMigrateResults] = useState<Record<string, MigrateRowResult>>({});
 
   const memory = (settings?.memory ?? {}) as Record<string, unknown>;
   const capability = (settings?.capability ?? {}) as Record<string, unknown>;
@@ -157,6 +177,34 @@ export default function MemorySettings() {
     } catch { /* offline */ }
   }, []);
   usePollWhileVisible(refreshJobs, 5000, []);
+
+  async function runMigrate(source: string, dryRun: boolean) {
+    setMigrating(`${source}:${dryRun ? "dry" : "import"}`);
+    try {
+      const r = await fetch("/api/v2/memory/migrate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ source, dryRun }),
+      });
+      const j = await r.json();
+      setMigrateResults((prev) => ({
+        ...prev,
+        [source]: r.ok
+          ? {
+              found: j.found ?? 0, queued: j.queued ?? 0, imported: j.imported ?? 0,
+              skipped: j.skipped ?? 0, dryRun: j.dryRun === true, full: j.full === true,
+            }
+          : { found: 0, queued: 0, imported: 0, skipped: 0, dryRun, full: false, error: String(j?.error ?? `HTTP ${r.status}`) },
+      }));
+    } catch (err) {
+      setMigrateResults((prev) => ({
+        ...prev,
+        [source]: { found: 0, queued: 0, imported: 0, skipped: 0, dryRun, full: false, error: err instanceof Error ? err.message : "request failed" },
+      }));
+    } finally {
+      setMigrating(null);
+    }
+  }
 
   async function toggleJob(job: JobRowClient, enabled: boolean) {
     try {
@@ -305,6 +353,49 @@ export default function MemorySettings() {
       <div className="mt-3">
         <SaveBar saving={saving} saved={saved} onSave={() => void saveAll()} accent={MEMORY_ACCENT} />
       </div>
+
+      {/* ── Legacy migration (A9.3) ── */}
+      <SectionTitle>Legacy migration</SectionTitle>
+      <p className="text-[10.5px] leading-relaxed mb-2" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+        One-shot import of the pre-V2 memory stores as <code className="font-mono">legacy</code>-labeled
+        episodes (verbatim + embedding, no LLM calls). Import is <strong>additive and idempotent</strong> —
+        re-running skips everything already imported. The legacy stores are never written; they stay
+        live and read-only until retirement.
+      </p>
+      {MIGRATION_SOURCES.map(({ source, label, hint }) => {
+        const res = migrateResults[source];
+        const busy = migrating?.startsWith(`${source}:`) ?? false;
+        return (
+          <div key={source} className="flex items-center gap-2 py-1.5" style={{ borderBottom: "1px solid var(--panel-border, #2a2436)" }}>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11.5px] font-medium truncate" style={{ color: "var(--fg, #e8e2f0)" }}>{label}</div>
+              <div className="font-mono text-[9.5px] truncate" style={{ color: "var(--fg-dimmer, #6b6478)" }}>{hint}</div>
+              {res && (
+                <div className="text-[10px] mt-0.5" style={{ color: res.error ? "#f87171" : "var(--fg-dim, #9aa)" }}>
+                  {res.error
+                    ? `error: ${res.error}`
+                    : res.dryRun
+                      ? `dry-run · found ${res.found} · would skip ${res.skipped}`
+                      : `found ${res.found} · imported ${res.imported} · skipped ${res.skipped}`}
+                </div>
+              )}
+            </div>
+            <button onClick={() => void runMigrate(source, true)} disabled={migrating !== null}
+              className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
+              style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
+              {migrating === `${source}:dry` && <Loader2 size={10} className="animate-spin" />}
+              Dry-run
+            </button>
+            <button onClick={() => void runMigrate(source, false)} disabled={migrating !== null}
+              className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
+              style={{ border: `1px solid ${MEMORY_ACCENT}44`, color: MEMORY_ACCENT }}>
+              {migrating === `${source}:import` && <Loader2 size={10} className="animate-spin" />}
+              Import
+            </button>
+          </div>
+        );
+      })}
+      <div className="mb-3" />
 
       {/* ── System ── */}
       <SectionTitle>System</SectionTitle>

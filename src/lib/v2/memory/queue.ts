@@ -144,6 +144,7 @@ export interface IngestFromModuleInput {
   labelNames?: string[]; // NAMES, resolved/created via the labels.ts ladder
   endUserId?: string;
   agentId?: string;
+  referenceTime?: string; // ISO; defaults to now (backdated module imports)
   metadata?: Record<string, string | number | boolean>;
 }
 
@@ -167,6 +168,7 @@ export async function ingestFromModule(
     labelIds,
     endUserId: input.endUserId,
     agentId: input.agentId,
+    referenceTime: input.referenceTime,
     metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
   });
 }
