@@ -199,3 +199,8 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - Known TODO stubs carried forward: title-generation module (compaction ladder step 3), `scripts/v2/reembed.mjs` (referenced by embed dim-guard + gear warning), F1.6 .99 backup push transport, entity graph visualization (explicit phase-2), episode versioning/diffing (port map S).
 
 ## Phases 2-9: not started
+
+### Post-gate fix (orchestrator, 2026-08-27): golden gate now 12/12
+Case-8 root cause was two-layered; both fixed and verified by a final full-capture gate run (12/12 PASS):
+1. `resolution.ts` statement-contradiction verdict bumped `low`→`medium` tier (4-seed evidence: kimi-k2.6 declined valid contradictions ~50% of seeds). Chain creation now reliable.
+2. `search/handlers.ts` normalizeToRecallResult: entity queries additionally surface the resolved entity's OWN invalidated statements — "currently X, previously Y" no longer depends on which episodes ranked (a gap inherited from REF and fixed here).

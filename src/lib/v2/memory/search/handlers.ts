@@ -7,6 +7,7 @@ import {
   getEpisodes,
   getEpisodesInvalidFacts,
   getStatements,
+  getStatementsForEntity,
 } from "../graph";
 import { countTokens } from "../chunker";
 import { getMatchedLabelIds } from "./router";
@@ -1267,6 +1268,22 @@ function normalizeToRecallResult(
   const rawEpisodes = handlerResult.episodes || [];
   const episodes = replaceWithCompacts(rawEpisodes, ctx);
   const invalidatedFacts = extractInvalidatedFactsFor(rawEpisodes);
+
+  // Entity queries also surface the entity's OWN invalidated statements —
+  // "currently X, previously Y" must not depend on which episodes happened to
+  // rank (golden case 8: chain existed in the DB but the superseded episode
+  // wasn't in the result set, so history silently vanished). REF has this gap.
+  for (const ent of handlerResult.entities || []) {
+    try {
+      for (const s of getStatementsForEntity(ent.uuid, { includeInvalidated: true })) {
+        if (!s.invalidAt) continue;
+        if (invalidatedFacts.some((f) => f.fact === s.fact && f.invalidAt === s.invalidAt)) continue;
+        invalidatedFacts.push({ fact: s.fact, validAt: s.validAt, invalidAt: s.invalidAt, relevantScore: 0 });
+      }
+    } catch (err) {
+      logPathError("entity invalidated facts", err);
+    }
+  }
 
   const statements: RecallResult["statements"] =
     handlerResult.statements?.map((s) => ({

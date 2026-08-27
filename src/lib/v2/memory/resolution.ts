@@ -437,7 +437,11 @@ async function resolveStatementsWithDuplicates(
   };
 
   try {
-    const responseText = await modelCallText(resolveStatementPrompt(promptContext), "low");
+    // Medium tier, not low: the golden-queries gate measured the low-tier model
+    // (kimi-k2.6) declining valid contradictions on ~50% of seeds (case 8,
+    // 4-seed evidence in PROGRESS.md). Contradiction verdicts gate temporal
+    // chains — the one place verdict reliability outranks token cost.
+    const responseText = await modelCallText(resolveStatementPrompt(promptContext), "medium");
     const tagged = extractOutputTag(responseText);
     if (!tagged) {
       console.warn("[v2/memory/resolution] statement resolution missing <output> — keeping all");
