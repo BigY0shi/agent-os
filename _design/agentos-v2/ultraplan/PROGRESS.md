@@ -35,4 +35,24 @@
 - Next tasks: A1.1 constants+types → A1.2 graph.ts → A2.1 llm.ts → A2.2 prompts port → A2.3 chunker → A2.4-8 queue+ingest+resolution+labels → A3 → A4 router/handlers/formatter → A5 compaction → A6 persona → A7 tools → A8 UI → A9 migration.
 - Yoshi must have Ollama running (local embed) before A-phase ingest testing; `ollama pull nomic-embed-text`.
 
-## Phases 1-9: not started
+## Phase 1 — Memory V2: in progress
+
+### Chunk 3 (A2.4–A2.8): ✅ ingestion pipeline (2026-08-27)
+
+| Task | Status | Verified by |
+|---|---|---|
+| A2.4 queue.ts (addToQueue/ensureMemoryQueue/retryQueueItem/ingestFromModule seam, kill-switch, stages, events) | ✅ | smoke-ingest |
+| A2.5 ingest.ts (addEpisode: normalize → extract×2 ∥ → reflect×2 ∥ → classify×2 ∥ → triples/voice + embeddings; REF race-fix ordering kept) | ✅ | smoke-ingest online |
+| A2.6 resolution.ts (entity dedupe/merge, statement duplicate/contradiction, aspect duplicate/evolution/new, orphan cleanup) | ✅ | smoke-ingest contradiction leg |
+| A2.7 labels.ts + prompts/label-assignment.ts (exact → 0.85 semantic → create, OKLCH, Persona excluded, 20k budget) | ✅ | smoke-ingest |
+| A2.8 rules.ts (getActiveRuleTexts seam + CRUD; injected into normalize) | ✅ | smoke-ingest offline |
+| Boot: ensureMemoryQueue() added to boot.ts ensureV2() | ✅ | tsc |
+
+**Deltas vs spec/REF made during build:**
+1. **llm.ts hardened (A2.1 follow-up):** Ollama Cloud models (observed live: glm-5.2:cloud) sometimes ignore the `format` JSON-schema param — structured calls now ALSO append the textual JSON-schema instruction for ollama providers, and `modelCall` does ONE corrective retry feeding the validation errors back. Without this the pipeline hard-fails on schema drift.
+2. Statement-resolution contradictions are filtered to the offered candidate set (REF trusts the LLM's uuids blindly) — defensive, prevents an episode invalidating its own new statements.
+3. Title-generation + compaction (A5) + persona-trigger (A6) are TODO seams in queue.ts stage chain — land with their chunks.
+4. Label-assignment stage failure is non-fatal (warn + COMPLETED), matching REF's try/catch around label/title jobs.
+5. Document versioning/diffing (REF EpisodeVersioning/Differ) deferred per port map (S) — DOCUMENT type uses normalizeDocumentPrompt without previousVersionContent.
+
+## Phases 2-9: not started

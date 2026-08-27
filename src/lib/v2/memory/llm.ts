@@ -175,6 +175,21 @@ function flattenForCli(messages: ChatMessage[]): string {
     .join("\n\n");
 }
 
+/** Append the JSON-only instruction to the trailing user message. */
+function withJsonInstruction(
+  messages: ChatMessage[],
+  schema: z.ZodType<unknown>,
+): ChatMessage[] {
+  const msgs = [...messages];
+  const last = msgs[msgs.length - 1];
+  if (last?.role === "user") {
+    msgs[msgs.length - 1] = { ...last, content: last.content + jsonOnlyInstruction(schema) };
+  } else {
+    msgs.push({ role: "user", content: jsonOnlyInstruction(schema).trim() });
+  }
+  return msgs;
+}
+
 function jsonOnlyInstruction(schema: z.ZodType<unknown>): string {
   const jsonSchema = JSON.stringify(z.toJSONSchema(schema as z.ZodType));
   return (
@@ -201,7 +216,12 @@ async function rawCall(
     case "ollama-cloud":
     case "ollama-local": {
       const format = schema ? (z.toJSONSchema(schema as z.ZodType) as Record<string, unknown>) : undefined;
-      out = await ollamaChat(provider, model, messages, format, opts);
+      // Belt AND suspenders: several Ollama(-cloud) models silently ignore the
+      // `format` JSON-schema param (observed live: glm-5.2:cloud returning
+      // subject/object keys + markdown) — so the schema is ALSO spelled out as
+      // a textual instruction (SPEC-A risk #8: keep both paths alive).
+      const msgs = schema ? withJsonInstruction(messages, schema) : messages;
+      out = await ollamaChat(provider, model, msgs, format, opts);
       break;
     }
     case "cli": {
@@ -217,16 +237,7 @@ async function rawCall(
       break;
     }
     case "minimax": {
-      let msgs = messages;
-      if (schema) {
-        msgs = [...messages];
-        const last = msgs[msgs.length - 1];
-        if (last?.role === "user") {
-          msgs[msgs.length - 1] = { ...last, content: last.content + jsonOnlyInstruction(schema) };
-        } else {
-          msgs.push({ role: "user", content: jsonOnlyInstruction(schema).trim() });
-        }
-      }
+      const msgs = schema ? withJsonInstruction(messages, schema) : messages;
       out = await minimaxChat(model, msgs, opts);
       break;
     }
@@ -242,17 +253,49 @@ async function rawCall(
   return { out, provider, model };
 }
 
-/** Structured call: the model output is parsed + zod-validated to T. */
+/**
+ * Structured call: the model output is parsed + zod-validated to T.
+ * One corrective retry on parse/validation failure: the model is shown its
+ * failed output plus the exact validation errors and asked to re-emit —
+ * observed necessary live (glm-5.2:cloud drifting to subject/object keys and
+ * dropping nullable fields even with the schema in `format`).
+ */
 export async function modelCall<T>(
   messages: ChatMessage[],
   complexity: Complexity,
   opts: ModelCallOpts & { schema: z.ZodType<T> },
 ): Promise<T> {
   const { out, provider, model } = await rawCall(messages, complexity, opts.schema, opts);
+  let firstError: string;
   try {
     return parseStructured(out, opts.schema);
   } catch (e) {
-    throw new Error(`${provider}/${model} (${complexity}): ${e instanceof Error ? e.message : String(e)}`);
+    firstError = e instanceof Error ? e.message : String(e);
+  }
+
+  const retryMessages: ChatMessage[] = [
+    ...messages,
+    { role: "assistant", content: out.slice(0, 6000) },
+    {
+      role: "user",
+      content:
+        `Your previous response was rejected: ${firstError.slice(0, 600)}\n\n` +
+        `Respond again with ONLY a single JSON object that validates against the required schema — ` +
+        `use EXACTLY the property names the schema defines, include every required property ` +
+        `(use null where a nullable value is unknown), no prose, no markdown fences. ` +
+        `Wrap the JSON object in <output></output> tags.` +
+        jsonOnlyInstruction(opts.schema),
+    },
+  ];
+  try {
+    const second = await rawCall(retryMessages, complexity, opts.schema, opts);
+    return parseStructured(second.out, opts.schema);
+  } catch (retryErr) {
+    throw new Error(
+      `${provider}/${model} (${complexity}): ${firstError} — corrective retry also failed: ${
+        retryErr instanceof Error ? retryErr.message : String(retryErr)
+      }`,
+    );
   }
 }
 

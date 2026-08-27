@@ -91,6 +91,10 @@ export const VOICE_SIMILAR_THRESHOLD = 0.75;
  *  REF apps/webapp/app/jobs/labels/label-assignment.logic.ts:22 LABEL_SIMILARITY_THRESHOLD */
 export const LABEL_SEMANTIC_MATCH_THRESHOLD = 0.85;
 
+/** Token budget for the label-extraction prompt context (episode + session).
+ *  REF apps/webapp/app/jobs/labels/label-assignment.logic.ts:19 MAX_CONTENT_TOKENS */
+export const LABEL_CONTEXT_MAX_TOKENS = 20000;
+
 // ---- Prompts (A2.2) ----
 
 /** Name substituted where REF interpolates a userName into ingestion prompts.
