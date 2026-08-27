@@ -5,6 +5,7 @@ import {
   listTools,
   listVersions,
   updatePackage,
+  setPackageSpec,
   deleteDraftPackage,
   archivePackage,
   listCallLogs,
@@ -47,17 +48,28 @@ export async function GET(_req: Request, ctx: Ctx) {
   );
 }
 
-/** PATCH /api/v2/webmcp/packages/[id] { name?, description?, icon? } → { package }. */
+/**
+ * PATCH /api/v2/webmcp/packages/[id] { name?, description?, icon?, spec? }
+ * → { package }. `spec` must match WebmcpSpecSchema exactly (unknown keys /
+ * wrong types → loud 400 with the zod message); `spec: null` clears it.
+ */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   ensureV2();
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "invalid JSON body" }, { status: 400, ...noStore });
   try {
-    const pkg = updatePackage((await ctx.params).id, {
+    const id = (await ctx.params).id;
+    let pkg = updatePackage(id, {
       name: typeof body.name === "string" ? body.name : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       icon: typeof body.icon === "string" ? body.icon : undefined,
     });
+    if ("spec" in body) {
+      if (body.spec !== null && (typeof body.spec !== "object" || Array.isArray(body.spec))) {
+        return NextResponse.json({ error: "spec must be an object or null" }, { status: 400, ...noStore });
+      }
+      pkg = setPackageSpec(id, body.spec);
+    }
     return NextResponse.json({ package: pkg }, noStore);
   } catch (err) {
     return errResponse(err);

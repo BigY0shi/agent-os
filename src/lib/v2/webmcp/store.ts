@@ -7,6 +7,7 @@ import { emit } from "../events";
 import { registerAction, unregisterAction } from "../mcp/registry";
 import { readSettings } from "../../settings";
 import { validateInputSchema, assertObjectSchema, jsonSchemaToZod } from "./schema";
+import { WebmcpSpecSchema, type WebmcpSpec } from "./types";
 
 /**
  * SPEC-C D1/D2 — WebMCP package store.
@@ -51,6 +52,8 @@ export interface WebmcpPackage {
   currentVersion: number;
   /** name → '{{secret:NAME}}' refs only — values live in the secrets file. */
   secretRefs: Record<string, string>;
+  /** Spec-shaped metadata (migration 032); null until authored in the Spec tab. */
+  spec: WebmcpSpec | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -80,7 +83,16 @@ export interface SnapshotTool {
 }
 
 export interface WebmcpSnapshot {
-  package: { id: string; slug: string; name: string; description: string; icon: string; version: number };
+  package: {
+    id: string;
+    slug: string;
+    name: string;
+    description: string;
+    icon: string;
+    version: number;
+    /** Frozen spec at publish time (absent on pre-032 snapshots). */
+    spec?: WebmcpSpec | null;
+  };
   tools: SnapshotTool[];
 }
 
@@ -101,6 +113,7 @@ interface PackageRow {
   status: string;
   current_version: number;
   secrets_json: string;
+  spec_json: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -128,6 +141,16 @@ function safeObj(s: string): Record<string, unknown> {
   }
 }
 
+function parseSpec(specJson: string | null): WebmcpSpec | null {
+  if (!specJson) return null;
+  try {
+    const parsed = WebmcpSpecSchema.safeParse(JSON.parse(specJson));
+    return parsed.success ? (parsed.data as WebmcpSpec) : null;
+  } catch {
+    return null;
+  }
+}
+
 function rowToPackage(r: PackageRow): WebmcpPackage {
   return {
     id: r.id,
@@ -138,6 +161,7 @@ function rowToPackage(r: PackageRow): WebmcpPackage {
     status: r.status as PackageStatus,
     currentVersion: r.current_version,
     secretRefs: safeObj(r.secrets_json) as Record<string, string>,
+    spec: parseSpec(r.spec_json),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -257,6 +281,29 @@ export function recordSecretRef(idOrSlug: string, name: string): WebmcpPackage {
   getDb()
     .prepare("UPDATE webmcp_packages SET secrets_json = ?, updated_at = ? WHERE id = ?")
     .run(JSON.stringify(refs), now(), row.id);
+  return getPackage(row.id)!;
+}
+
+/**
+ * Write the package spec (spec_json, migration 032). `null` clears it.
+ * Loudly validates against WebmcpSpecSchema — unknown keys / wrong types throw
+ * a 400-shaped WebmcpError (the PATCH route surfaces the zod message verbatim).
+ */
+export function setPackageSpec(idOrSlug: string, spec: unknown): WebmcpPackage {
+  const row = getPackageRow(idOrSlug);
+  if (!row) throw new WebmcpError("package not found", 404);
+  if (row.status === "archived") throw new WebmcpError("archived packages are read-only", 409);
+  let specJson: string | null = null;
+  if (spec !== null && spec !== undefined) {
+    const parsed = WebmcpSpecSchema.safeParse(spec);
+    if (!parsed.success) {
+      throw new WebmcpError(`invalid spec: ${parsed.error.message}`, 400);
+    }
+    specJson = JSON.stringify(parsed.data);
+  }
+  getDb()
+    .prepare("UPDATE webmcp_packages SET spec_json = ?, updated_at = ? WHERE id = ?")
+    .run(specJson, now(), row.id);
   return getPackage(row.id)!;
 }
 
@@ -526,6 +573,7 @@ export function publishPackage(idOrSlug: string): { package: WebmcpPackage; vers
       description: row.description,
       icon: row.icon,
       version,
+      spec: parseSpec(row.spec_json),
     },
     tools: tools.map((t) => ({
       name: t.name,

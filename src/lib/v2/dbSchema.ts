@@ -519,4 +519,14 @@ export const MIGRATIONS: Migration[] = [
       db.exec(M031_JARVIS_CONVERSATIONS);
     },
   },
+  {
+    version: 32,
+    name: "webmcp_spec",
+    up: (db) => {
+      // SPEC-C D3.2/D5: Spec-shaped package metadata (auth kind, schedule, mcp
+      // type, config manifest — see webmcp/types.ts WebmcpSpec). NULL = no spec
+      // authored yet. Validated on write via WebmcpSpecSchema (store.setPackageSpec).
+      db.exec("ALTER TABLE webmcp_packages ADD COLUMN spec_json TEXT");
+    },
+  },
 ];
