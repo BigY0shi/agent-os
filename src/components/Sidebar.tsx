@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { href: "/room",     label: "AI Agent Mastermind", icon: <MessagesSquare size={16} />, accent: "#a855f7", dim: "rgba(168,85,247,0.16)" },
   { href: "/pipeline", label: "Pipeline", icon: <Workflow size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
   { href: "/deals",    label: "Deal Desk", icon: <CheckCircle2 size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
+  { href: "/marketing", label: "Marketing Hub", icon: <Megaphone size={16} />, accent: "#ec4899", dim: "rgba(236,72,153,0.16)" },
   // Sibling of Deal Desk: same pipeline, pointed at salaried job postings instead of gigs.
   { href: "/hire",     label: "Hire Engine", icon: <Factory size={16} />, accent: "#fb923c", dim: "rgba(251,146,60,0.16)" },
   { href: "/audit",    label: "Audit Console", icon: <Radar size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
@@ -63,6 +64,9 @@ const NAV: NavItem[] = [
   { href: "/thumbnails", label: "Thumbnails", icon: <ImageIcon size={16} />, accent: "#fb7185", dim: "rgba(251,113,133,0.16)" },
   { href: "/notebook", label: "Notebook", icon: <NotebookText size={16} />, accent: "#fde047", dim: "rgba(253,224,71,0.16)" },
   { href: "/kanban",   label: "Kanban",   icon: <Columns3 size={16} />,  accent: "#14b8a6", dim: "rgba(20,184,166,0.16)" },
+  // Tasks V2 (SPEC-B): list + calendar + drag-drop board + agents strip. Lives in
+  // "Self" by default (sectionOf fallback) — do NOT add to the section Sets.
+  { href: "/tasks",    label: "Tasks",    icon: <ListTodo size={16} />,  accent: "#f97316", dim: "rgba(249,115,22,0.16)" },
   { href: "/memory",   label: "Memory",   icon: <Brain size={16} />,     accent: "#22d3ee", dim: "rgba(34,211,238,0.16)" },
   // Replaced Build Guide (2026-07-26) — a static how-to earned less shelf space than a
   // real shell. /guide still renders if you navigate to it directly.
@@ -83,7 +87,7 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // NOTE: membership here is what decides the group — NOT position in NAV and not the saved
 // drag order. A route missing from this set silently lands in "Self" no matter where it
 // sits in the array, so add new orchestration modules here as well as to NAV.
-const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
+const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
 function sectionOf(href: string): string {
   if (href === "/") return "Workspace";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
@@ -102,6 +106,8 @@ export default function Sidebar() {
   const [customize, setCustomize] = useState(false);
   const [dragHref, setDragHref] = useState<string | null>(null);
   const [overHref, setOverHref] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  useEffect(() => { fetch("/api/version").then((r) => r.json()).then((j) => setVersion(j.version || "")).catch(() => {}); }, []);
 
   // load saved prefs (client only)
   useEffect(() => {
@@ -176,6 +182,11 @@ export default function Sidebar() {
           <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-faint)]">
             Agentic OS · v0.2
           </span>
+          {version && version !== "unknown" && (
+            <span className="font-mono text-[9px] tracking-[0.18em] text-[var(--color-ink-faint)]" title="Pack build — compare against the newest in the AI Profit Boardroom">
+              build {version}
+            </span>
+          )}
         </div>
       </Link>
 

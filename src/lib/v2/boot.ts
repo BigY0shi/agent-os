@@ -6,6 +6,7 @@ import { ensureV2Scheduler, registerJobHandler, scheduleJob } from "./scheduler"
 import { ensureMemoryQueue } from "./memory/queue";
 import { registerTaskWakeHandler } from "./tasks/recurrence";
 import { recoverStuckTasks } from "./tasks/dispatch";
+import { ensureTaskSeeds } from "./tasks/seeds";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -66,6 +67,7 @@ export function ensureV2(): void {
     registerCoreJobs();
     registerTaskWakeHandler(); // SPEC-B B1: wake jobs survive restarts, handler re-registers at boot
     recoverStuckTasks(); // SPEC-B B2: Working tasks orphaned by a dead process → Waiting + attention.flag
+    ensureTaskSeeds(); // SPEC-B B3: recurring seed tasks (idempotent by metadata.seedKey, disabled by default)
     ensureV2Scheduler();
     ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;

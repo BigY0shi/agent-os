@@ -173,6 +173,9 @@ export interface Settings {
     runTimeoutMin?: number;    // wall-clock budget per run + boot stuck-recovery threshold (default 30)
     runMode?: "steps" | "sdk"; // 'sdk' is a NOT_IMPLEMENTED seam for chunk 3+
     emptyTaskGc?: boolean;     // buffer-expiry GC of abandoned Untitled daily tasks (default true)
+    // B3 recurring seed tasks: per-seed enable toggle (default false — nothing
+    // fires until enabled in the Tasks gear). Keys match seeds.ts settingsKey.
+    seeds?: Record<string, { enabled?: boolean }>;
   };
 
   [extra: string]: unknown;
@@ -234,10 +237,19 @@ export const DEFAULT_SETTINGS: Settings = {
     timezone: "America/Chicago",
     editingBufferSec: 120,
     planApproval: "always",
+    // Seed categories opted into unattended runs by default — the seeds
+    // themselves ship disabled, so nothing fires until enabled in the gear.
+    autoApprove: { categories: ["brief", "planning"] },
     maxStepsPerRun: 12,
     runTimeoutMin: 30,
     runMode: "steps",
     emptyTaskGc: true,
+    seeds: {
+      morningBrief: { enabled: false },
+      eodWrapup: { enabled: false },
+      sundayPlanning: { enabled: false },
+      weeklyRetro: { enabled: false },
+    },
   },
 };
 

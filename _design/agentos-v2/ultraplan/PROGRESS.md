@@ -256,6 +256,34 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - B4 TasksSettings gear must expose the new settings.tasks keys (rule 16): planApproval, autoApprove, maxStepsPerRun, runTimeoutMin, emptyTaskGc.
 - B5: buffer-GC currently exiles the task only; `removeTaskItemFromPages` node-strip is the open TODO once v2_pages exists (marked in dispatch.ts).
 
+### Chunk 3 (B3 seeds + B4 REST API + Tasks page UI): ✅ (2026-08-27, branch feat/v2-phase2-tasks)
+
+| Task | Status | Verified by |
+|---|---|---|
+| B3 tasks/seeds.ts — 4 seeds (Morning Brief daily 7:00, EOD Wrap-up daily 18:00, Sunday Planning Sun 19:00, Weekly Retro scaffold Fri 16:00), metadata.seedKey upsert (json_extract), ALL created DISABLED (isActive 0, no armed job) until settings.tasks.seeds.<key>.enabled / gear toggle; spec_md carries the full discipline (idempotency heading guard, append-only, cap 5/section, plain-bullets-never-taskItems, scratchpad-unavailable → deliver via task conversation); categories 'brief'/'planning'; boot.ts ensureTaskSeeds() (idempotent) | ✅ | smoke-tasks-api seeds leg |
+| settings: tasks.seeds subtree + DEFAULT tasks.autoApprove.categories ["brief","planning"] (seeds run unattended once ENABLED; visible/editable in gear) | ✅ | tsc + smoke |
+| B4 REST src/app/api/v2/tasks/: route.ts GET(filters incl. FTS q, status CSV, source, parent, scheduledDate)/POST(create; schedule\|runAt → applySchedule); [id]/route.ts GET(task+subtasks+events+sessions+conversations, :id = uuid OR tk-*)/PATCH(fields queue-blind; schedule-block → applySchedule ONLY — isActive toggle re-derives runAt from stored schedule; status → changeTaskStatus actor user, illegal → 409, **'Working' route-gated 409 "runtime-owned"**)/DELETE(exile); [id]/approve POST {edits?,note?} → approvePlan \| {action:'reject',reason} → rejectPlan (409 on non-drafted); [id]/run POST → enqueueTask immediate + tickOnce nudge (202; 404/409 guards); [id]/chat GET(active thread, ephemeral hidden, runs list)/POST {text} → append + checkWaitingTaskReply; agents-strip GET (thin butler-activity derivation over agentsStore/agentsRuntime + v2 assignments — statusFeed replaces internals in E); recalc POST (timezone change → scheduleTask over active schedules) | ✅ | smoke-tasks-api (60 checks) |
+| B4 UI /tasks: page.tsx → TasksView (header search/new-task/gear; Row1 TaskListPanel 2fr [One-time\|Repeating tabs, "needs you" chip = Waiting/Review/plan-drafted, Done checkbox, date pill → PATCH scheduledDate, schedule text + N-left, next-run chip] beside MiniCalendar 1fr [month grid, column-colored dots from scheduledDate/runAt, click filters list]; Row2 TaskBoard 4 cols Todo / In Progress=Ready("starting…")+Working(pulse) / Waiting=Waiting("needs you")+Review("review me") / Done — HTML5 DnD, drop→PATCH (In Progress sets Ready), 409 → snap-back + toast with reason; Row3 AgentsSection cards w/ **shared src/components/v2/StatusBand.tsx** (CONVENTIONS §6 palette exact: #34d399/#60a5fa/#fbbf24/#f87171/#9ca3af), current + ≤3 upcoming per agent); TaskDetail slide-over tabs Overview(spec editable, plan rendered + Approve/Reject when drafted, result, subtasks, status timeline)/Chat(thread + input, reply unblocks Waiting)/Sessions/Activity; ?focus=tk-N deep link honored (attention.flag route); TasksSettings gear = timezone(+recalc POST on change), planApproval, autoApprove categories+maxSteps, maxStepsPerRun, runTimeoutMin, editingBufferSec, emptyTaskGc, per-seed toggles (PATCH isActive + settings mirror) | ✅ | smoke-tasks-ui 55/55 |
+| Sidebar: /tasks NAV entry (ListTodo, accent #f97316) placed after /kanban — NOT added to any section Set (sectionOf fallback lands it in "Self" as intended); /kanban untouched | ✅ | smoke-tasks-ui |
+
+**Deltas/decisions (chunk 3):**
+1. **All 4 seeds default DISABLED** (SPEC silent on per-seed defaults → brief's "default all disabled" applied); DEFAULT_SETTINGS pre-opts categories 'brief'+'planning' into autoApprove so an ENABLED seed runs unattended out of the box (visible in gear, rule 16).
+2. **Route-level 409 on status 'Working'**: canTransition lets actor 'user' do anything, so the only board-drag 409s would never fire; 'Working' is runtime-owned (drop on In Progress sets Ready, worker flips Working) — enforced in the PATCH route, message surfaced as the board toast.
+3. **No /board route**: columns derive client-side from the one list fetch (poll 5s); agents payload is its own thin GET /api/v2/tasks/agents-strip. SPEC's board+agents single-poll can be reinstated when E's statusFeed lands.
+4. **PATCH isActive re-derivation**: applySchedule({isActive}) alone would deactivate a schedule whose runAt is NULL (disabled seed) — the route passes the stored schedule through so enable recomputes runAt. Covered by a dedicated smoke check.
+5. ensureTaskSeeds leaves EXISTING seed tasks untouched (user owns them post-creation); identity = metadata.seedKey via json_extract.
+6. approve/run routes nudge tickOnce (50 ms fire-and-forget) so immediate runs don't wait out the 30 s tick interval.
+7. B6 ingest deliberately NOT wired into chat POST (chunk-4 memory-wiring pass owns the taskIngest call-site audit); engine's run-summary ingest (chunk 2) unchanged.
+
+**Verification:** `scripts/v2/smoke-tasks-api.mjs` ALL PASS (seeds idempotency ×2, disabled=no-job/enabled=job, create/list/FTS/detail-by-display-id, PATCH legal + 409 + queue-blind title edit + isActive re-arm, run→Waiting→approve→Review E2E via routes, reject, chat GET/POST + Waiting→Ready hook, DELETE exile bundle-on-disk, agents-strip band set, recalc) · `scripts/v2/smoke-tasks-ui.mjs` 55/55 · regressions: smoke-engine ALL PASS (incl. live Ollama-cloud leg), smoke-tasks ALL PASS · `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**Handoff for chunk 4 (B5 scratchpad + B6 memory-wiring):**
+- Page/API surface available to B5: `GET/POST /api/v2/tasks` (create with source 'daily' + status 'Ready' is the `[ ]`→task binding path; buffer-GC exiles empty ones), `PATCH /api/v2/tasks/[id]` (title sync w/ sourcePageId is TODO — PATCH accepts title but outlink propagation needs v2_pages), TaskDetail opens by uuid OR display id (`?focus=` works cross-page).
+- B6 call sites to wire taskIngest/ingestFromModule: chat POST (route has the marker comment), comment replies (B5.5), plus audit the engine's existing run-completion ingest = the B6.1 exactly-once pass.
+- dispatch.ts still has the `removeTaskItemFromPages` TODO (node strip on buffer-GC) — lands with v2_pages.
+- StatusBand is live at the CONVENTIONS path; agents-strip route is the seam SPEC-E's statusFeed.getStatusSnapshot() replaces (keep the response shape).
+- Gear seed toggles PATCH the task AND mirror settings.tasks.seeds — keep both in sync if B5 adds more seed-like tasks.
+
 ## Phases 3-9: not started
 
 ### Post-gate fix (orchestrator, 2026-08-27): golden gate now 12/12
