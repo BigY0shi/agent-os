@@ -110,4 +110,36 @@
 - `personaTrigger(episodeUuid)` / `updatePersonaIncremental(episodeUuid)` / `compactSession(sessionId)` are all exported and idempotent-safe for manual routes if wanted.
 - Tool descriptions come verbatim from `REF/apps/webapp/app/utils/mcp/memory.ts` into `memory/mcpTools.ts`, registered via F4 `registerAction` + first-class tools on server.ts; stamp `?source=`.
 
+### Chunk 6 (A7.1–A7.2): ✅ MCP memory tools + REST API (2026-08-27)
+
+| Task | Status | Verified by |
+|---|---|---|
+| A7.1 memory/mcpTools.ts (5 tools, descriptions VERBATIM from REF utils/mcp/memory.ts; schemas per SPEC §5.1 — search gains labelIds/endUserIds/structured, ingest gains referenceTime, about_user + init_session take {}) registered BOTH as first-class server.ts tools AND F4 registry actions (module "memory"); `?source=` stamped as `mcp:<source>` on every ingest; first-class calls audited via the same `mcp.execute` emit as execute_action | ✅ | smoke-memory-api + smoke-mcp |
+| server.ts NOT_READY branches deleted (toolDefs spreads memoryToolDefs(); tools/call default → isMemoryTool dispatch; ensureMemoryActions() beside ensureCoreActions()) | ✅ | smoke-mcp |
+| A7.2 REST routes (all §5.2 shapes): ingest 202/400-zod · search {markdown}\|RecallResult · episodes list (label/sessionId/endUserId/agentId/source/from/to/q LIKE/limit/offset → {episodes,total}) · episodes/[id] GET {episode,statements(incl invalidated),voiceAspects,labels,compact?} + DELETE cascade-exile · entities (?q = entity-ns 0.65 vector + name LIKE, ?type) · entities/[id] {entity,statements,episodes} · labels GET(+episodeCount)/POST/PATCH (new labels.ts updateLabel, re-embeds) · logs GET/POST retry · rules GET/POST/PATCH · persona GET/POST(mode:full→409 via PersonaExistsError.status) · stats {episodes,statements,entities,voiceAspects,labels,invalidated(graph+voice),queueDepth,lastIngestAt} | ✅ | smoke-memory-api |
+| A8.5 cascade-EXILE landed early in `memory/exile.ts` (exileEpisodeCascade): REF deleteEpisodeWithRelatedNodes semantics — sole-provenance statements removed, shared-provenance KEPT (lose only this episode's provenance edge), entities orphaned by the removed statements removed, voice aspects unlinked / removed when episode list empties; full JSON bundle (episode+labels+statements+entities+voice+embeddings) written to `~/.agentic-os/.exile/memory/<stamp>-<uuid>.json` and VERIFIED on disk BEFORE any row is touched; vec rows for exiled rows removed (§8.10); emits `memory.exiled` | ✅ | smoke-memory-api cascade leg |
+
+**Deltas/notes (chunk 6):**
+1. Exile bundle path follows SPEC A8.5 (`.exile/memory/<stamp>-<uuid>.json`), not the older per-timestamp-folder shape.
+2. memory_about_user returns a clear "No persona document exists yet…" message when the doc is absent (REF returned the raw profile handler output).
+3. entities?q vector leg degrades gracefully to LIKE-only when the embedder is unreachable (warn, no 500).
+4. smoke-mcp updated for the live-tools contract (NOT_READY assertions replaced with live session-init/get_labels/about_user/ingest-validation checks).
+5. Smoke direct-imports the Next route handlers via tsx (tsconfig paths resolve `@/`), driving them with constructed NextRequest objects — first script to do so; pattern reusable for future route smokes.
+
+**Verification:** `scripts/v2/smoke-memory-api.mjs` ALL PASS (offline: stub embeds + ingestEnabled:false; online vs local Ollama + Ollama cloud: MCP memory_ingest → COMPLETED → memory_search markdown recalling the fact). Regressions: smoke-mcp / smoke-ingest / smoke-search ALL PASS (online halves live). `npx tsc --noEmit` clean.
+
+### Handoff notes for chunk 7 (A8 Memory page UI)
+Endpoints live (all nodejs/force-dynamic/no-store, ensureV2 first):
+- `POST /api/v2/memory/ingest` {episodeBody≥20, source, sessionId, referenceTime?, type?, title?, labelIds?, endUserId?, agentId?, metadata?} → 202 {queueId} (400 zod text)
+- `POST /api/v2/memory/search` {query, limit?, maxEpisodes?, tokenBudget?, labelIds?, endUserIds?, agentId?, startTime?, endTime?, structured?} → {markdown} | RecallResult
+- `GET /api/v2/memory/episodes?label=&sessionId=&endUserId=&agentId=&source=&from=&to=&q=&limit=(50/200)&offset=` → {episodes: EpisodicNode[] (incl labelIds), total}, valid_at DESC
+- `GET /api/v2/memory/episodes/[id]` → {episode, statements:{uuid,fact,aspect,validAt,invalidAt,invalidatedBy}[], voiceAspects:{uuid,fact,aspect,validAt,invalidAt,invalidatedBy}[], labels:{id,name,description,color}[], compact?:{id,title,content,updatedAt}} · `DELETE` → {ok, episodeUuid, exiledTo, removed:{statements,entities,voiceAspects}, keptStatements} — UI confirm dialog must name `exiledTo`'s dir (A8.5)
+- `GET /api/v2/memory/entities?q=&type=&limit=` → {entities: EntityNode[]} · `GET /entities/[id]` → {entity, statements (incl invalidated — strike-through), episodes (valid_at DESC)}
+- `GET /api/v2/memory/labels` → {labels: LabelRow&{episodeCount}[]} · POST {name,description?,color?} → 201 {label} · PATCH {id,…} → {label}
+- `GET /api/v2/memory/logs?status=&limit=` → {logs: camelCase queue rows incl stage/error/retryCount/output} · POST {id, action:"retry"} → {queueId, retryCount}
+- `GET /api/v2/memory/rules(?source=&activeOnly=)` → {rules} · POST {text,name?,source?,isActive?} → 201 · PATCH {id,…}
+- `GET /api/v2/memory/persona` → {document: PersonaDocument|null} · POST {mode:"full"} → 201 {document} | 409 when doc exists (full-gen button disabled then)
+- `GET /api/v2/memory/stats` → {episodes, statements, entities, voiceAspects, labels, invalidated, queueDepth, lastIngestAt} (header strip)
+Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemorySettings gear (A8.6 incl. capability section F3.4), migrate route+UI is A9 (route `/api/v2/memory/migrate` NOT yet built).
+
 ## Phases 2-9: not started

@@ -121,6 +121,47 @@ export async function createLabel(input: {
 }
 
 /**
+ * Patch a label (name/description/color) — /api/v2/memory/labels PATCH.
+ * Re-embeds best-effort when name/description change (semantic ladder parity
+ * with createLabel); a failed embed degrades matching, never the update.
+ */
+export async function updateLabel(
+  id: string,
+  patch: { name?: string; description?: string | null; color?: string },
+): Promise<LabelRow> {
+  const existing = getLabel(id);
+  if (!existing) throw new Error(`label ${id} not found`);
+
+  const name = patch.name !== undefined ? patch.name.trim() : existing.name;
+  if (!name) throw new Error("label name is required");
+  if (patch.name !== undefined && name.toLowerCase() !== existing.name.toLowerCase()) {
+    const clash = getLabelByName(name);
+    if (clash && clash.id !== id) throw new Error(`label "${name}" already exists`);
+  }
+  const description =
+    patch.description !== undefined ? patch.description : existing.description;
+  const color = patch.color !== undefined && patch.color ? patch.color : existing.color;
+
+  getDb()
+    .prepare("UPDATE labels SET name = ?, description = ?, color = ? WHERE id = ?")
+    .run(name, description, color, id);
+
+  if (patch.name !== undefined || patch.description !== undefined) {
+    try {
+      const labelText = description ? `${name}: ${description}` : name;
+      vectorUpsert("label", id, await getEmbedding(labelText));
+    } catch (err) {
+      console.warn(
+        `[v2/memory/labels] could not re-embed label "${name}" (semantic matching degraded until re-embed):`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  return getLabel(id)!;
+}
+
+/**
  * CONVENTIONS §4 ladder for label NAMES coming from other modules
  * (ingestFromModule labelNames): exact NOCASE match, else create.
  * Returns deduped label ids in input order.
