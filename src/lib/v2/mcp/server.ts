@@ -8,6 +8,8 @@ import {
   type ActionContext,
 } from "./registry";
 import { emit } from "../events";
+import { redactArgs } from "../redact";
+import { ensureTaskActions } from "./taskActions";
 import {
   callMemoryTool,
   ensureMemoryActions,
@@ -94,6 +96,7 @@ export async function handleMcpMessage(
 ): Promise<JsonRpcResponse | null> {
   ensureCoreActions();
   ensureMemoryActions();
+  ensureTaskActions();
 
   // Notifications (no id) are accepted and produce no body.
   if (msg.method?.startsWith("notifications/")) return null;
@@ -156,9 +159,16 @@ export async function handleMcpMessage(
             return rpcResult(msg.id, errText(`Invalid args for '${key}': ${parsed.error.message}`));
           }
           // CONVENTIONS §9.1: every external execute_action is audited.
+          // Args are logged REDACTED via the shared redactArgs (CONVENTIONS §9.3).
           emit(
             "mcp.execute",
-            { key, source: ctx.source, remoteAddr: ctx.remoteAddr ?? null, strict: ctx.strict },
+            {
+              key,
+              source: ctx.source,
+              remoteAddr: ctx.remoteAddr ?? null,
+              strict: ctx.strict,
+              args: redactArgs(parsed.data),
+            },
             "mcp",
           );
           try {
@@ -175,10 +185,16 @@ export async function handleMcpMessage(
 
         default: {
           if (isMemoryTool(name)) {
-            // Same audit contract as execute_action (CONVENTIONS §9.1).
+            // Same audit contract as execute_action (CONVENTIONS §9.1/§9.3).
             emit(
               "mcp.execute",
-              { key: name, source: ctx.source, remoteAddr: ctx.remoteAddr ?? null, strict: ctx.strict },
+              {
+                key: name,
+                source: ctx.source,
+                remoteAddr: ctx.remoteAddr ?? null,
+                strict: ctx.strict,
+                args: redactArgs(args),
+              },
               "mcp",
             );
             return rpcResult(msg.id, await callMemoryTool(name, args, ctx));

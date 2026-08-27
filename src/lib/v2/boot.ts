@@ -8,6 +8,10 @@ import { registerTaskWakeHandler } from "./tasks/recurrence";
 import { recoverStuckTasks } from "./tasks/dispatch";
 import { ensureTaskSeeds } from "./tasks/seeds";
 import { registerScratchpadHandlers } from "./pages/butler";
+import { loadPublishedIntoRegistry } from "./webmcp/store";
+import { seedSelfTools } from "./webmcp/seedSelfTools";
+import { installHubSeam } from "./webmcp/hub";
+import { ensureTaskActions } from "./mcp/taskActions";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -70,6 +74,10 @@ export function ensureV2(): void {
     recoverStuckTasks(); // SPEC-B B2: Working tasks orphaned by a dead process → Waiting + attention.flag
     ensureTaskSeeds(); // SPEC-B B3: recurring seed tasks (idempotent by metadata.seedKey, disabled by default)
     registerScratchpadHandlers(); // SPEC-B B5/B6: @jarvis mention handler + nightly scratchpad ingest job
+    ensureTaskActions(); // SPEC-C D4: ui.navigate / tasks_create / tasks_list registry actions
+    seedSelfTools(); // SPEC-C D4-lite: idempotent create+publish of the 'agentos' package
+    loadPublishedIntoRegistry(); // SPEC-C D2: re-register ALL published WebMCP snapshots after restart
+    installHubSeam(); // SPEC-C D3: globalThis.__agentosMcpHub for the C3 brain
     ensureV2Scheduler();
     ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;
