@@ -142,4 +142,31 @@ Endpoints live (all nodejs/force-dynamic/no-store, ensureV2 first):
 - `GET /api/v2/memory/stats` → {episodes, statements, entities, voiceAspects, labels, invalidated, queueDepth, lastIngestAt} (header strip)
 Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemorySettings gear (A8.6 incl. capability section F3.4), migrate route+UI is A9 (route `/api/v2/memory/migrate` NOT yet built).
 
+### Chunk 7 (A8.1–A8.7 + F2.4 + F3.4 gear): ✅ Memory page UI (2026-08-27)
+
+| Task | Status | Verified by |
+|---|---|---|
+| A8.1 exile + shell: old page → `.exile/2026-08-27_090625/src/app/memory/page.tsx` (copy) + `src/components/MemoryPanel.tsx` (moved); new page renders `MemoryView` (tabs Episodes\|Entities\|Aspects\|Labels\|Logs\|Persona, /stats strip polled 5s, queue-depth badge on Logs tab, "Add memory" drawer, gear) | ✅ | smoke-memory-ui |
+| A8.2 EpisodeBrowser (label chips + source/session/endUser/date/q filters, 50-row paging, poll 5s) + EpisodeDetail slide-over (original/normalized toggle, aspect-badged facts, A3 "currently X — previously Y (until date)" pairing by aspect+leading-word heuristic, 📦 compact expander, cascade-exile confirm naming `~/.agentic-os/.exile/memory/` then showing the response's exact `exiledTo`) | ✅ | smoke-memory-ui + tsc |
+| A8.3 EntityBrowser (q+type master/detail: attributes table, current + struck-through invalidated statements, provenance episodes → EpisodeDetail) + AspectExplorer (World-graph 7 + Voice 6 card sections, stores queried SEPARATELY, click → fact list) | ✅ | smoke-stats-facet |
+| A8.4 LabelsManager (POST/PATCH, episodeCount, color swatch; no delete) + IngestLogs (status pills amber/blue/green/red, stage, error expander, Retry) + ManualIngest (drop .md/.txt → textarea + type DOCUMENT, source default "manual", label/session pickers, 202 → Logs tab) + RulesEditor (inside Logs tab) | ✅ | smoke-memory-ui |
+| A8.6 MemorySettings gear (ConfigMenu children): provider/modelLow/modelMedium, embedProvider/embedModel + re-embed warning, 3 toggles (instant save), tokenBudget/labelRouterThreshold, MCP secret "configured ✓" + copy-fetches-on-click-never-rendered; F3.4 Capabilities (folders+scopes editor, execAllow/execDeny textareas, browser toggle disabled "coming with E"); System section = jobs table (/api/v2/jobs enable/disable) + EventFeed | ✅ | smoke-memory-ui |
+| A8.7 PersonaPanel (ReactMarkdown render, updatedAt/version, autoUpdate toggle → settings.memory.personaAutoUpdate, Generate only when doc absent, 409 messaged) | ✅ | tsc |
+| F2.4 `src/components/v2/EventFeed.tsx` (poll /api/v2/events via usePollWhileVisible, type-colored dots memory/job/task/mcp/attention) — mounted in gear System section, Homepage reuses later | ✅ | smoke-memory-ui |
+
+**Deltas/notes (chunk 7):**
+1. **Additive API change:** `/api/v2/memory/stats` gained `?facet=aspects` (→ `{graph: {aspect,current,invalidated}[], voice: [...]}` — two stores NEVER blended) and `?facet=aspects&aspect=&store=graph|voice&limit=` (→ `{facts[]}`). Base GET shape untouched; `GET(req?)` param made optional so chunk-6's direct-import smoke (`GET()` no-arg) still passes. New micro-smoke `scripts/v2/smoke-stats-facet.mjs`.
+2. MarkdownView.tsx NOT reused for persona (it fetches its own `src` URL + full-page article shell); PersonaPanel uses react-markdown directly with panel-scale styling.
+3. A3 "currently X — previously Y" pairing is a heuristic (same aspect + same leading subject word); unpaired invalidated facts render "previously … (until date)" alone. True chain links would need invalidatedBy→statement resolution server-side.
+4. Labels fetched once in MemoryView and shared with EpisodeBrowser chips / LabelsManager / ManualIngest pickers.
+5. No lint script exists in package.json (and no eslint dep) — lint step skipped; verification = tsc + smokes.
+
+**Verification:** `npx tsc --noEmit` clean · `scripts/v2/smoke-memory-ui.mjs` 66/66 ALL PASS (files exist, page imports MemoryView, exile proof, every fetch URL ↔ live route, no server-only imports, 'use client' everywhere) · `scripts/v2/smoke-stats-facet.mjs` ALL PASS · regression `scripts/v2/smoke-memory-api.mjs` ALL PASS (incl. online half vs Ollama).
+
+### Handoff notes for chunk 8 (A9 migration + golden queries)
+- `/api/v2/memory/migrate` route does NOT exist yet — A9.2 builds it (POST {source, dryRun?, full?}) + the "Import legacy" button belongs in MemorySettings gear (add a Migration section under System).
+- Importers per A9.1: `.memsearch/memory/YYYY-MM-DD.md`, `~/.agentic-os/jarvis-memory.jsonl`, `~/.agentic-os/agents/<id>/memory/{facts,journal}.md` (agent id → `metadata.agentId`, NOT endUserId), `.remember/*` if present; labels `["legacy","<source>"]`, source `migration:<source>`; default mode RAW (episode + embedding only).
+- Golden queries (§9.2) = `scripts/v2/golden-queries.mjs`, run after A9; A10 checkpoint doc gates API freeze.
+- UI already ready for migration output: EpisodeBrowser source filter matches `migration:*`, Logs tab shows migration queue rows, legacy label chip appears automatically once created.
+
 ## Phases 2-9: not started
