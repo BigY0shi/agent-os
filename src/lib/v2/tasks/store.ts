@@ -195,7 +195,7 @@ function armReadyBuffer(taskId: string): string {
     .prepare("UPDATE v2_tasks SET run_at = ?, updated_at = ? WHERE id = ?")
     .run(runAt, now(), taskId);
   removeScheduledTask(taskId);
-  enqueueScheduledTask(taskId, { runAt });
+  enqueueScheduledTask(taskId, { runAt, payload: { expectedRunAt: runAt } });
   return runAt;
 }
 

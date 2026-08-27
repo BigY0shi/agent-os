@@ -166,6 +166,13 @@ export interface Settings {
   tasks?: {
     timezone?: string;         // IANA zone; changing it recalculates active schedules (B4.7)
     editingBufferSec?: number; // Ready buffer before execution starts
+    // B2 execution engine (additive):
+    planApproval?: "always" | "auto";  // global plan-approval gate
+    autoApprove?: { categories?: string[]; maxSteps?: number }; // per-category skip (task metadata.category)
+    maxStepsPerRun?: number;   // hard cap on plan steps executed per run (default 12)
+    runTimeoutMin?: number;    // wall-clock budget per run + boot stuck-recovery threshold (default 30)
+    runMode?: "steps" | "sdk"; // 'sdk' is a NOT_IMPLEMENTED seam for chunk 3+
+    emptyTaskGc?: boolean;     // buffer-expiry GC of abandoned Untitled daily tasks (default true)
   };
 
   [extra: string]: unknown;
@@ -223,7 +230,15 @@ export const DEFAULT_SETTINGS: Settings = {
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},
   scheduler: { tickSeconds: 30 },
-  tasks: { timezone: "America/Chicago", editingBufferSec: 120 },
+  tasks: {
+    timezone: "America/Chicago",
+    editingBufferSec: 120,
+    planApproval: "always",
+    maxStepsPerRun: 12,
+    runTimeoutMin: 30,
+    runMode: "steps",
+    emptyTaskGc: true,
+  },
 };
 
 function settingsPath(): string {

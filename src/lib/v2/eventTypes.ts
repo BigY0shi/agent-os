@@ -10,6 +10,8 @@ export type V2EventType =
   | "task.created"
   | "task.status"
   | "task.wake"
+  | "task.run" // B2 engine: {taskId, displayId, status: 'started'|'ok'|'failed', ...}
+  | "task.gc" // B2 dispatcher: empty daily task exiled at buffer expiry
   | "task.deleted"
   | "agent.status"
   | "attention.flag" // CONVENTIONS §5: {kind, severity, title, route, dedupeKey}

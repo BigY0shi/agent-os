@@ -9,6 +9,9 @@ const tmpDb = path.join(os.tmpdir(), `agentos-smoke-tasks-${stamp}.db`);
 const tmpSettings = path.join(os.tmpdir(), `agentos-smoke-tasks-settings-${stamp}.json`);
 process.env.AGENTIC_OS_DB = tmpDb;
 process.env.AGENTIC_OS_SETTINGS = tmpSettings;
+// B2: task.wake now runs the execution engine — use its deterministic mock so
+// this model-level smoke stays offline (engine behavior is smoke-engine.mjs's job).
+process.env.AGENTOS_MOCK_LLM = "1";
 // 1-second Ready buffer so the buffer-fire test runs fast; fixed tz for determinism.
 fs.writeFileSync(
   tmpSettings,
@@ -203,9 +206,16 @@ let job = sched.listJobs().find((j) => j.id === `task:${recur.id}`);
 check("recurring task has a jobs-table row", !!job && job.enabled === 1);
 
 // Force due, then tick — handler must log 'woke', advance occurrence, reschedule.
+// B2's dispatcher checks task.run_at AND the payload's expectedRunAt nonce, so a
+// forced fire has to keep all three (job.run_at, task.run_at, nonce) in sync.
 const past = new Date(Date.now() - 1000).toISOString();
-getDb().prepare("UPDATE jobs SET run_at = ? WHERE id = ?").run(past, `task:${recur.id}`);
-getDb().prepare("UPDATE v2_tasks SET run_at = ? WHERE id = ?").run(past, recur.id);
+const forceDue = (taskId) => {
+  getDb()
+    .prepare("UPDATE jobs SET run_at = ?, payload = ? WHERE id = ?")
+    .run(past, JSON.stringify({ taskId, expectedRunAt: past }), `task:${taskId}`);
+  getDb().prepare("UPDATE v2_tasks SET run_at = ? WHERE id = ?").run(past, taskId);
+};
+forceDue(recur.id);
 await sched.tickOnce();
 recurTask = store.getTask(recur.id);
 job = sched.listJobs().find((j) => j.id === `task:${recur.id}`);
@@ -224,7 +234,7 @@ check(
 
 // ---- maxOccurrences deactivation ----
 rec.applySchedule(recur.id, { maxOccurrences: 2 });
-getDb().prepare("UPDATE jobs SET run_at = ? WHERE id = ?").run(past, `task:${recur.id}`);
+forceDue(recur.id);
 await sched.tickOnce();
 recurTask = store.getTask(recur.id);
 check(

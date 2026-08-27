@@ -9,6 +9,7 @@ import {
 } from "../scheduler";
 import { readSettings } from "../../settings";
 import { getTask, appendTaskEvent } from "./store";
+import { dispatchTaskWake, type WakeOutcome } from "./dispatch";
 import type { Task } from "./types";
 
 /**
@@ -428,7 +429,7 @@ export function applySchedule(taskId: string, input: ApplyScheduleInput): Task {
   // Remove-then-enqueue on the deterministic job id (NO idempotency key).
   removeScheduledTask(taskId);
   if (isActive && runAt) {
-    const job = enqueueScheduledTask(taskId, { runAt });
+    const job = enqueueScheduledTask(taskId, { runAt, payload: { expectedRunAt: runAt } });
     db.prepare("UPDATE v2_tasks SET job_id = ? WHERE id = ?").run(job.id, taskId);
   } else {
     db.prepare("UPDATE v2_tasks SET job_id = NULL WHERE id = ?").run(taskId);
@@ -472,7 +473,7 @@ export function scheduleTask(taskOrId: Task | string): string | null {
 
   const db = getDb();
   removeScheduledTask(id);
-  const job = enqueueScheduledTask(id, { runAt });
+  const job = enqueueScheduledTask(id, { runAt, payload: { expectedRunAt: runAt } });
   db.prepare("UPDATE v2_tasks SET run_at = ?, job_id = ?, updated_at = ? WHERE id = ?").run(
     runAt,
     job.id,
@@ -518,7 +519,7 @@ function advanceAfterFire(taskId: string): void {
     }
     const runAt = next.toISOString();
     removeScheduledTask(taskId);
-    const job = enqueueScheduledTask(taskId, { runAt });
+    const job = enqueueScheduledTask(taskId, { runAt, payload: { expectedRunAt: runAt } });
     db.prepare("UPDATE v2_tasks SET run_at = ?, job_id = ? WHERE id = ?").run(
       runAt,
       job.id,
@@ -537,32 +538,38 @@ function advanceAfterFire(taskId: string): void {
 }
 
 /**
- * Register the 'task.wake' job handler. B1 THIN body: log a 'woke' activity
- * row + emit the bus event, then advance the recurrence. B2's execution
- * engine (dispatch.ts) replaces the body with the staleness-guarded
- * claim → plan → execute pipeline; the recurrence advance stays.
+ * Register the 'task.wake' job handler — B2's staleness-guarded
+ * claim → plan → execute pipeline (tasks/dispatch.ts), keeping B1's
+ * `finally { advanceAfterFire }` shape. The dispatcher marks
+ * `outcome.advance` BEFORE risky work on every claimed fire, so a failing
+ * run body still schedules the next occurrence (upstream stall fix), while
+ * stale no-op wakes leave the recurrence untouched (REF parity — whoever
+ * moved the schedule enqueued the fresh wake).
  */
 export function registerTaskWakeHandler(): void {
-  registerJobHandler("task.wake", (payload) => {
+  registerJobHandler("task.wake", async (payload) => {
     const taskId = String(payload.taskId ?? "");
     const task = taskId ? getTask(taskId) : null;
     if (!task) {
       console.warn(`[v2/tasks] task.wake for unknown task '${taskId}' — ignoring`);
       return;
     }
+    const outcome: WakeOutcome = { advance: false };
     try {
       appendTaskEvent(taskId, "woke", "system", {
         displayId: task.displayId,
         status: task.status,
         scheduled: !!task.schedule,
+        immediate: payload.immediate === true,
       });
       emit(
         "task.wake",
         { taskId, displayId: task.displayId, status: task.status, schedule: task.schedule },
         "tasks",
       );
+      await dispatchTaskWake(task, payload, outcome);
     } finally {
-      advanceAfterFire(taskId);
+      if (outcome.advance) advanceAfterFire(taskId);
     }
   });
 }
