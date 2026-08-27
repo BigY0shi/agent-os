@@ -471,6 +471,9 @@ export interface SearchV2Options {
   /** Counterparty scoping — every query path MUST thread these (SPEC-A §8.7). */
   endUserIds?: string[];
 
+  /** Owning-agent scoping — episodes.agent_id filter (CONVENTIONS §4). */
+  agentId?: string;
+
   /** true = RecallResult, false = markdown string. */
   structured?: boolean;
 

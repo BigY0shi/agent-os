@@ -55,4 +55,33 @@
 4. Label-assignment stage failure is non-fatal (warn + COMPLETED), matching REF's try/catch around label/title jobs.
 5. Document versioning/diffing (REF EpisodeVersioning/Differ) deferred per port map (S) — DOCUMENT type uses normalizeDocumentPrompt without previousVersionContent.
 
+### Chunk 4 (A4.1–A4.4): ✅ Search V2 (2026-08-27)
+
+| Task | Status | Verified by |
+|---|---|---|
+| A4.1 search/router.ts (searchLabels 0.7 via label ns, extractAspects structured medium call, gate <0.2/shouldSearch, error fallback exploratory/0.3, getMatchedLabelIds 0.5) + prompts/router.ts (both variants + cache-key constants, AspectExtractionSchema reused from types.ts) | ✅ | smoke-search online (router classified, gate short-circuit) |
+| A4.2 search/handlers.ts part 1 (aspect_query / entity_lookup attr+broad / relationship; 3-path merge; Cypher→SQL over edges/episode_labels) | ✅ | smoke-search offline |
+| A4.3 search/handlers.ts part 2 + post (temporal w/ event_date OR-branch + rerank-skip-without-topic, temporal_facets graph+voice split, exploratory over documents, batchScore rerank 0.1/0.2, voice search 0.5, replaceWithCompacts ≥3, token budget) | ✅ | smoke-search offline (all 6 handlers + compact replacement + budget) |
+| A4.4 search/formatter.ts (markdown verbatim incl. 📦/📄 + Invalidated Facts + truncation warning) + search/index.ts (searchV2 entry, recall_logs write, recall_count bump, executeSearch export for LLM-free testing) | ✅ | smoke-search offline+online; smoke-ingest regression ALL PASS; tsc clean |
+| SearchV2Options gained `agentId?` (episodes.agent_id filter, CONVENTIONS §4) | ✅ | smoke-search agentId scope check |
+
+**Deltas vs REF made during build (A4):**
+1. **Cohere rerank + V1 broad-recall backstop stripped** per port map (S) — vector `batchScore` IS the rerank. DOCUMENT-type rows are scored against the `compacted_session` ns (REF's vector-fallback scored them against the episode ns where they have no vector and silently dropped every compact — our version matches the Cohere-path intent instead).
+2. **Temporal bounds Cypher→SQL fix:** REF compares `s.validAt >= $startTime` even when startTime is null (a 'before'-only window silently returns nothing); our `statementTemporalFilter` emits each bound only when present. Event `event_date` compared lexically via `json_extract` (date-only strings order correctly against full ISO).
+3. **endUserIds:** NULL `end_user_id` EXCLUDED when the filter is set — enforced in SQL (`IS NOT NULL AND IN (...)`) AND re-applied in JS on vector-sourced episodes. relationship/facets thread it through an EXISTS over provenance→episodes.
+4. **labelIds force-scope** (`options.labelIds`) bypasses router label selection in every label-scoped handler (REF declared the option but never consumed it).
+5. **Anti-hallucination hardened:** routeIntent filters `selectedLabels` to actually-matched label names (REF trusted the LLM).
+6. **REF quirk kept deliberately:** `getAspectsForFacets` statementCount caps at 20 (REF counts after LIMIT 20); facet voice-aspect list is the 5-item set WITHOUT Task (REF aspectStore ALL_VOICE_ASPECTS), while the recall voice filter uses all 6 VOICE_ASPECTS incl. Task (REF handlers) — both mirrored.
+7. **Gate short-circuit writes no recall_logs row** (REF behavior — returns before logging).
+8. Structured mode returns `RecallResult` directly — REF's `formatForV1Compatibility` only existed to map Dates; our types are already ISO strings.
+
+**Verification:** `scripts/v2/smoke-search.mjs` — offline half needs NO Ollama (local stub `/api/embed` server + deterministic synthetic 768-d vectors, handlers driven via `executeSearch()` with hand-built RouterOutput); online half ran against Ollama cloud (kimi-k2.6/glm-5.2): ALL PASS both halves. `smoke-ingest.mjs` regression ALL PASS. `npx tsc --noEmit` clean.
+
+### Handoff notes for chunk 5 (A5 compaction + A6 persona)
+- The TODO seams are still in `queue.ts`: `TODO(A5)` in preprocess (enqueue compaction in parallel with ingest — the episodes-saved-first ordering is already in place) and `TODO(A6)` persona-trigger after COMPLETED.
+- A5 must write `documents` rows type='conversation' with `session_id` + `document_labels` junction rows + `end_user_id` + embed the content into the **`compacted_session`** vec ns — exploratory (`handleExploratory`), `replaceWithCompacts`, temporal_facets compactSessions, AND the rerank doc-scoring path in `search/handlers.ts` all already consume exactly that shape (smoke-search seeds it by hand; A5 replaces the hand-seed).
+- `settings.memory.compactionEnabled` gate exists in settings; not yet consulted anywhere.
+- A6 persona: `documents` type='persona'; "Persona" label exclusion already honored in labels.ts.
+- searchV2 API surface for A7: `searchV2(query, opts)` (markdown | RecallResult), `executeSearch(routerOutput, opts)`, `analyzeQuery(query)` from `src/lib/v2/memory/search/index.ts`; replace the memory_search NOT_READY branch in `mcp/server.ts` with searchV2 when A7 lands.
+
 ## Phases 2-9: not started
