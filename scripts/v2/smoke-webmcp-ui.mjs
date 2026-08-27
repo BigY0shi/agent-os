@@ -73,7 +73,8 @@ check("WebmcpSettings surfaces sandboxTimeoutMs + allowJsHandlers", gear.include
 const view = read("src/components/v2/webmcp/WebmcpView.tsx");
 check("WebmcpView mounts the gear (ConfigMenu → WebmcpSettings)", view.includes("<ConfigMenu") && view.includes("<WebmcpSettings"));
 const settingsSrc = read("src/lib/settings.ts");
-check("settings.webmcp defaults present", /webmcp: \{ sandboxTimeoutMs: 5000, allowJsHandlers: true \}/.test(settingsSrc));
+check("settings.webmcp defaults present", /webmcp: \{ sandboxTimeoutMs: 5000, allowJsHandlers: true, llmGetActions: true \}/.test(settingsSrc));
+check("WebmcpSettings surfaces the D1.5 llmGetActions toggle (rule 16)", gear.includes("llmGetActions"));
 
 // ── secrets stay write-only client-side ─────────────────────────────────────
 const secretsCmp = read("src/components/v2/webmcp/SecretsPanel.tsx");

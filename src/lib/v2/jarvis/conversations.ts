@@ -15,6 +15,12 @@ export interface JarvisConversation {
   channel: JarvisChannel;
   createdAt: string;
   updatedAt: string;
+  /** C3.6: non-null = archived (soft delete — rows are never destroyed). */
+  archivedAt: string | null;
+}
+
+export interface JarvisConversationSummary extends JarvisConversation {
+  messageCount: number;
 }
 
 export interface JarvisMessage {
@@ -38,6 +44,7 @@ interface ConvRow {
   channel: JarvisChannel;
   created_at: string;
   updated_at: string;
+  archived_at?: string | null;
 }
 interface MsgRow {
   id: string;
@@ -51,7 +58,14 @@ interface MsgRow {
 const TITLE_CAP = 80;
 
 function mapConv(r: ConvRow): JarvisConversation {
-  return { id: r.id, title: r.title, channel: r.channel, createdAt: r.created_at, updatedAt: r.updated_at };
+  return {
+    id: r.id,
+    title: r.title,
+    channel: r.channel,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    archivedAt: r.archived_at ?? null,
+  };
 }
 
 function mapMsg(r: MsgRow): JarvisMessage {
@@ -98,11 +112,42 @@ export function getConversation(id: string): JarvisConversation | null {
   return r ? mapConv(r) : null;
 }
 
-export function listConversations(limit = 50): JarvisConversation[] {
+/** Live conversations newest-first with message counts (C3.6 list contract).
+ *  Archived rows are excluded unless includeArchived. */
+export function listConversations(
+  limit = 50,
+  opts: { includeArchived?: boolean } = {},
+): JarvisConversationSummary[] {
+  const where = opts.includeArchived ? "" : "WHERE c.archived_at IS NULL";
   const rows = getDb()
-    .prepare("SELECT * FROM jarvis_conversations ORDER BY updated_at DESC LIMIT ?")
-    .all(Math.min(Math.max(limit, 1), 200)) as ConvRow[];
-  return rows.map(mapConv);
+    .prepare(
+      `SELECT c.*, (SELECT COUNT(*) FROM jarvis_messages m WHERE m.conversation_id = c.id) AS message_count
+       FROM jarvis_conversations c ${where} ORDER BY c.updated_at DESC LIMIT ?`,
+    )
+    .all(Math.min(Math.max(limit, 1), 200)) as (ConvRow & { message_count: number })[];
+  return rows.map((r) => ({ ...mapConv(r), messageCount: r.message_count }));
+}
+
+/** C3.6 PATCH: rename. Returns null when the id is unknown. */
+export function renameConversation(id: string, title: string): JarvisConversation | null {
+  const clean = title.trim().slice(0, TITLE_CAP);
+  const info = getDb()
+    .prepare("UPDATE jarvis_conversations SET title = ?, updated_at = ? WHERE id = ?")
+    .run(clean, now(), id);
+  if (info.changes === 0) return null;
+  return getConversation(id);
+}
+
+/** C3.6 DELETE semantics: ARCHIVE (soft flag), never row destruction.
+ *  Idempotent — archiving an archived conversation keeps the original stamp. */
+export function archiveConversation(id: string): JarvisConversation | null {
+  const existing = getConversation(id);
+  if (!existing) return null;
+  if (existing.archivedAt) return existing;
+  getDb()
+    .prepare("UPDATE jarvis_conversations SET archived_at = ? WHERE id = ?")
+    .run(now(), id);
+  return getConversation(id);
 }
 
 /** Resolve-or-create: an unknown/absent id starts a fresh conversation.

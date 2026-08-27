@@ -43,6 +43,19 @@ export interface ExecuteCtx {
   interactive?: boolean;
   /** passthrough to internal registry actions (capability deny-by-default gates). */
   strict?: boolean;
+  /** Originating jarvis conversation — threaded onto Human-Gate approval records. */
+  conversationId?: string | null;
+  /** Human-Gate bypass: set ONLY by approvals.resolveApproval (source 'human-gate'). */
+  approved?: boolean;
+}
+
+/** Route/stream-safe approval summary (redacted args only). */
+export interface ApprovalRequiredInfo {
+  id: string;
+  slug: string;
+  tool: string;
+  redactedArgs: Record<string, unknown>;
+  expiresAt: string;
 }
 
 export interface ExecuteResult {
@@ -52,6 +65,8 @@ export interface ExecuteResult {
   durationMs: number;
   /** js-handler console capture (Test tab surface). */
   logs?: string[];
+  /** Human-Gate: set when a pending approval record was created instead of executing. */
+  approval?: ApprovalRequiredInfo;
 }
 
 const OUTPUT_CAP = 32 * 1024; // truncation discipline (SPEC D1.4)
@@ -262,14 +277,51 @@ async function run(
   const args = parsed.data as Record<string, unknown>;
 
   // Approval gate (published lane only — the Test tab is you, testing your own
-  // tool). Human-Gate UI wiring lands later; until then approval-required
-  // tools refuse in both modes rather than silently running (SPEC D1.4).
-  if (lane === "published" && tool.requiresApproval) {
-    const error = ctx.interactive
-      ? `'${slug}/${tool.name}' requires human approval — the approval UI lands with the Human-Gate wiring; not executed`
-      : `'${slug}/${tool.name}' requires human approval and cannot run non-interactively`;
-    log(false, error);
-    return { ok: false, output: "", error, durationMs: Date.now() - started };
+  // tool). Human-Gate (Phase-4 chunk 2): an INTERACTIVE caller gets a PENDING
+  // approval record + an approval-required result naming the id; the user
+  // approves/denies via /api/v2/webmcp/approvals. Non-interactive/strict
+  // callers keep the HARD REFUSE (no record). resolveApproval re-enters this
+  // path with ctx.approved=true (source 'human-gate') to actually execute.
+  if (lane === "published" && tool.requiresApproval && !ctx.approved) {
+    if (!ctx.interactive || ctx.strict) {
+      const error = `'${slug}/${tool.name}' requires human approval and cannot run non-interactively`;
+      log(false, error);
+      return { ok: false, output: "", error, durationMs: Date.now() - started };
+    }
+    try {
+      const { createApproval } = await import("./approvals"); // lazy: breaks the execute↔approvals cycle
+      const approval = createApproval({
+        slug,
+        tool: tool.name,
+        args,
+        requestedBy: ctx.source,
+        conversationId: ctx.conversationId ?? null,
+      });
+      const error =
+        `'${slug}/${tool.name}' requires human approval — approval request ${approval.id} created ` +
+        `and shown to the user (expires ${approval.expiresAt}). Tell the user to approve or deny it; do NOT retry.`;
+      log(false, error);
+      return {
+        ok: false,
+        output: "",
+        error,
+        durationMs: Date.now() - started,
+        approval: {
+          id: approval.id,
+          slug: approval.slug,
+          tool: approval.tool,
+          redactedArgs: approval.redactedArgs,
+          expiresAt: approval.expiresAt,
+        },
+      };
+    } catch (err) {
+      // Approval record creation failing must never silently run the tool.
+      const error = `'${slug}/${tool.name}' requires human approval — approval record creation failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+      log(false, error);
+      return { ok: false, output: "", error, durationMs: Date.now() - started };
+    }
   }
 
   try {

@@ -146,7 +146,9 @@ for (const f of clientFiles) {
 }
 check("new components reference at least 4 API endpoints", apiUrls.size >= 4, [...apiUrls]);
 for (const url of apiUrls) {
-  const routeFile = path.join("src", "app", ...url.split("/").filter(Boolean), "route.ts");
+  // Template-literal params (`/x/${id}`) map onto Next dynamic segments ([id]).
+  const segments = url.split("/").filter(Boolean).map((s) => (s.startsWith("${") ? "[id]" : s));
+  const routeFile = path.join("src", "app", ...segments, "route.ts");
   check(`route file exists for ${url}`, exists(routeFile), routeFile);
 }
 

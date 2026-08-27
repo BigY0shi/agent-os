@@ -26,7 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Send, Settings as Gear, X, Loader2 } from "lucide-react";
+import { Mic, Send, Settings as Gear, X, Loader2, History, Plus, Archive } from "lucide-react";
 import type { Settings } from "@/components/ConfigMenu";
 import { useVoiceCapture, providerInfo } from "@/lib/v2/jarvis/useVoiceCapture";
 import { getEffectivePageContext } from "@/lib/v2/jarvis/pageContext";
@@ -42,6 +42,26 @@ interface SessionTurn {
   working?: boolean;
   /** Tool-activity lines streamed during this turn (C3 tool events). */
   tools?: string[];
+  /** Human-Gate approval cards streamed during this turn. */
+  approvals?: ApprovalCard[];
+}
+
+interface ApprovalCard {
+  id: string;
+  slug: string;
+  tool: string;
+  redactedArgs: Record<string, unknown>;
+  expiresAt: string;
+  status: "pending" | "approved" | "denied" | "expired" | "working";
+  resultText?: string;
+}
+
+interface ConversationRow {
+  id: string;
+  title: string;
+  channel: string;
+  updatedAt: string;
+  messageCount: number;
 }
 
 export default function ChatboxOverlay({
@@ -76,6 +96,10 @@ export default function ChatboxOverlay({
   // Conversation thread for this overlay session (handed back by the meta event).
   const conversationIdRef = useRef<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  // C3.6 transcript drawer state.
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversations, setConversations] = useState<ConversationRow[]>([]);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const idRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // The live interim transcript occupies this range inside the textarea value;
@@ -206,6 +230,12 @@ export default function ChatboxOverlay({
               state?: string;
               summary?: string;
               route?: string;
+              // Human-Gate approval event fields
+              id?: string;
+              slug?: string;
+              tool?: string;
+              redactedArgs?: Record<string, unknown>;
+              expiresAt?: string;
             };
             if (ev.type === "meta") {
               if (ev.conversationId) conversationIdRef.current = ev.conversationId;
@@ -216,6 +246,18 @@ export default function ChatboxOverlay({
             } else if (ev.type === "tool" && ev.name && ev.state !== "start") {
               const line = `⚙ ${ev.name}${ev.state === "error" ? " ✗" : ""}${ev.summary ? ` — ${ev.summary}` : ""}`;
               setTurns((t) => t.map((x) => (x.id === jId ? { ...x, tools: [...(x.tools ?? []), line] } : x)));
+            } else if (ev.type === "approval" && ev.id && ev.tool) {
+              const card: ApprovalCard = {
+                id: ev.id,
+                slug: ev.slug ?? "",
+                tool: ev.tool,
+                redactedArgs: ev.redactedArgs ?? {},
+                expiresAt: ev.expiresAt ?? "",
+                status: "pending",
+              };
+              setTurns((t) =>
+                t.map((x) => (x.id === jId ? { ...x, approvals: [...(x.approvals ?? []), card] } : x)),
+              );
             } else if (ev.type === "navigate" && ev.route && ev.route.startsWith("/")) {
               try {
                 router.push(ev.route);
@@ -241,6 +283,115 @@ export default function ChatboxOverlay({
     busyRef.current = false;
     setBusy(false);
   }, [capture, splice, router]);
+
+  // ── Human-Gate: resolve one approval card (Approve executes server-side) ───
+  const resolveApprovalCard = useCallback(async (approvalId: string, action: "approve" | "deny") => {
+    const setCard = (patch: Partial<ApprovalCard>) =>
+      setTurns((t) =>
+        t.map((x) =>
+          x.approvals?.some((a) => a.id === approvalId)
+            ? { ...x, approvals: x.approvals!.map((a) => (a.id === approvalId ? { ...a, ...patch } : a)) }
+            : x,
+        ),
+      );
+    setCard({ status: "working" });
+    try {
+      const res = await fetch(`/api/v2/webmcp/approvals/${approvalId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = (await res.json().catch(() => null)) as {
+        approval?: { status?: string };
+        result?: { ok?: boolean; output?: string; error?: string } | null;
+        error?: string;
+      } | null;
+      if (res.status === 410) {
+        setCard({ status: "expired", resultText: "expired — ask Jarvis again" });
+        return;
+      }
+      if (!res.ok) {
+        setCard({ status: "pending", resultText: data?.error ?? `failed (${res.status})` });
+        return;
+      }
+      if (action === "deny") {
+        setCard({ status: "denied", resultText: "denied — not executed" });
+        return;
+      }
+      const r = data?.result;
+      setCard({
+        status: "approved",
+        resultText: r?.ok
+          ? (r.output || "executed").slice(0, 400)
+          : `execution failed: ${(r?.error ?? "unknown error").slice(0, 300)}`,
+      });
+    } catch (e) {
+      setCard({ status: "pending", resultText: "request failed: " + String(e) });
+    }
+  }, []);
+
+  // ── C3.6 transcript drawer ─────────────────────────────────────────────────
+  const loadConversations = useCallback(async () => {
+    setHistoryBusy(true);
+    try {
+      const res = await fetch("/api/v2/jarvis/conversations");
+      const data = (await res.json().catch(() => null)) as { conversations?: ConversationRow[] } | null;
+      setConversations(Array.isArray(data?.conversations) ? data!.conversations! : []);
+    } catch {
+      setConversations([]);
+    }
+    setHistoryBusy(false);
+  }, []);
+
+  const toggleHistory = useCallback(() => {
+    setShowHistory((s) => {
+      if (!s) loadConversations();
+      return !s;
+    });
+  }, [loadConversations]);
+
+  /** Open a past conversation: thread its id into the next ask + show its transcript. */
+  const openConversation = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/v2/jarvis/conversations/${id}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        messages?: { role: string; content: string; toolCalls?: { name: string; summary: string; ok: boolean }[] | null }[];
+      };
+      conversationIdRef.current = id;
+      const mapped: SessionTurn[] = (data.messages ?? []).map((m) => ({
+        id: ++idRef.current,
+        role: m.role === "user" ? "user" : "jarvis",
+        text: m.role === "system" ? `· ${m.content}` : m.content,
+        tools: m.toolCalls?.length
+          ? m.toolCalls.map((tc) => `⚙ ${tc.name}${tc.ok ? "" : " ✗"}${tc.summary ? ` — ${tc.summary}` : ""}`)
+          : undefined,
+      }));
+      setTurns(mapped);
+      setShowHistory(false);
+    } catch {
+      /* drawer stays open on failure */
+    }
+  }, []);
+
+  const newConversation = useCallback(() => {
+    conversationIdRef.current = null;
+    setTurns([]);
+    setShowHistory(false);
+  }, []);
+
+  const archiveConversationRow = useCallback(
+    async (id: string) => {
+      try {
+        await fetch(`/api/v2/jarvis/conversations/${id}`, { method: "DELETE" });
+        if (conversationIdRef.current === id) newConversation();
+        loadConversations();
+      } catch {
+        /* keep the row */
+      }
+    },
+    [loadConversations, newConversation],
+  );
 
   // ── C2b step 6: the ONLY auto-send path — gated on the settings toggle ─────
   const prevCaptureStatusRef = useRef(captureStatus);
@@ -346,6 +497,14 @@ export default function ChatboxOverlay({
               )}
               <div className="ml-auto flex items-center gap-1.5">
                 <button
+                  onClick={toggleHistory}
+                  title="Conversation history"
+                  className="p-1.5 rounded-lg transition hover:bg-white/5"
+                  style={{ color: showHistory ? ACCENT : "var(--fg-dimmer, #6b6478)" }}
+                >
+                  <History size={14} />
+                </button>
+                <button
                   onClick={() => setShowSettings((s) => !s)}
                   title="Jarvis settings"
                   className="p-1.5 rounded-lg transition hover:bg-white/5"
@@ -365,6 +524,56 @@ export default function ChatboxOverlay({
               </div>
             )}
 
+            {/* C3.6 conversation drawer */}
+            {showHistory && (
+              <div className="px-4 py-3 max-h-[260px] overflow-y-auto" style={{ borderBottom: "1px solid var(--panel-border, #2a2436)" }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                    Conversations
+                  </span>
+                  {historyBusy && <Loader2 size={11} className="animate-spin" style={{ color: ACCENT }} />}
+                  <button
+                    onClick={newConversation}
+                    className="ml-auto inline-flex items-center gap-1 px-2 h-6 rounded-lg text-[11px] transition hover:bg-white/5"
+                    style={{ border: `1px solid ${ACCENT}55`, color: ACCENT }}
+                  >
+                    <Plus size={11} /> New conversation
+                  </button>
+                </div>
+                {conversations.length === 0 && !historyBusy && (
+                  <div className="text-[11.5px] py-1" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                    No conversations yet.
+                  </div>
+                )}
+                {conversations.map((c) => (
+                  <div
+                    key={c.id}
+                    className="group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition hover:bg-white/5"
+                    style={c.id === conversationIdRef.current ? { background: `${ACCENT}11` } : undefined}
+                    onClick={() => openConversation(c.id)}
+                  >
+                    <span className="flex-1 truncate text-[12px]" style={{ color: "var(--fg, #e8e2f0)" }}>
+                      {c.title || "(untitled)"}
+                    </span>
+                    <span className="shrink-0 text-[10px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                      {c.messageCount} msg · {c.updatedAt?.slice(0, 10)}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        archiveConversationRow(c.id);
+                      }}
+                      title="Archive conversation (never deleted)"
+                      className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 transition hover:bg-white/10"
+                      style={{ color: "var(--fg-dimmer, #6b6478)" }}
+                    >
+                      <Archive size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* session transcript (this overlay session only) */}
             {turns.length > 0 && (
               <div className="px-4 pt-3 max-h-[240px] overflow-y-auto space-y-2">
@@ -377,6 +586,52 @@ export default function ChatboxOverlay({
                       {t.tools?.map((line, i) => (
                         <span key={i} className="block text-[11px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
                           {line}
+                        </span>
+                      ))}
+                      {t.approvals?.map((a) => (
+                        <span
+                          key={a.id}
+                          className="block my-1.5 px-2.5 py-2 rounded-lg text-[11.5px]"
+                          style={{ border: "1px solid #fbbf2466", background: "#fbbf2410" }}
+                        >
+                          <span className="block font-semibold" style={{ color: "#fbbf24" }}>
+                            Approval needed: {a.slug === "registry" ? a.tool : `${a.slug}/${a.tool}`}
+                          </span>
+                          <span className="block font-mono text-[10.5px] mt-0.5 break-all" style={{ color: "var(--fg-dim, #9aa)" }}>
+                            {JSON.stringify(a.redactedArgs).slice(0, 300)}
+                          </span>
+                          {a.status === "pending" || a.status === "working" ? (
+                            <span className="mt-1.5 flex items-center gap-2">
+                              <button
+                                onClick={() => resolveApprovalCard(a.id, "approve")}
+                                disabled={a.status === "working"}
+                                className="px-2.5 h-6 rounded-lg text-[11px] font-medium transition disabled:opacity-40"
+                                style={{ border: "1px solid #34d39966", background: "#34d39918", color: "#34d399" }}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => resolveApprovalCard(a.id, "deny")}
+                                disabled={a.status === "working"}
+                                className="px-2.5 h-6 rounded-lg text-[11px] font-medium transition disabled:opacity-40"
+                                style={{ border: "1px solid #f8717166", background: "#f8717118", color: "#f87171" }}
+                              >
+                                Deny
+                              </button>
+                              {a.status === "working" && <Loader2 size={11} className="animate-spin" style={{ color: "#fbbf24" }} />}
+                              {a.resultText && (
+                                <span className="text-[10.5px]" style={{ color: "#fbbf24" }}>{a.resultText}</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span
+                              className="block mt-1 text-[11px]"
+                              style={{ color: a.status === "approved" ? "#34d399" : a.status === "denied" ? "#f87171" : "#9ca3af" }}
+                            >
+                              {a.status === "approved" ? "✓ approved" : a.status === "denied" ? "✗ denied" : "expired"}
+                              {a.resultText ? ` — ${a.resultText}` : ""}
+                            </span>
+                          )}
                         </span>
                       ))}
                       {t.text || (t.working ? "…" : "")}

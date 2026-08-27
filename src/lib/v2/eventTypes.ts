@@ -21,6 +21,7 @@ export type V2EventType =
   | "mcp.execute"
   | "webmcp.published" // SPEC-C D2: {slug, version, tools[]}
   | "webmcp.archived" // SPEC-C D2: {slug}
+  | "webmcp.approval" // Human-Gate: {id, slug, tool, status, requestedBy} on create + resolve
   | "ui.navigate" // SPEC-C D4: {route} — the overlay/pages consume, nothing runs server-side
   | (string & {});
 

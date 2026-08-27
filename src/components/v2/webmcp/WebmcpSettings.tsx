@@ -14,8 +14,13 @@ export default function WebmcpSettings() {
   const [timeoutDraft, setTimeoutDraft] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const webmcp = (settings?.webmcp ?? {}) as { sandboxTimeoutMs?: number; allowJsHandlers?: boolean };
+  const webmcp = (settings?.webmcp ?? {}) as {
+    sandboxTimeoutMs?: number;
+    allowJsHandlers?: boolean;
+    llmGetActions?: boolean;
+  };
   const allowJs = webmcp.allowJsHandlers !== false;
+  const llmGetActions = webmcp.llmGetActions !== false;
 
   useEffect(() => {
     if (settings && timeoutDraft === null) {
@@ -63,6 +68,25 @@ export default function WebmcpSettings() {
           <span className="block text-[10.5px] leading-relaxed" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
             Gates creation of &apos;js&apos;-kind tools. The sandbox is crash/timeout isolation only — NOT a
             security boundary; code runs with server privileges on this single-user box.
+          </span>
+        </span>
+      </label>
+
+      <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={llmGetActions}
+          onChange={(e) => save({ webmcp: { ...webmcp, llmGetActions: e.target.checked } })}
+          className="mt-[2px]"
+          style={{ accentColor: WEBMCP_ACCENT }}
+        />
+        <span>
+          <span className="block text-[12px] font-medium" style={{ color: "var(--fg, #e8e2f0)" }}>
+            LLM-filtered tool discovery
+          </span>
+          <span className="block text-[10.5px] leading-relaxed" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+            get_actions picks the 1–3 most relevant tools via the memory-provider model (low tier).
+            Off = plain keyword scoring. LLM failures always fall back to the full tool list, never fewer.
           </span>
         </span>
       </label>
