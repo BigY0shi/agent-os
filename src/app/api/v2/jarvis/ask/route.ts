@@ -15,8 +15,9 @@ export const dynamic = "force-dynamic";
  *   GET → { busy, engine, conversationId? }
  * A new POST while busy interrupts the running turn (warm-brain behavior kept).
  * pageContext is per-request ONLY — never persisted (C5 privacy rule).
- * The OLD /api/jarvis/brain stays untouched (the /jarvis page + homepage
- * module still use it; migrating them is the CR.1 polish task).
+ * CR.1 done: the /jarvis page, homepage JarvisModule and the overlay all use
+ * THIS lane; /api/jarvis/brain is deprecated (kept serving for external
+ * callers only).
  */
 
 const NO_STORE = { "Cache-Control": "no-store" };

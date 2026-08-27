@@ -314,7 +314,7 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - **plan/outcome/log zone TipTap nodes (B5.7)** — plans live in plan_md columns (chunk-2 decision); page-zone rendering lands if/when TaskDetail moves its body to TipTap.
 - Yjs/hocuspocus stays DEFERRED by design (§1.1); the pageStore doc-I/O seam is in place for it.
 
-## Phase 3 — Omnipresent Jarvis (SPEC-C): in progress
+## Phase 3 — Omnipresent Jarvis + WebMCP (SPEC-C): ✅ COMPLETE (2026-08-27, 4 chunks)
 
 ### Chunk 1 (C1 shell + C2 hotkey + C2b capture): ✅ (2026-08-27, branch feat/v2-phase3-jarvis)
 
@@ -404,6 +404,45 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - CR.1: point dashboard/JarvisModule + JarvisView at POST /api/v2/jarvis/ask ({text} + SSE superset of the old shape — sentence/done/error parse unchanged, meta/tool/navigate additive); then mark /api/jarvis/brain deprecated (keep serving; exile only when nothing references it).
 - The C3.6 conversations REST surface (list/read/rename for a transcript drawer) is NOT built — jarvis_conversations/messages CRUD lives in `src/lib/v2/jarvis/conversations.ts`, routes are a thin wrap when the drawer lands.
 - Smoke teardown nit: switching temp DBs mid-run while a fire-and-forget ingest drains logs a harmless "database connection is not open" FAILED row in the abandoned temp DB (smoke-jarvis-brain leg G) — cosmetic, temp-env only.
+
+### Chunk 4 (D3 builder UI + D4 full self-tools + CR.1): ✅ (2026-08-27, branch feat/v2-phase3-jarvis) — FINAL Phase-3 chunk
+
+| Task | Status | Verified by |
+|---|---|---|
+| D3 /webmcp page — `src/app/webmcp/page.tsx` + `src/components/v2/webmcp/{shared,WebmcpView,PackageList,PackageEditor,ToolDesigner,TestRunner,VersionsPanel,LogsPanel,SecretsPanel,WebmcpSettings}.tsx`: left-rail package list (status pill, "vN" integer versions per chunk-2 decision, tool count) + create-package inline form; PackageEditor tabs **Tools** (per-tool editor: name/description/requires-approval, params schema as field-row builder ⇄ raw-JSON toggle, handler-kind tabs internal→actionKey / http→url+method+headers+bodyTemplate templates / js→mono textarea, add/save/rename/remove on the DRAFT set) · **Test** (auto-form from input schema w/ raw-JSON fallback → POST /test → ok/output/logs[]/durationMs) · **Versions** (publish w/ confirm → vN+1, frozen history, "live on hub" pill) · **Logs** (recentLogs first page + "Older" cursor paging, ok/err chips, source column, redacted-args expander) · **Secrets** (names + "configured ✓" only; PUT {name,value}, password input cleared on save — values NEVER round-trip); header actions: name/description blur-save, archive (published, confirm) / delete-draft (exile bundle, confirm); archived = read-only banner. V2 idiom throughout (usePollWhileVisible, dark palette, ConfigMenu gear, useJarvisPageContext C5 descriptor) | ✅ | smoke-webmcp-ui + tsc |
+| D3 gear (rule 16): `WebmcpSettings` → settings.webmcp {sandboxTimeoutMs (SaveBar), allowJsHandlers (instant toggle + "not a security boundary" copy)} | ✅ | smoke-webmcp-ui |
+| D3 /logs route: NEW `GET /api/v2/webmcp/packages/[id]/logs?tool=&source=&before=&limit=` → {logs, nextCursor} (SPEC §5 cursor paging); `store.listCallLogs` gained `before` (created_at < cursor) | ✅ | smoke-webmcp-ui dynamic leg (paging, no-overlap, filter, 404) |
+| Sidebar: /webmcp NAV entry (Hammer, tool-brass #b7852f), "Self" via sectionOf fallback — NOT in any section Set | ✅ | smoke-webmcp-ui |
+| D4 seedSelfTools full set (8 tools): navigate + tasks_create + tasks_list (kept) + **tasks_get** (read-only full task view) + **tasks_update_status** (Waiting\|Review ONLY — the agent-legal set from tasks/types.ts canTransition; requires_approval=1) + **pages_append** (append-only paragraphs onto today's /today page via pages/store savePageDocInternal; requires_approval=1) + **events_recent** (bus reads, type filter) + **jobs_list** (scheduler jobs). Backing actions registered in `mcp/taskActions.ts` (already boot-wired BEFORE seedSelfTools) | ✅ | smoke-webmcp K (full MCP round trips per tool) |
+| D4 SEED_VERSION gate: `SEED_VERSION` const + applied version in `meta` ('webmcp_agentos_seed_version'); bump → seed defs synced into the draft set (missing added, seed-named updated in place, user-added tools untouched) + republished EXACTLY once (brain picks it up via toolsSignature() — no brain change); idempotent across boots; archived never resurrected; lost meta alone doesn't burn a version (no-change guard skips publish) | ✅ | smoke-webmcp K bump leg (stale-meta + drifted-def → v2 once → no-op ×2) |
+| D4 approval wiring: requires_approval=1 on BOTH the seeded tool rows (webmcp published-lane gate refuses, interactive or not — brain relays verbatim, the verified path) AND the registry entries (jarvis execute_action gate); PLUS in-handler hard refusal for `ctx.strict` callers on tasks_update_status/pages_append — defense in depth because mcp/server.ts execute_action does not consult requiresApproval. Test-tab draft lane still runs them (you are the human) — that's how the smoke proves the handlers actually work | ✅ | smoke-webmcp K approval legs |
+| CR.1 homepage `dashboard/JarvisModule.tsx` → POST /api/v2/jarvis/ask {text, conversationId}: SSE superset parsed (meta threads conversationId, tool events → ⚙ activity lines, navigate → client jump, sentence/error unchanged, per-sentence TTS kept); orb/status GET repointed to /api/v2/jarvis/ask {busy, engine}; reset = local new-conversation (no server DELETE needed); mic stays review-first | ✅ | smoke-webmcp-ui CR.1 leg |
+| CR.1 `JarvisView.tsx` (/jarvis page) chat lane → POST /api/v2/jarvis/ask (was **/api/hermes/jarvis** — note: the /jarvis page never used /api/jarvis/brain): sentences stream into the turn, meta/tool/navigate handled, conversationId threaded (server-side history replaces the client history payload), pageContext shipped from the C5 registry; voice-capture semantics UNTOUCHED (deliverTranscript → editable input; ask() only behind voiceAutoSendRef — regex-verified identical to chunk-1) | ✅ | smoke-webmcp-ui + smoke-jarvis-ui regression |
+| CR.1 `/api/jarvis/brain` marked DEPRECATED (header comment; kept serving for external callers). Post-CR.1 grep: ZERO live fetches of /api/jarvis/brain in src/ (comments only); `/api/hermes/jarvis` (the old /jarvis chat lane) is now also src-unreferenced — jarvis-log/jarvis-memory/tts hermes routes still in use. Neither route exiled (house rule: keep serving until confirmed dead) | ✅ | smoke-webmcp-ui src-walk check |
+
+**Deltas/decisions (chunk 4):**
+1. **No Monaco** — SPEC §3's `@monaco-editor/react` skipped (chunk constraint: no new deps); the sanctioned textarea fallback (SPEC §8.13) IS the js editor, mono-styled. Swapping Monaco in later is one component.
+2. **No Spec tab** — SPEC D3.2's SpecForm (auth kind/schedule/mcp type) needs a `spec_json` column migration 030 never created; the D2 model shipped without it. Editable surface = name/description/icon + tools. Spec-shaped packaging belongs with D5 export/client-onboarding (Phase 4+).
+3. **Publish = integer bump, no changelog/semver picker** (store has no changelog column; chunk-2 integer-version decision) — Versions tab renders "vN" + publishedAt.
+4. **memory_search_summary NOT seeded** — memory tools are already first-class on /api/mcp (A7.1) and built into the brain; a third wrapper adds reserved-name collision risk (memory_search/memory_ingest/get_actions/execute_action/navigate are brain built-ins, first-wins skip) without new capability. agentos/navigate still collides by design (identical function).
+5. **tasks_update_status enum is schema-level Waiting|Review** — mirrors canTransition's agent rule so the model can't even request an illegal target; changeTaskStatus(actor 'agent') remains the enforcement backstop.
+6. **pages_append writes plain paragraphs** (TipTap doc nodes via savePageDocInternal — rev bump makes any open /today client refetch); markdown is stored as text, not parsed into rich nodes.
+7. smoke-webmcp K rewritten for the full seed (8-tool snapshot assert, approval-flag matrix, SEED_VERSION bump-once leg, per-tool MCP round trips incl. draft-lane proof that the gated handlers work); new `smoke-webmcp-ui.mjs` = static D3/CR.1 contract + dynamic /logs cursor leg on a temp DB.
+
+**Verification (chunk 4):** `npx tsc --noEmit` clean · smoke-webmcp-ui ALL PASS · smoke-webmcp ALL PASS (extended) · regressions: smoke-jarvis-ui ALL PASS, smoke-jarvis-hotkey ALL PASS, smoke-mcp ALL PASS, smoke-tasks-api ALL PASS, smoke-jarvis-brain ALL PASS exit 0 first try — online cross-page-recall leg live vs Ollama cloud AND the SDK live leg ran (sentences + tasks_create tool round trip + tk-N row + persisted assistant summaries); the known chunk-3 cosmetic teardown line ("database connection is not open" in the abandoned temp DB) appeared as documented. NOT COMMITTED — orchestrator owns git.
+
+### Phase 3 COMPLETE — handoff
+
+**PR #5 should say:** SPEC-C delivered end-to-end on feat/v2-phase3-jarvis: C1/C2/C2b omnipresent capture shell + OS-global hotkey (chunk 1) · D1/D2 WebMCP engine core — package store, draft-vs-published snapshots, internal/http/js execution lanes, secrets, redacted call logs, hub + F4 registry integration (chunk 2) · C3–C6 Jarvis V2 brain — persona-loaded warm SDK session, in-process MCP tools, §9.4 taint gate, page-context, conversations (chunk 3) · D3 /webmcp builder UI + D4 full 'agentos' self-tools (8 tools, SEED_VERSION-gated republish) + CR.1 legacy repoint (chunk 4). All surfaces run the same POST /api/v2/jarvis/ask lane; /api/jarvis/brain and /api/hermes/jarvis are deprecated-but-serving with zero in-repo callers.
+
+**Deferred to Phase 4+ (deliberate, not dropped):**
+- **D5 exporter/client-onboarding** (standalone package export, `${config:*}` placeholders) + the Spec form it needs (spec_json migration).
+- **Human-Gate approval UI** — requires_approval tools currently refuse everywhere except the Test tab; the refusal message names the missing wiring. When the gate lands, webmcp/execute.ts's published-lane branch and jarvis tools.ts's two gates are the only three call sites to touch.
+- **D1.5 LLM-filtered getActions** (ported ACTION_SELECTION prompt) — hub.getActions still uses the F4 keyword scorer; the seam is one function.
+- **Monaco editor** for js handlers (one-component swap in ToolDesigner) — only if the textarea chafes.
+- **C3.6 conversations REST** (transcript drawer) — CRUD lives in `src/lib/v2/jarvis/conversations.ts`; routes are a thin wrap when the drawer lands.
+- **Jarvis voice providers** openai-realtime/gemini-live in useVoiceCapture remain stubs-with-reasons.
+- Retirement decision for `/api/jarvis/brain` + `/api/hermes/jarvis` + `src/lib/jarvisBrain.ts` (exile once confirmed unused by anything external — both still serve today).
 
 ## Phases 4-9: not started
 

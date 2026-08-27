@@ -255,14 +255,40 @@ const failLog = store.listCallLogs({ packageSlug: "smoke-http" }).find((l) => !l
 check("validation failure writes a call log row", !!failLog);
 
 // ---------------------------------------------------------------------------
-// K. agentos seed: idempotent ×2 + full MCP round trip creates a tk-N task
+// K. agentos seed (D4 full set): idempotent ×2, SEED_VERSION bump path,
+//    requires_approval flags + full MCP round trips over the new tools
 // ---------------------------------------------------------------------------
+const SEED_NAMES = [
+  "events_recent", "jobs_list", "navigate", "pages_append",
+  "tasks_create", "tasks_get", "tasks_list", "tasks_update_status",
+];
 const s1 = seedSelfTools();
 const s2 = seedSelfTools();
 const agentos = store.getPackage("agentos");
 check("seedSelfTools publishes agentos v1", agentos?.status === "published" && agentos.currentVersion === 1 && s1.version === 1);
 check("seedSelfTools idempotent ×2 (one version row)", s2.seeded === false && store.listVersions(agentos.id).length === 1);
-check("seed tools registered", !!getAction("agentos/navigate") && !!getAction("agentos/tasks_create") && !!getAction("agentos/tasks_list"));
+check("all D4 seed tools registered as agentos/<tool>", SEED_NAMES.every((n) => !!getAction(`agentos/${n}`)));
+
+const seedSnap = store.getPublishedSnapshot("agentos");
+check("published snapshot carries the full D4 tool set", (seedSnap?.tools ?? []).map((t) => t.name).sort().join(",") === SEED_NAMES.join(","));
+const approvalMap = Object.fromEntries((seedSnap?.tools ?? []).map((t) => [t.name, t.requiresApproval]));
+check("requires_approval=1 on state-changing seeds ONLY",
+  approvalMap.tasks_update_status === true && approvalMap.pages_append === true &&
+  ["navigate", "tasks_create", "tasks_list", "tasks_get", "events_recent", "jobs_list"].every((n) => approvalMap[n] === false));
+
+// SEED_VERSION bump path: simulate an already-seeded install running NEWER seed
+// code — stale meta + a drifted tool def → exactly ONE republish, then no-op.
+const { getDb } = await import("../../src/lib/v2/db.ts");
+getDb().prepare("UPDATE meta SET value = '0' WHERE key = 'webmcp_agentos_seed_version'").run();
+store.updateTool("agentos", "tasks_get", { description: "stale pre-bump description" });
+const bump1 = seedSelfTools();
+const bump2 = seedSelfTools();
+const agentosAfter = store.getPackage("agentos");
+check("SEED_VERSION bump re-publishes exactly once", bump1.seeded === true && bump1.version === 2 && bump2.seeded === false && agentosAfter.currentVersion === 2 && store.listVersions(agentos.id).length === 2);
+check("bump re-syncs drifted seed tool defs", store.getPublishedSnapshot("agentos")?.tools.find((t) => t.name === "tasks_get")?.description !== "stale pre-bump description");
+// meta intact + tools unchanged → a further boot never burns a version.
+const bump3 = seedSelfTools();
+check("post-bump boots are no-ops", bump3.seeded === false && store.getPackage("agentos").currentVersion === 2);
 
 const created = await mcpCall("execute_action", { key: "agentos/tasks_create", args: { title: "Smoke seeded task", spec: "do the thing" } }, 2);
 const createdText = created.result?.content?.[0]?.text ?? "";
@@ -274,10 +300,39 @@ check("tk-N task exists in the SPEC-B store", !!task && task.title === "Smoke se
 const listed = await mcpCall("execute_action", { key: "agentos/tasks_list", args: { status: "Todo" } }, 3);
 check("tasks_list surfaces the created task", (listed.result?.content?.[0]?.text ?? "").includes(tkId ?? "@@"));
 
+const got = await mcpCall("execute_action", { key: "agentos/tasks_get", args: { id: tkId } }, 5);
+const gotText = got.result?.content?.[0]?.text ?? "";
+check("tasks_get reads the task by display id", got.result?.isError !== true && gotText.includes(tkId) && gotText.includes("do the thing"));
+
 const nav = await mcpCall("execute_action", { key: "agentos/navigate", args: { route: "/pipeline" } }, 4);
 check("navigate returns ok", nav.result?.isError !== true && (nav.result?.content?.[0]?.text ?? "").includes("/pipeline"));
 const navEvent = recent({ type: "ui.navigate" })[0];
 check("ui.navigate event emitted for the overlay", navEvent?.payload?.route === "/pipeline");
+
+const evs = await mcpCall("execute_action", { key: "agentos/events_recent", args: { type: "ui.navigate", limit: 5 } }, 6);
+check("events_recent reads the bus", evs.result?.isError !== true && (evs.result?.content?.[0]?.text ?? "").includes("/pipeline"));
+
+const jobs = await mcpCall("execute_action", { key: "agentos/jobs_list", args: {} }, 7);
+check("jobs_list surfaces scheduler jobs", jobs.result?.isError !== true && (jobs.result?.content?.[0]?.text ?? "").includes("core:db-backup"));
+
+// Approval gates — the verified refusal paths:
+//  (a) published hub lane refuses requires_approval tools in BOTH modes;
+const upubRefused = await hub.executeAction("agentos", "tasks_update_status", { id: tkId, status: "Waiting" }, { source: "smoke", interactive: true });
+check("tasks_update_status refuses on the published lane (approval)", upubRefused.ok === false && (upubRefused.error ?? "").includes("approval"));
+const pagesRefused = await hub.executeAction("agentos", "pages_append", { text: "should not land" }, { source: "smoke" });
+check("pages_append refuses on the published lane (approval)", pagesRefused.ok === false && (pagesRefused.error ?? "").includes("approval"));
+//  (b) plain registry keys refuse strict/MCP callers inside the handler;
+const strictRefused = await mcpCall("execute_action", { key: "tasks_update_status", args: { id: tkId, status: "Waiting" } }, 8);
+check("bare tasks_update_status action refuses strict MCP callers", (strictRefused.result?.content?.[0]?.text ?? "").includes("approval"));
+check("strict refusal did not move the task", listTasks({}).find((t) => t.displayId === tkId)?.status === "Todo");
+//  (c) the Test-tab draft lane bypasses (you are the human) and the action works.
+const draftUpdate = await executeDraftTool("agentos", "tasks_update_status", { id: tkId, status: "Waiting" }, "test");
+check("draft/test lane runs tasks_update_status (agent → Waiting)", draftUpdate.ok === true && listTasks({}).find((t) => t.displayId === tkId)?.status === "Waiting");
+const draftAppend = await executeDraftTool("agentos", "pages_append", { text: "smoke appended line\nsecond paragraph" }, "test");
+const pagesStore = await import("../../src/lib/v2/pages/store.ts");
+const todayPage = pagesStore.getPageByDate(pagesStore.localDateStr());
+const todayText = JSON.stringify(todayPage?.doc ?? {});
+check("pages_append lands paragraphs on today's page", draftAppend.ok === true && todayText.includes("smoke appended line") && todayText.includes("second paragraph"));
 
 // hub seam + hub surface
 check("globalThis.__agentosMcpHub seam installed", typeof globalThis.__agentosMcpHub?.executeAction === "function" && typeof globalThis.__agentosMcpHub?.getActions === "function" && typeof globalThis.__agentosMcpHub?.listPublishedPackages === "function");
@@ -285,7 +340,7 @@ const hubPkgs = hub.listPublishedPackages();
 check("hub lists published packages only", hubPkgs.some((p) => p.slug === "agentos") && !hubPkgs.some((p) => p.slug === "smoke-echo"));
 const hubActions = hub.getActions("all", "create a task");
 check("hub getActions intent filter ranks tasks_create", hubActions[0]?.name === "tasks_create" && hubActions[0].package === "agentos");
-check("hub getActions('agentos') returns exact advertised names", hub.getActions("agentos").map((t) => t.name).sort().join(",") === "navigate,tasks_create,tasks_list");
+check("hub getActions('agentos') returns exact advertised names", hub.getActions("agentos").map((t) => t.name).sort().join(",") === SEED_NAMES.join(","));
 
 // ---------------------------------------------------------------------------
 // L. Packages route smoke (create via route + 409)

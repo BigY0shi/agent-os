@@ -643,7 +643,7 @@ export function writeCallLog(entry: {
     );
 }
 
-export function listCallLogs(filter: { packageSlug?: string; toolName?: string; source?: string; limit?: number } = {}): CallLogRow[] {
+export function listCallLogs(filter: { packageSlug?: string; toolName?: string; source?: string; limit?: number; before?: string } = {}): CallLogRow[] {
   const where: string[] = [];
   const args: unknown[] = [];
   if (filter.packageSlug) {
@@ -657,6 +657,11 @@ export function listCallLogs(filter: { packageSlug?: string; toolName?: string; 
   if (filter.source) {
     where.push("source = ?");
     args.push(filter.source);
+  }
+  if (filter.before) {
+    // Cursor paging (SPEC §5 /logs): strictly-older-than the last row seen.
+    where.push("created_at < ?");
+    args.push(filter.before);
   }
   const limit = Math.min(Math.max(filter.limit ?? 50, 1), 500);
   const rows = getDb()
