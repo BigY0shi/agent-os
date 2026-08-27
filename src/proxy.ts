@@ -38,6 +38,18 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Jarvis OS-global hotkey (SPEC-C C2): the AutoHotkey helper can't hold a
+  // session cookie. POSTs carrying the hotkey secret header pass through for
+  // the ROUTE to validate strictly (timing-safe compare, 401 on mismatch) —
+  // same pattern as /api/mcp above. GET, /stream and /setup stay cookie-gated.
+  if (
+    pathname === "/api/jarvis/hotkey" &&
+    request.method === "POST" &&
+    request.headers.has("x-agentos-hotkey-secret")
+  ) {
+    return NextResponse.next();
+  }
+
   const password = process.env.AGENTOS_PASSWORD || "";
   const isApi = pathname.startsWith("/api/");
 

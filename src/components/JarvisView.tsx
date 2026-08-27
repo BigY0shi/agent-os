@@ -957,6 +957,30 @@ export default function JarvisView() {
     busyRef.current = false; setBusy(false);
   }, [mode, turns, voice]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── SPEC-C C2b retrofit: review-before-send ────────────────────────────────
+  // Voice transcripts land in the INPUT FIELD for review — releasing the mic /
+  // finishing an utterance never fires a request anymore. Enter/Send is the
+  // only dispatch, unless the user opted back into the old behavior via
+  // settings.jarvis.voice.autoSend (default OFF; toggled in the Jarvis gear).
+  const voiceAutoSendRef = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive) voiceAutoSendRef.current = !!(j?.settings?.jarvis?.voice?.autoSend);
+      })
+      .catch(() => { /* default stays: review-first */ });
+    return () => { alive = false; };
+  }, []);
+  const deliverTranscript = useCallback((raw: string) => {
+    const text = (raw || "").trim();
+    if (!text) return;
+    if (voiceAutoSendRef.current) { setStatus("Heard: " + text); ask(text); return; } // autoSend opt-in only
+    setInput((prev) => (prev ? (/\s$/.test(prev) ? prev + text : prev + " " + text) : text));
+    setStatus(`Heard: “${text}” — review, edit, then press Enter to send.`);
+  }, [ask]);
+
   // Restart the wake recognizer (uses ONLY refs → no stale closures). A short
   // gap minimizes the mic flicker; backoff stops genuine error-loops.
   function safeStartWake() {
@@ -986,7 +1010,8 @@ export default function JarvisView() {
       rec.onend = () => { listeningRef.current = false; setListening(false); if (phaseRef.current === "listening") setPhase("idle");
         if (liveRef.current && !busyRef.current && !typingRef.current) { setTimeout(() => { if (liveRef.current && !busyRef.current && !listeningRef.current && !typingRef.current) startListening(); }, 350); }
         else if (wakeOnRef.current && !busyRef.current) scheduleWakeRestart(); };
-      rec.onresult = (e) => { const t = e?.results?.[0]?.[0]?.transcript || ""; if (t.trim()) { setStatus("Heard: " + t); ask(t); } };
+      // C2b: push-to-talk release routes the transcript to the input for review — never auto-sends (autoSend-gated inside deliverTranscript).
+      rec.onresult = (e) => { const t = e?.results?.[0]?.[0]?.transcript || ""; if (t.trim()) deliverTranscript(t); };
       recRef.current = rec;
     }
     try { rec.start(); } catch {}
@@ -1023,10 +1048,10 @@ export default function JarvisView() {
         const m = low.match(/\b(jarvis|jervis|jarviss|harvis|hermes|hey jarvis|ok jarvis)\b/);
         if (m) {
           const after = raw.slice((m.index ?? 0) + m[0].length).replace(/^[\s,.:!?]+/, "").trim();
-          if (after.length > 1) { try { rec!.stop(); } catch {} setStatus("Heard: " + after); ask(after); }
+          if (after.length > 1) { try { rec!.stop(); } catch {} deliverTranscript(after); } // C2b: wake opens the capture buffer, not a request
           else { armedRef.current = true; setPhase("listening"); setStatus("Yes, sir? I'm listening…"); sfxRef.current?.wake(); }
         } else if (armedRef.current) {
-          armedRef.current = false; try { rec!.stop(); } catch {} setStatus("Heard: " + raw); ask(raw);
+          armedRef.current = false; try { rec!.stop(); } catch {} deliverTranscript(raw); // C2b review-first
         }
       };
       wakeRef.current = rec;

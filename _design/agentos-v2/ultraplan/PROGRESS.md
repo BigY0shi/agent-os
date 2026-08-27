@@ -314,7 +314,34 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - **plan/outcome/log zone TipTap nodes (B5.7)** — plans live in plan_md columns (chunk-2 decision); page-zone rendering lands if/when TaskDetail moves its body to TipTap.
 - Yjs/hocuspocus stays DEFERRED by design (§1.1); the pageStore doc-I/O seam is in place for it.
 
-## Phases 3-9: not started
+## Phase 3 — Omnipresent Jarvis (SPEC-C): in progress
+
+### Chunk 1 (C1 shell + C2 hotkey + C2b capture): ✅ (2026-08-27, branch feat/v2-phase3-jarvis)
+
+| Task | Status | Verified by |
+|---|---|---|
+| hotkeyBus.ts (globalThis subscriber set + fire + OWN subscriber count + lastFireAt; deliberately DB-free) + hotkeySecret.ts (~/.agentic-os/jarvis-hotkey.secret, 64-hex, `AGENTIC_OS_HOTKEY_SECRET` test override, sha256+timingSafeEqual compare) | ✅ | smoke-jarvis-hotkey |
+| /api/jarvis/hotkey POST (x-agentos-hotkey-secret strict; 503 pre-setup, 401 bad; fires bus; returns {subscribers} = hotkey-stream count) + GET status {configured,lastFireAt,subscribers}; /hotkey/stream SSE (own count, 25s heartbeat, retry hint); /hotkey/setup GET (idempotent secret gen + instructions + AHK script content; cookie-gated) | ✅ | smoke-jarvis-hotkey (19) |
+| proxy.ts exemption: POST /api/jarvis/hotkey ONLY when header present (route validates strictly; /stream and /setup stay cookie-gated) | ✅ | smoke-jarvis-ui static |
+| scripts/v2/jarvis-hotkey.ahk (AHK v2, #SingleInstance Force; WinHttpRequest COM POST — never Download; FileRead secret; subscribers==0 → Run "?jarvis=1"; else best-effort WinActivate "Agent OS"→"Agentic OS"; TrayTip on every failure; JarvisKey config line + CapsLock example + shell:startup one-liner) | ✅ | smoke-jarvis-ui |
+| useVoiceCapture.ts hook {status idle\|recording\|error, partial, error, start, stop, cancel} + onFinalChunk; VOICE_PROVIDERS registry: webspeech + kimi live (kimi's existing plumbing IS browser SR), openai-realtime/gemini-live stubs returning reason strings; Opera trap detected (ctor present but disabled → reason, never silent) | ✅ | smoke-jarvis-ui |
+| ChatboxOverlay.tsx — C2b contract exact: open→textarea focus, mic never hot; partial spliced at cursor (tracked range, live-replaced), finals become permanent text; release/stop NEVER sends; Enter(no-shift)/Send only dispatch; Esc discards (confirm >80 chars); autoSend (default OFF) is the ONLY auto-send branch; session transcript streams from the EXISTING POST /api/jarvis/brain {utterance} SSE lane (C3 replaces internals next chunk); gear → JarvisSettings inline | ✅ | smoke-jarvis-ui call-site scan |
+| JarvisOmnipresence.tsx mounted in layout.tsx (every route, hidden /login): orb bottom-right (glow from GET /api/jarvis/brain poll 5s), hotkey SSE consumer w/ manual reconnect + window.focus + title flash, in-app F13 keydown fallback (settings.jarvis.hotkey, 400ms dedupe both directions vs SSE), ?jarvis=1 opens overlay on mount | ✅ | smoke-jarvis-ui |
+| settings.jarvis additive: voice {provider webspeech, autoSend FALSE, pushToTalk true} + hotkey {key F13, enabled true}; JarvisSettings gear surfaces all + helper "secret configured ✓ · last fire" + setup-route link (rule 16) | ✅ | tsc + smoke-jarvis-ui |
+| JarvisView retrofit (SURGICAL): rec.onresult / wake-with-text / armed-wake now route through deliverTranscript → input field + "review, edit, Enter to send" status; ask() only behind voiceAutoSendRef (settings.jarvis.voice.autoSend fetched on mount). Realtime/Kimi panels untouched (already opt-in live-conversation modes) | ✅ | smoke-jarvis-ui regex + tsc |
+
+**Deltas/decisions (chunk 1):**
+1. Existing `/api/jarvis/brain` reused UNCHANGED as the overlay answer lane (request shape {utterance}, SSE sentence/done/error; warm session holds conversation server-side) — no thin /api/v2/jarvis/ask proxy needed this chunk.
+2. Hotkey subscriber count is the hotkey stream's OWN count on globalThis (not events.ts sseSubscriberCount) per the helper's open-tab contract.
+3. Interim "ghost" text is real spliced text continuously replaced (a plain textarea can't gray a sub-range); manual edits invalidate the splice range; the mirror-div ghost can land with C3 polish if wanted.
+4. AHK targets http://127.0.0.1:3033 in its config block (per chunk brief; single editable line) and title-matches both "Agent OS" and the current "Agentic OS" document.title.
+5. Hotkey routes emit NO v2 events / touch NO DB — a press must work before boot; smoke runs with zero infra.
+
+**Verification:** smoke-jarvis-hotkey.mjs 19/19 ALL PASS (direct-import, temp secret env) · smoke-jarvis-ui.mjs 53/53 ALL PASS (incl. sendBuffer call-site scan: every site Enter/onClick/autoSend-gated; onFinalChunk insert-only) · regressions smoke-events-scheduler + smoke-tasks-api ALL PASS · `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**Handoff for chunk 2 (C3 brain + C4/C5):** the overlay expects from the ask lane: POST body `{utterance}` (extend to `{text, conversationId?, mode?, pageContext?}` per SPEC §5 — update ChatboxOverlay's sendBuffer fetch + parse in the same pass), SSE events `{type:"sentence",text}` / `{type:"done"}` / `{type:"error",error}` (add meta/tool/navigate types; overlay currently ignores unknown types safely). Orb polls GET /api/jarvis/brain {busy} — keep a busy field on the C3 status route or repoint. Voice: fill the openai-realtime/gemini-live adapters in useVoiceCapture's registry (stub reasons say "lands with the C3 brain chunk"). Page-context registry (C5) mounts in JarvisOmnipresence — it already owns overlay state and is the natural provider host.
+
+## Phases 4-9: not started
 
 ### Post-gate fix (orchestrator, 2026-08-27): golden gate now 12/12
 Case-8 root cause was two-layered; both fixed and verified by a final full-capture gate run (12/12 PASS):
