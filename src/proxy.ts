@@ -31,6 +31,13 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // /api/mcp: NOT blanket-exempt (CONVENTIONS §9.1). Requests carrying the MCP
+  // secret header pass through for the ROUTE to validate strictly (401 on
+  // mismatch); cookie-holders fall through to the normal session check below.
+  if (pathname.startsWith("/api/mcp") && request.headers.has("x-agentos-mcp-secret")) {
+    return NextResponse.next();
+  }
+
   const password = process.env.AGENTOS_PASSWORD || "";
   const isApi = pathname.startsWith("/api/");
 

@@ -1,0 +1,105 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createHash, randomBytes } from "node:crypto";
+import { ensureV2 } from "@/lib/v2/boot";
+import { handleMcpMessage } from "@/lib/v2/mcp/server";
+import { readSettings, writeSettings } from "@/lib/settings";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * F4 internal MCP endpoint (stateless Streamable HTTP, JSON responses).
+ * Auth (CONVENTIONS §9.1): a valid x-agentos-mcp-secret header OR a valid
+ * dashboard session cookie. Either way the capability gates run in strict
+ * mode — through MCP, exec/files are deny-by-default until opted in.
+ */
+
+const SECRET_HEADER = "x-agentos-mcp-secret";
+const COOKIE = "agentos_session";
+
+function getOrCreateSecret(): string {
+  const existing = readSettings().mcp?.secret;
+  if (existing) return existing;
+  const secret = "amcp_" + randomBytes(24).toString("hex");
+  writeSettings({ mcp: { secret } });
+  return secret;
+}
+
+function hasValidCookie(req: NextRequest): boolean {
+  const password = process.env.AGENTOS_PASSWORD || "";
+  if (!password) return false;
+  const expected = createHash("sha256").update("agentos.v1:" + password).digest("hex");
+  return req.cookies.get(COOKIE)?.value === expected;
+}
+
+function authenticate(req: NextRequest): { ok: boolean; status?: number; error?: string } {
+  const provided = req.headers.get(SECRET_HEADER);
+  const secret = getOrCreateSecret();
+  if (provided) {
+    if (provided === secret) return { ok: true };
+    return { ok: false, status: 401, error: "invalid MCP secret" };
+  }
+  if (hasValidCookie(req)) return { ok: true };
+  return {
+    ok: false,
+    status: 401,
+    error: `unauthorized: send the ${SECRET_HEADER} header (Settings → Capabilities shows the secret) or a dashboard session cookie`,
+  };
+}
+
+export async function POST(req: NextRequest) {
+  ensureV2();
+  const auth = authenticate(req);
+  if (!auth.ok) {
+    return NextResponse.json(
+      { jsonrpc: "2.0", id: null, error: { code: -32000, message: auth.error } },
+      { status: auth.status, headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { jsonrpc: "2.0", id: null, error: { code: -32700, message: "parse error" } },
+      { status: 400, headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  const source = req.nextUrl.searchParams.get("source") ?? "unknown";
+  const remoteAddr =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
+  const ctx = { source, strict: true, remoteAddr };
+
+  const messages = Array.isArray(body) ? body : [body];
+  const responses = [];
+  for (const msg of messages) {
+    const res = await handleMcpMessage(msg as Record<string, unknown>, ctx);
+    if (res) responses.push(res);
+  }
+
+  if (responses.length === 0) {
+    return new Response(null, { status: 202, headers: { "cache-control": "no-store" } });
+  }
+  return NextResponse.json(Array.isArray(body) ? responses : responses[0], {
+    headers: { "cache-control": "no-store" },
+  });
+}
+
+const METHOD_NOT_ALLOWED = NextResponse.json(
+  {
+    jsonrpc: "2.0",
+    id: null,
+    error: { code: -32000, message: "stateless server: POST only (no SSE stream, no sessions)" },
+  },
+  { status: 405, headers: { "cache-control": "no-store", allow: "POST" } },
+);
+
+export async function GET() {
+  return METHOD_NOT_ALLOWED;
+}
+
+export async function DELETE() {
+  return METHOD_NOT_ALLOWED;
+}

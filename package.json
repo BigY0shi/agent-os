@@ -14,10 +14,12 @@
     "@types/js-yaml": "^4.0.9",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "better-sqlite3": "^13.0.3",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "croner": "^10.0.1",
     "framer-motion": "^12.38.0",
+    "gpt-tokenizer": "^4.0.0",
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.1",
     "lucide-react": "^1.16.0",
@@ -29,18 +31,23 @@
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "rrule": "^2.8.1",
+    "sqlite-vec": "^0.1.9",
     "tailwind-merge": "^3.6.0",
     "three": "^0.184.0",
     "three-spritetext": "^1.10.0",
+    "zod": "^4.4.3",
     "zustand": "5.0.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.184.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
