@@ -9,6 +9,7 @@ import {
   appendMessage,
 } from "@/lib/v2/tasks/store";
 import { checkWaitingTaskReply } from "@/lib/v2/tasks/engine";
+import { ingestFromModule } from "@/lib/v2/memory/queue";
 import type { Conversation } from "@/lib/v2/tasks/types";
 
 export const runtime = "nodejs";
@@ -78,7 +79,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const conv = activeConversation(id, !!task.schedule);
   const message = appendMessage(conv.id, { role: "user", content: text, userType: "human" });
   const unblocked = checkWaitingTaskReply(conv.id);
-  // B6 note: memory ingestion of chat exchanges lands with the chunk-4
-  // memory-wiring pass (taskIngest call sites audit).
+  // B6: task chat exchanges ingest into Memory V2 (labels task + tk-N,
+  // session task-<uuid> — same bucket as the engine's run-summary ingest).
+  void ingestFromModule({
+    episodeBody: `Task ${task.displayId} (${task.title || "untitled"}) chat — user: ${text}`,
+    source: "task",
+    labelNames: ["task", task.displayId],
+    sessionId: `task-${task.id}`,
+    metadata: { taskId: task.id, displayId: task.displayId, conversationId: conv.id },
+  }).catch((err) => {
+    console.warn(`[v2/tasks] chat ingest failed for ${task.displayId} (message still saved):`, err);
+  });
   return NextResponse.json({ message, unblocked }, noStore);
 }

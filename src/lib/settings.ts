@@ -177,6 +177,10 @@ export interface Settings {
     // fires until enabled in the Tasks gear). Keys match seeds.ts settingsKey.
     seeds?: Record<string, { enabled?: boolean }>;
   };
+  // SPEC-B B5 scratchpad (/today): @jarvis mention-scan idle debounce.
+  scratchpad?: {
+    mentionDebounceSec?: number; // default 8
+  };
 
   [extra: string]: unknown;
 }
@@ -251,6 +255,7 @@ export const DEFAULT_SETTINGS: Settings = {
       weeklyRetro: { enabled: false },
     },
   },
+  scratchpad: { mentionDebounceSec: 8 },
 };
 
 function settingsPath(): string {

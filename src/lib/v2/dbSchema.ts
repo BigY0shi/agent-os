@@ -349,6 +349,37 @@ CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_ad AFTER DELETE ON v2_tasks BEGIN
 END;
 `;
 
+const M021_PAGES_SCRATCHPAD = `
+-- SPEC-B B5: scratchpad pages (TipTap JSON, single-client, rev-based optimistic
+-- lock — Yjs DEFERRED per SPEC-B §1.1; the doc I/O seam lives in pages/store.ts).
+CREATE TABLE IF NOT EXISTS v2_pages (
+  id         TEXT PRIMARY KEY,
+  date       TEXT,              -- 'YYYY-MM-DD' in settings.tasks.timezone; NULL = non-daily page
+  title      TEXT NOT NULL DEFAULT '',
+  doc_json   TEXT NOT NULL DEFAULT '{"type":"doc","content":[]}',
+  rev        INTEGER NOT NULL DEFAULT 0,   -- optimistic concurrency (409 on stale save)
+  metadata   TEXT NOT NULL DEFAULT '{}',   -- lastIngestHash (B6 nightly ingest), ...
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_pages_date ON v2_pages(date) WHERE date IS NOT NULL;
+
+-- @jarvis paragraph comments (REF ButlerComment, pattern-only: Yjs relative
+-- positions replaced by paragraph-node-id attrs + normalized-text fallback).
+CREATE TABLE IF NOT EXISTS v2_page_comments (
+  id               TEXT PRIMARY KEY,
+  page_id          TEXT NOT NULL REFERENCES v2_pages(id) ON DELETE CASCADE,
+  anchor_node_id   TEXT,        -- paragraph attrs.nodeId at detection time
+  anchor_text_norm TEXT,        -- normalized paragraph text (fallback anchor + dedupe key)
+  author           TEXT NOT NULL DEFAULT 'jarvis' CHECK (author IN ('jarvis','user')),
+  body_md          TEXT NOT NULL DEFAULT '',
+  conversation_id  TEXT,        -- v2_conversations (source 'daily'), nullable
+  created_at       TEXT NOT NULL,
+  resolved_at      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_v2_page_comments_page ON v2_page_comments(page_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -384,6 +415,13 @@ export const MIGRATIONS: Migration[] = [
       // Root display-id counter lives in the shared meta table (SPEC-B's
       // v2_meta is folded into meta; its timezone seed is void per CONVENTIONS §10).
       db.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES ('task_root_counter', '0')").run();
+    },
+  },
+  {
+    version: 21,
+    name: "pages_scratchpad",
+    up: (db) => {
+      db.exec(M021_PAGES_SCRATCHPAD);
     },
   },
 ];

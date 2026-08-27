@@ -9,6 +9,7 @@ import {
   appendTaskEvent,
 } from "./store";
 import { runTask } from "./engine";
+import { removeTaskItemFromPages } from "../pages/store";
 import type { Task } from "./types";
 import type { AttentionFlagPayload } from "../eventTypes";
 
@@ -111,7 +112,13 @@ export async function dispatchTaskWake(
     const gcEnabled = readSettings().tasks?.emptyTaskGc !== false;
     if (task.source === "daily" && gcEnabled && isTaskEmpty(task)) {
       console.log(`[v2/tasks] auto-exiling empty scratchpad task ${task.displayId} at buffer expiry`);
-      // removeTaskItemFromPages lands with B5 (v2_pages doesn't exist yet).
+      // B5: strip the bound taskItem node from any page BEFORE the row goes
+      // (deleteTask cascades the link rows, so strip while they still exist).
+      try {
+        removeTaskItemFromPages(taskId);
+      } catch (err) {
+        console.warn(`[v2/tasks] node strip failed for ${task.displayId} (exile continues):`, err);
+      }
       const res = deleteTask(taskId);
       emit("task.gc", { taskId, displayId: task.displayId, exiledTo: res.exiledTo }, "tasks");
       return; // task is gone — no advance

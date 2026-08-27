@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -67,6 +67,9 @@ const NAV: NavItem[] = [
   // Tasks V2 (SPEC-B): list + calendar + drag-drop board + agents strip. Lives in
   // "Self" by default (sectionOf fallback) — do NOT add to the section Sets.
   { href: "/tasks",    label: "Tasks",    icon: <ListTodo size={16} />,  accent: "#f97316", dim: "rgba(249,115,22,0.16)" },
+  // Scratchpad V2 (SPEC-B B5): daily page, [ ]→task binding, @jarvis replies.
+  // Lives in "Self" beside /tasks (sectionOf fallback) — not in any section Set.
+  { href: "/today",    label: "Today",    icon: <NotebookPen size={16} />, accent: "#06b6d4", dim: "rgba(6,182,212,0.16)" },
   { href: "/memory",   label: "Memory",   icon: <Brain size={16} />,     accent: "#22d3ee", dim: "rgba(34,211,238,0.16)" },
   // Replaced Build Guide (2026-07-26) — a static how-to earned less shelf space than a
   // real shell. /guide still renders if you navigate to it directly.

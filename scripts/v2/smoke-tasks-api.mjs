@@ -227,6 +227,13 @@ check("chat: checkWaitingTaskReply fired (Waiting → Ready)", j.unblocked === 1
 res = await chatRoute.POST(req(`/api/v2/tasks/${tBlk.id}/chat`, jsonInit("POST", {})), ctx(tBlk.id));
 check("chat: empty text → 400", res.status === 400);
 
+// B6 (chunk 4): the chat POST ingests the exchange into Memory V2 — wait for
+// the queue row so the fire-and-forget ingest settles before process exit.
+const chatIngestRow = () =>
+  db.prepare("SELECT COUNT(*) c FROM ingestion_queue WHERE source = 'task' AND data LIKE '%take option A%'").get().c;
+await waitFor(() => chatIngestRow() === 1, 8000);
+check("chat: B6 ingest row queued (source 'task', exchange body)", chatIngestRow() === 1, chatIngestRow());
+
 console.log("=== RUN GUARDS + DELETE (exile) ===");
 res = await runRoute.POST(req("/api/v2/tasks/tk-9999/run", { method: "POST" }), ctx("tk-9999"));
 check("run: unknown → 404", res.status === 404);
