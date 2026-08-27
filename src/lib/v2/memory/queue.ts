@@ -8,6 +8,8 @@ import { saveEpisode } from "./graph";
 import { addEpisode } from "./ingest";
 import { processGraphResolution } from "./resolution";
 import { addEpisodeLabels, assignLabels, resolveLabelNames } from "./labels";
+import { compactSession } from "./compaction";
+import { personaTrigger } from "./persona";
 import type { AddEpisodeResult } from "./types";
 
 /**
@@ -19,9 +21,10 @@ import type { AddEpisodeResult } from "./types";
  * CRITICAL ordering kept from REF preprocess-episode.logic.ts: episodes are
  * saved to the graph BEFORE the ingest stage runs (compaction race fix).
  *
- * Stage chain per row: 'preprocess' → 'ingest' → 'resolution' → 'labels'.
- * (A5 compaction and A6 persona-trigger slot in behind seams below — TODO
- * stubs until those chunks land; 'compaction'/'persona' stages reserved.)
+ * Stage chain per row: 'preprocess' → ('compaction' kicked in parallel) →
+ * 'ingest' → 'resolution' → 'labels' → 'compaction' (settle) → COMPLETED →
+ * 'persona' (post-COMPLETED trigger). Compaction and persona failures are
+ * non-fatal (warn, row stays COMPLETED) — REF label/title-job pattern.
  *
  * The worker NEVER throws: failures land as status FAILED + error + a
  * 'memory.queue.failed' event. settings.memory.ingestEnabled=false is the
@@ -327,9 +330,22 @@ async function processQueueItem(row: QueueRow): Promise<void> {
       if (body.labelIds?.length) addEpisodeLabels(episodeUuid, body.labelIds);
       chunkEpisodes.push({ episodeUuid, chunkIndex: chunk.chunkIndex, content: chunk.content });
     }
-    // TODO(A5): enqueue session compaction here, in PARALLEL with ingest
-    // (REF preprocess-episode.logic.ts enqueueSessionCompaction) — lands with
-    // compaction.ts; the race-fix ordering above is what makes it safe.
+    // ---- A5 seam: session compaction, kicked in PARALLEL with ingest ----
+    // (REF preprocess-episode.logic.ts enqueueSessionCompaction — conversations
+    // only; safe because the episodes were just saved to the graph above.)
+    // The promise is settled after the labels stage so the drain stays
+    // deterministic for smoke scripts; failures never fail the queue row.
+    let compactionPromise: Promise<void> | null = null;
+    if (body.type === "CONVERSATION") {
+      compactionPromise = compactSession(body.sessionId)
+        .then(() => undefined)
+        .catch((err) => {
+          console.warn(
+            `[v2/memory/queue] session compaction failed for ${body.sessionId} (non-blocking):`,
+            err instanceof Error ? err.message : err,
+          );
+        });
+    }
 
     // ---- Stage 2: ingest — normalize/extract/reflect/classify per chunk ----
     setStage(row.id, "ingest");
@@ -380,8 +396,11 @@ async function processQueueItem(row: QueueRow): Promise<void> {
       }
     }
 
-    // TODO(A6): persona-trigger seam fires here after COMPLETED (REF
-    // ingest-episode.logic.ts enqueuePersonaGeneration) — lands with persona.ts.
+    // ---- A5 settle: wait for the parallel compaction before completing ----
+    if (compactionPromise) {
+      setStage(row.id, "compaction");
+      await compactionPromise;
+    }
 
     // ---- Complete ----
     const output = {
@@ -403,6 +422,24 @@ async function processQueueItem(row: QueueRow): Promise<void> {
     ).run(JSON.stringify(output), JSON.stringify(episodeUuids), now(), row.id);
 
     emit("memory.ingested", { queueId: row.id, episodeUuids, source: body.source }, body.source);
+
+    // ---- A6 seam: persona trigger, post-COMPLETED (REF ingest-episode
+    // enqueuePersonaGeneration — threshold/worthiness check runs inside;
+    // personaTrigger never throws, and a failure never touches the row). ----
+    if (episodeUuids.length > 0) {
+      try {
+        setStage(row.id, "persona");
+        for (const episodeUuid of episodeUuids) {
+          await personaTrigger(episodeUuid);
+        }
+      } catch (personaErr) {
+        // Row is already COMPLETED — a persona failure must never demote it.
+        console.warn(
+          `[v2/memory/queue] persona trigger failed for ${row.id} (non-blocking):`,
+          personaErr instanceof Error ? personaErr.message : personaErr,
+        );
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     try {

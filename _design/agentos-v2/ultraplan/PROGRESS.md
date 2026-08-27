@@ -84,4 +84,30 @@
 - A6 persona: `documents` type='persona'; "Persona" label exclusion already honored in labels.ts.
 - searchV2 API surface for A7: `searchV2(query, opts)` (markdown | RecallResult), `executeSearch(routerOutput, opts)`, `analyzeQuery(query)` from `src/lib/v2/memory/search/index.ts`; replace the memory_search NOT_READY branch in `mcp/server.ts` with searchV2 when A7 lands.
 
+### Chunk 5 (A5.1 + A6.1–A6.2): ✅ compaction + persona (2026-08-27)
+
+| Task | Status | Verified by |
+|---|---|---|
+| A5.1 compaction.ts (compactSession: incremental fold, coveredUntil monotonic watermark, title ladder, Document upsert + document_labels + end_user_id + version bump, compacted_session embed, `memory.compacted` event) + prompts/compaction.ts (system/user prompts + `<output>` fallback parse, verbatim REF) | ✅ | smoke-compaction offline+online |
+| A6.1 persona.ts trigger + full mode (checkPersonaUpdateThreshold worthiness gate on Identity/Preference/Directive across BOTH stores incl. invalidated side, Persona label auto-create #009CF3, personaAutoUpdate gate, generateAspectBasedPersona: SKIPPED_ASPECTS=all-but-Identity, 30/20 recency chunking, userName synthetic) + prompts/persona.ts (gate/section-map/section/chunk/merge/placement prompts + zod placement schemas, verbatim REF) | ✅ | smoke-compaction online |
+| A6.2 incremental mode (tombstones pure-code first → LLM placement single+batched → section-surgical bullet ops → ONE save; full-regen-over-existing-doc throws PersonaExistsError status 409) | ✅ | smoke-compaction offline (deterministic tombstone) + online (bullet placement) |
+| queue.ts seams wired: compaction kicked post-preprocess in parallel with ingest (settled at stage 'compaction' pre-COMPLETED), persona-trigger post-COMPLETED at stage 'persona'; BOTH non-fatal (warn, row stays COMPLETED) | ✅ | smoke-ingest regression |
+
+**REF findings / deltas (chunk 5):**
+1. **Trigger threshold is 1/1, not 3** — REF CONFIG `minEpisodesForCompaction: 1, compactionThreshold: 1`: compaction fires after EVERY conversation episode (docs' "after 3 exchanges" doesn't match shipped code). `maxEpisodesPerBatch: 50` is declared but unused in REF's run path — mirrored as an unused constant.
+2. **Two watermarks, kept separate as in REF:** FETCH watermark = `documents.updated_at` (`created_at > updatedAt` — catches backdated-referenceTime episodes, important for A9 raw migration); COVERAGE watermark = `metadata.coveredUntil` = monotonic max(valid_at) (lexical ISO max — never regresses).
+3. **Title ladder step 3 (LLM title generation) skipped** — title-generation module doesn't exist here (chunk-3 TODO); ladder is queue-title → episode metadata.title → summary-prefix munging (verbatim REF fallback).
+4. **Persona doc row is `type='persona'` / session_id 'persona-v2'** (spec schema; REF used type "skill") — NOT embedded into any vector ns (REF parity; exploratory only reads type='conversation' anyway). `lastPersonaGenerationAt` lives in the `meta` table (REF: workspace.metadata).
+5. **Placement calls use modelCallText + tolerant local parse** (REF contract: null = "skip this run, retry on next episode") — modelCall's throw+corrective-retry would break that semantics; strict zod validation still applied per decision (batch entries dropped individually, REF parity).
+6. All REF batch-API code (createBatch/pollBatchCompletion/USE_BATCH) deleted; direct-call branch only.
+7. `documents.version` bumps on every compaction update AND persona save (schema column; Prisma hid this upstream).
+
+**Verification:** `scripts/v2/smoke-compaction.mjs` ALL PASS (offline: watermark math, `<output>` parse, all bullet ops, disabled/insufficient gates, 409 refusal, deterministic tombstone-only incremental; online vs Ollama cloud kimi-k2.6/glm-5.2: 4-episode session → doc v4, coveredUntil advancing == max(valid_at), labels mirrored, compacted_session vector, exploratory executeSearch surfaces the compact, persona full-gen via queue trigger, second full-gen 409, incremental bullet+tombstone). Regressions: smoke-ingest ALL PASS, smoke-search ALL PASS (both now exercise the live seams). `npx tsc --noEmit` clean.
+
+### Handoff notes for chunk 6 (A7 MCP tools + REST API)
+- Swap `mcp/server.ts` NOT_READY branches: memory_search → `searchV2(query, opts)` (`src/lib/v2/memory/search/index.ts`), memory_ingest → `addToQueue`/`ingestFromModule` (`memory/queue.ts`), memory_about_user → `getPersonaDocument()` (`memory/persona.ts`, returns `{content, updatedAt, …} | null`).
+- REST per SPEC §5.2: `/persona` GET = getPersonaDocument(); POST mode:"full" = `generatePersonaFull()` — catch `PersonaExistsError` (has `.status === 409`) → HTTP 409.
+- `personaTrigger(episodeUuid)` / `updatePersonaIncremental(episodeUuid)` / `compactSession(sessionId)` are all exported and idempotent-safe for manual routes if wanted.
+- Tool descriptions come verbatim from `REF/apps/webapp/app/utils/mcp/memory.ts` into `memory/mcpTools.ts`, registered via F4 `registerAction` + first-class tools on server.ts; stamp `?source=`.
+
 ## Phases 2-9: not started
