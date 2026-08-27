@@ -9,6 +9,8 @@ export type V2EventType =
   | "job.failed"
   | "task.created"
   | "task.status"
+  | "task.wake"
+  | "task.deleted"
   | "agent.status"
   | "attention.flag" // CONVENTIONS §5: {kind, severity, title, route, dedupeKey}
   | "mcp.execute"

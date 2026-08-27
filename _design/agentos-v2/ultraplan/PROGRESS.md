@@ -198,7 +198,33 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - §9.3 one-time manual checks: `/api/mcp` from a real Claude Code client; Memory page walkthrough.
 - Known TODO stubs carried forward: title-generation module (compaction ladder step 3), `scripts/v2/reembed.mjs` (referenced by embed dim-guard + gear warning), F1.6 .99 backup push transport, entity graph visualization (explicit phase-2), episode versioning/diffing (port map S).
 
-## Phases 2-9: not started
+## Phase 2 — Tasks (SPEC-B): in progress
+
+### Chunk 1 (B1 task model + store): ✅ (2026-08-27, branch feat/v2-phase2-tasks)
+
+| Task | Status | Verified by |
+|---|---|---|
+| Migration 020 'tasks_core' (v2_tasks + events + sessions + conversations + messages + page_task_links + FTS5 w/ triggers; meta.task_root_counter seed) | ✅ | smoke-tasks + smoke-db |
+| tasks/types.ts (client-safe TaskStatus/Task/TaskEvent/TaskSession/Conversation/Message + canTransition verbatim REF task.phase.ts) | ✅ | tsc + smoke matrix |
+| tasks/store.ts (createTask displayId txn tk-N / tk-N.M 2-level cap, resolveTaskId, listTasks filters+FTS/LIKE, updateTask queue-blind, changeTaskStatus REF rules, complete/reopen, conversations B1.5, sessions, exile-delete to ~/.agentic-os/.exile/tasks/) | ✅ | smoke-tasks (58) |
+| tasks/recurrence.ts (computeNextRun tz-aware WITHOUT luxon — Intl wall-clock port; applySchedule/scheduleTask remove-then-enqueue; thin task.wake handler w/ finally-advance; loud-warn unparseable schedules) | ✅ | smoke-tasks DST/relative/weekly table |
+| settings.tasks subtree {timezone: America/Chicago, editingBufferSec: 120} | ✅ | smoke uses AGENTIC_OS_SETTINGS |
+| eventTypes +task.wake/+task.deleted; boot.ts registers task.wake handler | ✅ | smoke-tasks |
+| scheduler.ts tickOnce: respect handler self-reschedule/self-remove of its own job row (recurrence stall fix — one-shot completion no longer clobbers the re-enqueued task:<id> job) | ✅ | smoke-events-scheduler regression + smoke-tasks |
+
+**Deltas/decisions (chunk 1):**
+1. **FTS5 works natively** in better-sqlite3 — triggers (AI/AU/AD) sync title+description_md+spec_md; porter stemming verified; LIKE fallback only on MATCH error.
+2. **luxon NOT added** (no-new-deps): computeNextRun ported onto Intl.DateTimeFormat wall-clock conversion; REF's BYHOUR ≤400-day iteration + no-BYHOUR relative-interval semantics preserved; DST boundary verified (Chicago 2026-11-01).
+3. **status CHECK carries REF's 7th value 'Recurring'** for enum parity but the store never sets it — recurring = schedule IS NOT NULL (SPEC-B model).
+4. Depth cap = 2 levels (tk-N.M max) per B1 brief — stricter than REF's 3.
+5. smoke-db's hard-coded "[1,2]" migration assertions made forward-compatible (includes + strictly-increasing).
+6. v2_page_task_links has no FK on page_id (v2_pages lands with B5).
+
+**Verification:** smoke-tasks.mjs ALL PASS · regressions smoke-db + smoke-events-scheduler ALL PASS · `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**Handoff for chunk 2 (B2 engine):** replace the thin task.wake body in `tasks/recurrence.ts registerTaskWakeHandler` with dispatch.ts's staleness-guarded pipeline — keep the `finally { advanceAfterFire }` shape; buffer wakes come through the same kind. Queue-touch discipline: only applySchedule/scheduleTask/advanceAfterFire touch jobs; store.updateTask never does. scheduler contract adjustment already made (self-reschedule respect in tickOnce) — nothing else needed.
+
+## Phases 3-9: not started
 
 ### Post-gate fix (orchestrator, 2026-08-27): golden gate now 12/12
 Case-8 root cause was two-layered; both fixed and verified by a final full-capture gate run (12/12 PASS):

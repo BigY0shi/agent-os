@@ -152,6 +152,25 @@ export async function tickOnce(): Promise<number> {
           emit("job.failed", { id: job.id, kind: job.kind, name: job.name, error }, "scheduler");
         }
       }
+      // A handler may remove or reschedule ITS OWN job (task.wake recurrence
+      // does remove-then-enqueue on the same deterministic id — SPEC-B stall
+      // fix). Respect what the handler left behind instead of clobbering it.
+      const afterRow = db
+        .prepare("SELECT run_at, rrule FROM jobs WHERE id = ?")
+        .get(job.id) as { run_at: string | null; rrule: string | null } | undefined;
+      if (!afterRow) {
+        fired++;
+        continue; // handler removed the job — nothing to update
+      }
+      if (afterRow.run_at !== job.run_at || afterRow.rrule !== job.rrule) {
+        // Self-rescheduled: keep its run_at/enabled, record bookkeeping only.
+        db.prepare(
+          "UPDATE jobs SET last_run_at = ?, last_status = ?, last_error = ? WHERE id = ?",
+        ).run(now(), status, error, job.id);
+        fired++;
+        continue;
+      }
+
       // Recompute next fire AFTER the run — repeats advance from now (no backfill).
       let nextRunAt: string | null = null;
       let enabled = job.enabled;

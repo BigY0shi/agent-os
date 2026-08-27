@@ -161,6 +161,12 @@ export interface Settings {
   };
   mcp?: { secret?: string };
   scheduler?: { tickSeconds?: number };
+  // SPEC-B tasks: the SINGLE timezone source for schedule interpretation
+  // (CONVENTIONS §10) + the Ready editing buffer before a run starts.
+  tasks?: {
+    timezone?: string;         // IANA zone; changing it recalculates active schedules (B4.7)
+    editingBufferSec?: number; // Ready buffer before execution starts
+  };
 
   [extra: string]: unknown;
 }
@@ -217,6 +223,7 @@ export const DEFAULT_SETTINGS: Settings = {
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},
   scheduler: { tickSeconds: 30 },
+  tasks: { timezone: "America/Chicago", editingBufferSec: 120 },
 };
 
 function settingsPath(): string {
