@@ -17,10 +17,18 @@ import {
   listActivities,
   type AccountRow,
 } from "@/lib/v2/integrations/store";
+import { callTool } from "@/lib/v2/integrations/runtime";
+import { listTasks } from "@/lib/v2/tasks/store";
+import type { Task } from "@/lib/v2/tasks/types";
 import { GET as fleetRuntimeGET } from "@/app/api/fleet/runtime/route";
 import { GET as dealsListGET } from "@/app/api/deals/list/route";
 import { getWidget } from "./registry";
-import { SEVERITY_RANK, type WidgetData } from "./types";
+import {
+  SEVERITY_RANK,
+  type CalendarPayload,
+  type TasksUpcomingPayload,
+  type WidgetData,
+} from "./types";
 
 type Config = Record<string, unknown>;
 
@@ -205,6 +213,141 @@ async function agentStatusData(config: Config): Promise<WidgetData> {
   return { available: true, agents, total: rt.agents.length, generatedAt: rt.generatedAt };
 }
 
+// ─── tasks-upcoming (H3.2 — REAL data, the v2 tasks store landed in Phase 2) ─
+// Scopes (§6.6 config): 'new' = latest Todo/Ready by creation; 'upcoming' =
+// due (run_at) or calendar-pinned (scheduled_date) tasks sorted soonest-first
+// (overdue included at the top — honest, not hidden); 'in-progress' =
+// Working/Waiting/Review.
+
+function taskWire(t: Task): TasksUpcomingPayload["tasks"][number] {
+  return {
+    id: t.id,
+    displayId: t.displayId,
+    title: t.title,
+    status: t.status,
+    runAt: t.runAt,
+    scheduledDate: t.scheduledDate,
+    agentId: t.agentId,
+    createdAt: t.createdAt,
+  };
+}
+
+/** Effective due instant for 'upcoming' sorting: run_at wins, else the
+ *  calendar pin's date (lexical ISO compare works for both). */
+function dueKey(t: Task): string | null {
+  if (t.runAt) return t.runAt;
+  if (t.scheduledDate) return `${t.scheduledDate}T00:00:00.000Z`;
+  return null;
+}
+
+function tasksUpcomingData(config: Config): WidgetData<TasksUpcomingPayload> {
+  const maxItems = Math.min(num(config.maxItems, 10), 100);
+  const rawScope = str(config.scope);
+  const scope: TasksUpcomingPayload["scope"] =
+    rawScope === "new" || rawScope === "in-progress" ? rawScope : "upcoming";
+
+  let tasks: Task[];
+  if (scope === "new") {
+    tasks = listTasks({ status: ["Todo", "Ready"], limit: maxItems });
+  } else if (scope === "in-progress") {
+    tasks = listTasks({ status: ["Working", "Waiting", "Review"], limit: maxItems });
+  } else {
+    tasks = listTasks({ status: ["Todo", "Waiting", "Ready", "Working", "Review"], limit: 1000 })
+      .filter((t) => dueKey(t) !== null)
+      .sort((a, b) => (dueKey(a)! < dueKey(b)! ? -1 : dueKey(a)! > dueKey(b)! ? 1 : 0))
+      .slice(0, maxItems);
+  }
+  return { available: true, scope, tasks: tasks.map(taskWire) };
+}
+
+// ─── newsletter-edition + anynotes-recent (H3.2 placeholder contracts) ───────
+// The §6.6 payload contracts live in types.ts (NewsletterEditionPayload /
+// AnynotesRecentPayload) for SPEC-F workstreams K and I — those workstreams
+// REPLACE these stubs (CONVENTIONS §8: fill the route, never register a second
+// widget). Until then the honest envelope, so the picker greys them with the
+// reason.
+
+function newsletterEditionData(): WidgetData {
+  return { available: false, reason: "workstream not built — the Newsletter module (SPEC-F K) fills this route" };
+}
+
+function anynotesRecentData(): WidgetData {
+  return { available: false, reason: "workstream not built — the AnyNotes module (SPEC-F I) fills this route" };
+}
+
+// ─── calendar (H3.3 — first connector-powered widget, proves the G4 path) ────
+// Calls the gcal connector's gcal_list_events tool through runtime.callTool
+// (verbatim tool name, redacted call logging, the __setGoogleMockForTests seam
+// keeps it offline-testable). Config: accountId (account-select over connected
+// gcal accounts) + days 1/7. Window boundaries use the server's local midnight
+// (this is Yoshi's single-user box — server tz == user tz; revisit with
+// settings.tasks.timezone if that ever splits).
+
+/** Parse the fixed gcal_list_events text format back into rows:
+ *  "- <summary> (<start>)\n  ID: <id>\n  Location: <loc>" blocks. */
+export function parseGcalEventList(text: string): CalendarPayload["events"] {
+  if (!text.startsWith("Found ")) return [];
+  const events: CalendarPayload["events"] = [];
+  for (const block of text.slice(text.indexOf("\n\n") + 2).split("\n\n")) {
+    const lines = block.split("\n");
+    const head = lines[0] ?? "";
+    if (!head.startsWith("- ")) continue;
+    // summary may itself contain " (" — the START stamp is the LAST paren group.
+    const open = head.lastIndexOf(" (");
+    if (open < 2 || !head.endsWith(")")) continue;
+    const summary = head.slice(2, open);
+    const start = head.slice(open + 2, -1);
+    const idLine = lines.find((l) => l.trim().startsWith("ID: "));
+    const locLine = lines.find((l) => l.trim().startsWith("Location: "));
+    const id = idLine ? idLine.trim().slice(4) : null;
+    const location = locLine ? locLine.trim().slice(10) : null;
+    events.push({
+      id,
+      summary,
+      start,
+      location: location === "N/A" ? null : location,
+    });
+  }
+  return events;
+}
+
+async function calendarData(config: Config): Promise<WidgetData<CalendarPayload>> {
+  const accountId = str(config.accountId);
+  if (!accountId) {
+    return { available: false, reason: "connect Google Calendar on /integrations, then pick the account in this widget's settings" };
+  }
+  const account = getAccount(accountId);
+  if (!account || !account.isActive) {
+    return { available: false, reason: `Google Calendar account '${accountId}' is not connected (or was disconnected)` };
+  }
+  if (account.definitionSlug !== "gcal") {
+    return { available: false, reason: `account '${accountId}' is a '${account.definitionSlug}' account, not Google Calendar` };
+  }
+
+  const days = num(config.days, 1) === 7 ? 7 : 1;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start.getTime() + days * 86_400_000);
+
+  const result = await callTool(
+    accountId,
+    "gcal_list_events",
+    {
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      orderBy: "startTime",
+      singleEvents: true,
+      maxResults: 50,
+    },
+    { source: "widget:calendar" },
+  );
+  if (result.isError) {
+    // Soft connector-API failure (runtime decision 6) — honest, not fabricated.
+    return { available: false, reason: result.text };
+  }
+  return { available: true, accountId, days, events: parseGcalEventList(result.text) };
+}
+
 // ─── dispatcher ──────────────────────────────────────────────────────────────
 
 /**
@@ -223,9 +366,17 @@ export async function getWidgetData(slug: string, config: Config = {}): Promise<
         return await pipelineStatsData(config);
       case "agent-status":
         return await agentStatusData(config);
+      case "tasks-upcoming":
+        return tasksUpcomingData(config);
+      case "newsletter-edition":
+        return newsletterEditionData();
+      case "anynotes-recent":
+        return anynotesRecentData();
+      case "calendar":
+        return await calendarData(config);
       default:
-        // Registry entry without a data fn (future placeholder slugs land in
-        // H3.2 with explicit contracts) — honest, not fabricated.
+        // Registry entry without a data fn (legacy-* wrappers are dataKind
+        // 'none' — their components never call this) — honest, not fabricated.
         return { available: false, reason: `widget '${slug}' has no data source yet` };
     }
   } catch (err) {

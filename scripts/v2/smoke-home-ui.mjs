@@ -1,12 +1,16 @@
-// SPEC-D H2.1/H3.1/H4.2 smoke: the home widget framework UI contract (static
-// file/regex checks, house *-ui pattern — the dynamic registry/data/attention
-// legs live in smoke-widgets.mjs). Covers: files + 'use client' + exports,
-// per-cell error boundary, StatusBand imported from the SHARED path with NO
-// local palette copy (CONVENTIONS §6), registry ↔ component-map parity,
-// HomeGrid defaults fallback, NO DnD yet (chunk 2), hero built standalone and
-// NOT mounted in Overview (H1.1 is chunk 2 — Overview/dashboard are Yoshi's
-// dirty files and this chunk must not touch them), honest unavailable
-// rendering, and the routes the components call all existing.
+// SPEC-D H2.1/H2.2/H1.1/H3.* /H4.2 smoke: the home widget framework UI
+// contract (static file/regex checks, house *-ui pattern — the dynamic
+// registry/data/attention legs live in smoke-widgets.mjs). Covers: files +
+// 'use client' + exports, per-cell error boundary, StatusBand imported from
+// the SHARED path with NO local palette copy (CONVENTIONS §6), registry ↔
+// component-map parity, HomeGrid defaults fallback, H2.2 edit mode (Customize
+// toggle, hand-rolled HTML5 DnD per decision 9, size cycle, remove, picker,
+// config form incl. account-select, 800ms debounced settings save,
+// Cancel/Done), H1.1 Overview restructure (hero + scratchpad slot + grid
+// mounted, Yoshi's pre-existing edit markers PRESERVED, legacy-* wrappers
+// importing the dashboard panels unchanged), showScratchpad=false path,
+// honest unavailable rendering, and the routes the components call all
+// existing.
 // Run: npx tsx scripts/v2/smoke-home-ui.mjs
 import path from "node:path";
 import fs from "node:fs";
@@ -27,6 +31,10 @@ const homeFiles = [
   "src/components/v2/home/WidgetShell.tsx",
   "src/components/v2/home/widgetComponents.tsx",
   "src/components/v2/home/AttentionHero.tsx",
+  // chunk 2 (H2.2 + H1.1)
+  "src/components/v2/home/WidgetPicker.tsx",
+  "src/components/v2/home/WidgetConfigForm.tsx",
+  "src/components/v2/home/ScratchpadSlot.tsx",
 ];
 for (const f of homeFiles) {
   check(`${f} exists`, exists(f));
@@ -72,18 +80,59 @@ check("agent-status renders the SHARED StatusBand (@/components/v2/StatusBand)",
 // ── registry ↔ component map parity ─────────────────────────────────────────
 {
   const reg = read("src/lib/v2/widgets/registry.ts");
-  const regSlugs = [...reg.matchAll(/^\s*slug: "([^"]+)"/gm)].map((m) => m[1]).sort();
+  // Not line-anchored: legacy entries come via the legacyDef({ slug: "…" }) helper.
+  const regSlugs = [...reg.matchAll(/slug: "([^"]+)"/g)].map((m) => m[1]).sort();
   const mapBlock = cmp.slice(cmp.indexOf("WIDGET_COMPONENTS"));
   const mapSlugs = [...mapBlock.matchAll(/^\s*"?([a-z][a-z0-9-]*)"?: \w+Widget,/gm)].map((m) => m[1]).sort();
   check("every registry slug has a component and vice versa", JSON.stringify(regSlugs) === JSON.stringify(mapSlugs), { regSlugs, mapSlugs });
+  check("chunk-2 slugs registered ONCE each (tasks-upcoming/calendar/newsletter-edition/anynotes-recent + 8 legacy-*)",
+    ["tasks-upcoming", "calendar", "newsletter-edition", "anynotes-recent",
+     "legacy-mission", "legacy-jarvis", "legacy-telemetry", "legacy-kpi",
+     "legacy-todo", "legacy-deals", "legacy-systemmap", "legacy-timeline",
+    ].every((s) => regSlugs.filter((r) => r === s).length === 1), regSlugs);
 }
 
-// ── HomeGrid: settings layout + defaults fallback, no DnD yet ───────────────
+// ── HomeGrid: settings layout + defaults fallback ───────────────────────────
 check("HomeGrid reads settings.home.cells with the DEFAULT_HOME_CELLS fallback (resolveHomeCells)",
   grid.includes("useSettings") && grid.includes("resolveHomeCells") && grid.includes(".cells"));
-check("no DnD in chunk 1 (H2.2 lands drag/resize — §8 risk 8 mouse-first later)",
-  !grid.includes("draggable") && !shell.includes("draggable") && !grid.includes("onDrop"));
 check("unknown widget slug renders an inline notice, not a crash", grid.includes("unknown widget"));
+
+// ── H2.2 edit mode: DnD + size cycle + remove + debounced save + Cancel/Done ─
+check("Customize toggle arms edit mode (mirrors the Sidebar customize UX)",
+  grid.includes("Customize") && grid.includes("enterEdit"));
+check("hand-rolled HTML5 DnD (decision 9): draggable + onDragEnter reorder + onDrop persist",
+  grid.includes("draggable={edit}") && grid.includes("onDragEnter") && grid.includes("onDragOver") && grid.includes("onDrop"));
+check("end drop zone appends (Sidebar '__end__' pattern)", grid.includes("__end__"));
+check("size cycle S→M→L→S from SIZE_SPAN sizes", grid.includes("NEXT_SIZE") && /S: "M", M: "L", L: "S"/.test(grid));
+check("remove drops the cell from the layout (filter, never a data delete)",
+  grid.includes("onRemove") && grid.includes("cur.filter((c) => c.id !== cell.id)"));
+check("layout saves DEBOUNCED 800ms via useSettings().save({home:{cells}})",
+  grid.includes("SAVE_DEBOUNCE_MS = 800") && grid.includes("save({ home: { cells: next } })"));
+check("Done flushes the pending save; Cancel restores the enter-time snapshot",
+  grid.includes("const done") && grid.includes("const cancel") && grid.includes("snapshotRef"));
+check("WidgetShell exposes the edit controls (gear · size cycle · remove) + drag grip",
+  shell.includes("onConfigure") && shell.includes("onSizeCycle") && shell.includes("onRemove") && shell.includes("GripVertical"));
+check("chromeless legacy wrappers render bare outside edit mode (pixel parity with the old page)",
+  shell.includes("chromeless") && read("src/lib/v2/widgets/registry.ts").includes("chromeless: true"));
+
+// ── H2.2 WidgetPicker: honest catalog ───────────────────────────────────────
+const picker = read("src/components/v2/home/WidgetPicker.tsx");
+check("picker lists the registry from /api/v2/widgets", picker.includes('fetch("/api/v2/widgets"'));
+check("picker probes each endpoint widget's data route and GREYS unavailable entries WITH the reason",
+  picker.includes("/api/v2/widgets/${def.slug}/data") && picker.includes("not available:") && picker.includes("opacity"));
+check("greyed entries stay addable (placeholder widgets render their empty state once placed)",
+  picker.includes("onClick={() => onAdd(def)}"));
+
+// ── H2.2 WidgetConfigForm: auto-form from configSchema ──────────────────────
+const form = read("src/components/v2/home/WidgetConfigForm.tsx");
+check("config form auto-renders the schema field types (input/select/toggle/account-select)",
+  form.includes('case "toggle"') && form.includes('case "select"') && form.includes('case "account-select"') &&
+  form.includes('type="text"'));
+check("account-select fetches connected accounts from /api/v2/integrations (H3.3 dynamic options)",
+  form.includes('fetch("/api/v2/integrations"') && form.includes("isActive"));
+check("account-select with zero connected accounts shows the honest empty state, never fake options",
+  form.includes("no connected"));
+check("form saves into cell.config (onSave) and can cancel", form.includes("onSave(values)") && form.includes("onCancel"));
 
 // ── honest unavailable rendering (fake-telemetry P0) ────────────────────────
 check("widget components render the honest {available:false} state verbatim",
@@ -104,16 +153,60 @@ check("collector-health footnote (honest-metrics rule)", hero.includes("unavaila
 check("zero open items → thin All-clear band (§6.4)", hero.includes("All clear"));
 check("hero live-updates via usePollWhileVisible", hero.includes("usePollWhileVisible"));
 
-// ── H1.1 guard: hero/grid NOT mounted in Overview yet (chunk 2) ─────────────
+// ── H1.1: Overview restructure — hero + scratchpad + grid, Yoshi's edits kept ─
 {
   const overview = read("src/components/Overview.tsx");
-  check("Overview.tsx untouched by this chunk: no AttentionHero/HomeGrid mount (H1.1 is chunk 2)",
-    !overview.includes("AttentionHero") && !overview.includes("HomeGrid") && !overview.includes("v2/home"));
+  check("Overview now mounts the H1.1 spine: HeroGreeting → AttentionHero → ScratchpadSlot → HomeGrid",
+    overview.includes("<HeroGreeting") && overview.includes("<AttentionHero") &&
+    overview.includes("<ScratchpadSlot") && overview.includes("<HomeGrid"));
+  // Yoshi's PRE-EXISTING uncommitted edit (JarvisModule centerpiece comment)
+  // must SURVIVE the restructure — his distinctive marker line, verbatim.
+  check("Yoshi's edit marker preserved ('the warm voice assistant' comment survives the rework)",
+    overview.includes("the warm voice assistant") && overview.includes("it replaced the placeholder AssistantPanel"));
+  check("Overview no longer composes the panels directly (they render via the legacy-* widgets)",
+    !overview.includes("<JarvisModule") && !overview.includes("<TelemetryPanel") && !overview.includes("<KPIGrid"));
+
+  // Legacy wrappers: widgetComponents imports the dashboard panels UNCHANGED.
+  for (const [slug, importPath] of [
+    ["legacy-jarvis", "@/components/dashboard/JarvisModule"],
+    ["legacy-telemetry", "@/components/dashboard/TelemetryPanel"],
+    ["legacy-kpi", "@/components/dashboard/KPIGrid"],
+    ["legacy-deals", "@/components/dashboard/DealDeskSummary"],
+    ["legacy-systemmap", "@/components/dashboard/SystemMap"],
+    ["legacy-timeline", "@/components/dashboard/MiniTimeline"],
+    ["legacy-mission", "@/components/dashboard/MissionStripe"],
+    ["legacy-todo", "@/components/TodoPanel"],
+  ]) {
+    check(`${slug} wraps the existing panel (imports ${importPath})`,
+      cmp.includes(`"${importPath}"`) && cmp.includes(`"${slug}":`));
+  }
+  // Default layout reproduces the pre-rework page order (nothing visually lost).
+  const typesSrc = read("src/lib/v2/widgets/types.ts");
+  const defaultOrder = [...typesSrc.matchAll(/widgetSlug: "(legacy-[a-z]+)"/g)].map((m) => m[1]);
+  check("DEFAULT_HOME_CELLS reproduces Yoshi's page order (mission→jarvis→telemetry→kpi→todo→deals→systemmap→timeline)",
+    JSON.stringify(defaultOrder) === JSON.stringify([
+      "legacy-mission", "legacy-jarvis", "legacy-telemetry", "legacy-kpi",
+      "legacy-todo", "legacy-deals", "legacy-systemmap", "legacy-timeline",
+    ]), defaultOrder);
+
+  // dashboard/* content stays READ-ONLY (imported, never edited): none of the
+  // panels themselves reach into the widget framework.
   const dashboardImports = fs
     .readdirSync(path.join(root, "src/components/dashboard"))
     .filter((f) => f.endsWith(".tsx"))
     .some((f) => read(`src/components/dashboard/${f}`).includes("v2/home") || read(`src/components/dashboard/${f}`).includes("v2/widgets"));
-  check("dashboard/* untouched: nothing there imports the widget framework", !dashboardImports);
+  check("dashboard/* untouched: no panel imports the widget framework", !dashboardImports);
+}
+
+// ── H1.1 ScratchpadSlot: feature-detect + settings toggle ───────────────────
+{
+  const slot = read("src/components/v2/home/ScratchpadSlot.tsx");
+  check("ScratchpadSlot feature-detects the /today module via dynamic import try/catch (§6.4)",
+    slot.includes('import("@/components/v2/pages/ScratchpadView")') && slot.includes(".catch("));
+  check("settings.home.showScratchpad === false hides the slot (default stays visible)",
+    slot.includes("showScratchpad === false") && slot.includes("return null"));
+  check("absent module renders the dashed placeholder, never a crash",
+    slot.includes("Today's scratchpad arrives with Tasks V2"));
 }
 
 // ── components ↔ live routes ────────────────────────────────────────────────
