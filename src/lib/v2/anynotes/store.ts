@@ -329,7 +329,13 @@ export function getReply(id: string): Reply | null {
 
 export function listReplies(noteId: string): Reply[] {
   const rows = getDb()
-    .prepare("SELECT * FROM anynote_replies WHERE note_id = ? ORDER BY created_at, id")
+    // Tiebreak on rowid, NOT id: created_at is millisecond ISO text, and the
+    // replies route inserts the human reply and the pending @jarvis row inside
+    // the same millisecond, so ties are the common case rather than the edge.
+    // shortId() is random, so ordering by it shuffled the thread ~25% of the
+    // time — the answer could render above the question. rowid is monotonic
+    // per insert, so this is true insertion order with no schema change.
+    .prepare("SELECT * FROM anynote_replies WHERE note_id = ? ORDER BY created_at, rowid")
     .all(noteId) as ReplyDbRow[];
   return rows.map(toReply);
 }
@@ -348,6 +354,26 @@ export function setReplyResult(
     .prepare("UPDATE anynote_replies SET body = ?, error = ?, pending = 0 WHERE id = ?")
     .run(isError ? "" : result.body, isError ? result.error : null, id);
   return getReply(id);
+}
+
+/**
+ * Reply counts for a batch of notes (I3.3: the NoteCard's reply badge).
+ * Chunk 1 shipped no bulk counter and the list route had nothing to render the
+ * badge from — this is the one read the card needs, done in ONE query instead
+ * of an N+1 of listReplies. Ids absent from the map have zero replies.
+ */
+export function replyCountsFor(noteIds: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (noteIds.length === 0) return out;
+  const placeholders = noteIds.map(() => "?").join(",");
+  const rows = getDb()
+    .prepare(
+      `SELECT note_id, COUNT(*) AS n FROM anynote_replies
+       WHERE note_id IN (${placeholders}) GROUP BY note_id`,
+    )
+    .all(...noteIds) as { note_id: string; n: number }[];
+  for (const r of rows) out[r.note_id] = r.n;
+  return out;
 }
 
 /** Count of jarvis replies still generating (widget/attention side data). */

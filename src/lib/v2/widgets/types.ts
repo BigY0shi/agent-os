@@ -94,16 +94,26 @@ export interface NewsletterEditionPayload extends Record<string, unknown> {
   };
 }
 
-/** `anynotes-recent` — contract for SPEC-F workstream I (§6.6 verbatim). */
+/**
+ * `anynotes-recent` — SPEC-F workstream I (I4.1 FILLED this contract).
+ *
+ * Two shape corrections against the §6.6 placeholder, forced by the real note
+ * row (src/lib/v2/anynotes/types.ts): `url` is NULLABLE (text and screenshot
+ * notes have no source link — the card links to the in-app note instead), and
+ * `pendingJarvis` carries the "@jarvis is still thinking" count the widget
+ * spec asks for.
+ */
 export interface AnynotesRecentPayload extends Record<string, unknown> {
   notes: Array<{
     id: string;
     type: string;
     title: string;
-    url: string;
+    url: string | null;
     capturedAt: string;
     replyCount: number;
   }>;
+  /** Jarvis replies still generating across ALL notes (store.pendingJarvisCount). */
+  pendingJarvis: number;
 }
 
 /** `calendar` — filled by H3.3 over runtime.callTool(gcal_list_events). */

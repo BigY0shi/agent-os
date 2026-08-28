@@ -9,7 +9,7 @@
 
 import { useCallback, useState, type ComponentType } from "react";
 import Link from "next/link";
-import { Bot, CalendarDays, Gauge, ListTodo, Rss } from "lucide-react";
+import { Bot, CalendarDays, Gauge, ListTodo, Rss, StickyNote } from "lucide-react";
 import StatusBand, { type StatusBandKind } from "@/components/v2/StatusBand";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import type {
@@ -445,29 +445,47 @@ function NewsletterEditionWidget({ config }: WidgetComponentProps) {
   );
 }
 
+// SPEC-F I4.1: the placeholder is FILLED. Cards link to the note's slide-over
+// on /anynotes (the same ?note= deep link the attention.flag route uses), NOT
+// to the captured source — text/screenshot notes have no url at all. The
+// pending-@jarvis count is the widget's one live signal.
 function AnynotesRecentWidget({ config }: WidgetComponentProps) {
   const { data, failed } = useWidgetData<AnynotesRecentPayload>("anynotes-recent", config);
   if (!data) return <Pending failed={failed} />;
   if (!data.available) return <Unavailable reason={data.reason} />;
+  if (data.notes.length === 0) {
+    return (
+      <EmptyState
+        icon={<StickyNote size={18} />}
+        title="Nothing captured yet"
+        hint="Paste a link, drop a screenshot or jot a note on /anynotes."
+      />
+    );
+  }
   return (
     <div className="flex flex-col gap-1.5">
+      {data.pendingJarvis > 0 && (
+        <div className="font-mono text-[10px]" style={{ color: "#e8a33d" }}>
+          {data.pendingJarvis} @jarvis {data.pendingJarvis === 1 ? "reply" : "replies"} generating…
+        </div>
+      )}
       {data.notes.map((n) => (
-        <a
+        <Link
           key={n.id}
-          href={n.url}
+          href={`/anynotes?note=${n.id}`}
           className="rounded-lg px-3 py-2"
           style={{ border: "1px solid var(--panel-border, #2a2436)" }}
         >
           <div className="flex items-baseline gap-2">
             <span className="truncate text-[12px]" style={{ color: "var(--fg, #e8e2f0)" }}>
-              {n.title}
+              {n.title || "(untitled)"}
             </span>
             <span className="ml-auto shrink-0 font-mono text-[10px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
               {n.type} · {fmtAgo(n.capturedAt)}
               {n.replyCount > 0 ? ` · ${n.replyCount} repl${n.replyCount === 1 ? "y" : "ies"}` : ""}
             </span>
           </div>
-        </a>
+        </Link>
       ))}
     </div>
   );

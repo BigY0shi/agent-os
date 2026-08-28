@@ -122,9 +122,33 @@ let exiledId = null;
   const q = store.listNotes({ status: "all", q: "straight through the store" });
   check("A7 q= searches title + content_md", q.some((n) => n.id === note.id), q.length);
 
+  // Insertion order must hold even when every row lands in the SAME millisecond
+  // — which is the normal case, since the replies route writes the human reply
+  // and the pending @jarvis row back to back. Ordering by the random shortId()
+  // tiebreak shuffled this ~25% of runs; 8 rows makes a regression certain to
+  // fail rather than occasionally fail.
+  // On a THROWAWAY note, so the burst can't perturb the pending/exile counts
+  // the sections below assert against `note`.
+  const orderNote = store.createNote({ type: "text", title: "order probe", contentMd: "x" });
+  const burst = [];
+  for (let i = 0; i < 8; i++) {
+    burst.push(store.addReply({
+      noteId: orderNote.id,
+      author: i % 2 ? "jarvis" : "user",
+      body: `burst-${i}`,
+    }).id);
+  }
+  const got = store.listReplies(orderNote.id).map((r) => r.id);
+  const stamps = store.listReplies(orderNote.id).map((r) => r.createdAt);
+  check("A8 listReplies holds insertion order", JSON.stringify(got) === JSON.stringify(burst), { got, burst });
+  check("A8b …and the burst really did collide on the timestamp (the case A8 guards)",
+    new Set(stamps).size < 8, stamps);
+  store.exileNote(orderNote.id);
+
   const r1 = store.addReply({ noteId: note.id, author: "user", body: "first" });
   store.addReply({ noteId: note.id, author: "jarvis", body: "", pending: true });
-  check("A8 listReplies is chronological", store.listReplies(note.id)[0].id === r1.id);
+  check("A8c the real route pair (human + pending jarvis) keeps its order",
+    store.listReplies(note.id)[0].id === r1.id);
   check("A9 pendingJarvisCount sees the queued row", store.pendingJarvisCount() === 1);
 
   const settled = store.setReplyResult(store.listReplies(note.id)[1].id, { body: "answered" });

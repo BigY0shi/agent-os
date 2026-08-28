@@ -15,6 +15,7 @@ import { ensureTaskActions } from "./mcp/taskActions";
 import { ensureIntegrationSync } from "./integrations/schedule";
 import { ensureIntegrationMetaActions } from "./integrations/metaTools";
 import { ensureAttention } from "./attention";
+import { ensureAnynotesAttention } from "./anynotes/attention";
 import { ensureAutomations } from "./automations/engine";
 import { ensureBrowserActions } from "./mcp/browserActions";
 import { seedBrowserDrivingSkill } from "./browser/skillSeed";
@@ -88,6 +89,7 @@ export function ensureV2(): void {
     ensureIntegrationSync(); // SPEC-D G2.8: 'integration.sync' handler + per-account schedule jobs
     ensureIntegrationMetaActions(); // SPEC-D G4.2: the three integration meta-tools as F4 registry actions (AFTER integrations init)
     ensureAttention(); // SPEC-D H4.1: attention.flag bus bridge + 60s pull-collector tick
+    ensureAnynotesAttention(); // SPEC-F I4.1: anynote.reply.jarvis → attention.flag (after ensureAttention so the generic bridge is listening)
     ensureAutomations(); // SPEC-D G5.1: automation rules engine ('*' bus subscription; after attention so create_attention lands)
     ensureBrowserActions(); // SPEC-E E3.4: browser_* on the F4 registry (synced to capability.browserEnabled)
     seedBrowserDrivingSkill(); // SPEC-E E3.5: idempotent browser-driving SKILL.md + settings.skills.modules.browser

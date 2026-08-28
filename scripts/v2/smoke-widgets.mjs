@@ -339,15 +339,20 @@ const EXPECTED_SLUGS = [
 }
 
 // ---------------------------------------------------------------------------
-// H. newsletter-edition + anynotes-recent (H3.2) — contract stubs stay honest
+// H. newsletter-edition stub + anynotes-recent (FILLED by SPEC-F I4.1)
 // ---------------------------------------------------------------------------
 {
   const news = await (await dataReq("newsletter-edition", {})).json();
   check("newsletter-edition → {available:false, reason 'workstream not built'} until SPEC-F K fills it",
     news.available === false && /workstream not built/i.test(news.reason ?? ""), news);
+  // SPEC-F I4.1 replaced the anynotes stub with the real store read. An EMPTY
+  // AnyNotes table is `available:true` with zero notes — "nothing captured
+  // yet" is a real answer, not an unavailable source (the honest-metrics rule
+  // forbids fabrication, not emptiness). Depth of the payload is covered by
+  // smoke-anynotes-ui §H against a seeded note.
   const notes = await (await dataReq("anynotes-recent", {})).json();
-  check("anynotes-recent → {available:false, reason 'workstream not built'} until SPEC-F I fills it",
-    notes.available === false && /workstream not built/i.test(notes.reason ?? ""), notes);
+  check("anynotes-recent → available:true with a real notes array (SPEC-F I4.1 filled the placeholder)",
+    notes.available === true && Array.isArray(notes.notes) && typeof notes.pendingJarvis === "number", notes);
 }
 
 // ---------------------------------------------------------------------------

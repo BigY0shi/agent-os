@@ -19,6 +19,7 @@ import {
 } from "@/lib/v2/integrations/store";
 import { callTool } from "@/lib/v2/integrations/runtime";
 import { getStatusSnapshot } from "@/lib/v2/agents/statusFeed";
+import { listNotes, listReplies, pendingJarvisCount } from "@/lib/v2/anynotes/store";
 import { listTasks } from "@/lib/v2/tasks/store";
 import type { Task } from "@/lib/v2/tasks/types";
 import { GET as fleetRuntimeGET } from "@/app/api/fleet/runtime/route";
@@ -26,6 +27,7 @@ import { GET as dealsListGET } from "@/app/api/deals/list/route";
 import { getWidget } from "./registry";
 import {
   SEVERITY_RANK,
+  type AnynotesRecentPayload,
   type CalendarPayload,
   type TasksUpcomingPayload,
   type WidgetData,
@@ -263,19 +265,32 @@ function tasksUpcomingData(config: Config): WidgetData<TasksUpcomingPayload> {
   return { available: true, scope, tasks: tasks.map(taskWire) };
 }
 
-// ─── newsletter-edition + anynotes-recent (H3.2 placeholder contracts) ───────
-// The §6.6 payload contracts live in types.ts (NewsletterEditionPayload /
-// AnynotesRecentPayload) for SPEC-F workstreams K and I — those workstreams
-// REPLACE these stubs (CONVENTIONS §8: fill the route, never register a second
-// widget). Until then the honest envelope, so the picker greys them with the
-// reason.
+// ─── newsletter-edition (H3.2 placeholder contract) ─────────────────────────
+// The §6.6 payload contract lives in types.ts (NewsletterEditionPayload) for
+// SPEC-F workstream K — that workstream REPLACES this stub (CONVENTIONS §8:
+// fill the route, never register a second widget). Until then the honest
+// envelope, so the picker greys it with the reason.
 
 function newsletterEditionData(): WidgetData {
   return { available: false, reason: "workstream not built — the Newsletter module (SPEC-F K) fills this route" };
 }
 
-function anynotesRecentData(): WidgetData {
-  return { available: false, reason: "workstream not built — the AnyNotes module (SPEC-F I) fills this route" };
+// ─── anynotes-recent (SPEC-F I4.1 — the placeholder FILLED) ─────────────────
+// Reads the workstream-I store directly (same process, same db). An empty
+// inbox is `available: true` with zero notes — "nothing captured yet" is a
+// real answer, not an unavailable source.
+
+function anynotesRecentData(config: Config): WidgetData<AnynotesRecentPayload> {
+  const maxItems = Math.min(num(config.maxItems, 10), 50);
+  const notes = listNotes({ status: "all", limit: maxItems }).map((n) => ({
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    url: n.url,
+    capturedAt: n.capturedAt,
+    replyCount: listReplies(n.id).length,
+  }));
+  return { available: true, notes, pendingJarvis: pendingJarvisCount() };
 }
 
 // ─── calendar (H3.3 — first connector-powered widget, proves the G4 path) ────
@@ -374,7 +389,7 @@ export async function getWidgetData(slug: string, config: Config = {}): Promise<
       case "newsletter-edition":
         return newsletterEditionData();
       case "anynotes-recent":
-        return anynotesRecentData();
+        return anynotesRecentData(config);
       case "calendar":
         return await calendarData(config);
       default:

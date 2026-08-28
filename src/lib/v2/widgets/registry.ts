@@ -222,7 +222,7 @@ export const WIDGETS: WidgetDef[] = [
     slug: "anynotes-recent",
     title: "AnyNotes",
     description:
-      "Recently captured AnyNotes (workstream I). Not built yet — the data route answers honestly until it lands.",
+      "Recently captured AnyNotes with their reply counts, plus how many @jarvis replies are still generating.",
     icon: "StickyNote",
     minSize: "S",
     defaultSize: "M",

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureV2 } from "@/lib/v2/boot";
 import { captureUrl, saveScreenshot } from "@/lib/v2/anynotes/capture";
 import { ingestNote } from "@/lib/v2/anynotes/ingest";
-import { countsByStatus, createNote, listNotes } from "@/lib/v2/anynotes/store";
+import { countsByStatus, createNote, listNotes, replyCountsFor } from "@/lib/v2/anynotes/store";
 import { isNoteStatus, isNoteType, type Note, type NoteStatus } from "@/lib/v2/anynotes/types";
 import { emit } from "@/lib/v2/events";
 import { readSettings } from "@/lib/settings";
@@ -47,7 +47,16 @@ export async function GET(req: NextRequest) {
       limit: limitParam ? Number(limitParam) : undefined,
       before: sp.get("before") || undefined,
     });
-    return NextResponse.json({ notes, counts: countsByStatus() }, noStore);
+    // replyCounts is ADDITIVE (I3.3): the NoteCard's reply badge had no source
+    // in the chunk-1 contract. One grouped query, never an N+1.
+    return NextResponse.json(
+      {
+        notes,
+        counts: countsByStatus(),
+        replyCounts: replyCountsFor(notes.map((n) => n.id)),
+      },
+      noStore,
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500, ...noStore });
