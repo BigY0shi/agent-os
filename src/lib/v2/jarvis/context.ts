@@ -1,6 +1,7 @@
 import { readSettings } from "../../settings";
 import { personaPrompt } from "../../jarvisPersona";
 import { getPersonaDocument } from "../memory/persona";
+import { renderSkillPolicyBlock } from "../skills/store";
 import {
   IDENTITY_BLOCK,
   TOOL_GUIDANCE_BLOCK,
@@ -18,7 +19,7 @@ import {
  *   runtime <identity> (never user-editable)
  *   → jarvisPersona record (model-agnostic editable data, rule 17)
  *   → A6 persona DOCUMENT (getPersonaDocument — absent until generated)
- *   → skills seam (settings.skills.global NAMES as a note; full skills = Phase 5)
+ *   → skills slot (B7: active v2_skills POLICY bodies + file-skill names note)
  *   → <current_datetime> + <active_page> (per-request pageContext, NEVER persisted)
  *   → spoken mechanics.
  *
@@ -64,6 +65,9 @@ export interface BuildContextInput {
   /** Test override — production reads getPersonaDocument()/settings itself. */
   personaDocContent?: string | null;
   skillNames?: string[];
+  /** Test override for the B7 policy block — undefined = read the v2_skills
+   *  store (renderSkillPolicyBlock); null/"" = render none. */
+  skillPolicies?: string | null;
   now?: Date;
 }
 
@@ -90,13 +94,30 @@ function skillNamesOrSettings(input: BuildContextInput): string[] {
   }
 }
 
+/**
+ * The C4 skills SLOT (B7 upgrade): the active v2_skills POLICY bodies
+ * (<skill_policies>, from skills/store.ts — "" on empty/DB-unbooted, warned
+ * inside renderSkillPolicyBlock) followed by the file-skill NAMES note. Slot
+ * position in the assembly is unchanged (…doc → skills → datetime…, the
+ * smoke-asserted order).
+ */
+function skillsSlot(input: BuildContextInput): string {
+  const policies =
+    input.skillPolicies !== undefined
+      ? (input.skillPolicies ?? "")
+      : renderSkillPolicyBlock();
+  return [policies, skillsNoteBlock(skillNamesOrSettings(input))]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /** Session-stable half — seeds the warm SDK session's system prompt. */
 export function buildStableSystemPrompt(input: BuildContextInput = {}): string {
   return [
     IDENTITY_BLOCK,
     personaPrompt(),
     userPersonaBlock(personaDocOrNull(input)),
-    skillsNoteBlock(skillNamesOrSettings(input)),
+    skillsSlot(input),
     TOOL_GUIDANCE_BLOCK,
     RECALLED_MEMORY_RULE,
     SPOKEN_MECHANICS_BLOCK,
@@ -122,7 +143,7 @@ export function buildSystemPrompt(input: BuildContextInput = {}): string {
     IDENTITY_BLOCK,
     personaPrompt(),
     userPersonaBlock(personaDocOrNull(input)),
-    skillsNoteBlock(skillNamesOrSettings(input)),
+    skillsSlot(input),
     RECALLED_MEMORY_RULE,
     datetimeBlock(input.now),
     activePageBlock(input.pageContext),

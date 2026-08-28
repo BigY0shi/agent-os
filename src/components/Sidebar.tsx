@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -81,6 +81,10 @@ const NAV: NavItem[] = [
   // WebMCP Engine (SPEC-C D3): build/test/version/publish MCP tool packages.
   // Lives in "Self" beside /tasks//today (sectionOf fallback) — not in any Set.
   { href: "/webmcp",   label: "WebMCP",   icon: <Hammer size={16} />, accent: "#b7852f", dim: "rgba(183,133,47,0.16)" },
+  // Skills-as-policies (SPEC-B B7): standing policy blocks injected into task
+  // execution + Jarvis. Lives in "Self" beside /webmcp//memory (sectionOf
+  // fallback) — not in any section Set.
+  { href: "/skills",   label: "Skills",   icon: <ScrollText size={16} />, accent: "#c4b5fd", dim: "rgba(196,181,253,0.16)" },
   { href: "/memory",   label: "Memory",   icon: <Brain size={16} />,     accent: "#22d3ee", dim: "rgba(34,211,238,0.16)" },
   // Replaced Build Guide (2026-07-26) — a static how-to earned less shelf space than a
   // real shell. /guide still renders if you navigate to it directly.

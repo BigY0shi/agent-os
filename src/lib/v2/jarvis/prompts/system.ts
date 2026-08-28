@@ -67,12 +67,15 @@ export const CLI_ANSWER_ONLY_NOTE =
   "action, explain what you would do and tell them the full engine (Settings → " +
   "Jarvis → brain engine 'sdk') can execute it.";
 
-/** <skills> seam — global operating-skill NAMES only (full skills land Phase 5). */
+/** <skills> note — FILE-based operating-skill NAMES (platformSkills; their
+ *  bodies are applied by the CLI execution lanes, not here). The in-context
+ *  policy skills (B7, v2_skills) render as a sibling <skill_policies> block at
+ *  the same assembly slot — see context.ts skillsSlot(). */
 export function skillsNoteBlock(globalSkillNames: string[]): string {
   if (!globalSkillNames.length) return "";
   return `<skills>
 Operating skills active platform-wide (names only — their playbooks are applied
-by the execution engines, full in-context skills land later): ${globalSkillNames.join(", ")}.
+by the execution engines): ${globalSkillNames.join(", ")}.
 </skills>`;
 }
 

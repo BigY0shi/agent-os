@@ -380,6 +380,27 @@ CREATE TABLE IF NOT EXISTS v2_page_comments (
 CREATE INDEX IF NOT EXISTS idx_v2_page_comments_page ON v2_page_comments(page_id, created_at);
 `;
 
+const M022_SKILLS_POLICIES = `
+-- SPEC-B B7 (CONVENTIONS §11): skills-as-policies — standing policy blocks
+-- authored in-app (/skills page) and injected into task-execution prompts (B2)
+-- and the Jarvis context (C4) via skills/store.ts withSkills()/
+-- renderSkillPolicyBlock(). DISTINCT from the FILE-based operating skills
+-- (~/.agentic-os/skills/<name>/SKILL.md, platformSkills.ts), which keep
+-- fronting the CLI-agent lanes — coexistence documented in skills/store.ts.
+CREATE TABLE IF NOT EXISTS v2_skills (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  policy_md   TEXT NOT NULL DEFAULT '',
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  position    INTEGER NOT NULL DEFAULT 0,  -- injection/list order (ascending)
+  archived_at TEXT,                        -- soft-archive stamp; rows are never destroyed (house rule)
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_skills_order ON v2_skills(position, created_at);
+`;
+
 const M030_WEBMCP_CORE = `
 -- SPEC-C D1/D2: WebMCP Engine core. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
 -- secrets_json holds NAMES -> '{{secret:NAME}}' refs only; the VALUES live in
@@ -662,6 +683,27 @@ export const MIGRATIONS: Migration[] = [
     name: "pages_scratchpad",
     up: (db) => {
       db.exec(M021_PAGES_SCRATCHPAD);
+    },
+  },
+  {
+    version: 22,
+    name: "skills_policies",
+    up: (db) => {
+      db.exec(M022_SKILLS_POLICIES);
+      // ONE disabled example row (is_active=0 → never injected) so the /skills
+      // page has a visible template on first open. Editable/archivable in-app.
+      db.prepare(
+        `INSERT OR IGNORE INTO v2_skills
+           (id, title, description, policy_md, is_active, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, 0, ?, ?)`,
+      ).run(
+        "skill-example",
+        "Example: response style",
+        "A disabled sample policy — edit or archive it. Toggle Active to inject it.",
+        "- Lead with the answer, then the reasoning.\n- Prefer bullet lists over long prose.\n- Never invent identifiers; quote them from real output.",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
     },
   },
   {
