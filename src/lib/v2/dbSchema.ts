@@ -673,6 +673,34 @@ CREATE TABLE IF NOT EXISTS browser_tool_audit (
 CREATE INDEX IF NOT EXISTS idx_browser_audit_ts ON browser_tool_audit(ts);
 `;
 
+// SPEC-E §2 F-workstream tables (range 050-059, slot 051 per the chunk-3
+// brief). CONVENTIONS §1.4 amendment applied: ALL timestamp columns are TEXT
+// UTC ISO-8601 (the spec's INTEGER epoch-ms DDL is superseded).
+// harnesses.definition is pure-data JSON (HarnessDef, rule 17); DELETE is
+// {exiled:true} inside that JSON — rows are NEVER dropped (house rule).
+const M051_AGENTS_HARNESSES_STATUS = `
+CREATE TABLE IF NOT EXISTS harnesses (
+  id          TEXT PRIMARY KEY,                -- kebab id, e.g. 'ralph-loop'
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  kind        TEXT NOT NULL DEFAULT 'loop',    -- 'loop' | 'oneshot' | 'council' | 'custom'
+  definition  TEXT NOT NULL,                   -- JSON HarnessDef (SPEC-E §5.2)
+  builtin     INTEGER NOT NULL DEFAULT 0,      -- seeded rows; editable but never deletable
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_status_events (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts       TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  status   TEXT NOT NULL,                      -- 'running' | 'idle' | 'waiting' | 'error' | 'offline'
+  run_id   TEXT,
+  detail   TEXT                                -- short human line: 'run started (manual)', 'approval pending'
+);
+CREATE INDEX IF NOT EXISTS idx_agent_status_agent_ts ON agent_status_events(agent_id, ts);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -865,6 +893,13 @@ export const MIGRATIONS: Migration[] = [
     name: "browser_core",
     up: (db) => {
       db.exec(M050_BROWSER_CORE);
+    },
+  },
+  {
+    version: 51,
+    name: "agents_harnesses_status",
+    up: (db) => {
+      db.exec(M051_AGENTS_HARNESSES_STATUS);
     },
   },
 ];

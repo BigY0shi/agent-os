@@ -1,12 +1,15 @@
 "use client";
 
 // ── StatusBand (CONVENTIONS §6) ──────────────────────────────────────────────
-// THE shared status-band component. SPEC-E (F6.1) owns this file; created here
-// by SPEC-B B4 because E hasn't landed — E adopts it at this exact path.
-// Consumers: B4 AgentsSection, D H3.1, E F6. Palette is normative — do not
-// fork these five hex values.
+// THE shared status-band component. SPEC-E (F6.1) owns this file — created by
+// SPEC-B B4 while E was pending, ADOPTED by E in Phase 7 chunk 3. Consumers:
+// B4 AgentsSection, D H3.1, E F2/F5/F6. Palette is normative — do not fork
+// these five hex values. The canonical status union is agentsTypes.BandStatus;
+// StatusBandKind stays as a compatibility alias for existing imports.
 
-export type StatusBandKind = "running" | "idle" | "waiting" | "error" | "offline";
+import type { BandStatus } from "@/lib/agentsTypes";
+
+export type StatusBandKind = BandStatus;
 
 /** CONVENTIONS §6 single palette (matches existing sidebar accents). */
 export const STATUS_BAND_COLORS: Record<StatusBandKind, string> = {

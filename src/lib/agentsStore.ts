@@ -18,7 +18,11 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 import type { AgentDef, RunMeta, RunEvent, ApprovalReq } from "./agentsTypes";
 
-const ROOT = path.join(os.homedir(), ".agentic-os", "agents");
+// Test override (mirrors AGENTIC_OS_DB / AGENTIC_OS_SETTINGS): smokes point
+// this at a temp dir so they never touch the live agents. Absent = live root.
+const ROOT = process.env.AGENTIC_OS_AGENTS_DIR?.trim()
+  ? process.env.AGENTIC_OS_AGENTS_DIR.trim()
+  : path.join(os.homedir(), ".agentic-os", "agents");
 
 export function agentDir(id: string): string { return path.join(ROOT, id); }
 export function workspaceDir(id: string): string { return path.join(ROOT, id, "workspace"); }

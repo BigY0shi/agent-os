@@ -18,6 +18,7 @@ import {
   type AccountRow,
 } from "@/lib/v2/integrations/store";
 import { callTool } from "@/lib/v2/integrations/runtime";
+import { getStatusSnapshot } from "@/lib/v2/agents/statusFeed";
 import { listTasks } from "@/lib/v2/tasks/store";
 import type { Task } from "@/lib/v2/tasks/types";
 import { GET as fleetRuntimeGET } from "@/app/api/fleet/runtime/route";
@@ -183,10 +184,11 @@ async function pipelineStatsData(config: Config): Promise<WidgetData> {
 }
 
 // ─── agent-status ────────────────────────────────────────────────────────────
-// Wraps the /api/fleet/runtime agents array (same derivation KPIGrid trusts);
-// rendered client-side with the SHARED StatusBand (CONVENTIONS §6). An agent
-// with no runs on disk maps to 'offline' — the fleet feed reports it 'idle'
-// but with lastRunAt null, and a band that has never run is not resting.
+// Band status comes from SPEC-E's statusFeed.getStatusSnapshot() — THE single
+// derivation (CONVENTIONS §6); this widget no longer re-derives (the old
+// "never ran → offline" special case is superseded by the §6 mapping). The
+// /api/fleet/runtime wrap remains only for the display extras (lastRunAt,
+// run counts, spend) KPIGrid already trusts.
 
 export interface AgentStatusEntry {
   id: string;
@@ -200,11 +202,12 @@ export interface AgentStatusEntry {
 
 async function agentStatusData(config: Config): Promise<WidgetData> {
   const maxAgents = Math.min(num(config.maxAgents, 8), 50);
-  const rt = await readFleetRuntime();
+  const [rt, snapshot] = await Promise.all([readFleetRuntime(), getStatusSnapshot()]);
+  const bandById = new Map(snapshot.map((s) => [s.agentId, s.status]));
   const agents: AgentStatusEntry[] = rt.agents.slice(0, maxAgents).map((a) => ({
     id: a.id,
     name: a.name,
-    status: a.lastRunAt == null ? "offline" : a.status,
+    status: bandById.get(a.id) ?? "offline",
     lastRunAt: a.lastRunAt,
     lastRunStatus: a.lastRunStatus,
     runs: a.runs,

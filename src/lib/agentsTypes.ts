@@ -19,7 +19,52 @@ export type AgentTrigger =
   | { type: "filewatch"; path: string; glob?: string }
   | { type: "schedule"; cron: string };
 
-export interface AgentDef {
+// ── SPEC-E F1.1 — Agents-page V2 additions (all OPTIONAL: old agent.json ─────
+// files parse unchanged; absent lifecycle = "deployed" so nothing pre-existing
+// stops firing).
+
+export type AgentLifecycle = "ideation" | "forge" | "test" | "deployed" | "retired";
+
+/** The five shared status-band states (CONVENTIONS §6). StatusBand.tsx's
+ *  StatusBandKind aliases THIS type — single source, no forks. */
+export type BandStatus = "running" | "idle" | "waiting" | "error" | "offline";
+
+/** Model-agnostic writing/voice persona (rule 17 — data, never prompt code).
+ *  Mirrors the JarvisPersona shape. */
+export interface AgentPersona {
+  name: string;
+  voiceRules: string;
+  audience?: string;
+  bannedPhrases: string[];
+  ctaStyle?: string;
+}
+
+/** Run provider override. Absent = "sdk" (the current agentsRuntime path).
+ *  cli/ollama route through cliComplete / a direct Ollama chat — rule 11: an
+ *  unresolvable provider FAILS LOUDLY (run status error), never silent SDK
+ *  fallback. */
+export type AgentProvider =
+  | { kind: "sdk" }
+  | { kind: "cli"; agent: string }
+  | { kind: "ollama"; model: string };
+
+export interface AgentDefV2Fields {
+  /** Absent = "deployed" (every pre-existing agent is live). Trigger tick
+   *  SKIPS lifecycle ∈ {ideation, forge, test, retired} (F1.2). */
+  lifecycle?: AgentLifecycle;
+  /** FK into the harnesses table; absent = plain single-run (today's behavior). */
+  harnessId?: string;
+  persona?: AgentPersona;
+  /** WebMCP/Fd4 tool package ids; absent = today's {mcp, browser} only. */
+  toolIds?: string[];
+  /** G-workstream connector ids; tolerated-unknown until G exists. */
+  connectorIds?: string[];
+  provider?: AgentProvider;
+  /** Browser session names this agent may drive (E3∩F3). */
+  browserSessions?: string[];
+}
+
+export interface AgentDef extends AgentDefV2Fields {
   id: string;
   name: string;
   /** One-liner shown on the card. The real instructions live in system.md. */

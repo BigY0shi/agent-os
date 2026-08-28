@@ -65,6 +65,35 @@ function fail(code: BrowserToolErrorCode, message: string): BrowserToolResult {
   return { ok: false, error: { code, message } };
 }
 
+/**
+ * CONVENTIONS §9.5: `browser_evaluate` requires approval for ask-mode agents.
+ * Non-ask agents (and non-agent callers) pass straight through. The approval
+ * parks on the agent's ACTIVE run via agentsRuntime.requestAgentToolApproval;
+ * an agent with no active run is denied (fail closed). Dynamic imports keep
+ * the claude-agent-sdk dependency out of this module's static import graph.
+ */
+async function approveEvaluateForAgent(
+  agentId: string,
+  params: Record<string, unknown>,
+): Promise<{ allowed: boolean; reason?: string }> {
+  try {
+    const { loadAgent } = await import("../../agentsStore");
+    const def = await loadAgent(agentId);
+    if (!def) return { allowed: false, reason: `agent "${agentId}" not found` };
+    if (def.permissionMode !== "ask") return { allowed: true };
+    const { requestAgentToolApproval } = await import("../../agentsRuntime");
+    return await requestAgentToolApproval(
+      agentId,
+      "browser_evaluate",
+      params,
+      "browser_evaluate from an ask-mode agent (CONVENTIONS §9.5)",
+    );
+  } catch (err) {
+    // Fail CLOSED — an approval seam failure never lets evaluate run unreviewed.
+    return { allowed: false, reason: `approval seam failed: ${String((err as Error)?.message || err)}` };
+  }
+}
+
 // ============ Zod schemas (AOC verbatim, session descriptions kept) ============
 
 const SessionParam = z
@@ -594,6 +623,18 @@ export async function executeBrowserTool(
       case "browser_evaluate": {
         // Audited like everything else; the args_preview carries the (capped)
         // script text — Fd3's audit-everything rule for evaluate (E3.4).
+        //
+        // CONVENTIONS §9.5 (F3.2 wire-in): browser_evaluate from an ASK-mode
+        // agent requires human approval — parked on the agent's active run's
+        // approval queue; no active run = denied (fail closed). Lazy import
+        // keeps the SDK-heavy agentsRuntime out of this module's static graph.
+        if (opts.agentId) {
+          const gate = await approveEvaluateForAgent(opts.agentId, params);
+          if (!gate.allowed) {
+            audit(false, `browser_evaluate approval: ${gate.reason}`);
+            return fail("TOOL_ERROR", `browser_evaluate requires approval for ask-mode agents (CONVENTIONS §9.5): ${gate.reason}`);
+          }
+        }
         const p = EvaluateSchema.parse(params);
         const { page, error } = await resolve(p.session);
         if (error || !page) {
