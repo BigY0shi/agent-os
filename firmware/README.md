@@ -49,15 +49,20 @@ server (light WiFi use) while the heavy WiFi/BLE capture stays on Board A.
 
 ## Connecting the boards
 
+Hand-wire plan for a **Flipper GPIO protoboard backpack** (power, jumper list,
+host tap): **[HARDWARE.md](HARDWARE.md)**.
+
 The telemetry chain is one-way: **B → A → C**.
 
 1. **Board B → Board A:** wire `LINK_TX_PIN` (B) → `LINK_RX_PIN` (A) + common GND.
 2. **Board A → Board C:** wire `LINK_TX_PIN` (A) → `LINK_RX_PIN` (C, GPIO2) + common GND.
-3. Default link pins are in each project's `src/config.h`. All links are
-   115200 8N1, newline-delimited ASCII CSV.
-4. Flash each board with its matching `-e` env, power them, then join Board C's
-   WiFi (`RF-Capture-Rig`) and open **http://192.168.4.1**. Any subset works on
-   its own — a missing upstream board just shows as "not connected".
+3. Tee Board A’s TX to Flipper **pin 14 (RX)** + GND (pin 11). Do **not** take
+   3.3 V or 5 V from the Flipper — onboard radios are weak; this backpack *is*
+   the GPIO add-on. Details in [HARDWARE.md](HARDWARE.md).
+4. Flash each board with its matching `-e` env, power the backpack from USB,
+   then join Board C's WiFi (`RF-Capture-Rig`) and open **http://192.168.4.1**.
+   Any subset works on its own — a missing upstream board just shows as
+   "not connected".
 
 ## Scope & ethics
 
