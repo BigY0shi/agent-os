@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { exileAgent, listRuns, loadAgent, readSystemPrompt, safeId, saveAgent, writeSystemPrompt } from "@/lib/agentsStore";
 import { agentHasActiveRun } from "@/lib/agentsRuntime";
 import type { AgentDef, AgentLifecycle, AgentPersona, AgentProvider } from "@/lib/agentsTypes";
-import { AGENT_LIFECYCLES, effectiveLifecycle, hasSuccessfulRun } from "@/lib/v2/agents/lifecycle";
+import { AGENT_LIFECYCLES, checkDeployGuard, effectiveLifecycle } from "@/lib/v2/agents/lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,6 +35,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     await writeSystemPrompt(id, body.instructions);
   }
   const patch: Partial<AgentDef> = {};
+  let deployWarning: string | undefined;
   if (typeof body.name === "string" && body.name.trim()) patch.name = body.name.trim().slice(0, 80);
   if (typeof body.description === "string") patch.description = body.description.trim().slice(0, 200);
   if (body.permissionMode && ["bypass", "gated", "ask"].includes(body.permissionMode)) patch.permissionMode = body.permissionMode;
@@ -48,14 +49,12 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       return NextResponse.json({ error: `unknown lifecycle "${body.lifecycle}"` }, { status: 400 });
     }
     const to = body.lifecycle as AgentLifecycle;
-    // F1.2 deploy guard: promoting INTO deployed requires ≥1 successful run.
+    // F1.2 deploy guard (CONVENTIONS §11): shared checkDeployGuard — hard 409
+    // when agents.requireTestRun (default), else a warning rides the response.
     if (to === "deployed" && effectiveLifecycle(agent) !== "deployed") {
-      if (!(await hasSuccessfulRun(id))) {
-        return NextResponse.json(
-          { error: "deploy requires at least one successful (done) run — run the agent in Test first" },
-          { status: 409 },
-        );
-      }
+      const gate = await checkDeployGuard(id, agent);
+      if (gate.block) return NextResponse.json({ error: gate.block.error }, { status: gate.block.status });
+      if (gate.warning) deployWarning = gate.warning;
     }
     patch.lifecycle = to;
   }
@@ -118,7 +117,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
   const next = { ...agent, ...patch };
   await saveAgent(next);
-  return NextResponse.json({ agent: next });
+  return NextResponse.json(deployWarning ? { agent: next, warning: deployWarning } : { agent: next });
 }
 
 // DELETE /api/agents/<id> — exile (house rule: never destroy).

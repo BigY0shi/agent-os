@@ -15,7 +15,7 @@ const VIOLET = "#a78bfa";
 
 type AgentCard = AgentDef & { lastRun: RunMeta | null; active: boolean };
 
-function ago(ts: number): string {
+export function ago(ts: number): string {
   const m = Math.floor((Date.now() - ts) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
@@ -87,28 +87,7 @@ export default function AgentsView() {
         Reusable background agents — your tools, your subscriptions, your machine. Runs pause for approval before anything leaves the box.
       </p>
 
-      {approvals.length > 0 && (
-        <div className="mb-5 rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.06)" }}>
-          <div className="text-[11px] font-mono uppercase tracking-widest flex items-center gap-2 text-amber-300">
-            <ShieldAlert size={13} /> Waiting on you — {approvals.length} pending action{approvals.length > 1 ? "s" : ""}
-          </div>
-          {approvals.map((a) => (
-            <div key={a.id} className="rounded-xl border p-3" style={{ borderColor: "rgba(251,191,36,0.3)", background: "rgba(0,0,0,0.25)" }}>
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="text-[13px]" style={{ color: "var(--fg)" }}>
-                  <b>{a.agentName}</b> wants <code className="text-amber-300">{a.toolName}</code>
-                  <span className="ml-2 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}>{a.reason}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => decide(a.id, "allow")} className="px-3 h-8 rounded-lg border text-[12px] text-emerald-300" style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>Approve</button>
-                  <button onClick={() => decide(a.id, "deny")} className="px-3 h-8 rounded-lg border text-[12px] text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)" }}>Deny</button>
-                </div>
-              </div>
-              <pre className="mt-2 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all max-h-32 overflow-y-auto" style={{ color: "var(--fg-dim)" }}>{a.inputPreview}</pre>
-            </div>
-          ))}
-        </div>
-      )}
+      <ApprovalsStrip approvals={approvals} onDecide={decide} />
 
       {loaded && agents.length === 0 && !creating && (
         <div className="rounded-2xl border border-dashed p-10 text-center" style={{ borderColor: "var(--panel-border)" }}>
@@ -154,6 +133,34 @@ export default function AgentsView() {
 
       {creating && <CreateModal onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); void refresh(); setOpenId(id); }} />}
       {openId && <AgentDrawer id={openId} onClose={() => { setOpenId(null); void refresh(); }} onRun={runNow} />}
+    </div>
+  );
+}
+
+// ---- approvals strip (shared with the v2 agents page) ---------------------
+
+export function ApprovalsStrip({ approvals, onDecide }: { approvals: ApprovalReq[]; onDecide: (id: string, decision: "allow" | "deny") => void }) {
+  if (approvals.length === 0) return null;
+  return (
+    <div className="mb-5 rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.06)" }}>
+      <div className="text-[11px] font-mono uppercase tracking-widest flex items-center gap-2 text-amber-300">
+        <ShieldAlert size={13} /> Waiting on you — {approvals.length} pending action{approvals.length > 1 ? "s" : ""}
+      </div>
+      {approvals.map((a) => (
+        <div key={a.id} className="rounded-xl border p-3" style={{ borderColor: "rgba(251,191,36,0.3)", background: "rgba(0,0,0,0.25)" }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-[13px]" style={{ color: "var(--fg)" }}>
+              <b>{a.agentName}</b> wants <code className="text-amber-300">{a.toolName}</code>
+              <span className="ml-2 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}>{a.reason}</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => onDecide(a.id, "allow")} className="px-3 h-8 rounded-lg border text-[12px] text-emerald-300" style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>Approve</button>
+              <button onClick={() => onDecide(a.id, "deny")} className="px-3 h-8 rounded-lg border text-[12px] text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)" }}>Deny</button>
+            </div>
+          </div>
+          <pre className="mt-2 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all max-h-32 overflow-y-auto" style={{ color: "var(--fg-dim)" }}>{a.inputPreview}</pre>
+        </div>
+      ))}
     </div>
   );
 }
@@ -212,7 +219,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   );
 }
 
-function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; onChange: (m: AgentDef["permissionMode"]) => void }) {
+export function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; onChange: (m: AgentDef["permissionMode"]) => void }) {
   return (
     <div>
       <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Permissions</div>
@@ -233,7 +240,7 @@ function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; on
   );
 }
 
-function IntelPicker({ value, onChange }: { value: AgentDef["intelligence"]; onChange: (m: AgentDef["intelligence"]) => void }) {
+export function IntelPicker({ value, onChange }: { value: AgentDef["intelligence"]; onChange: (m: AgentDef["intelligence"]) => void }) {
   return (
     <div>
       <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Intelligence</div>
@@ -404,7 +411,7 @@ function trigSummary(t: AgentTrigger): string {
   }
 }
 
-function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentTrigger[]) => void }) {
+export function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentTrigger[]) => void }) {
   const [adding, setAdding] = useState<AgentTrigger["type"] | null>(null);
   const [f1, setF1] = useState("");  // query / url / path / cron
   const [f2, setF2] = useState("");  // interval / glob
@@ -484,7 +491,7 @@ function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentT
 
 // ---- live run transcript --------------------------------------------------
 
-function RunView({ agentId, runId }: { agentId: string; runId: string }) {
+export function RunView({ agentId, runId }: { agentId: string; runId: string }) {
   const [meta, setMeta] = useState<RunMeta | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [mcp, setMcp] = useState<McpServerHealth[]>([]);

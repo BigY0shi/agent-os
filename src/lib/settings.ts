@@ -253,6 +253,14 @@ export interface Settings {
     heroPollMs?: number;                // default 4000 (SSE preferred; poll fallback)
     defaultHarness?: string;            // harness id preselected in the Forge wizard
   };
+  // CONVENTIONS §11 deploy gate. requireTestRun=true → promoting to "deployed"
+  // without a successful test run is a HARD 409; false → it succeeds with a
+  // WARNING surfaced in the UI. Default true (the shipped chunk-3 guard) —
+  // ASK-YOSHI flag: CONVENTIONS §11 suggests warning as the default; flip in
+  // the Agents gear.
+  agents?: {
+    requireTestRun?: boolean;
+  };
 
   [extra: string]: unknown;
 }
@@ -343,6 +351,7 @@ export const DEFAULT_SETTINGS: Settings = {
     wsBind: "local",
   },
   agentsPage: { heroPollMs: 4000 },
+  agents: { requireTestRun: true },
 };
 
 function settingsPath(): string {
