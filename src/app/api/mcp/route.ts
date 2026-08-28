@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ensureV2 } from "@/lib/v2/boot";
 import { handleMcpMessage } from "@/lib/v2/mcp/server";
 import { readSettings, writeSettings } from "@/lib/settings";
@@ -25,18 +25,27 @@ function getOrCreateSecret(): string {
   return secret;
 }
 
+// Constant-time string compare: hash both sides so neither content nor length
+// leaks through timing (a bare === exits early on the first differing char).
+function safeEqual(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
+
 function hasValidCookie(req: NextRequest): boolean {
   const password = process.env.AGENTOS_PASSWORD || "";
   if (!password) return false;
   const expected = createHash("sha256").update("agentos.v1:" + password).digest("hex");
-  return req.cookies.get(COOKIE)?.value === expected;
+  const cookie = req.cookies.get(COOKIE)?.value;
+  return !!cookie && safeEqual(cookie, expected);
 }
 
 function authenticate(req: NextRequest): { ok: boolean; status?: number; error?: string } {
   const provided = req.headers.get(SECRET_HEADER);
   const secret = getOrCreateSecret();
   if (provided) {
-    if (provided === secret) return { ok: true };
+    if (safeEqual(provided, secret)) return { ok: true };
     return { ok: false, status: 401, error: "invalid MCP secret" };
   }
   if (hasValidCookie(req)) return { ok: true };
@@ -67,7 +76,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const source = req.nextUrl.searchParams.get("source") ?? "unknown";
+  // ?source= is observability tagging, never trust. 'human-gate' is reserved:
+  // it is the approved-execution bypass source produced only by
+  // approvals.resolveApproval (strict refuses destructive calls before the
+  // bypass check, so this is defense-in-depth, not the primary guard).
+  const rawSource = req.nextUrl.searchParams.get("source") ?? "unknown";
+  const source = rawSource === "human-gate" ? "mcp:spoofed-human-gate" : rawSource;
   const remoteAddr =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
   const ctx = { source, strict: true, remoteAddr };

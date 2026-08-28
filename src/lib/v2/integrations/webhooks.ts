@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { emit } from "../events";
 import { getConnector } from "./registry";
 import {
@@ -27,9 +27,11 @@ export function checkWebhookSecret(slug: string, headers: Record<string, string>
   const expected = getDefinitionConfig(slug).webhookSecret;
   if (!expected) return false;
   const got = headers["x-hook-secret"] ?? "";
-  const a = Buffer.from(got);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  // Hash both sides so the compare is constant-time regardless of length —
+  // a bare length check before timingSafeEqual leaks the secret's length.
+  const a = createHash("sha256").update(got).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
 }
 
 /**

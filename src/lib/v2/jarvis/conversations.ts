@@ -29,8 +29,16 @@ export interface JarvisMessage {
   role: "user" | "assistant" | "system";
   content: string;
   toolCalls: JarvisToolCallSummary[] | null;
+  /** This turn's context contained integration-labeled recall (§9.4). Replaying
+   *  a tainted message into a fresh session must re-taint it — the warm-session
+   *  taint flag alone dies with the process (review finding, 2026-08-27). */
+  tainted?: boolean;
   createdAt: string;
 }
+
+/** Sentinel row inside tool_calls_json marking a §9.4-tainted turn — stored
+ *  in-band so no migration is needed; stripped out of toolCalls on read. */
+const TAINT_MARKER = "__recall_taint__";
 
 export interface JarvisToolCallSummary {
   name: string;
@@ -70,10 +78,20 @@ function mapConv(r: ConvRow): JarvisConversation {
 
 function mapMsg(r: MsgRow): JarvisMessage {
   let toolCalls: JarvisToolCallSummary[] | null = null;
+  let tainted = false;
   if (r.tool_calls_json) {
     try {
       const parsed = JSON.parse(r.tool_calls_json);
-      if (Array.isArray(parsed)) toolCalls = parsed as JarvisToolCallSummary[];
+      if (Array.isArray(parsed)) {
+        const real = (parsed as JarvisToolCallSummary[]).filter((t) => {
+          if (t && t.name === TAINT_MARKER) {
+            tainted = true;
+            return false;
+          }
+          return true;
+        });
+        toolCalls = real.length ? real : null;
+      }
     } catch {
       /* malformed tolerated — surfaces as null */
     }
@@ -84,6 +102,7 @@ function mapMsg(r: MsgRow): JarvisMessage {
     role: r.role,
     content: r.content,
     toolCalls,
+    ...(tainted ? { tainted: true } : {}),
     createdAt: r.created_at,
   };
 }
@@ -171,14 +190,18 @@ export function appendJarvisMessage(input: {
   role: "user" | "assistant" | "system";
   content: string;
   toolCalls?: JarvisToolCallSummary[] | null;
+  tainted?: boolean;
 }): JarvisMessage {
   const ts = now();
+  const serialized = input.tainted
+    ? [...(input.toolCalls ?? []), { name: TAINT_MARKER, summary: "", ok: true }]
+    : (input.toolCalls ?? []);
   const row: MsgRow = {
     id: uuid(),
     conversation_id: input.conversationId,
     role: input.role,
     content: input.content,
-    tool_calls_json: input.toolCalls?.length ? JSON.stringify(input.toolCalls) : null,
+    tool_calls_json: serialized.length ? JSON.stringify(serialized) : null,
     created_at: ts,
   };
   const db = getDb();

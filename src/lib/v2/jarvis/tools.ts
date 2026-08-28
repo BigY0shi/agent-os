@@ -421,6 +421,13 @@ export function buildJarvisToolHandlers(opts: {
             emit({ type: "tool", name: key, state: "error", summary: `awaiting human approval (${metaApproval.id})` });
             return approvalRequired(metaApproval, key);
           }
+          // §9.4 extension (review 2026-08-27): LIVE third-party content is the
+          // same injection surface as recalled third-party content. Any
+          // integration round trip — read or write — taints the session so the
+          // rest of it runs under the write-gate.
+          if (key === "execute_integration_action") {
+            state.integrationTainted = true;
+          }
           const summary = result.ok ? (result.output || "ok").slice(0, 200) : (result.error ?? "failed");
           record(`execute_action:${key}`, result.ok, summary);
           emit({ type: "tool", name: key, state: result.ok ? "done" : "error", summary });

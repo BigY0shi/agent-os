@@ -330,8 +330,20 @@ export async function resolveApproval(
   if (a.status === "expired") throw new WebmcpError("approval expired — ask again", 410);
   if (a.status !== "pending") throw new WebmcpError(`approval already ${a.status}`, 409);
 
+  // Atomic claim (review 2026-08-27): check-then-execute left a window where
+  // two concurrent approve requests both saw 'pending' and executed the tool
+  // TWICE. Whoever flips the row off 'pending' first wins; the loser 409s.
+  const claimed = getDb()
+    .prepare(
+      "UPDATE webmcp_approvals SET status = ?, resolved_at = ? WHERE id = ? AND status = 'pending'",
+    )
+    .run(action === "deny" ? "denied" : "approved", now(), a.id);
+  if (claimed.changes === 0) {
+    const current = getApproval(a.id);
+    throw new WebmcpError(`approval already ${current?.status ?? "resolved"}`, 409);
+  }
+
   if (action === "deny") {
-    persistResolution(a.id, "denied", null);
     emit("webmcp.approval", { id: a.id, slug: a.slug, tool: a.tool, status: "denied" }, "webmcp");
     followUpMessage(a, "deny", null);
     const denied = getApproval(a.id)!;
