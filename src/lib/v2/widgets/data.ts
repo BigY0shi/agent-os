@@ -20,6 +20,8 @@ import {
 import { callTool } from "@/lib/v2/integrations/runtime";
 import { getStatusSnapshot } from "@/lib/v2/agents/statusFeed";
 import { listNotes, listReplies, pendingJarvisCount } from "@/lib/v2/anynotes/store";
+import { getEdition, listEditionDates } from "@/lib/v2/newsletter/store";
+import type { EditionDoc } from "@/lib/v2/newsletter/types";
 import { listTasks } from "@/lib/v2/tasks/store";
 import type { Task } from "@/lib/v2/tasks/types";
 import { GET as fleetRuntimeGET } from "@/app/api/fleet/runtime/route";
@@ -29,6 +31,7 @@ import {
   SEVERITY_RANK,
   type AnynotesRecentPayload,
   type CalendarPayload,
+  type NewsletterEditionPayload,
   type TasksUpcomingPayload,
   type WidgetData,
 } from "./types";
@@ -265,14 +268,51 @@ function tasksUpcomingData(config: Config): WidgetData<TasksUpcomingPayload> {
   return { available: true, scope, tasks: tasks.map(taskWire) };
 }
 
-// ─── newsletter-edition (H3.2 placeholder contract) ─────────────────────────
-// The §6.6 payload contract lives in types.ts (NewsletterEditionPayload) for
-// SPEC-F workstream K — that workstream REPLACES this stub (CONVENTIONS §8:
-// fill the route, never register a second widget). Until then the honest
-// envelope, so the picker greys it with the reason.
+// ─── newsletter-edition (SPEC-F K4.3 — the placeholder FILLED) ──────────────
+// Reads the LATEST stored EditionDoc (same process, same db). Unlike an empty
+// AnyNotes table, "no edition row at all" is genuinely UNAVAILABLE — there is
+// no document, no date and no stats to render — so it answers honestly with
+// the reason and the fix, rather than an empty card that looks like today's
+// paper. An edition that exists but has zero stories IS available: an empty
+// news day is a real answer.
 
-function newsletterEditionData(): WidgetData {
-  return { available: false, reason: "workstream not built — the Newsletter module (SPEC-F K) fills this route" };
+function newsletterEditionData(config: Config): WidgetData<NewsletterEditionPayload> {
+  const maxStories = Math.min(num(config.maxStories, 5), 25);
+  const date = listEditionDates(1)[0];
+  if (!date) {
+    return {
+      available: false,
+      reason:
+        "no edition built yet — the daily job builds one at settings.newsletter.editionTime, or build one now on /newsletter",
+    };
+  }
+  const row = getEdition(date);
+  const doc = row?.content as EditionDoc | null;
+  if (!doc || !Array.isArray(doc.sections) || !doc.stats) {
+    return { available: false, reason: `edition ${date} is stored but unreadable — rebuild it on /newsletter` };
+  }
+
+  // Top N headlines across the document, keeping section order.
+  let budget = maxStories;
+  const sections: NewsletterEditionPayload["edition"]["sections"] = [];
+  for (const section of doc.sections) {
+    if (budget <= 0) break;
+    const stories = section.stories.slice(0, budget).map((s) => ({
+      id: s.id,
+      title: s.title,
+      url: s.url ?? null,
+      sources: s.sources.map((src) => src.name),
+    }));
+    if (stories.length === 0) continue;
+    budget -= stories.length;
+    sections.push({ topic: section.topic, stories });
+  }
+
+  return {
+    available: true,
+    edition: { date: doc.date, builtAt: doc.builtAt, sections },
+    stats: doc.stats,
+  };
 }
 
 // ─── anynotes-recent (SPEC-F I4.1 — the placeholder FILLED) ─────────────────
@@ -387,7 +427,7 @@ export async function getWidgetData(slug: string, config: Config = {}): Promise<
       case "tasks-upcoming":
         return tasksUpcomingData(config);
       case "newsletter-edition":
-        return newsletterEditionData();
+        return newsletterEditionData(config);
       case "anynotes-recent":
         return anynotesRecentData(config);
       case "calendar":

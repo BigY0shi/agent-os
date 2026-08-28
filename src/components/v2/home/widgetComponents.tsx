@@ -406,9 +406,10 @@ function CalendarWidget({ config }: WidgetComponentProps) {
   );
 }
 
-// ─── newsletter-edition + anynotes-recent (H3.2 placeholder contracts) ──────
-// The components already render the CONTRACT shapes (types.ts) so workstreams
-// K/I only fill the data route; until then the honest Unavailable panel shows.
+// ─── newsletter-edition (SPEC-F K4.3 — the placeholder FILLED) ──────────────
+// Headlines from the latest stored EditionDoc. A story with NO link renders as
+// plain text, not a dead anchor (canonical_url is nullable — see the type note
+// in widgets/types.ts), and the source count is the dedupe payoff made visible.
 
 function NewsletterEditionWidget({ config }: WidgetComponentProps) {
   const { data, failed } = useWidgetData<NewsletterEditionPayload>("newsletter-edition", config);
@@ -417,8 +418,15 @@ function NewsletterEditionWidget({ config }: WidgetComponentProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="font-mono text-[10px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
-        Edition · {data.edition.date}
+        Edition · {data.edition.date} · {data.stats.stories}{" "}
+        {data.stats.stories === 1 ? "story" : "stories"} from {data.stats.emails}{" "}
+        {data.stats.emails === 1 ? "email" : "emails"}
       </div>
+      {data.edition.sections.length === 0 && (
+        <div className="text-[11px]" style={{ color: "var(--fg-dim, #9aa)" }}>
+          No stories in this edition.
+        </div>
+      )}
       {data.edition.sections.map((s) => (
         <div key={s.topic}>
           <div className="mb-1 text-[12px] font-medium" style={{ color: "var(--fg, #e8e2f0)" }}>
@@ -426,17 +434,37 @@ function NewsletterEditionWidget({ config }: WidgetComponentProps) {
           </div>
           <div className="flex flex-col gap-1">
             {s.stories.map((story) => (
-              <a
-                key={story.url}
-                href={story.url}
-                target="_blank"
-                rel="noreferrer"
-                className="truncate text-[11px] hover:underline"
-                style={{ color: "var(--fg-dim, #9aa)" }}
-                title={story.title}
-              >
-                {story.title}
-              </a>
+              <div key={story.id} className="flex items-baseline gap-1.5">
+                {story.url ? (
+                  <a
+                    href={story.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate text-[11px] hover:underline"
+                    style={{ color: "var(--fg-dim, #9aa)" }}
+                    title={story.title}
+                  >
+                    {story.title}
+                  </a>
+                ) : (
+                  <span
+                    className="truncate text-[11px]"
+                    style={{ color: "var(--fg-dim, #9aa)" }}
+                    title={story.title}
+                  >
+                    {story.title}
+                  </span>
+                )}
+                {story.sources.length > 1 && (
+                  <span
+                    className="shrink-0 font-mono text-[9px]"
+                    style={{ color: "#4d9de0" }}
+                    title={story.sources.join(" · ")}
+                  >
+                    ×{story.sources.length}
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -444,6 +472,8 @@ function NewsletterEditionWidget({ config }: WidgetComponentProps) {
     </div>
   );
 }
+
+// ─── anynotes-recent (SPEC-F I4.1) ──────────────────────────────────────────
 
 // SPEC-F I4.1: the placeholder is FILLED. Cards link to the note's slide-over
 // on /anynotes (the same ?note= deep link the attention.flag route uses), NOT

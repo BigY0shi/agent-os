@@ -83,15 +83,27 @@ export interface TasksUpcomingPayload extends Record<string, unknown> {
   }>;
 }
 
-/** `newsletter-edition` — contract for SPEC-F workstream K (§6.6 verbatim). */
+/**
+ * `newsletter-edition` — SPEC-F workstream K (K4.3 FILLED this contract).
+ *
+ * Two shape corrections against the §6.6 placeholder, forced by the real story
+ * row (src/lib/v2/newsletter/types.ts): `url` is NULLABLE — a newsletter item
+ * genuinely can have no link, and the DDL says so
+ * (`canonical_url TEXT -- null when the item has no link`) — and `id` is added
+ * because the placeholder component keyed its React children on `story.url`,
+ * which is exactly the field that can be null AND duplicate.
+ */
 export interface NewsletterEditionPayload extends Record<string, unknown> {
   edition: {
     date: string;
+    builtAt: string;
     sections: Array<{
       topic: string;
-      stories: Array<{ title: string; url: string; sources: string[] }>;
+      stories: Array<{ id: string; title: string; url: string | null; sources: string[] }>;
     }>;
   };
+  /** Real counts off the stored EditionDoc — never estimated. */
+  stats: { emails: number; stories: number; duplicatesMerged: number };
 }
 
 /**

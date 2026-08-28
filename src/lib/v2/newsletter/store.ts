@@ -500,8 +500,17 @@ export function listStorySources(storyId: string): StorySource[] {
 
 // ── editions (rows only; K4.1 builds the document) ───────────────────────────
 
-export function upsertEdition(date: string, content: unknown): { date: string; builtAt: string } {
-  const builtAt = now();
+/**
+ * Upsert one edition row. `builtAt` is accepted so the caller can stamp the
+ * SAME instant into the stored EditionDoc and the row (K4.1: the doc's builtAt
+ * is what the idempotency guard compares, so the two must not drift).
+ */
+export function upsertEdition(
+  date: string,
+  content: unknown,
+  builtAtOverride?: string,
+): { date: string; builtAt: string } {
+  const builtAt = builtAtOverride ?? now();
   getDb()
     .prepare(
       `INSERT INTO newsletter_editions(date, built_at, content) VALUES (?, ?, ?)

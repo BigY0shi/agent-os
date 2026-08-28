@@ -276,7 +276,8 @@ export interface Settings {
   newsletter?: {
     syncEnabled?: boolean;      // master kill switch for SCHEDULED syncs (manual always runs)
     syncRrule?: string;         // K3.3 schedule (default FREQ=MINUTELY;INTERVAL=30)
-    editionTime?: string;       // HH:MM local — K4.1 (chunk 4) daily edition build
+    editionEnabled?: boolean;   // kill switch for the SCHEDULED daily edition (manual rebuild always runs)
+    editionTime?: string;       // HH:MM local — K4.1 daily edition build
     sections?: string[];        // edition section names (K4.1)
     dedupeThreshold?: number;   // K3.2 embedding cosine floor (default 0.86)
     dedupeWindowDays?: number;  // K3.2 bounded candidate scan (default 3)
@@ -387,6 +388,7 @@ export const DEFAULT_SETTINGS: Settings = {
   newsletter: {
     syncEnabled: true,
     syncRrule: "FREQ=MINUTELY;INTERVAL=30",
+    editionEnabled: true,
     editionTime: "06:30",
     sections: ["AI & Agents", "Dev & Tools", "Business", "Security", "Everything Else"],
     dedupeThreshold: 0.86,
