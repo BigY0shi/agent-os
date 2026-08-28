@@ -269,6 +269,24 @@ export interface Settings {
     defaultStatus?: "inbox" | "kept" | "archived"; // status a fresh capture lands in
     maxSnapshotChars?: number; // cap on the stored content_md snapshot
   };
+  // SPEC-F K — Newsletter. Rule 16: every knob here gets an in-app gear
+  // (NewsletterSettings, chunk 4). NOTHING secret lives here — the addy.io key
+  // stays in ~/.agentic-os/newsletter/config.json, read only by
+  // src/lib/v2/newsletter/config.ts, which hands out booleans.
+  newsletter?: {
+    syncEnabled?: boolean;      // master kill switch for SCHEDULED syncs (manual always runs)
+    syncRrule?: string;         // K3.3 schedule (default FREQ=MINUTELY;INTERVAL=30)
+    editionTime?: string;       // HH:MM local — K4.1 (chunk 4) daily edition build
+    sections?: string[];        // edition section names (K4.1)
+    dedupeThreshold?: number;   // K3.2 embedding cosine floor (default 0.86)
+    dedupeWindowDays?: number;  // K3.2 bounded candidate scan (default 3)
+    trackerHosts?: string[];    // hosts whose links are redirect wrappers to unwrap
+    parseAgent?: string;        // AgentPicker id routed through cliComplete (rule 11)
+    lookbackDays?: number;      // first-sync window when there is no watermark (default 1)
+    addyDomain?: string;        // display/hint only — e.g. "yoshi.addy.io"
+    gmailAccountId?: string;    // which SPEC-D gmail integration account to sync (CONVENTIONS §7)
+    gmailLabel?: string;        // optional Gmail label filter for unknown-alias mail
+  };
 
   [extra: string]: unknown;
 }
@@ -365,6 +383,18 @@ export const DEFAULT_SETTINGS: Settings = {
     jarvisAgent: "claude",
     defaultStatus: "inbox",
     maxSnapshotChars: 24000,
+  },
+  newsletter: {
+    syncEnabled: true,
+    syncRrule: "FREQ=MINUTELY;INTERVAL=30",
+    editionTime: "06:30",
+    sections: ["AI & Agents", "Dev & Tools", "Business", "Security", "Everything Else"],
+    dedupeThreshold: 0.86,
+    dedupeWindowDays: 3,
+    parseAgent: "claude",
+    lookbackDays: 1,
+    addyDomain: "",
+    gmailLabel: "",
   },
 };
 

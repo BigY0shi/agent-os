@@ -775,6 +775,88 @@ CREATE TABLE IF NOT EXISTS anynote_replies_exile (
 CREATE INDEX IF NOT EXISTS idx_anynote_replies_exile ON anynote_replies_exile(note_id, created_at);
 `;
 
+// SPEC-F §2 Newsletter tables (range 060-069, slot 061 — 060 is anynotes).
+// Departures from the spec DDL, all deliberate:
+//   1. CONVENTIONS §1.4 — `newsletter_state.lastSyncTime` is stored as TEXT UTC
+//      ISO, not the spec's "unix ms". It is a timestamp; ISO keeps lexical
+//      order == chronological order and matches every other watermark in the db
+//      (integrations' account_state does the same).
+//   2. Two additive indexes the spec omitted (`newsletter_emails.subscription_id`
+//      and `newsletter_story_sources.email_id`) — both are read paths the sync
+//      and the edition builder actually take.
+//   3. `newsletter_stories.first_seen` stays a YYYY-MM-DD DATE bucket, not a
+//      timestamp: it is the edition-date key, and §1.4 governs instants.
+const M061_NEWSLETTER = `
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  topic        TEXT,
+  alias_id     TEXT,
+  alias_email  TEXT,
+  signup_url   TEXT,
+  cadence      TEXT NOT NULL DEFAULT 'unknown' CHECK (cadence IN ('daily','weekly','monthly','unknown')),
+  status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','dead')),
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_nl_subs_status ON newsletter_subscriptions(status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nl_subs_alias
+  ON newsletter_subscriptions(alias_email) WHERE alias_email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS newsletter_emails (
+  id              TEXT PRIMARY KEY,
+  gmail_id        TEXT NOT NULL UNIQUE,
+  thread_id       TEXT,
+  subscription_id TEXT REFERENCES newsletter_subscriptions(id),
+  from_addr       TEXT,
+  to_addr         TEXT,
+  subject         TEXT,
+  received_at     TEXT NOT NULL,
+  content_md      TEXT NOT NULL DEFAULT '',
+  parse_status    TEXT NOT NULL DEFAULT 'pending' CHECK (parse_status IN ('pending','parsed','failed','skipped')),
+  parse_error     TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_recv ON newsletter_emails(received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_ps   ON newsletter_emails(parse_status);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_sub  ON newsletter_emails(subscription_id, received_at DESC);
+
+CREATE TABLE IF NOT EXISTS newsletter_stories (
+  id            TEXT PRIMARY KEY,
+  title         TEXT NOT NULL,
+  canonical_url TEXT,
+  summary       TEXT NOT NULL DEFAULT '',
+  topic         TEXT,
+  embedding     BLOB,
+  first_seen    TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nl_stories_url
+  ON newsletter_stories(canonical_url) WHERE canonical_url IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nl_stories_seen ON newsletter_stories(first_seen);
+
+CREATE TABLE IF NOT EXISTS newsletter_story_sources (
+  story_id    TEXT NOT NULL REFERENCES newsletter_stories(id),
+  email_id    TEXT NOT NULL REFERENCES newsletter_emails(id),
+  source_name TEXT NOT NULL,
+  item_url    TEXT,
+  item_title  TEXT,
+  PRIMARY KEY (story_id, email_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nl_sources_email ON newsletter_story_sources(email_id);
+
+CREATE TABLE IF NOT EXISTS newsletter_editions (
+  date       TEXT PRIMARY KEY,
+  built_at   TEXT NOT NULL,
+  content    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS newsletter_state (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -981,6 +1063,13 @@ export const MIGRATIONS: Migration[] = [
     name: "anynotes",
     up: (db) => {
       db.exec(M060_ANYNOTES);
+    },
+  },
+  {
+    version: 61,
+    name: "newsletter",
+    up: (db) => {
+      db.exec(M061_NEWSLETTER);
     },
   },
 ];

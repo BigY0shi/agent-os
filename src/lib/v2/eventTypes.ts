@@ -28,6 +28,8 @@ export type V2EventType =
   | "automation.notify" // SPEC-D G5 notify action default: {ruleId, ruleName, message, event} (source 'automation' — never re-triggers rules)
   | "anynote.captured" // SPEC-F I2.1: {id, type, title}
   | "anynote.reply.jarvis" // SPEC-F I3.1: {noteId, replyId, ok} — I4.1 turns this into an attention.flag
+  | "newsletter.email.ingested" // SPEC-F K3.1: {emailId, gmailId, subscriptionId, subject} per NEW email row
+  | "newsletter.edition.built" // SPEC-F K4.1 (chunk 4): {date, stories} — the H3 widget refresh trigger
   | (string & {});
 
 export interface V2Event {
