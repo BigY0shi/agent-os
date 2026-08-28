@@ -14,6 +14,8 @@ import { installHubSeam } from "./webmcp/hub";
 import { ensureTaskActions } from "./mcp/taskActions";
 import { ensureIntegrationSync } from "./integrations/schedule";
 import { ensureIntegrationMetaActions } from "./integrations/metaTools";
+import { ensureAttention } from "./attention";
+import { ensureAutomations } from "./automations/engine";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -82,6 +84,8 @@ export function ensureV2(): void {
     installHubSeam(); // SPEC-C D3: globalThis.__agentosMcpHub for the C3 brain
     ensureIntegrationSync(); // SPEC-D G2.8: 'integration.sync' handler + per-account schedule jobs
     ensureIntegrationMetaActions(); // SPEC-D G4.2: the three integration meta-tools as F4 registry actions (AFTER integrations init)
+    ensureAttention(); // SPEC-D H4.1: attention.flag bus bridge + 60s pull-collector tick
+    ensureAutomations(); // SPEC-D G5.1: automation rules engine ('*' bus subscription; after attention so create_attention lands)
     ensureV2Scheduler();
     ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;

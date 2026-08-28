@@ -562,6 +562,64 @@ CREATE TABLE IF NOT EXISTS oauth_sessions (
 );
 `;
 
+const M041_ATTENTION_CORE = `
+-- SPEC-D H4.1: "needs my attention" store. Timestamps TEXT UTC ISO
+-- (CONVENTIONS §1.4). One row per dedupe_key — upsertByDedupeKey refreshes
+-- title/severity/payload on re-flag and reopens auto-resolved rows; a
+-- user-dismissed row is NEVER resurrected by a re-flag (attention/store.ts
+-- documents the full status semantics). Fed by the generic 'attention.flag'
+-- bus bridge (CONVENTIONS §5 payload contract) + the pull collectors.
+CREATE TABLE IF NOT EXISTS attention_items (
+  id               TEXT PRIMARY KEY,
+  dedupe_key       TEXT NOT NULL UNIQUE,      -- e.g. 'sync-fail:<accountId>', approval id
+  kind             TEXT NOT NULL,             -- approval|agent_error|sync_failed|automation|... (open set)
+  severity         TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info','warn','urgent')),
+  title            TEXT NOT NULL,
+  body             TEXT,
+  route            TEXT,                      -- in-app link the hero's [Go] follows
+  payload_json     TEXT NOT NULL DEFAULT '{}',
+  source           TEXT NOT NULL DEFAULT '',  -- emitting module ('webmcp'|'integrations'|'automations'|...)
+  status           TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done','dismissed')),
+  auto_resolved_at TEXT,                      -- set when autoResolve() cleared it (source condition ended)
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attention_open ON attention_items(status, severity, created_at);
+`;
+
+const M042_AUTOMATIONS_CORE = `
+-- SPEC-D G5.1: automations engine. Rules are DETERMINISTIC data (§8 risk 11):
+-- conditions_json is an op-whitelisted string-op list, actions_json carries
+-- {{payload.*}} STRING templates — no eval anywhere, the LLM has no role.
+-- run_tool actions on destructive-annotated tools require confirmDestructive
+-- (422 at save, re-checked at fire time). Timestamps TEXT UTC ISO.
+CREATE TABLE IF NOT EXISTS automation_rules (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  trigger_slug    TEXT NOT NULL DEFAULT 'system', -- connector slug, 'system', or '*'
+  trigger_event   TEXT NOT NULL,             -- activity eventType (GMAIL_MESSAGE_RECEIVED) or bus event type (sync.failed)
+  conditions_json TEXT NOT NULL DEFAULT '[]',-- [{ field, op, value }] — op whitelist in automations/types.ts
+  actions_json    TEXT NOT NULL DEFAULT '[]',-- [{ kind: create_attention|create_task|notify|run_tool, ... }]
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  last_fired_at   TEXT,
+  fire_count      INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS automation_runs (
+  id           TEXT PRIMARY KEY,
+  rule_id      TEXT NOT NULL REFERENCES automation_rules(id),
+  activity_id  TEXT,                         -- triggering activity, when the trigger was activity.created
+  trigger_json TEXT NOT NULL DEFAULT '{}',   -- trigger payload snapshot at fire time
+  status       TEXT NOT NULL CHECK (status IN ('ok','condition_miss','action_failed')),
+  detail_json  TEXT,                         -- per-condition / per-action results
+  error        TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, created_at DESC);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -645,6 +703,20 @@ export const MIGRATIONS: Migration[] = [
     name: "integrations_core",
     up: (db) => {
       db.exec(M040_INTEGRATIONS_CORE);
+    },
+  },
+  {
+    version: 41,
+    name: "attention_core",
+    up: (db) => {
+      db.exec(M041_ATTENTION_CORE);
+    },
+  },
+  {
+    version: 42,
+    name: "automations_core",
+    up: (db) => {
+      db.exec(M042_AUTOMATIONS_CORE);
     },
   },
 ];

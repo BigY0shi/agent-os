@@ -211,6 +211,15 @@ export interface Settings {
                                // (default http://localhost:3000; redirectUri = <origin>/api/v2/integrations/oauth/callback)
     syncEnabled?: boolean;     // master kill switch for SCHEDULED syncs (default true; manual sync always runs)
   };
+  // SPEC-D H4 attention aggregator (hero UI lands in Phase 6; store/collectors live).
+  attention?: {
+    pollMs?: number;           // collector tick cadence (default 60000, min 5000)
+    muteKinds?: string[];      // kinds hidden from the attention API/hero (rows still recorded)
+  };
+  // SPEC-D G5 automations engine (gear panel on /automations).
+  automations?: {
+    enabled?: boolean;         // kill switch: false = rules never fire (default true; /test dry-runs still work)
+  };
 
   [extra: string]: unknown;
 }

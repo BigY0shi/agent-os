@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -22,6 +22,10 @@ const NAV: NavItem[] = [
   // Slack/Buzz accounts, tools, activity, memory rules. Workspace per §6.2
   // (WORKSPACE_ROUTES membership decides the section, not NAV position).
   { href: "/integrations", label: "Integrations", icon: <Plug size={16} />, accent: "#7dd3a8", dim: "rgba(125,211,168,0.16)" },
+  // Automations (SPEC-D G5): When [trigger] if [conditions] then [actions]
+  // rules over the integration/system event stream. Workspace per §6.2
+  // (WORKSPACE_ROUTES membership decides the section, not NAV position).
+  { href: "/automations", label: "Automations", icon: <Zap size={16} />, accent: "#fcd34d", dim: "rgba(252,211,77,0.16)" },
   // The local Tasklet: reusable background agents (SDK runtime, triggers, approvals).
   // Top-level on purpose — this is the OS's core primitive, not another module.
   { href: "/agents",   label: "Agents", icon: <Bot size={16} />, accent: "#a78bfa", dim: "rgba(167,139,250,0.16)" },
@@ -99,7 +103,7 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // sits in the array, so add new orchestration modules here as well as to NAV.
 const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
 // SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
-const WORKSPACE_ROUTES = new Set(["/", "/integrations"]);
+const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations"]);
 function sectionOf(href: string): string {
   if (WORKSPACE_ROUTES.has(href)) return "Workspace";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
