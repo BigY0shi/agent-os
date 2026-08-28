@@ -32,6 +32,21 @@ export function checkWebhookSecret(slug: string, headers: Record<string, string>
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * G3.6 — the verification front door for /api/hooks/[slug]: a connector that
+ * implements `verifyWebhook` REPLACES the generic header gate (Slack's v0
+ * signing-secret HMAC runs over webhook.rawBody — §8.6: verify BEFORE any
+ * parse-derived data is trusted); everyone else keeps the x-hook-secret check.
+ * The definition config is decrypted HERE so connectors never touch the store.
+ */
+export function verifyWebhookRequest(slug: string, webhook: WebhookInput): boolean {
+  const connector = getConnector(slug);
+  if (connector?.verifyWebhook) {
+    return connector.verifyWebhook(webhook, getDefinitionConfig(slug));
+  }
+  return checkWebhookSecret(slug, webhook.headers);
+}
+
 /** Run one connector's PROCESS for one account (activity path shared with sync). */
 export async function runProcess(
   account: AccountRow,

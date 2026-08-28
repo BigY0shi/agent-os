@@ -2,6 +2,10 @@ import type { ConnectorModule } from "./types";
 import { testConnector } from "./connectors/_test";
 import { gmailConnector } from "./connectors/gmail";
 import { gcalConnector } from "./connectors/gcal";
+import { notionConnector } from "./connectors/notion";
+import { githubConnector } from "./connectors/github";
+import { slackConnector } from "./connectors/slack";
+import { buzzConnector } from "./connectors/buzz";
 
 /**
  * SPEC-D G2.2 — static connector registry (decision 1: in-process TS modules,
@@ -15,6 +19,10 @@ const CONNECTORS: Record<string, ConnectorModule> = {
   _test: testConnector,
   gmail: gmailConnector,
   gcal: gcalConnector,
+  notion: notionConnector,
+  github: githubConnector,
+  slack: slackConnector,
+  buzz: buzzConnector,
 };
 
 export function getConnector(slug: string): ConnectorModule | undefined {

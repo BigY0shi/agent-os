@@ -30,6 +30,13 @@ export async function GET(req: NextRequest) {
       icon: spec.icon ?? "",
       category: spec.category ?? "",
       auth: spec.auth.oauth2 ? "oauth2" : spec.auth.apiKey ? "api_key" : "local",
+      // G3 additive: connectors that offer BOTH OAuth and an api-key path
+      // (notion) — the ConnectDialog shows both lanes.
+      hasApiKey: !!spec.auth.apiKey,
+      // G3 additive (G1 UI needs): api-key field defs (Param — no secrets) +
+      // the connect-dialog hint (§6.1 renders spec.uiHint).
+      authFields: spec.auth.apiKey?.fields ?? [],
+      uiHint: spec.uiHint ?? "",
       hasSchedule: !!spec.schedule,
       triggers: spec.triggers ?? [],
       configured: configured.clientId || spec.auth.oauth2 === undefined,

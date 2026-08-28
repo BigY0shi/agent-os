@@ -1,0 +1,950 @@
+import { z } from "zod";
+import { ConnectorConfigError, type CallCtx, type ConnectorTool, type ToolResult } from "../../types";
+import { notionRequest } from "./client";
+
+/**
+ * SPEC-D G3.3 — all 16 Notion tools, verbatim-adapt of AOC
+ * integrations/notion/src/mcp/index.ts (1007 ln). Kept verbatim: the zod
+ * schema shapes, the prompt-grade tool descriptions, the XML-ish page
+ * rendering (blockToXml / blocksToXmlContent), result text formats, and the
+ * error-swallow shape (client.ts throws Error(<notion message>) → the runtime
+ * soft-wraps to `Error: ...`, upstream's exact catch text).
+ *
+ * Mechanical adaptations (gmail/gcal house pattern):
+ * - axios → client.ts notionRequest (Notion-Version const, transport seam);
+ * - `notion_*` names passed VERBATIM (decision 2); unknown tool → LOUD
+ *   ConnectorConfigError (upstream returned a soft "Unknown tool" text);
+ * - {content:[{type:'text',text}]} → ToolResult {text};
+ * - zod4: z.record needs a key schema (z.record(z.string(), z.any()));
+ *   upstream's bare `z.object({})` placeholders parse in STRIP mode and would
+ *   silently drop every key the model passes — ported as z.looseObject({}) so
+ *   args survive (functional fix in the chunk-2 "upstream fixes" spirit);
+ * - annotations: idempotentHint dropped (not in ConnectorTool); create/update/
+ *   move-named tools annotated destructiveHint TRUE (repo-wide destructive-name
+ *   discipline; upstream marked create_* false — delta documented in PROGRESS).
+ */
+
+// ─── Helpers (verbatim-adapt) ────────────────────────────────────────────────
+
+type AnyRecord = Record<string, unknown>;
+
+// Helper to extract plain text from rich_text array
+function extractPlainText(richText: unknown): string {
+  if (!richText || !Array.isArray(richText)) return "";
+  return richText.map((t: AnyRecord) => (t.plain_text as string) || "").join("");
+}
+
+// Helper to convert page ID to URL
+function pageIdToUrl(pageId: string): string {
+  const cleanId = pageId.replace(/-/g, "");
+  return `https://www.notion.so/${cleanId}`;
+}
+
+// Helper to get icon string
+function getIconString(icon: unknown): string {
+  if (!icon || typeof icon !== "object") return "";
+  const i = icon as AnyRecord;
+  if (i.type === "emoji") return String(i.emoji ?? "");
+  if (i.type === "external") return String((i.external as AnyRecord)?.url ?? "");
+  if (i.type === "file") return String((i.file as AnyRecord)?.url ?? "");
+  return "";
+}
+
+// Convert a single block to XML-like format (verbatim)
+function blockToXml(block: AnyRecord): string {
+  const type = String(block.type ?? "");
+  const blockData = block[type] as AnyRecord | undefined;
+
+  if (!blockData) {
+    return "<empty-block/>";
+  }
+
+  switch (type) {
+    case "paragraph": {
+      const text = extractPlainText(blockData.rich_text);
+      return text || "<empty-block/>";
+    }
+    case "heading_1": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<h1>${text}</h1>`;
+    }
+    case "heading_2": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<h2>${text}</h2>`;
+    }
+    case "heading_3": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<h3>${text}</h3>`;
+    }
+    case "bulleted_list_item": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<li>${text}</li>`;
+    }
+    case "numbered_list_item": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<li>${text}</li>`;
+    }
+    case "to_do": {
+      const text = extractPlainText(blockData.rich_text);
+      const checked = blockData.checked ? "[x]" : "[ ]";
+      return `<todo checked="${blockData.checked}">${checked} ${text}</todo>`;
+    }
+    case "toggle": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<toggle>${text}</toggle>`;
+    }
+    case "child_page": {
+      const title = (blockData.title as string) || "Untitled";
+      const url = pageIdToUrl(String(block.id ?? ""));
+      return `<page url="{{${url}}}">${title}</page>`;
+    }
+    case "child_database": {
+      const title = (blockData.title as string) || "Untitled Database";
+      const url = pageIdToUrl(String(block.id ?? ""));
+      return `<database url="{{${url}}}">${title}</database>`;
+    }
+    case "code": {
+      const text = extractPlainText(blockData.rich_text);
+      const language = (blockData.language as string) || "plain text";
+      return `<code language="${language}">${text}</code>`;
+    }
+    case "quote": {
+      const text = extractPlainText(blockData.rich_text);
+      return `<quote>${text}</quote>`;
+    }
+    case "callout": {
+      const text = extractPlainText(blockData.rich_text);
+      const icon = getIconString(blockData.icon);
+      return `<callout icon="${icon}">${text}</callout>`;
+    }
+    case "divider": {
+      return "<divider/>";
+    }
+    case "image": {
+      const url = String((blockData.external as AnyRecord)?.url ?? (blockData.file as AnyRecord)?.url ?? "");
+      const caption = extractPlainText(blockData.caption);
+      return `<image src="${url}"${caption ? ` caption="${caption}"` : ""}/>`;
+    }
+    case "bookmark": {
+      const url = String(blockData.url ?? "");
+      const caption = extractPlainText(blockData.caption);
+      return `<bookmark url="${url}"${caption ? ` caption="${caption}"` : ""}/>`;
+    }
+    case "embed": {
+      const url = String(blockData.url ?? "");
+      return `<embed url="${url}"/>`;
+    }
+    case "equation": {
+      const expression = String(blockData.expression ?? "");
+      return `<equation>${expression}</equation>`;
+    }
+    case "link_to_page": {
+      const pageId = String(blockData.page_id ?? blockData.database_id ?? "");
+      const url = pageIdToUrl(pageId);
+      return `<link-to-page url="{{${url}}}"/>`;
+    }
+    default:
+      return `<${type}/>`;
+  }
+}
+
+// Fetch all block children with pagination (verbatim-adapt)
+async function fetchAllBlockChildren(accessToken: string, blockId: string): Promise<AnyRecord[]> {
+  const allBlocks: AnyRecord[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const res = await notionRequest<AnyRecord>(accessToken, "GET", `/blocks/${blockId}/children`, {
+      params: { start_cursor: cursor, page_size: "100" },
+    });
+    allBlocks.push(...((res.results as AnyRecord[]) || []));
+    cursor = res.has_more ? (res.next_cursor as string) : undefined;
+  } while (cursor);
+
+  return allBlocks;
+}
+
+// Convert blocks array to XML content string (recursive, verbatim-adapt)
+async function blocksToXmlContent(accessToken: string, blocks: AnyRecord[]): Promise<string> {
+  const lines: string[] = [];
+
+  for (const block of blocks) {
+    const xml = blockToXml(block);
+    lines.push(xml);
+
+    // Recursively fetch children if the block has children (but not child pages/databases)
+    if (block.has_children && block.type !== "child_page" && block.type !== "child_database") {
+      try {
+        const children = await fetchAllBlockChildren(accessToken, String(block.id ?? ""));
+        const childContent = await blocksToXmlContent(accessToken, children);
+        if (childContent) {
+          lines.push(childContent);
+        }
+      } catch {
+        // Ignore errors fetching children (upstream parity)
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+// ─── Schemas — organized by category (verbatim-adapt, zod4) ──────────────────
+
+const schemas = {
+  // PAGE TOOLS
+  createPage: z.object({
+    pages: z
+      .array(
+        z.object({
+          properties: z.record(z.string(), z.any()).describe("Page properties as a JSON map"),
+          content: z.string().optional().describe("Page content in Notion-flavored Markdown"),
+        }),
+      )
+      .max(100)
+      .describe("The pages to create"),
+    parent: z
+      .object({
+        page_id: z.string().optional().describe("Parent page ID"),
+        database_id: z.string().optional().describe("Parent database ID"),
+        data_source_id: z.string().optional().describe("Data source/collection ID"),
+      })
+      .optional()
+      .describe("Parent for the new pages. If omitted, creates as private workspace-level pages"),
+  }),
+  getPage: z.object({
+    page_id: z.string().describe("Page ID"),
+    filter_properties: z.array(z.string()).optional().describe("Filter properties"),
+  }),
+  updatePage: z.object({
+    page_id: z.string().describe("Page ID to update"),
+    command: z
+      .enum(["update_properties", "replace_content", "replace_content_range", "insert_content_after"])
+      .describe("The update command to execute"),
+    properties: z
+      .record(z.string(), z.any())
+      .optional()
+      .describe("Properties to update (for update_properties command)"),
+    new_str: z.string().optional().describe("New content string (for content commands)"),
+    selection_with_ellipsis: z
+      .string()
+      .optional()
+      .describe("Selection pattern with ellipsis for replace_content_range or insert_content_after"),
+    allow_deleting_content: z
+      .boolean()
+      .optional()
+      .describe("Set to true to allow deleting child pages/databases"),
+  }),
+  retrievePageProperty: z.object({
+    page_id: z.string().describe("Page ID"),
+    property_id: z.string().describe("Property ID"),
+    start_cursor: z.string().optional(),
+    page_size: z.number().optional(),
+  }),
+  movePages: z.object({
+    page_or_database_ids: z
+      .array(z.string())
+      .min(1)
+      .max(100)
+      .describe("Array of page or database IDs to move (v4 UUIDs, with or without dashes)"),
+    new_parent: z
+      .object({
+        page_id: z.string().optional().describe("Parent page ID"),
+        database_id: z.string().optional().describe("Parent database ID"),
+        workspace: z.boolean().optional().describe("Move to workspace level (private pages)"),
+      })
+      .describe("The new parent for the pages"),
+  }),
+
+  // DATABASE TOOLS
+  queryDatabase: z.object({
+    database_id: z.string().describe("Database ID"),
+    filter: z.record(z.string(), z.any()).optional(),
+    sorts: z.array(z.record(z.string(), z.any())).optional(),
+    start_cursor: z.string().optional(),
+    page_size: z.number().optional(),
+  }),
+  getDatabase: z.object({ database_id: z.string().describe("Database ID") }),
+  createDatabase: z.object({
+    parent: z.looseObject({}).describe("Parent page object"),
+    title: z.array(z.looseObject({})).describe("Database title"),
+    properties: z.looseObject({}).describe("Properties schema"),
+    icon: z.looseObject({}).optional(),
+    cover: z.looseObject({}).optional(),
+  }),
+  updateDatabase: z.object({
+    database_id: z.string().describe("Database ID"),
+    title: z.array(z.looseObject({})).optional(),
+    properties: z.looseObject({}).optional(),
+    archived: z.boolean().optional(),
+  }),
+  createDatabaseItem: z.object({
+    database_id: z.string().describe("Database ID"),
+    properties: z.looseObject({}).describe("Item properties"),
+    children: z.array(z.looseObject({})).optional(),
+  }),
+
+  // SEARCH & USER TOOLS
+  search: z.object({
+    query: z.string().optional().describe("Search query"),
+    filter: z.record(z.string(), z.any()).optional(),
+    start_cursor: z.string().optional(),
+    page_size: z.number().optional(),
+  }),
+  getUser: z.object({ user_id: z.string().describe("User ID") }),
+  listUsers: z.object({
+    start_cursor: z.string().optional(),
+    page_size: z.number().optional(),
+  }),
+  getMe: z.object({}),
+
+  // COMMENT TOOLS
+  createComment: z.object({
+    parent: z.looseObject({}).optional(),
+    rich_text: z.array(z.looseObject({})).describe("Comment content"),
+    discussion_id: z.string().optional(),
+  }),
+  getComments: z.object({
+    block_id: z.string().describe("Block ID"),
+    start_cursor: z.string().optional(),
+    page_size: z.number().optional(),
+  }),
+};
+
+const jsonSchema = (schema: z.ZodType): Record<string, unknown> =>
+  z.toJSONSchema(schema) as Record<string, unknown>;
+
+// ─── Tool list (descriptions VERBATIM from upstream) ─────────────────────────
+
+export function getNotionTools(): ConnectorTool[] {
+  return [
+    // Page tools (5)
+    {
+      name: "notion_create_page",
+      description: `## Overview
+Creates one or more Notion pages, with the specified properties and content.
+
+## Parent
+All pages created with a single call to this tool will have the same parent. The parent can be a Notion page ("page_id") or data source ("data_source_id"). If the parent is omitted, the pages are created as standalone, workspace-level private pages.
+
+If you have a database URL, ALWAYS pass it to the "fetch" tool first to get the schema and URLs of each data source under the database. You can't use the "database_id" parent type if the database has more than one data source, so you'll need to identify which "data_source_id" to use.
+
+## Content
+Notion page content is a string in Notion-flavored Markdown format. Don't include the page title at the top of the page's content. Only include it under "properties".
+
+## Properties
+Notion page properties are a JSON map of property names to SQLite values.
+When creating pages in a database:
+- Use the correct property names from the data source schema shown in the fetch tool results.
+- Always include a title property.
+
+For pages outside of a database:
+- The only allowed property is "title", which is the title of the page in inline markdown format.
+
+**IMPORTANT**: Some property types require expanded formats:
+- Date properties: Split into "date:{property}:start", "date:{property}:end" (optional), and "date:{property}:is_datetime" (0 or 1)
+- Place properties: Split into "place:{property}:name", "place:{property}:address", "place:{property}:latitude", "place:{property}:longitude", and "place:{property}:google_place_id" (optional)
+- Number properties: Use JavaScript numbers (not strings)
+- Checkbox properties: Use "__YES__" for checked, "__NO__" for unchecked
+
+**Special property naming**: Properties named "id" or "url" (case insensitive) must be prefixed with "userDefined:" (e.g., "userDefined:URL", "userDefined:id")`,
+      inputSchema: jsonSchema(schemas.createPage),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    {
+      name: "notion_get_page",
+      description: "Retrieve a page with its full content (metadata, properties, and all blocks)",
+      inputSchema: jsonSchema(schemas.getPage),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_update_page",
+      description: `## Overview
+Update a Notion page's properties or content.
+
+## Properties
+Notion page properties are a JSON map of property names to SQLite values.
+For pages in a database:
+- ALWAYS use the "fetch" tool first to get the data source schema and the exact property names.
+- Provide a non-null value to update a property's value.
+- Omitted properties are left unchanged.
+
+**IMPORTANT**: Some property types require expanded formats:
+- Date properties: Split into "date:{property}:start", "date:{property}:end" (optional), and "date:{property}:is_datetime" (0 or 1)
+- Place properties: Split into "place:{property}:name", "place:{property}:address", "place:{property}:latitude", "place:{property}:longitude", and "place:{property}:google_place_id" (optional)
+- Number properties: Use JavaScript numbers (not strings)
+- Checkbox properties: Use "__YES__" for checked, "__NO__" for unchecked
+
+**Special property naming**: Properties named "id" or "url" (case insensitive) must be prefixed with "userDefined:" (e.g., "userDefined:URL", "userDefined:id")
+
+For pages outside of a database:
+- The only allowed property is "title", which is the title of the page in inline markdown format.
+
+## Content
+Notion page content is a string in Notion-flavored Markdown format.
+
+Before updating a page's content with this tool, use the "fetch" tool first to get the existing content.
+
+### Preserving Child Pages and Databases
+When using "replace_content" or "replace_content_range", the operation will check if any child pages or databases would be deleted. If so, it will fail with an error listing the affected items.
+
+**CRITICAL**: To intentionally delete child content: if the call failed with validation and requires "allow_deleting_content" to be true, DO NOT automatically assume the content should be deleted. ALWAYS show the list of pages to be deleted and ask for user confirmation before proceeding.
+
+## Commands
+- update_properties: Update page properties only
+- replace_content: Replace the entire content of a page
+- replace_content_range: Replace specific content using selection_with_ellipsis
+- insert_content_after: Insert content after specific text
+
+**Note**: For selection_with_ellipsis, provide only the first ~10 characters, an ellipsis, and the last ~10 characters. Ensure the selection is unique.`,
+      inputSchema: jsonSchema(schemas.updatePage),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    {
+      name: "notion_retrieve_page_property",
+      description: "Retrieve page property",
+      inputSchema: jsonSchema(schemas.retrievePageProperty),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_move_pages",
+      description: `Move one or more Notion pages or databases to a new parent.
+
+## Parameters
+- page_or_database_ids: Array of up to 100 page or database IDs to move (v4 UUIDs, with or without dashes)
+- new_parent: The new parent - can be a page (page_id), database (database_id), or workspace level
+
+## Notes
+- Pages must be within the current workspace with proper permissions
+- Data Sources under Databases can't be moved individually
+- Moving to workspace level adds them as private pages (should rarely be used)`,
+      inputSchema: jsonSchema(schemas.movePages),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+
+    // Database tools (5)
+    {
+      name: "notion_query_database",
+      description: "Query a database",
+      inputSchema: jsonSchema(schemas.queryDatabase),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_get_database",
+      description: "Retrieve a database",
+      inputSchema: jsonSchema(schemas.getDatabase),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_create_database",
+      description: "Create a database",
+      inputSchema: jsonSchema(schemas.createDatabase),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    {
+      name: "notion_update_database",
+      description: "Update a database",
+      inputSchema: jsonSchema(schemas.updateDatabase),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    {
+      name: "notion_create_database_item",
+      description: "Create database item",
+      inputSchema: jsonSchema(schemas.createDatabaseItem),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+
+    // Search & User tools (4)
+    {
+      name: "notion_search",
+      description: "Search pages and databases",
+      inputSchema: jsonSchema(schemas.search),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_get_user",
+      description: "Retrieve a user",
+      inputSchema: jsonSchema(schemas.getUser),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_list_users",
+      description: "List all users",
+      inputSchema: jsonSchema(schemas.listUsers),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: "notion_get_me",
+      description: "Get current bot user",
+      inputSchema: jsonSchema(schemas.getMe),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+
+    // Comment tools (2)
+    {
+      name: "notion_create_comment",
+      description: "Create a comment",
+      inputSchema: jsonSchema(schemas.createComment),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    {
+      name: "notion_get_comments",
+      description: "Get comments",
+      inputSchema: jsonSchema(schemas.getComments),
+      annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+  ];
+}
+
+// ─── Dispatch (verbatim-adapt of AOC callTool) ───────────────────────────────
+
+export async function callNotionTool(
+  name: string,
+  args: Record<string, unknown>,
+  ctx: CallCtx,
+): Promise<ToolResult> {
+  const token = ctx.config.access_token;
+
+  switch (name) {
+    // PAGE HANDLERS
+    case "notion_create_page": {
+      const { pages, parent } = schemas.createPage.parse(args);
+
+      // Determine parent object for Notion API
+      let parentObj: AnyRecord;
+      if (parent?.page_id) {
+        parentObj = { page_id: parent.page_id };
+      } else if (parent?.database_id) {
+        parentObj = { database_id: parent.database_id };
+      } else if (parent?.data_source_id) {
+        parentObj = { database_id: parent.data_source_id };
+      } else {
+        parentObj = { workspace: true };
+      }
+
+      const createdPages: Array<{ id: string; url: string }> = [];
+
+      for (const page of pages) {
+        // Build properties - handle title specially
+        const notionProperties: AnyRecord = {};
+        for (const [key, value] of Object.entries(page.properties || {})) {
+          if (key === "title" || key.toLowerCase() === "title") {
+            notionProperties[key] = { title: [{ text: { content: value as string } }] };
+          } else {
+            // Pass through other properties as-is for now
+            notionProperties[key] = value;
+          }
+        }
+
+        // Build children blocks from content
+        const children = page.content
+          ? [
+              {
+                object: "block",
+                type: "paragraph",
+                paragraph: { rich_text: [{ text: { content: page.content } }] },
+              },
+            ]
+          : undefined;
+
+        const res = await notionRequest<AnyRecord>(token, "POST", "/pages", {
+          body: { parent: parentObj, properties: notionProperties, children },
+        });
+
+        createdPages.push({ id: String(res.id), url: String(res.url) });
+      }
+
+      const resultText = createdPages
+        .map((p, i) => `Page ${i + 1}:\nID: ${p.id}\nURL: ${p.url}`)
+        .join("\n\n");
+
+      return { text: `Created ${createdPages.length} page(s)!\n\n${resultText}` };
+    }
+
+    case "notion_get_page": {
+      const { page_id, filter_properties } = schemas.getPage.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "GET", `/pages/${page_id}`, {
+        params: filter_properties ? { filter_properties: filter_properties.join(",") } : {},
+      });
+
+      // Extract title from properties
+      const properties = (res.properties as AnyRecord) || {};
+      let title = "Untitled";
+      for (const key of Object.keys(properties)) {
+        const prop = properties[key] as AnyRecord;
+        const titleArr = prop?.title as AnyRecord[] | undefined;
+        if (prop?.type === "title" && titleArr?.[0]?.plain_text) {
+          title = String(titleArr[0].plain_text);
+          break;
+        }
+      }
+
+      const pageUrl = (res.url as string) || pageIdToUrl(page_id);
+      const icon = getIconString(res.icon);
+      const timestamp = new Date().toISOString();
+
+      // Fetch page content (blocks)
+      let contentXml = "";
+      try {
+        const blocks = await fetchAllBlockChildren(token, page_id);
+        contentXml = await blocksToXmlContent(token, blocks);
+      } catch {
+        contentXml = "<error>Failed to fetch page content</error>";
+      }
+
+      // Build the XML-like response
+      const pageXml = `Here is the result of "view" for the Page with URL {{${pageUrl}}} as of ${timestamp}:
+<page url="{{${pageUrl}}}"${icon ? ` icon="${icon}"` : ""}>
+<properties>
+${JSON.stringify({ title })}
+</properties>
+<content>
+${contentXml}
+</content>
+</page>`;
+
+      const result = {
+        metadata: { type: "page" },
+        title,
+        url: pageUrl,
+        text: pageXml,
+      };
+
+      return { text: JSON.stringify(result) };
+    }
+
+    case "notion_update_page": {
+      const { page_id, command, properties, new_str, selection_with_ellipsis, allow_deleting_content } =
+        schemas.updatePage.parse(args);
+
+      switch (command) {
+        case "update_properties": {
+          if (!properties) {
+            return { text: "Error: properties required for update_properties command" };
+          }
+
+          // Build Notion properties format
+          const notionProperties: AnyRecord = {};
+          for (const [key, value] of Object.entries(properties)) {
+            if (key === "title" || key.toLowerCase() === "title") {
+              notionProperties[key] = { title: [{ text: { content: value as string } }] };
+            } else {
+              notionProperties[key] = value;
+            }
+          }
+
+          await notionRequest(token, "PATCH", `/pages/${page_id}`, {
+            body: { properties: notionProperties },
+          });
+          return { text: `Page ${page_id} properties updated` };
+        }
+
+        case "replace_content": {
+          if (!new_str) {
+            return { text: "Error: new_str required for replace_content command" };
+          }
+
+          // Get existing children to check for child pages/databases
+          const existingBlocks = await fetchAllBlockChildren(token, page_id);
+          const childPages = existingBlocks.filter(
+            (b) => b.type === "child_page" || b.type === "child_database",
+          );
+
+          if (childPages.length > 0 && !allow_deleting_content) {
+            const childList = childPages
+              .map((b) => `- ${b.type}: ${(b[String(b.type)] as AnyRecord)?.title || b.id}`)
+              .join("\n");
+            return {
+              text: `Error: This operation would delete child pages/databases:\n${childList}\n\nSet allow_deleting_content: true to proceed.`,
+            };
+          }
+
+          // Delete existing blocks
+          for (const block of existingBlocks) {
+            try {
+              await notionRequest(token, "DELETE", `/blocks/${block.id}`);
+            } catch {
+              // Ignore deletion errors (upstream parity)
+            }
+          }
+
+          // Add new content as a paragraph block
+          await notionRequest(token, "PATCH", `/blocks/${page_id}/children`, {
+            body: {
+              children: [
+                {
+                  object: "block",
+                  type: "paragraph",
+                  paragraph: { rich_text: [{ text: { content: new_str } }] },
+                },
+              ],
+            },
+          });
+
+          return { text: `Page ${page_id} content replaced` };
+        }
+
+        case "replace_content_range":
+        case "insert_content_after": {
+          if (!new_str || !selection_with_ellipsis) {
+            return { text: "Error: new_str and selection_with_ellipsis required for this command" };
+          }
+
+          // For now, return a message that this is a complex operation (upstream parity)
+          return {
+            text: `Command ${command} noted. Selection: "${selection_with_ellipsis}". This requires fetching and parsing existing content.`,
+          };
+        }
+
+        default:
+          return { text: `Unknown command: ${command}` };
+      }
+    }
+
+    case "notion_retrieve_page_property": {
+      const { page_id, property_id, ...params } = schemas.retrievePageProperty.parse(args);
+      const res = await notionRequest<AnyRecord>(
+        token,
+        "GET",
+        `/pages/${page_id}/properties/${property_id}`,
+        {
+          params: {
+            start_cursor: params.start_cursor,
+            page_size: params.page_size !== undefined ? String(params.page_size) : undefined,
+          },
+        },
+      );
+      return { text: JSON.stringify(res, null, 2) };
+    }
+
+    case "notion_move_pages": {
+      const { page_or_database_ids, new_parent } = schemas.movePages.parse(args);
+
+      // Build parent object for Notion API
+      let parentObj: AnyRecord;
+      if (new_parent.page_id) {
+        parentObj = { type: "page_id", page_id: new_parent.page_id };
+      } else if (new_parent.database_id) {
+        parentObj = { type: "database_id", database_id: new_parent.database_id };
+      } else if (new_parent.workspace) {
+        parentObj = { type: "workspace", workspace: true };
+      } else {
+        return { text: "Error: new_parent must specify page_id, database_id, or workspace" };
+      }
+
+      const results: Array<{ id: string; success: boolean; error?: string }> = [];
+
+      for (const id of page_or_database_ids) {
+        try {
+          await notionRequest(token, "PATCH", `/pages/${id}`, { body: { parent: parentObj } });
+          results.push({ id, success: true });
+        } catch (error) {
+          results.push({
+            id,
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const successCount = results.filter((r) => r.success).length;
+      const failureCount = results.filter((r) => !r.success).length;
+
+      let resultText = `Moved ${successCount}/${page_or_database_ids.length} pages successfully.`;
+      if (failureCount > 0) {
+        resultText += `\n\nFailed (${failureCount}):\n`;
+        resultText += results
+          .filter((r) => !r.success)
+          .map((r) => `- ${r.id}: ${r.error}`)
+          .join("\n");
+      }
+
+      return { text: resultText };
+    }
+
+    // DATABASE HANDLERS
+    case "notion_query_database": {
+      const { database_id, ...query } = schemas.queryDatabase.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "POST", `/databases/${database_id}/query`, {
+        body: query,
+      });
+      const results = (res.results as AnyRecord[]) || [];
+
+      if (results.length === 0) {
+        return { text: "No items found" };
+      }
+
+      const formatted = results
+        .map((item) => {
+          const props = item.properties as AnyRecord | undefined;
+          const title =
+            ((props?.Name as AnyRecord)?.title as AnyRecord[])?.[0]?.plain_text ||
+            ((props?.Title as AnyRecord)?.title as AnyRecord[])?.[0]?.plain_text ||
+            "Untitled";
+          return `ID: ${item.id}\nTitle: ${title}\nURL: ${item.url}\nCreated: ${item.created_time}`;
+        })
+        .join("\n\n");
+
+      return { text: `Found ${results.length} items:\n\n${formatted}` };
+    }
+
+    case "notion_get_database": {
+      const { database_id } = schemas.getDatabase.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "GET", `/databases/${database_id}`);
+      const title = ((res.title as AnyRecord[])?.[0]?.plain_text as string) || "Untitled";
+      const propertyCount = Object.keys((res.properties as AnyRecord) || {}).length;
+
+      return {
+        text: `Database: ${title}\nID: ${res.id}\nURL: ${res.url}\nProperties: ${propertyCount}\nCreated: ${res.created_time}\nLast edited: ${res.last_edited_time}`,
+      };
+    }
+
+    case "notion_create_database": {
+      const data = schemas.createDatabase.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "POST", "/databases", { body: data });
+      const title = ((res.title as AnyRecord[])?.[0]?.plain_text as string) || "Untitled";
+      return { text: `Database created!\nID: ${res.id}\nTitle: ${title}\nURL: ${res.url}` };
+    }
+
+    case "notion_update_database": {
+      const { database_id, ...updates } = schemas.updateDatabase.parse(args);
+      await notionRequest(token, "PATCH", `/databases/${database_id}`, { body: updates });
+      return { text: `Database ${database_id} updated` };
+    }
+
+    case "notion_create_database_item": {
+      const { database_id, properties, children } = schemas.createDatabaseItem.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "POST", "/pages", {
+        body: { parent: { database_id }, properties, children },
+      });
+
+      // Extract title from properties
+      let title = "Untitled";
+      const resProps = (res.properties as AnyRecord) || {};
+      for (const key of Object.keys(resProps)) {
+        const prop = resProps[key] as AnyRecord;
+        const titleArr = prop?.title as AnyRecord[] | undefined;
+        if (prop?.type === "title" && titleArr?.[0]?.plain_text) {
+          title = String(titleArr[0].plain_text);
+          break;
+        }
+      }
+
+      return { text: `Item created!\nID: ${res.id}\nTitle: ${title}\nURL: ${res.url}` };
+    }
+
+    // SEARCH & USER HANDLERS
+    case "notion_search": {
+      const query = schemas.search.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "POST", "/search", { body: query });
+      const results = (res.results as AnyRecord[]) || [];
+
+      if (results.length === 0) {
+        return { text: "No results found" };
+      }
+
+      const formatted = results
+        .map((item) => {
+          const type = String(item.object ?? ""); // 'page' or 'database'
+          let title = "Untitled";
+
+          if (type === "page") {
+            const props = item.properties as AnyRecord | undefined;
+            title =
+              (((props?.title as AnyRecord)?.title as AnyRecord[])?.[0]?.plain_text as string) ||
+              (((props?.Name as AnyRecord)?.title as AnyRecord[])?.[0]?.plain_text as string) ||
+              (((props?.Title as AnyRecord)?.title as AnyRecord[])?.[0]?.plain_text as string) ||
+              "Untitled";
+          } else if (type === "database") {
+            title = ((item.title as AnyRecord[])?.[0]?.plain_text as string) || "Untitled";
+          }
+
+          return `Type: ${type}\nID: ${item.id}\nTitle: ${title}\nURL: ${item.url}\nCreated: ${item.created_time}\nLast edited: ${item.last_edited_time}`;
+        })
+        .join("\n\n");
+
+      const hasMore: boolean = (res.has_more as boolean) || false;
+      const nextCursor: string | null = (res.next_cursor as string) || null;
+      let text = `Found ${results.length} results:\n\n${formatted}`;
+      if (hasMore && nextCursor) {
+        text += `\n\nnext_cursor: ${nextCursor}`;
+      }
+
+      return { text };
+    }
+
+    case "notion_get_user": {
+      const { user_id } = schemas.getUser.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "GET", `/users/${user_id}`);
+      return { text: `User: ${res.name || "Unknown"}\nID: ${res.id}` };
+    }
+
+    case "notion_list_users": {
+      const params = schemas.listUsers.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "GET", "/users", {
+        params: {
+          start_cursor: params.start_cursor,
+          page_size: params.page_size !== undefined ? String(params.page_size) : undefined,
+        },
+      });
+      const results = (res.results as AnyRecord[]) || [];
+
+      if (results.length === 0) {
+        return { text: "No users found" };
+      }
+
+      const formatted = results
+        .map((user) => {
+          const userType = (user.type as string) || "unknown";
+          const userName = (user.name as string) || "Unknown";
+          return `Name: ${userName}\nID: ${user.id}\nType: ${userType}`;
+        })
+        .join("\n\n");
+
+      return { text: `Found ${results.length} users:\n\n${formatted}` };
+    }
+
+    case "notion_get_me": {
+      schemas.getMe.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "GET", "/users/me");
+      return { text: `Bot: ${res.name || "Unknown"}\nID: ${res.id}` };
+    }
+
+    // COMMENT HANDLERS
+    case "notion_create_comment": {
+      const data = schemas.createComment.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "POST", "/comments", { body: data });
+      return { text: `Comment created! ID: ${res.id}` };
+    }
+
+    case "notion_get_comments": {
+      const { block_id, ...params } = schemas.getComments.parse(args);
+      const res = await notionRequest<AnyRecord>(token, "GET", "/comments", {
+        params: {
+          block_id,
+          start_cursor: params.start_cursor,
+          page_size: params.page_size !== undefined ? String(params.page_size) : undefined,
+        },
+      });
+      const results = (res.results as AnyRecord[]) || [];
+
+      if (results.length === 0) {
+        return { text: "No comments found" };
+      }
+
+      const formatted = results
+        .map((comment) => {
+          const text = ((comment.rich_text as AnyRecord[])?.[0]?.plain_text as string) || "No content";
+          const author = ((comment.created_by as AnyRecord)?.name as string) || "Unknown";
+          return `ID: ${comment.id}\nAuthor: ${author}\nCreated: ${comment.created_time}\nText: ${text}`;
+        })
+        .join("\n\n");
+
+      return { text: `Found ${results.length} comments:\n\n${formatted}` };
+    }
+
+    default:
+      // Unknown tool = caller contract violation → LOUD (decision 6).
+      throw new ConnectorConfigError(`unknown tool '${name}'`);
+  }
+}

@@ -137,6 +137,20 @@ export interface ConnectorModule {
   sync?(ctx: SyncCtx): Promise<SyncResult>;
   identify?(webhook: WebhookInput): Promise<string[]>; // -> external accountIds
   process?(webhook: WebhookInput, ctx: CallCtx): Promise<SyncResult>;
+  /**
+   * G3.6 (Slack) — per-connector webhook verification REPLACING the generic
+   * x-hook-secret gate (chunk-1 handoff seam). Runs over webhook.rawBody
+   * BEFORE any parse-derived data is trusted (SPEC-D §8.6); the definition
+   * config is passed so the secret (stored under `webhookSecret`) never has to
+   * live inside the connector. Return false → the route 401s.
+   */
+  verifyWebhook?(webhook: WebhookInput, defConfig: Record<string, string>): boolean;
+  /**
+   * G3.6 — provider handshake responses answered INLINE by the route (§5.9
+   * item 3, Slack `url_verification`). Runs AFTER verification. Return a JSON
+   * body to short-circuit the request (no dispatch), or null to proceed.
+   */
+  webhookChallenge?(webhook: WebhookInput): Record<string, unknown> | null;
 }
 
 /**
