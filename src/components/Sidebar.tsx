@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -59,6 +59,10 @@ const NAV: NavItem[] = [
   { href: "/local",       label: "Local",       icon: <Cpu size={18} />,                             accent: "#5eead4", dim: "rgba(94,234,212,0.16)" },
   { href: "/engine",      label: "Local Engine", icon: <Boxes size={18} />,                           accent: "#38bdf8", dim: "rgba(56,189,248,0.16)" },
   { href: "/agent-kanban", label: "Agent Kanban", icon: <LayoutDashboard size={18} />,                accent: "#7dd3fc", dim: "rgba(125,211,252,0.16)" },
+  // Agent browser (SPEC-E E2): isolated Playwright Chromium sessions + CDP live
+  // view + headed handoff. Also in ORCHESTRATION_ROUTES below (documented
+  // gotcha: NAV membership alone lands a route in "Self").
+  { href: "/browser",      label: "Browser",      icon: <Globe size={16} />,                           accent: "#38bdf8", dim: "rgba(56,189,248,0.16)" },
   // Personal
   { href: "/loop",     label: "Loop",     icon: <Repeat size={16} />,   accent: "#2dd4bf", dim: "rgba(45,212,191,0.16)" },
   // Calendar → materials → metrics loop; sits with its content siblings (SEO, Thumbnails, Video).
@@ -105,7 +109,7 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // NOTE: membership here is what decides the group — NOT position in NAV and not the saved
 // drag order. A route missing from this set silently lands in "Self" no matter where it
 // sits in the array, so add new orchestration modules here as well as to NAV.
-const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
+const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban", "/browser"]);
 // SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
 const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations"]);
 function sectionOf(href: string): string {
