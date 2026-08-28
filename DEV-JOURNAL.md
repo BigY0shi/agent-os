@@ -4,6 +4,27 @@ Companion docs: `_audit/2026-07-22/` (the audit + front-page repair log).
 
 ---
 
+## 2026-08-28 - Agents: a run can ask the user a question (ask-user park + reply)
+Found in live testing: an agent asked clarifying questions about scope and they went nowhere. Root cause was structural, not a missing feature - `agentsRuntime.ts` pushed assistant text (question included) as `{kind:"text"}` and stopped there, and the `waiting` status was only reachable from `queueApproval`, i.e. from a TOOL requesting permission. A sentence could never trip it, so the run carried on and guessed.
+
+**Fix** - questions attach to the other place a run can pause: the per-turn result.
+- **Detection is marker-first.** Every run's rendered system text now carries `ASK_USER_PROTOCOL`, instructing the agent to end its turn with `[[ASK-USER]] <question>`. `detectQuestion()` reads that marker; a punctuation fallback (last non-empty line ends in "?", <=300 chars) exists but ships **default OFF** - agent reports close on rhetorical questions all the time, and a false positive would park a *finished* run instead of completing it.
+- **Park** - `parkRunOnQuestion()` deliberately mirrors `queueApproval`: same `approvals.json` queue, same `meta.status = "waiting"`, same two `notifyStatus()` transition sites. So the hero band goes amber with no second code path, and `getStatusSnapshot()` remains the single derivation (CONVENTIONS section 6 - nothing re-derived).
+- **Reply** - `answerQuestion()` resolves the promise the park is awaiting *inside* `onTurnResult`, which is awaited inside `consumeRunStream`'s `for await`. The SDK stream is suspended mid-iteration while the human types, so the answer is pushed into the same `query()` session's input queue and the agent continues with context intact.
+- **Never a silent completion** - an unanswered question (skip / timeout / kill) sets `r.stranded`, and the run finalizes `error` with the question in the error text, never `done`. No curator pass fires on it.
+- Both lanes: the SDK path and the cli/ollama provider path park identically, off the one `renderedSystem` render site (rule 17).
+- Settings gear (rule 16): `agents.askUser.{enabled, heuristic, timeoutMin}` - all three exposed in AgentsSettings, nothing config-file-only.
+
+**Load-bearing behavior change:** `execute()` no longer eagerly closes the input queue for plain one-shot runs (`if (!controller) queue.close()` is gone) - a question can arrive on turn 1, and a closed queue leaves nothing to answer into. The turn handler now owns every close.
+
+**Verified:** `scripts/v2/smoke-agents-questions.mjs` 51/51 - drives the REAL turn path (`consumeRunStream` + `makeTurnResultHandler` + `makeInputQueue`) with a synthetic message stream, no SDK/network/model. Covers detection, park->waiting->reply->done, skip/timeout/kill all landing as `error`, the route's answer verb, and the wiring greps. Regressions green: smoke-approvals, smoke-agents-status, smoke-agents-forge, smoke-harnesses, smoke-agents-ui (its `agents.requireTestRun` assertion was a whitespace-exact grep that my multi-line defaults block broke - relaxed to assert the value; the hard default is unchanged, confirmed `{"requireTestRun":true,...}` at runtime). `tsc --noEmit` clean.
+
+**NOT yet verified live (the one open item):** that the SDK emits a per-turn `result` while the input queue is still open on a *plain* run. The shipped loop harness relies on exactly this, but its live leg was explicitly out of scope for the Phase 7 smokes, so it is asserted-by-precedent, not observed. First live plain run should be watched for a hang; rollback is one line - restore `if (!controller) queue.close();` in `execute()`, which reverts to today's behavior at the cost of the feature.
+
+Files: `src/lib/agentsRuntime.ts`, `src/lib/agentsTypes.ts`, `src/lib/settings.ts`, `src/app/api/agents/approvals/route.ts`, `src/components/AgentsView.tsx`, `src/components/v2/agents/{AgentsPageV2,AgentsSettings}.tsx`, `src/components/v2/agents/tabs/ApprovalsTab.tsx`, `scripts/v2/{smoke-agents-questions.mjs,smoke-agents-ui.mjs}`. Uncommitted - stage this explicit list only (rule 22; the tree carries 50+ unrelated dirty files).
+
+---
+
 ## 2026-08-27 · V2 rebuild: Phases 3–7 built in one run (Jarvis · WebMCP · Integrations · Homepage · Browser) + adversarial review
 The Ultraplan build continued autonomously (harness loop: background agent per chunk → orchestrator re-runs smokes + tsc → explicit-file commit). Fine-grained per-chunk records + deltas live in _design/agentos-v2/ultraplan/PROGRESS.md — this entry is the day-level index.
 - **Phase 3 (PR #5, feat/v2-phase3-jarvis):** F13 global chatbox (voice never auto-sends) · WebMCP engine + /webmcp builder · Jarvis brain (warm Claude-SDK session, persona+page context, conversations migration 031, §9.4 taint gate) · CR.1 legacy repoint. NOTE: pre-existing untracked JarvisModule.tsx + api/jarvis/brain/route.ts entered git here.

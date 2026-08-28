@@ -99,7 +99,7 @@ export interface RunMeta {
 export interface RunEvent {
   seq: number;
   ts: number;
-  kind: "init" | "text" | "tool" | "tool-result" | "approval" | "status" | "result" | "error" | "stderr";
+  kind: "init" | "text" | "tool" | "tool-result" | "approval" | "question" | "status" | "result" | "error" | "stderr";
   text?: string;
   toolName?: string;
   /** Compact preview of tool input / result — full payloads stay in the JSONL. */
@@ -107,16 +107,28 @@ export interface RunEvent {
   approvalId?: string;
 }
 
-export type ApprovalReason = "constitution" | "gated" | "ask";
+export type ApprovalReason = "constitution" | "gated" | "ask" | "question";
+
+/** Both things a run can park on share ONE pending queue (and therefore one
+ *  route, one strip, one badge count): a tool call awaiting approval, and a
+ *  free-form question awaiting a human reply. `kind` is OPTIONAL so any
+ *  approvals.json written before questions existed parses unchanged as an
+ *  approval — the same additive rule AgentDefV2Fields follows. */
+export type PendingKind = "approval" | "question";
 
 export interface ApprovalReq {
   id: string;
   runId: string;
   agentId: string;
   agentName: string;
+  /** Absent = "approval" (pre-question files). */
+  kind?: PendingKind;
+  /** For kind "question": the tool name is the sentinel ASK_USER_TOOL. */
   toolName: string;
   /** Pretty-printed tool input for the approval card. */
   inputPreview: string;
+  /** kind "question" only — the question text, verbatim, for the reply card. */
+  question?: string;
   reason: ApprovalReason;
   createdAt: number;
 }

@@ -79,6 +79,13 @@ export default function AgentsPageV2() {
     await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }) }).catch(() => {});
   }
 
+  // A parked question — the reply resumes the run inside its existing session.
+  async function answer(id: string, text: string) {
+    setApprovals((l) => l.filter((x) => x.id !== id));
+    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, answer: text }) }).catch(() => {});
+    void refreshApprovals();
+  }
+
   return (
     <div className="p-6 max-w-[1200px] mx-auto">
       <div className="flex items-center justify-between mb-1">
@@ -114,7 +121,7 @@ export default function AgentsPageV2() {
         onForgeHarness={() => setLibrary(true)}
       />
 
-      <ApprovalsStrip approvals={approvals} onDecide={decide} />
+      <ApprovalsStrip approvals={approvals} onDecide={decide} onAnswer={(id, text) => void answer(id, text)} />
 
       {loaded && agents.length === 0 && (
         <div className="rounded-2xl border border-dashed p-10 text-center" style={{ borderColor: "var(--panel-border)" }}>

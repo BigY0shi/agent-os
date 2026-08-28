@@ -9,13 +9,18 @@
 // ("run the agent in Test first") or the warning (agents.requireTestRun off —
 // CONVENTIONS §11 warning mode) as an amber banner.
 //
+// The test-run step also renders THIS run's approvals inline (the shared
+// ApprovalsStrip from AgentsView) and disables backdrop click-to-close while the
+// run is live — the page's own strip sits under the overlay, so releasing a
+// `waiting` run used to cost you the transcript (2026-08-28 UX defect).
+//
 // "Deploy Agent" mode opens straight at the review step listing existing
 // lifecycle:"test" agents to promote.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hammer, X, Loader2, ChevronLeft, ChevronRight, Play, Rocket, Sparkles, AlertTriangle } from "lucide-react";
-import type { AgentDef, AgentPersona, AgentProvider, AgentTrigger } from "@/lib/agentsTypes";
-import { ModePicker, IntelPicker, TriggersEditor, RunView } from "@/components/AgentsView";
+import type { AgentDef, AgentPersona, AgentProvider, AgentTrigger, ApprovalReq } from "@/lib/agentsTypes";
+import { ModePicker, IntelPicker, TriggersEditor, RunView, ApprovalsStrip } from "@/components/AgentsView";
 import { STATUS_BAND_COLORS } from "@/components/v2/StatusBand";
 import { AGENTS_ACCENT, type AgentCardData } from "./shared";
 
@@ -87,6 +92,10 @@ export default function ForgeWizard({
   const [testRunId, setTestRunId] = useState<string | null>(null);
   const [testRunStatus, setTestRunStatus] = useState<string | null>(null);
   const [deployed, setDeployed] = useState(false);
+  // Approvals for THIS run only — see the pollRun comment for why they live here.
+  const [approvals, setApprovals] = useState<ApprovalReq[]>([]);
+  /** Ids already decided here; keeps an in-flight poll from re-adding a resolved row. */
+  const resolvedRef = useRef<Set<string>>(new Set());
 
   // Deploy mode — existing test agents to promote.
   const [testAgents, setTestAgents] = useState<AgentCardData[]>([]);
@@ -111,7 +120,14 @@ export default function ForgeWizard({
     }
   }, [mode]);
 
-  // Poll the created agent's latest run while the test run is live.
+  // Poll the created agent's latest run while the test run is live — and, on
+  // the same tick, the approvals belonging to THAT run.
+  //
+  // 2026-08-28 UX defect: the wizard is a full-screen overlay and the only
+  // approvals surface lived on the page underneath it, so a test run parked at
+  // `waiting` could only be released by dismissing the wizard — which unmounted
+  // the live transcript. Same shared ApprovalsStrip, scoped here to this run.
+  // Filtering client-side off the global queue is the house pattern (AgentDetail).
   const pollRun = useCallback(async () => {
     if (!createdId) return;
     try {
@@ -122,13 +138,33 @@ export default function ForgeWizard({
         if (!testRunId) setTestRunId(latest.id);
       }
     } catch { /* fine */ }
+    try {
+      const a = await fetch("/api/agents/approvals", { cache: "no-store" }).then((r) => r.json());
+      if (Array.isArray(a.approvals)) {
+        setApprovals((a.approvals as ApprovalReq[]).filter((x) =>
+          x.agentId === createdId && (!testRunId || x.runId === testRunId) && !resolvedRef.current.has(x.id)));
+      }
+    } catch { /* fine */ }
   }, [createdId, testRunId]);
 
   useEffect(() => {
     if (!createdId || testRunStatus === "done" || testRunStatus === "error") return;
+    void pollRun(); // don't make a waiting run sit an extra tick before its approval shows
     const t = setInterval(() => void pollRun(), 2500);
     return () => clearInterval(t);
   }, [createdId, testRunStatus, pollRun]);
+
+  /** Resolve an approval from inside the wizard. ONE decision POST — the page's
+   *  own strip re-polls the same global queue and drops the row on its own, so
+   *  nothing is posted twice. */
+  async function decideApproval(id: string, decision: "allow" | "deny") {
+    resolvedRef.current.add(id);
+    setApprovals((l) => l.filter((x) => x.id !== id));
+    await fetch("/api/agents/approvals", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }),
+    }).catch(() => {});
+    void pollRun();
+  }
 
   const persona: AgentPersona | null = useMemo(() => {
     if (!usePersona || !pName.trim() || !pVoice.trim()) return null;
@@ -223,8 +259,14 @@ export default function ForgeWizard({
 
   const isReview = mode === "deploy" || step === STEPS.length - 1;
 
+  /** An agent exists and isn't deployed yet — the test-run step is on screen,
+   *  holding a live transcript and this run's approvals. Backdrop click-to-close
+   *  is DISABLED for that window (2026-08-28: a stray click threw away a running
+   *  transcript). The X button is always the explicit way out. */
+  const runLive = !!createdId && !deployed;
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={runLive ? undefined : onClose}>
       <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl border p-5 space-y-4"
         style={{ borderColor: `${AGENTS_ACCENT}44`, background: "rgba(14,16,26,0.98)" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
@@ -498,6 +540,8 @@ export default function ForgeWizard({
               </button>
               {testRunStatus && <span className="text-[11px] font-mono" style={{ color: "var(--fg-dimmer)" }}>test run: {testRunStatus}</span>}
             </div>
+            {/* This run's approvals, inline — the same shared strip the page uses. */}
+            <ApprovalsStrip approvals={approvals} onDecide={(id, d) => void decideApproval(id, d)} />
             {testRunId && <RunView agentId={createdId} runId={testRunId} />}
           </div>
         )}

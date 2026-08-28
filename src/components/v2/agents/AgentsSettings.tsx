@@ -12,14 +12,20 @@ import { AGENTS_ACCENT } from "./shared";
 export default function AgentsSettings() {
   const { settings, saving, save } = useSettings();
   const agentsPage = (settings?.agentsPage ?? {}) as { heroPollMs?: number; defaultHarness?: string };
-  const agents = (settings?.agents ?? {}) as { requireTestRun?: boolean };
+  const agents = (settings?.agents ?? {}) as {
+    requireTestRun?: boolean;
+    askUser?: { enabled?: boolean; heuristic?: boolean; timeoutMin?: number };
+  };
+  const askUser = agents.askUser ?? {};
 
   const [pollDraft, setPollDraft] = useState<string | null>(null);
+  const [askDraft, setAskDraft] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [harnesses, setHarnesses] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     if (settings && pollDraft === null) setPollDraft(String(agentsPage.heroPollMs ?? 4000));
+    if (settings && askDraft === null) setAskDraft(String(askUser.timeoutMin ?? 240));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
@@ -34,7 +40,11 @@ export default function AgentsSettings() {
 
   async function saveAll() {
     const heroPollMs = Math.max(parseInt(pollDraft ?? "4000", 10) || 4000, 1000);
-    await save({ agentsPage: { ...agentsPage, heroPollMs } });
+    const timeoutMin = Math.max(parseInt(askDraft ?? "240", 10) || 240, 1);
+    await save({
+      agentsPage: { ...agentsPage, heroPollMs },
+      agents: { ...agents, askUser: { ...askUser, timeoutMin } },
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
@@ -66,6 +76,42 @@ export default function AgentsSettings() {
           />
           Hard-block deploys until a test run finishes done
         </label>
+      </Field>
+
+      <Field label="Let a run ask you a question"
+        hint="A background run has no chat window. With this on, every agent is told to emit [[ASK-USER]] when it needs a decision only you can make — the run parks amber, the question lands in the approvals strip, and your reply resumes the same session.">
+        <label className="flex items-center gap-2 text-[12.5px] cursor-pointer" style={{ color: "var(--fg-dim)" }}>
+          <input
+            type="checkbox"
+            checked={askUser.enabled !== false}
+            onChange={(e) => void save({ agents: { ...agents, askUser: { ...askUser, enabled: e.target.checked } } })}
+          />
+          Park the run on the ASK-USER marker and wait for a reply
+        </label>
+      </Field>
+
+      <Field label="Also park when a turn merely ends in a question mark"
+        hint="OFF by default, and deliberately: agent reports often close on a rhetorical question, and a false positive parks a FINISHED run for hours instead of completing it. Turn on only for models that ignore the marker instruction."
+      >
+        <label className="flex items-center gap-2 text-[12.5px] cursor-pointer" style={{ color: "var(--fg-dim)" }}>
+          <input
+            type="checkbox"
+            checked={askUser.heuristic === true}
+            disabled={askUser.enabled === false}
+            onChange={(e) => void save({ agents: { ...agents, askUser: { ...askUser, heuristic: e.target.checked } } })}
+          />
+          Punctuation fallback (last line ends in a question mark)
+        </label>
+      </Field>
+
+      <Field label="Question timeout (minutes)"
+        hint="How long a parked question waits for you before the run ends UNANSWERED (status error — never a silent 'done'). Default 240.">
+        <TextInput
+          value={askDraft ?? ""}
+          onChange={(e) => setAskDraft(e.target.value)}
+          placeholder="240"
+          inputMode="numeric"
+        />
       </Field>
 
       <SaveBar saving={saving} saved={saved} onSave={() => void saveAll()} accent={AGENTS_ACCENT} />

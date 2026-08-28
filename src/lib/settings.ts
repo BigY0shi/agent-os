@@ -260,6 +260,14 @@ export interface Settings {
   // the Agents gear.
   agents?: {
     requireTestRun?: boolean;
+    // A background run has no chat window; when an agent needs a decision only
+    // the user can make it emits the ASK-USER marker and the run parks on the
+    // approvals queue until you reply.
+    askUser?: {
+      enabled?: boolean;    // default true — inject the protocol + park on the marker
+      heuristic?: boolean;  // default FALSE — also park when a turn merely ENDS in "?"
+      timeoutMin?: number;  // default 240 (4h, matching the approval park)
+    };
   };
   // SPEC-F I — AnyNotes. Rule 16: every knob here gets an in-app gear
   // (AnyNotesSettings, chunk 2); nothing is config-file-only.
@@ -378,7 +386,13 @@ export const DEFAULT_SETTINGS: Settings = {
     wsBind: "local",
   },
   agentsPage: { heroPollMs: 4000 },
-  agents: { requireTestRun: true },
+  agents: {
+    requireTestRun: true,
+    // heuristic defaults OFF: a rhetorical closing question is common in agent
+    // reports, and a false positive parks a finished run instead of completing
+    // it. The marker is the reliable signal; the heuristic is the opt-in net.
+    askUser: { enabled: true, heuristic: false, timeoutMin: 240 },
+  },
   anynotes: {
     autoIngest: true,
     jarvisAgent: "claude",

@@ -120,6 +120,41 @@ const bandHexes = /#34d399|#60a5fa|#fbbf24|#f87171|#9ca3af/;
   check("wizard's Draft-with-AI fails loudly (no silent fallback)", wiz.includes("draft failed") || wiz.includes("setDraftErr(j.error"));
 }
 
+// ── wizard approvals reachability (2026-08-28 UX defect) ────────────────────
+// The wizard is a full-screen overlay over the page that owns ApprovalsStrip;
+// a test run parked at `waiting` used to be releasable only by dismissing the
+// wizard, which unmounted the live transcript. The strip now renders INSIDE the
+// test-run step, scoped to this run, and the backdrop no longer discards it.
+{
+  const wiz = read("src/components/v2/agents/ForgeWizard.tsx");
+
+  check("wizard renders an approval surface in the test-run step",
+    wiz.includes("<ApprovalsStrip") && /<ApprovalsStrip[\s\S]{0,400}?<RunView/.test(wiz));
+  check("wizard's approvals are scoped to its own agent AND run (createdId / testRunId)",
+    /x\.agentId === createdId/.test(wiz) && /x\.runId === testRunId/.test(wiz));
+  check("wizard polls the shared approvals queue (house pattern, no bespoke route)",
+    wiz.includes('fetch("/api/agents/approvals"'));
+
+  check("wizard REUSES the shared strip from AgentsView (imported, not redeclared)",
+    /import \{[^}]*ApprovalsStrip[^}]*\} from "@\/components\/AgentsView"/.test(wiz));
+  check("wizard declares no second approval UI (no forked strip markup)",
+    !/function ApprovalsStrip/.test(wiz) && !/Waiting on you/.test(wiz));
+
+  check("wizard resolves an approval with exactly ONE decision POST (no duplicate decisions)",
+    (wiz.match(/\/api\/agents\/approvals/g) || []).length === 2 &&
+    (wiz.match(/async function decideApproval/g) || []).length === 1);
+  check("wizard guards against an in-flight poll re-adding a resolved approval",
+    wiz.includes("resolvedRef") && /resolvedRef\.current\.add\(id\)/.test(wiz) &&
+    /!resolvedRef\.current\.has\(x\.id\)/.test(wiz));
+
+  check("backdrop click-to-close is DISABLED while a test run is live",
+    /className="fixed inset-0[^"]*"\s+onClick=\{runLive \? undefined : onClose\}/.test(wiz) &&
+    !/className="fixed inset-0[^"]*"\s+onClick=\{onClose\}/.test(wiz));
+  check("runLive is derived from the created-but-not-deployed window",
+    /const runLive = !!createdId && !deployed;/.test(wiz));
+  check("wizard keeps an explicit close control (X button)", /<button onClick=\{onClose\}/.test(wiz));
+}
+
 // ── HarnessLibrary contract (F4.3) ──────────────────────────────────────────
 {
   const lib = read("src/components/v2/agents/HarnessLibrary.tsx");
@@ -161,8 +196,11 @@ const bandHexes = /#34d399|#60a5fa|#fbbf24|#f87171|#9ca3af/;
   check("gear covers agentsPage.defaultHarness", gs.includes("defaultHarness"));
   check("gear stubs agents.requireTestRun (CONVENTIONS §11 ASK-YOSHI)", gs.includes("requireTestRun"));
   const st = read("src/lib/settings.ts");
+  // Asserted on the VALUE, not the source formatting: the agents default block
+  // grew an askUser section, and a whitespace-exact grep would fail on a change
+  // that leaves the hard gate exactly where it was.
   check("settings.ts declares agents.requireTestRun with the hard default",
-    st.includes("requireTestRun") && st.includes("agents: { requireTestRun: true }"));
+    st.includes("requireTestRun") && /agents:\s*\{[\s\S]*?requireTestRun:\s*true/.test(st));
   const lcSrc = read("src/lib/v2/agents/lifecycle.ts");
   check("checkDeployGuard consults settings.agents.requireTestRun", lcSrc.includes("checkDeployGuard") && lcSrc.includes("requireTestRun"));
   const idRoute = read("src/app/api/agents/[id]/route.ts");
