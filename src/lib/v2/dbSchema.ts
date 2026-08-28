@@ -701,6 +701,80 @@ CREATE TABLE IF NOT EXISTS agent_status_events (
 CREATE INDEX IF NOT EXISTS idx_agent_status_agent_ts ON agent_status_events(agent_id, ts);
 `;
 
+// SPEC-F §2 AnyNotes tables (range 060-069, slot 060 — the first free F slot).
+// The spec's DDL is already TEXT-ISO throughout, so CONVENTIONS §1.4 is a no-op
+// here (nothing to amend). Two departures from the spec text, both deliberate:
+//   1. `pending` on anynote_replies stays INTEGER 0/1 — it is a BOOLEAN flag,
+//      not a timestamp, so §1.4 does not touch it.
+//   2. The spec named ONE exile table (anynotes_exile). A note's replies carry a
+//      FK to anynotes(id) and db.ts runs `foreign_keys = ON`, so exiling a note
+//      without moving its thread first is a constraint error. anynote_replies_exile
+//      is therefore its sibling: exile copies note + thread out, then deletes
+//      thread-then-note. Nothing is ever destroyed (house rule).
+const M060_ANYNOTES = `
+CREATE TABLE IF NOT EXISTS anynotes (
+  id            TEXT PRIMARY KEY,
+  url           TEXT,
+  type          TEXT NOT NULL CHECK (type IN ('tweet','article','video','screenshot','text')),
+  title         TEXT NOT NULL DEFAULT '',
+  author        TEXT,
+  site          TEXT,
+  content_md    TEXT NOT NULL DEFAULT '',
+  media_path    TEXT,
+  thumb_url     TEXT,
+  status        TEXT NOT NULL DEFAULT 'inbox' CHECK (status IN ('inbox','kept','archived')),
+  labels        TEXT NOT NULL DEFAULT '[]',
+  meta          TEXT NOT NULL DEFAULT '{}',
+  episode_id    TEXT,
+  captured_at   TEXT NOT NULL,
+  updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_anynotes_inbox ON anynotes(status, captured_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anynotes_type  ON anynotes(type,   captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS anynote_replies (
+  id           TEXT PRIMARY KEY,
+  note_id      TEXT NOT NULL REFERENCES anynotes(id),
+  author       TEXT NOT NULL CHECK (author IN ('user','jarvis')),
+  body         TEXT NOT NULL,
+  pending      INTEGER NOT NULL DEFAULT 0,
+  error        TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anynote_replies ON anynote_replies(note_id, created_at);
+
+CREATE TABLE IF NOT EXISTS anynotes_exile (
+  id            TEXT PRIMARY KEY,
+  url           TEXT,
+  type          TEXT NOT NULL,
+  title         TEXT NOT NULL DEFAULT '',
+  author        TEXT,
+  site          TEXT,
+  content_md    TEXT NOT NULL DEFAULT '',
+  media_path    TEXT,
+  thumb_url     TEXT,
+  status        TEXT NOT NULL DEFAULT 'inbox',
+  labels        TEXT NOT NULL DEFAULT '[]',
+  meta          TEXT NOT NULL DEFAULT '{}',
+  episode_id    TEXT,
+  captured_at   TEXT NOT NULL,
+  updated_at    TEXT,
+  exiled_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS anynote_replies_exile (
+  id           TEXT PRIMARY KEY,
+  note_id      TEXT NOT NULL,
+  author       TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  pending      INTEGER NOT NULL DEFAULT 0,
+  error        TEXT,
+  created_at   TEXT NOT NULL,
+  exiled_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anynote_replies_exile ON anynote_replies_exile(note_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -900,6 +974,13 @@ export const MIGRATIONS: Migration[] = [
     name: "agents_harnesses_status",
     up: (db) => {
       db.exec(M051_AGENTS_HARNESSES_STATUS);
+    },
+  },
+  {
+    version: 60,
+    name: "anynotes",
+    up: (db) => {
+      db.exec(M060_ANYNOTES);
     },
   },
 ];

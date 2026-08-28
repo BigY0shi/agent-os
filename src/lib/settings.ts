@@ -261,6 +261,14 @@ export interface Settings {
   agents?: {
     requireTestRun?: boolean;
   };
+  // SPEC-F I — AnyNotes. Rule 16: every knob here gets an in-app gear
+  // (AnyNotesSettings, chunk 2); nothing is config-file-only.
+  anynotes?: {
+    autoIngest?: boolean;      // I2.2 Memory V2 ingest gate (default true)
+    jarvisAgent?: string;      // AgentPicker id routed through cliComplete (rule 11: no silent fallback)
+    defaultStatus?: "inbox" | "kept" | "archived"; // status a fresh capture lands in
+    maxSnapshotChars?: number; // cap on the stored content_md snapshot
+  };
 
   [extra: string]: unknown;
 }
@@ -352,6 +360,12 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   agentsPage: { heroPollMs: 4000 },
   agents: { requireTestRun: true },
+  anynotes: {
+    autoIngest: true,
+    jarvisAgent: "claude",
+    defaultStatus: "inbox",
+    maxSnapshotChars: 24000,
+  },
 };
 
 function settingsPath(): string {
