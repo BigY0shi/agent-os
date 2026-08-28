@@ -4,6 +4,21 @@ Companion docs: `_audit/2026-07-22/` (the audit + front-page repair log).
 
 ---
 
+## 2026-08-27 · V2 rebuild: Phases 3–7 built in one run (Jarvis · WebMCP · Integrations · Homepage · Browser) + adversarial review
+The Ultraplan build continued autonomously (harness loop: background agent per chunk → orchestrator re-runs smokes + tsc → explicit-file commit). Fine-grained per-chunk records + deltas live in _design/agentos-v2/ultraplan/PROGRESS.md — this entry is the day-level index.
+- **Phase 3 (PR #5, feat/v2-phase3-jarvis):** F13 global chatbox (voice never auto-sends) · WebMCP engine + /webmcp builder · Jarvis brain (warm Claude-SDK session, persona+page context, conversations migration 031, §9.4 taint gate) · CR.1 legacy repoint. NOTE: pre-existing untracked JarvisModule.tsx + api/jarvis/brain/route.ts entered git here.
+- **Phase 4 (PR #6, feat/v2-phase4-webmcp):** D5 exporter (client mode \, zero secret embedding) + spec_json 032 + Spec tab · Human-Gate approvals (033) · LLM-filtered getActions · conversations drawer.
+- **Phase 5 (PR #7, feat/v2-phase5-integrations):** G2 runtime (040, AES-256-GCM store, OAuth PKCE, watermark sync → memory label integration:<slug>) · 7 connectors (gmail 20 tools / gcal 8 / notion 16 / github / slack HMAC / buzz) + /integrations page · G4 meta-tools on /api/mcp + brain · G5 automations (no-eval) + attention store (041/042) · B7 skills-as-policies (022). Deps: googleapis, google-auth-library ^10, turndown.
+- **Phase 6 (PR #8, feat/v2-phase6-home):** widget framework + honest {available:false} data layer · AttentionHero · Overview rebuilt on the grid (Yoshi's uncommitted layout preserved as default via legacy-* widgets; TodoPanel.tsx entered git) · edit-mode DnD · calendar widget. 
+- **Phase 7 (in flight, feat/v2-phase7-browser-agents):** E browser backend committed (Playwright manager, 18 tools, allowlists, capability slot, migration 050; deps playwright+ws, Chromium 151 installed). Browser live-view (CDP ws bridge :3738 + /browser page) built, gate pending. Agents-page chunks next.
+- **Independent review (Codex + Antigravity, both headless CLIs):** 25+10 findings, 10 confirmed+fixed (commit 'fix(v2): independent-review fixes'): gmail attachment arbitrary-write P0, §9.4 taint lost on session rebuild, SDK native Bash/Write/Edit ungated, live-read taint, approval double-execute race, scheduler run_at clobber, sync tx, untracked spawnEnv.ts (clean checkouts of #5–#8 were unbuildable), timing-safe compares, source-spoof hardening. 4 refuted. 13-item hardening backlog agent in flight → HARDENING-2026-08-27.md.
+- **Incident:** tracked scripts/ tree (53 smokes) deleted from working tree mid-parallel-agents, no exile; restored via git restore, zero loss; hardening agent warned + integrity check mandated.
+- **Env notes:** Ollama Cloud account hit session quota (429 glm-5.2:cloud) — memory-ingest legs degraded until reset; gemini CLI is dead (Google: migrate to Antigravity), agy works with --dangerously-skip-permissions BEFORE -p.
+**Rollback:** each phase is its own stacked branch/PR (#5→#8 + phase-7 branch) — revert = drop the branch from the stack. DB migrations are forward-only (022,031-033,040-042,050) on ~/.agentic-os/agentos.db; snapshot exists via the nightly db.backup job (keep-14, .exile). New deps removable via package.json revert + npm i. Chromium: npx playwright uninstall.
+**Verified:** every chunk gated on its smoke suite + regressions + tsc (records in PROGRESS.md); review fixes re-verified incl. brain taint legs + SDK live leg.
+
+---
+
 ## 2026-07-27 · Hire Engine brought to Deal Desk parity
 User: "it is supposed to mimic the Deal Desk" — it was a flat card grid with none of the review tooling. Changes:
 - **Kanban board** — `HIRE_COLUMNS` (New / Researching / Approved / Sent + trailing Parked) in `lib/hireDesk.ts`; `HireEngine.tsx` rebuilt as drag-and-drop columns like `DealDesk.tsx`. Machine strip kept as the filter above the board.
