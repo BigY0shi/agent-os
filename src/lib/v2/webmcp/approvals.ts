@@ -236,16 +236,23 @@ async function executeApproved(a: WebmcpApproval): Promise<ApprovalResultInfo> {
   if (a.slug === REGISTRY_SLUG) {
     // Plain F4-registry action key (e.g. 'tasks_update_status').
     const started = Date.now();
-    const [{ ensureCoreActions }, { ensureMemoryActions }, { ensureTaskActions }, { getAction }] =
-      await Promise.all([
-        import("../mcp/actions"),
-        import("../memory/mcpTools"),
-        import("../mcp/taskActions"),
-        import("../mcp/registry"),
-      ]);
+    const [
+      { ensureCoreActions },
+      { ensureMemoryActions },
+      { ensureTaskActions },
+      { ensureIntegrationMetaActions },
+      { getAction },
+    ] = await Promise.all([
+      import("../mcp/actions"),
+      import("../memory/mcpTools"),
+      import("../mcp/taskActions"),
+      import("../integrations/metaTools"),
+      import("../mcp/registry"),
+    ]);
     ensureCoreActions();
     ensureMemoryActions();
     ensureTaskActions();
+    ensureIntegrationMetaActions(); // G4: approve on 'execute_integration_action' must resolve its handler
     const action = getAction(a.tool);
     if (!action) {
       return { ok: false, output: "", error: `action '${a.tool}' is no longer registered`, durationMs: Date.now() - started };

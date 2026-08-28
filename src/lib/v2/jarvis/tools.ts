@@ -8,6 +8,7 @@ import { getLabel } from "../memory/labels";
 import { getAction, listActions, searchActions, actionJsonSchema } from "../mcp/registry";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
+import { ensureIntegrationMetaActions } from "../integrations/metaTools";
 import { listPublishedPackages, listPublishedToolSchemas, executeAction as hubExecuteAction } from "../webmcp/hub";
 import { selectActionNames } from "../webmcp/actionSelection";
 import { createApproval } from "../webmcp/approvals";
@@ -311,6 +312,7 @@ export function buildJarvisToolHandlers(opts: {
         try {
           ensureCoreActions();
           ensureTaskActions();
+          ensureIntegrationMetaActions();
           const intent = typeof args.intent === "string" ? args.intent.trim() : "";
           let actions = listActions();
           if (intent) {
@@ -382,6 +384,7 @@ export function buildJarvisToolHandlers(opts: {
         const args = (rawArgs.args && typeof rawArgs.args === "object" ? rawArgs.args : {}) as Record<string, unknown>;
         ensureCoreActions();
         ensureTaskActions();
+        ensureIntegrationMetaActions();
         const action = getAction(key);
         if (!action) {
           record(`execute_action:${key}`, false, "unknown key");
@@ -407,7 +410,17 @@ export function buildJarvisToolHandlers(opts: {
           const result = await action.handler(parsed.data as Record<string, unknown>, {
             source: "jarvis",
             strict: false,
+            conversationId: state.conversationId ?? null,
           });
+          // G4.1: conditionally-destructive handlers (execute_integration_action)
+          // create their own Human-Gate record and hand it back on meta.approval —
+          // surface it exactly like a statically-gated action (§9.4 taint already
+          // refused above, so a tainted session never reaches this).
+          const metaApproval = !result.ok ? (result.meta?.approval as ApprovalRequiredInfo | undefined) : undefined;
+          if (metaApproval && typeof metaApproval.id === "string") {
+            emit({ type: "tool", name: key, state: "error", summary: `awaiting human approval (${metaApproval.id})` });
+            return approvalRequired(metaApproval, key);
+          }
           const summary = result.ok ? (result.output || "ok").slice(0, 200) : (result.error ?? "failed");
           record(`execute_action:${key}`, result.ok, summary);
           emit({ type: "tool", name: key, state: result.ok ? "done" : "error", summary });

@@ -166,8 +166,11 @@ function selectLlm(): ActionSelectLlm {
 
 export type SelectionOutcome =
   | { mode: "selected"; names: string[] }
-  /** LLM/parse failure or nothing-valid — caller must return ALL tools (never narrow). */
-  | { mode: "all" }
+  /** LLM/parse failure or nothing-valid — caller must return ALL tools (never narrow).
+   *  `cause`/`error` are ADDITIVE (G4.1): callers that must distinguish a provider
+   *  failure (fail LOUD) from a parse failure (all-tools fallback) inspect them;
+   *  existing callers keep checking `.mode` only. */
+  | { mode: "all"; cause?: "llm-error" | "no-valid-names"; error?: unknown }
   /** settings.webmcp.llmGetActions is off — caller uses its keyword-scorer fallback. */
   | { mode: "off" };
 
@@ -197,7 +200,7 @@ export async function selectActionNames(
         `[webmcp/actionSelection] LLM selection for '${query.slice(0, 120)}' returned no valid tool names ` +
           `(raw: ${JSON.stringify(raw).slice(0, 300)}) — returning ALL tools`,
       );
-      return { mode: "all" };
+      return { mode: "all", cause: "no-valid-names" };
     }
     return { mode: "selected", names };
   } catch (err) {
@@ -205,6 +208,6 @@ export async function selectActionNames(
       `[webmcp/actionSelection] LLM selection FAILED for '${query.slice(0, 120)}' — returning ALL tools:`,
       err instanceof Error ? err.message : err,
     );
-    return { mode: "all" };
+    return { mode: "all", cause: "llm-error", error: err };
   }
 }

@@ -4,15 +4,19 @@
 // GET /accounts/[id]/tools, expandable JSON Schema, [Try] → args auto-form
 // (TestRunner pattern) → POST /accounts/[id]/call.
 //
-// Destructive gate (chunk-3 brief): destructiveHint-annotated tools show an
-// inline CONFIRM step before invoking — nothing is sent until the user
-// explicitly confirms. This is the lightweight stand-in for G4.3's two-phase
-// EmailToolUi/DestructiveToolGate (next chunk); the seam is exactly here:
-// replace the inline confirm block with <DestructiveToolGate> when it lands.
+// Destructive gate (G4.3 — replaces chunk 3's inline confirm at this exact
+// seam): destructiveHint-annotated tools stage their args into the two-phase
+// toolUi gate — an EDITABLE form → explicit Send/Decline → result view.
+// gmail_send_email-shaped tools (schema has to/subject/body) get the
+// EmailToolUi compose specialization; everything else gets the generic
+// DestructiveToolGate. Decline never calls — nothing leaves the browser and
+// the call log stays empty.
 
 import { useEffect, useMemo, useState } from "react";
 import { Play, Loader2, Search, ShieldAlert, ChevronDown, ChevronRight } from "lucide-react";
 import { INTEGRATIONS_ACCENT, EmptyState, inputStyle, monoStyle, type ToolInfo } from "./shared";
+import DestructiveToolGate from "./toolUi/DestructiveToolGate";
+import EmailToolUi, { isEmailShapedSchema } from "./toolUi/EmailToolUi";
 
 interface PropSpec {
   name: string;
@@ -65,7 +69,9 @@ export default function ToolsTab({ accountId }: { accountId: string }) {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<CallResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Destructive gate: args are staged here, the call fires only on Confirm.
+  // Destructive gate (G4.3): args are staged here; the call fires only when
+  // the user hits Send inside the gate. Stays set through the send so the
+  // gate's result view renders; Decline/Close clears it without ever calling.
   const [pendingConfirm, setPendingConfirm] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
@@ -140,7 +146,8 @@ export default function ToolsTab({ accountId }: { accountId: string }) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
-      setPendingConfirm(null);
+      // pendingConfirm is NOT cleared here — an open gate shows the result
+      // view (phase 2) until the user closes it.
     }
   };
 
@@ -152,11 +159,19 @@ export default function ToolsTab({ accountId }: { accountId: string }) {
     }
     setError(null);
     if (destructive) {
-      // Destructive-annotated → confirm step BEFORE any call leaves the browser.
+      // Destructive-annotated → the two-phase gate BEFORE any call leaves the browser.
+      setResult(null);
       setPendingConfirm(args);
       return;
     }
     void invoke(args);
+  };
+
+  const declineGate = () => {
+    // Decline/close: clears the staged call — NEVER invokes.
+    setPendingConfirm(null);
+    setResult(null);
+    setError(null);
   };
 
   if (tools === null) return <EmptyState title="Loading tools…" />;
@@ -313,36 +328,31 @@ export default function ToolsTab({ accountId }: { accountId: string }) {
             {error && <span className="text-[11.5px]" style={{ color: "#f87171" }}>{error}</span>}
           </div>
 
-          {/* Destructive confirm step — the G4.3 DestructiveToolGate seam. */}
-          {pendingConfirm !== null && (
-            <div className="mt-3 rounded-xl p-3" style={{ border: "1px solid #fbbf2466", background: "#fbbf240d" }}>
-              <div className="flex items-center gap-1.5 mb-1.5 text-[11.5px] font-semibold" style={{ color: "#fbbf24" }}>
-                <ShieldAlert size={13} /> This tool is destructive — confirm to run
-              </div>
-              <pre className="text-[10.5px] max-h-[140px] overflow-auto mb-2" style={{ ...monoStyle, color: "var(--fg-dim, #9aa)" }}>
-                {JSON.stringify(pendingConfirm, null, 2)}
-              </pre>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => void invoke(pendingConfirm)}
-                  disabled={running}
-                  className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-[12px] font-medium transition disabled:opacity-40"
-                  style={{ border: "1px solid #fbbf2466", background: "#fbbf2418", color: "#fbbf24" }}
-                >
-                  {running ? <Loader2 size={12} className="animate-spin" /> : <ShieldAlert size={12} />} Confirm &amp; run
-                </button>
-                <button
-                  onClick={() => setPendingConfirm(null)}
-                  className="px-3 h-8 rounded-lg text-[12px] transition"
-                  style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+          {/* G4.3 two-phase destructive gate (replaced chunk 3's inline confirm). */}
+          {pendingConfirm !== null &&
+            (isEmailShapedSchema(tool.inputSchema) ? (
+              <EmailToolUi
+                key={tool.name}
+                toolName={tool.name}
+                initialArgs={pendingConfirm}
+                running={running}
+                result={result}
+                onSend={(args) => void invoke(args)}
+                onDecline={declineGate}
+              />
+            ) : (
+              <DestructiveToolGate
+                key={tool.name}
+                toolName={tool.name}
+                initialArgs={pendingConfirm}
+                running={running}
+                result={result}
+                onSend={(args) => void invoke(args)}
+                onDecline={declineGate}
+              />
+            ))}
 
-          {result && (
+          {result && pendingConfirm === null && (
             <div className="mt-4 rounded-xl p-3" style={{ border: `1px solid ${result.result.isError ? "#f8717144" : "#34d39944"}` }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: result.result.isError ? "#f87171" : "#34d399" }}>

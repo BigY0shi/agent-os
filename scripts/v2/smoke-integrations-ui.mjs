@@ -37,6 +37,8 @@ const componentFiles = [
   "src/components/v2/integrations/ToolsTab.tsx",
   "src/components/v2/integrations/RulesTab.tsx",
   "src/components/v2/integrations/IntegrationsSettings.tsx",
+  "src/components/v2/integrations/toolUi/DestructiveToolGate.tsx",
+  "src/components/v2/integrations/toolUi/EmailToolUi.tsx",
 ];
 for (const f of componentFiles) {
   check(`${f} exists`, exists(f));
@@ -100,12 +102,29 @@ check("ConnectDialog api-key fields auto-render from spec.auth.apiKey.fields", d
 check("ConnectDialog credential inputs are password-type + cleared after use", dialog.includes('type="password"') && dialog.includes('setClientId("")') && dialog.includes("setFields({})"));
 check("ConnectDialog OAuth lane hits /oauth/start then redirects", dialog.includes("/api/v2/integrations/oauth/start") && dialog.includes("window.location.href"));
 
-// ── destructive-confirm gate (chunk-3 brief; the G4.3 seam) ─────────────────
+// ── G4.3 two-phase destructive gate (replaced chunk 3's inline confirm) ─────
 const toolsTab = read("src/components/v2/integrations/ToolsTab.tsx");
-check("[Try] gates destructive tools behind an inline confirm (pendingConfirm staged, no call until Confirm)", toolsTab.includes("destructiveHint === true") && toolsTab.includes("setPendingConfirm(args)") && toolsTab.includes("invoke(pendingConfirm)"));
-check("destructive confirm shows the warning copy + Cancel", /destructive — confirm to run/.test(toolsTab) && toolsTab.includes("setPendingConfirm(null)"));
+check("[Try] stages destructive args into the gate (no call until Send)", toolsTab.includes("destructiveHint === true") && toolsTab.includes("setPendingConfirm(args)"));
+check("ToolsTab mounts the G4.3 components (inline confirm is GONE)", toolsTab.includes("<DestructiveToolGate") && toolsTab.includes("<EmailToolUi") && !/Confirm &amp; run/.test(toolsTab));
+check("email-shaped tools get EmailToolUi (schema-detected)", toolsTab.includes("isEmailShapedSchema(tool.inputSchema)"));
 check("non-destructive tools invoke directly", /if \(destructive\) \{[\s\S]*?return;\s*\}\s*void invoke\(args\);/.test(toolsTab));
-check("ToolsTab notes the G4.3 DestructiveToolGate seam", toolsTab.includes("G4.3"));
+{
+  // Decline never calls: declineGate only clears state — no invoke/fetch inside.
+  const decline = toolsTab.match(/const declineGate = \(\) => \{([\s\S]*?)\};/)?.[1] ?? "@@MISSING@@";
+  check("decline handler clears staged state and NEVER invokes", decline.includes("setPendingConfirm(null)") && !decline.includes("invoke(") && !decline.includes("fetch("));
+}
+check("gate result view replaces the tab result while open", toolsTab.includes("result && pendingConfirm === null"));
+
+const gate = read("src/components/v2/integrations/toolUi/DestructiveToolGate.tsx");
+check("DestructiveToolGate is two-phase (editable form → Send/Decline → result view)", gate.includes("onSend") && gate.includes("onDecline") && gate.includes("GateResultView") && /Decline/.test(gate) && /sendLabel/.test(gate));
+check("DestructiveToolGate renders an EDITABLE args form (fields + JSON fallback)", gate.includes("setFields") && gate.includes("setRawJson"));
+check("DestructiveToolGate decline path never sends", !/onDecline[\s\S]{0,40}onSend/.test(gate.match(/onClick=\{onDecline\}/)?.[0] ?? "") && gate.includes("onClick={onDecline}"));
+
+const emailUi = read("src/components/v2/integrations/toolUi/EmailToolUi.tsx");
+check("EmailToolUi exposes to/subject/body compose fields", emailUi.includes('field("to"') && emailUi.includes('field("subject"') && emailUi.includes("setBody"));
+check("EmailToolUi splits recipients into string arrays (gmail schema shape)", emailUi.includes("textToList") && emailUi.includes("to: toList"));
+check("EmailToolUi exports the schema detector the tab uses", emailUi.includes("export function isEmailShapedSchema"));
+check("EmailToolUi preserves non-compose staged args verbatim", emailUi.includes("...initialArgs"));
 
 // ── dynamic leg: §5.6 tools + call routes on a temp DB ──────────────────────
 const { ensureDb, __closeForTests } = await import("../../src/lib/v2/db.ts");

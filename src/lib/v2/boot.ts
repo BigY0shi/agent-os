@@ -13,6 +13,7 @@ import { seedSelfTools } from "./webmcp/seedSelfTools";
 import { installHubSeam } from "./webmcp/hub";
 import { ensureTaskActions } from "./mcp/taskActions";
 import { ensureIntegrationSync } from "./integrations/schedule";
+import { ensureIntegrationMetaActions } from "./integrations/metaTools";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -80,6 +81,7 @@ export function ensureV2(): void {
     loadPublishedIntoRegistry(); // SPEC-C D2: re-register ALL published WebMCP snapshots after restart
     installHubSeam(); // SPEC-C D3: globalThis.__agentosMcpHub for the C3 brain
     ensureIntegrationSync(); // SPEC-D G2.8: 'integration.sync' handler + per-account schedule jobs
+    ensureIntegrationMetaActions(); // SPEC-D G4.2: the three integration meta-tools as F4 registry actions (AFTER integrations init)
     ensureV2Scheduler();
     ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;
