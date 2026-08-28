@@ -128,6 +128,7 @@ export async function runAccountSync(
       config: ctx.config,
       defConfig: ctx.defConfig,
       timezone: ctx.timezone,
+      accountId: account.id, // G3: token-refresh persistence seam (googleClient)
       state: getAccountState(accountId),
     });
     const { accepted, rejected } = await applySyncResult(account, result);

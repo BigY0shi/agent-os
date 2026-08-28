@@ -46,6 +46,7 @@ export async function runProcess(
       config: ctx.config,
       defConfig: ctx.defConfig,
       timezone: ctx.timezone,
+      accountId: account.id, // G3: token-refresh persistence seam (googleClient)
     });
     const counts = await applySyncResult(account, result);
     finishSyncRun(runId, { ok: true, activitiesCount: counts.accepted });

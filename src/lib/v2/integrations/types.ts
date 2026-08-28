@@ -53,6 +53,12 @@ export interface ConnectorSpec {
   schedule?: { frequency: string }; // 5-field cron, honored per-connector (SPEC-D §1 decision 5)
   triggers?: TriggerDef[];
   widgets?: string[]; // H2 widget slugs this connector powers
+  /**
+   * Short hint the ConnectDialog renders next to the auth fields (G3 additive
+   * field). Used for the OAuth-on-LAN redirect caveat (SPEC-D §8.3) and for
+   * gcal's "reuse Gmail app credentials" note (§3.3).
+   */
+  uiHint?: string;
 }
 
 export interface ConnectorTool {
@@ -91,6 +97,13 @@ export interface CallCtx {
   config: Record<string, string>; // decrypted account config
   defConfig: Record<string, string>; // decrypted definition config
   timezone: string; // injected from settings.tasks.timezone (SPEC-D §1 decision 10)
+  /**
+   * Account row id (G3 runtime extension, per the chunk-1 handoff): lets a
+   * connector persist refreshed OAuth tokens back through the store
+   * (googleClient.ts token-refresh persistence). Optional so hand-built test
+   * contexts stay valid; the runtime/sync/webhook drivers always set it.
+   */
+  accountId?: string;
 }
 
 export interface SyncCtx extends CallCtx {

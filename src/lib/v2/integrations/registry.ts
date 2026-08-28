@@ -1,5 +1,7 @@
 import type { ConnectorModule } from "./types";
 import { testConnector } from "./connectors/_test";
+import { gmailConnector } from "./connectors/gmail";
+import { gcalConnector } from "./connectors/gcal";
 
 /**
  * SPEC-D G2.2 — static connector registry (decision 1: in-process TS modules,
@@ -11,6 +13,8 @@ import { testConnector } from "./connectors/_test";
 
 const CONNECTORS: Record<string, ConnectorModule> = {
   _test: testConnector,
+  gmail: gmailConnector,
+  gcal: gcalConnector,
 };
 
 export function getConnector(slug: string): ConnectorModule | undefined {

@@ -123,6 +123,7 @@ export async function callTool(
       config: ctx.config,
       defConfig: ctx.defConfig,
       timezone: ctx.timezone,
+      accountId: account.id, // G3: token-refresh persistence seam (googleClient)
     });
     log(!result.isError, result.isError ? result.text : undefined);
     return result;
