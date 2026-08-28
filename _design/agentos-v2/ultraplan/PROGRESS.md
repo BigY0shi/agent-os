@@ -963,8 +963,8 @@ Case-8 root cause was two-layered; both fixed and verified by a final full-captu
 - [ ] **Ralph-loop live leg**: agent on `ralph-loop` (drop maxIterations to 2 in the library), Run now → transcript shows `harness loop: iteration N/M` status events, ≥2 assistant turns, stops on the marker.
 - [ ] **Phases approval card**: agent on `feat-loop`, Run now → a `harness-phase:build` approval card appears in the strip/Approvals tab; Approve → run continues into build/verify.
 - [ ] **Deploy E2E**: Forge wizard end-to-end (create → inline test run finishes done → Deploy) → hero node flips live; add a `schedule` trigger ("every 15 minutes") and watch the tick fire it (SPEC §9 acceptance).
-- [ ] **DECISION — deploy gate default** (delta 1): keep HARD (current) or flip to warning-first per CONVENTIONS §11 (`agents.requireTestRun` in the Agents gear; changing the DEFAULT also means updating smoke-harnesses E5/E8).
-- [ ] **DECISION — webhook lifecycle gating** (delta 3): webhooks currently fire test-lifecycle agents; say the word if `/api/agents/hook/[id]` should also check `lifecycleAllowsTriggers`.
+- [x] **DECISION — deploy gate default** (delta 1): **RESOLVED 2026-08-28 — Yoshi keeps the HARD gate.** No code change; CONVENTIONS §11 amended so the spec matches the shipped default. `agents.requireTestRun=false` remains the per-workspace escape hatch.
+- [x] **DECISION — webhook lifecycle gating** (delta 3): **RESOLVED 2026-08-28 — Yoshi: gate them too.** `/api/agents/hook/[id]` now calls `lifecycleAllowsTriggers` (403), checked AFTER the secret so lifecycle is not probeable without auth. Covered by smoke-agents-forge §H (6 checks). The hook's secret compare was also moved to hash-then-timingSafeEqual — the one site the hardening pass missed.
 - [ ] **Draft with AI**: needs the authed `claude` CLI — verify the wizard's Idea step returns a draft (failures surface loudly naming the provider).
 - [ ] **Hero SSE on the live server**: verify the EventSource stream + a mid-run status flip render through the dev server (smokes exercise the route functions directly).
 

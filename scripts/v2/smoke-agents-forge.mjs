@@ -231,6 +231,50 @@ console.log("\n── §G draft route validation ──");
   check("G2 error names the problem", /idea/.test(j.error ?? ""), j);
 }
 
+// ── §H webhook trigger obeys the lifecycle gate (Yoshi, 2026-08-28) ──────────
+// The scheduled tick already skips ideation/forge/test/retired; the hook route
+// now applies the SAME predicate, so an undeployed agent cannot be fired from
+// outside. Ordering matters: the secret is checked FIRST, so a caller without
+// the secret gets 401 and learns nothing about the agent's lifecycle.
+console.log("\n── §H webhook lifecycle gate ──");
+{
+  const hookRoute = await import("../../src/app/api/agents/hook/[id]/route.ts");
+  const SECRET = "smoke-hook-secret";
+  const hookReq = (secret) =>
+    new NextRequest(`http://127.0.0.1:3737/api/agents/hook/${agentId}`, {
+      method: "POST",
+      body: JSON.stringify({ ping: 1 }),
+      headers: { "content-type": "application/json", ...(secret ? { "x-agent-secret": secret } : {}) },
+    });
+  const call = (secret) => hookRoute.POST(hookReq(secret), { params: Promise.resolve({ id: agentId }) });
+
+  await patchAgent(agentId, { triggers: [{ type: "webhook", secret: SECRET }] });
+
+  // Park it back in "test" — the state the gate exists to catch.
+  await patchAgent(agentId, { lifecycle: "test" });
+  const parked = await call(SECRET);
+  const parkedJson = await parked.json();
+  check("H1 authenticated hook on a TEST agent → 403 (no run started)", parked.status === 403, parkedJson);
+  check("H2 the 403 names the lifecycle and the remedy",
+    /lifecycle|deploy/i.test(parkedJson.error ?? ""), parkedJson);
+
+  const noSecret = await call("");
+  check("H3 missing secret → 401, NOT 403 (lifecycle is not probeable)", noSecret.status === 401);
+  const wrongSecret = await call("not-the-secret");
+  check("H4 wrong secret → 401 regardless of lifecycle", wrongSecret.status === 401);
+
+  const src = fs.readFileSync("src/app/api/agents/hook/[id]/route.ts", "utf8");
+  // "Forked skip set" = the route re-deciding which lifecycles fire, instead of
+  // calling the predicate. Prose mentioning the states is fine; a Set/array
+  // literal or an equality test against a lifecycle name is not.
+  const codeOnly = src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  check("H5 hook route wired to the SHARED predicate (no forked skip set)",
+    /lifecycleAllowsTriggers\(agent\)/.test(codeOnly) &&
+    !/new Set\(|lifecycle\s*===\s*["']/.test(codeOnly), codeOnly.slice(0, 200));
+  check("H6 hook secret compare is hash-then-timingSafeEqual (no length leak)",
+    /createHash\("sha256"\)/.test(src) && !/ba\.length === bb\.length/.test(src));
+}
+
 // ── cleanup note ─────────────────────────────────────────────────────────────
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}  (temp db: ${tmpDb}, agents: ${agentsDir})`);
 process.exit(failures === 0 ? 0 : 1); // route imports hold ensureV2 timers
