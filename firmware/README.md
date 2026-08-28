@@ -5,6 +5,10 @@ band, sub-GHz ISM, and 802.15.4 (Zigbee/Thread) for a wireless-security lab.
 Everything here is **receive-only** — no transmit, associate, inject, deauth, or
 jam.
 
+> **Product / subscription / PolyRadio spine** (HaLow ↔ LoRa failover, nRF
+> power domain, **BLE DFU** for the sleepy MCU): see **[PRODUCT.md](PRODUCT.md)**.
+> That is the first commercial ship; this capture rig is the separate lab track.
+
 ```
   sub-GHz (~433 MHz)         2.4 GHz WiFi/BLE           802.15.4 (Zigbee/Thread)
  ┌────────────────────┐   ┌────────────────────┐   ┌──────────────────────────┐
