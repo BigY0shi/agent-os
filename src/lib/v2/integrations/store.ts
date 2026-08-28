@@ -315,6 +315,8 @@ interface ActivityDbRow {
   payload_json: string | null;
   rejection_reason: string | null;
   ingest_status: string;
+  dedupe_key: string | null;
+  ingest_attempts: number;
   created_at: string;
 }
 
@@ -328,10 +330,18 @@ function activityFromDb(r: ActivityDbRow): ActivityRow {
     payload: r.payload_json ? safeParse(r.payload_json) : null,
     rejectionReason: r.rejection_reason,
     ingestStatus: r.ingest_status as ActivityRow["ingestStatus"],
+    dedupeKey: r.dedupe_key ?? null,
+    ingestAttempts: r.ingest_attempts ?? 0,
     createdAt: r.created_at,
   };
 }
 
+/**
+ * Insert one activity row. When `dedupeKey` is provided (HARDENING-2026-08-27
+ * item 7), the insert is INSERT OR IGNORE against UNIQUE(account_id,
+ * dedupe_key) — a duplicate (overlap window, crash replay, webhook redelivery)
+ * returns NULL and callers must skip its side effects (emit/ingest).
+ */
 export function insertActivity(input: {
   accountId: string;
   text: string;
@@ -340,13 +350,14 @@ export function insertActivity(input: {
   payload?: Record<string, unknown>;
   rejectionReason?: string;
   ingestStatus?: ActivityRow["ingestStatus"];
-}): ActivityRow {
+  dedupeKey?: string;
+}): ActivityRow | null {
   const id = uuid();
-  getDb()
+  const info = getDb()
     .prepare(
-      `INSERT INTO activities
-         (id, account_id, text, source_url, event_type, payload_json, rejection_reason, ingest_status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO activities
+         (id, account_id, text, source_url, event_type, payload_json, rejection_reason, ingest_status, dedupe_key, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -357,8 +368,10 @@ export function insertActivity(input: {
       input.payload ? JSON.stringify(input.payload) : null,
       input.rejectionReason ?? null,
       input.ingestStatus ?? (input.rejectionReason ? "rejected" : "pending"),
+      input.dedupeKey ?? null,
       now(),
     );
+  if (info.changes === 0) return null; // dedupe hit — row already exists
   return getActivity(id)!;
 }
 
@@ -374,6 +387,28 @@ export function setActivityIngestStatus(
   status: ActivityRow["ingestStatus"],
 ): void {
   getDb().prepare("UPDATE activities SET ingest_status = ? WHERE id = ?").run(status, id);
+}
+
+/** Mark one ingest attempt failed AND count it (hardening item 8 — the hourly
+ *  'integration.ingest.retry' sweep re-attempts rows with attempts < cap). */
+export function markActivityIngestFailed(id: string): void {
+  getDb()
+    .prepare(
+      "UPDATE activities SET ingest_status = 'failed', ingest_attempts = ingest_attempts + 1 WHERE id = ?",
+    )
+    .run(id);
+}
+
+/** Failed-ingest rows still under the attempt cap, oldest first (item 8). */
+export function listRetryableIngestFailures(maxAttempts: number, limit = 50): ActivityRow[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM activities
+       WHERE ingest_status = 'failed' AND ingest_attempts < ?
+       ORDER BY created_at ASC LIMIT ?`,
+    )
+    .all(maxAttempts, Math.min(Math.max(limit, 1), 200)) as ActivityDbRow[];
+  return rows.map(activityFromDb);
 }
 
 export function listActivities(
@@ -586,6 +621,86 @@ export function purgeExpiredOauthSessions(): number {
   const cutoff = new Date(Date.now() - OAUTH_TTL_MS).toISOString();
   const info = getDb().prepare("DELETE FROM oauth_sessions WHERE created_at < ?").run(cutoff);
   return info.changes;
+}
+
+// ─── Webhook inbox (HARDENING-2026-08-27 item 11) ────────────────────────────
+// A verified delivery is persisted BEFORE the route returns 200, so a crash
+// between the 200 and the fire-and-forget dispatch no longer loses it. The
+// boot sweep re-processes 'pending' rows older than 1 minute; the activities
+// dedupe keys (item 7) make replays idempotent.
+
+/** Headers that must never be persisted (verification happens at receipt). */
+const INBOX_HEADER_DENYLIST = new Set([
+  "x-hook-secret",
+  "authorization",
+  "cookie",
+  "x-slack-signature",
+]);
+
+export interface WebhookInboxRow {
+  id: string;
+  slug: string;
+  headers: Record<string, string>;
+  rawBody: string;
+  status: "pending" | "done" | "error";
+  error: string | null;
+  createdAt: string;
+  processedAt: string | null;
+}
+
+export function insertWebhookInbox(
+  slug: string,
+  headers: Record<string, string>,
+  rawBody: string,
+): string {
+  const safeHeaders: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    if (!INBOX_HEADER_DENYLIST.has(k.toLowerCase())) safeHeaders[k] = v;
+  }
+  const id = uuid();
+  getDb()
+    .prepare(
+      `INSERT INTO webhook_inbox (id, slug, headers_json, raw_body, status, created_at)
+       VALUES (?, ?, ?, ?, 'pending', ?)`,
+    )
+    .run(id, slug, JSON.stringify(safeHeaders), rawBody, now());
+  return id;
+}
+
+export function markWebhookInbox(id: string, status: "done" | "error", error?: string): void {
+  getDb()
+    .prepare("UPDATE webhook_inbox SET status = ?, error = ?, processed_at = ? WHERE id = ?")
+    .run(status, error ?? null, now(), id);
+}
+
+/** 'pending' rows older than the cutoff — the boot sweep's work list. */
+export function listStaleWebhookInbox(olderThanMs: number, limit = 100): WebhookInboxRow[] {
+  const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM webhook_inbox WHERE status = 'pending' AND created_at < ?
+       ORDER BY created_at ASC LIMIT ?`,
+    )
+    .all(cutoff, Math.min(Math.max(limit, 1), 500)) as {
+    id: string;
+    slug: string;
+    headers_json: string;
+    raw_body: string;
+    status: string;
+    error: string | null;
+    created_at: string;
+    processed_at: string | null;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    headers: safeParse(r.headers_json) as Record<string, string>,
+    rawBody: r.raw_body,
+    status: r.status as WebhookInboxRow["status"],
+    error: r.error,
+    createdAt: r.created_at,
+    processedAt: r.processed_at,
+  }));
 }
 
 // ─── util ────────────────────────────────────────────────────────────────────

@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createHash } from "node:crypto";
+import {
+  SESSION_COOKIE as COOKIE,
+  SESSION_TTL_S,
+  ensureSessionSecret,
+  legacyCookieAccepted,
+  mintSessionToken,
+  verifySessionToken,
+} from "@/lib/authSessions";
 
 // LAN access gate. Next 16 renamed `middleware` → `proxy` (Node.js runtime by default,
-// so process.env + node:crypto are available). This runs before every route and blocks
-// anyone without a valid session cookie — because the dashboard can drive the user's
-// authed CLI agents, read the vault, and run commands, so a LAN-exposed instance MUST
-// be gated. Password lives in AGENTOS_PASSWORD (.env.local); the cookie holds its hash.
-
-const COOKIE = "agentos_session";
-
-function token(pw: string): string {
-  return createHash("sha256").update("agentos.v1:" + pw).digest("hex");
-}
+// so process.env + node:crypto/node:fs are available). This runs before every route and
+// blocks anyone without a valid session cookie — because the dashboard can drive the
+// user's authed CLI agents, read the vault, and run commands, so a LAN-exposed instance
+// MUST be gated. Password lives in AGENTOS_PASSWORD (.env.local).
+//
+// HARDENING-2026-08-27 item 13: the cookie is now a RANDOM signed session token
+// (30-day expiry, sliding refresh) minted at login — no longer a deterministic
+// password hash (theft = indefinite replay + offline dictionary oracle). The old
+// hash cookie stays accepted for 7 days from deploy (grace, upgraded on sight)
+// so existing sessions survive. See src/lib/authSessions.ts for the lane choice
+// (stateless HMAC vs DB-backed) rationale.
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -67,8 +75,32 @@ export function proxy(request: NextRequest) {
   }
 
   const cookie = request.cookies.get(COOKIE)?.value;
-  if (cookie && cookie === token(password)) {
-    return NextResponse.next();
+  if (cookie) {
+    const secretFile = ensureSessionSecret();
+    const setCookie = (res: NextResponse, value: string) => {
+      res.cookies.set(COOKIE, value, {
+        path: "/",
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false, // LAN is plain http; Secure would drop the cookie
+        maxAge: SESSION_TTL_S,
+      });
+      return res;
+    };
+    if (secretFile) {
+      const check = verifySessionToken(cookie, secretFile.secret);
+      if (check.valid) {
+        const res = NextResponse.next();
+        // Sliding refresh: re-mint when less than half the lifetime remains.
+        return check.shouldRefresh ? setCookie(res, mintSessionToken(secretFile.secret)) : res;
+      }
+    }
+    // Grace lane: the pre-hardening deterministic hash cookie, accepted for 7
+    // days from the secret file's creation — upgraded to a signed token here.
+    if (legacyCookieAccepted(cookie, password, secretFile)) {
+      const res = NextResponse.next();
+      return secretFile ? setCookie(res, mintSessionToken(secretFile.secret)) : res;
+    }
   }
 
   // Not authenticated.

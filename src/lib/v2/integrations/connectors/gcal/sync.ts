@@ -79,6 +79,9 @@ export async function gcalSync(ctx: SyncCtx): Promise<SyncResult> {
         ...(event.location ? { location: event.location } : {}),
         changeKind: isNew ? "created" : "updated",
       },
+      // Item 7: id@updated + kind — a NEW update to the same event is a new
+      // activity; a crash-replay of the same update state is not.
+      dedupeKey: `gcal-changed:${event.id ?? "unknown"}@${updated}`,
     });
   }
 
@@ -115,6 +118,8 @@ export async function gcalSync(ctx: SyncCtx): Promise<SyncResult> {
         end,
         ...(event.location ? { location: event.location } : {}),
       },
+      // Item 7: SOON fires once per event ever — kind-scoped key.
+      dedupeKey: `gcal-soon:${event.id}`,
     });
     notified.push(event.id);
     soonProgress = true;

@@ -372,6 +372,10 @@ export interface RecallInvalidatedFact {
 }
 
 export interface RecallStatement {
+  /** Statement node uuid — carried so the §9.4 taint gate can resolve the
+   *  statement's provenance episodes' labels (HARDENING-2026-08-27 item 1).
+   *  Optional for hand-built results; a missing uuid fails CLOSED (taints). */
+  uuid?: string;
   fact: string;
   validAt: string;
   attributes: Record<string, string>;

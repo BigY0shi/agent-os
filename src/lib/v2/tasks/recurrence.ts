@@ -126,11 +126,25 @@ function wallToUtc(
  * Compute the next run for an RRULE string interpreted in the user's local
  * timezone; returns a UTC Date (or null when exhausted/unparseable — the
  * latter is warned loudly, never silent).
+ *
+ * HARDENING-2026-08-27 item 10 (verified true): the no-BYHOUR branch treated
+ * every rule as a bare relative interval — BYDAY, COUNT and UNTIL were
+ * silently IGNORED ('FREQ=WEEKLY;BYDAY=MO' fired every 7 days from now on any
+ * weekday; COUNT/UNTIL never terminated). Such shapes now delegate to the
+ * rrule library in wall-clock space, anchored at `anchor` (a persisted
+ * DTSTART — callers pass the task's created_at). A COUNT rule without an
+ * anchor and without an inline DTSTART is REJECTED loudly (returns null →
+ * deactivation), never silently misfired. Known residual (documented): in the
+ * BYHOUR day-iteration path COUNT still cannot exhaust (the probe rule's
+ * dtstart rotates); COUNT-with-BYHOUR is bounded by maxOccurrences instead.
+ * UNTIL comparison in delegated wall-clock space is offset-approximate (≤ tz
+ * offset) — acceptable for day-granularity UNTILs.
  */
 export function computeNextRun(
   rruleString: string,
   timezone: string = getTasksTimezone(),
   after: Date = new Date(),
+  anchor?: Date | null,
 ): Date | null {
   const normalized = normalizeSchedule(rruleString);
   if (!normalized) return null;
@@ -199,6 +213,45 @@ export function computeNextRun(
       return null;
     }
 
+    // Item 10: no-BYHOUR shapes carrying pattern/termination clauses (BYDAY,
+    // COUNT, UNTIL) are NOT bare relative intervals — delegate to the rrule
+    // library in wall-clock space so those clauses are honored.
+    const hasByday = options.byweekday !== undefined && options.byweekday !== null;
+    const hasCount = options.count !== undefined && options.count !== null;
+    const hasUntil = options.until !== undefined && options.until !== null;
+    if (hasByday || hasCount || hasUntil) {
+      // Anchor: inline DTSTART wins; else the caller-persisted anchor (task
+      // created_at). COUNT is meaningless without a fixed anchor — reject loud.
+      const anchorUtc = options.dtstart ?? anchor ?? null;
+      if (hasCount && !anchorUtc) {
+        console.warn(
+          `[v2/tasks] schedule '${rruleString}' has COUNT but no DTSTART/anchor — cannot count occurrences; deactivating (never silently misfiring)`,
+        );
+        return null;
+      }
+      // Wall-clock naive space (same trick as the BYHOUR path): convert the
+      // anchor + `after` to the user's wall reading, run rrule on those naive
+      // instants, convert the hit back to UTC.
+      const wallNaive = (d: Date) => {
+        const w = utcToWall(d, timezone);
+        return new Date(Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi, w.s));
+      };
+      const afterNaive = wallNaive(after);
+      const dtstartNaive = anchorUtc ? wallNaive(anchorUtc) : afterNaive;
+      const rule = new RRule({ ...options, dtstart: dtstartNaive, until: options.until ?? null });
+      const nextNaive = rule.after(afterNaive, false);
+      if (!nextNaive) return null; // exhausted (COUNT/UNTIL) — legitimate end
+      return wallToUtc(
+        nextNaive.getUTCFullYear(),
+        nextNaive.getUTCMonth() + 1,
+        nextNaive.getUTCDate(),
+        nextNaive.getUTCHours(),
+        nextNaive.getUTCMinutes(),
+        nextNaive.getUTCSeconds(),
+        timezone,
+      );
+    }
+
     // No BYHOUR = relative-interval task ("in 5 min", "in 1 day") — REF
     // semantics: add the interval to `after`, NOT the pattern boundary.
     const interval = options.interval || 1;
@@ -234,9 +287,15 @@ export function computeNextRun(
   }
 }
 
+/** The task's persisted recurrence anchor (item 10): its creation instant. */
+function taskAnchor(task: Pick<Task, "createdAt">): Date | null {
+  const d = new Date(task.createdAt);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
 /** Next occurrence for a task: schedule-driven, else its pending one-shot runAt. */
 export function nextOccurrence(task: Task, after: Date = new Date()): Date | null {
-  if (task.schedule) return computeNextRun(task.schedule, getTasksTimezone(), after);
+  if (task.schedule) return computeNextRun(task.schedule, getTasksTimezone(), after, taskAnchor(task));
   if (task.runAt && task.runAt > after.toISOString()) return new Date(task.runAt);
   return null;
 }
@@ -398,7 +457,7 @@ export function applySchedule(taskId: string, input: ApplyScheduleInput): Task {
   if (input.runAt !== undefined) {
     runAt = input.runAt;
   } else if (input.schedule !== undefined) {
-    const next = schedule ? computeNextRun(schedule, tz) : null;
+    const next = schedule ? computeNextRun(schedule, tz, new Date(), taskAnchor(task)) : null;
     runAt = next ? next.toISOString() : null;
   } else {
     runAt = task.runAt;
@@ -454,7 +513,7 @@ export function scheduleTask(taskOrId: Task | string): string | null {
 
   let runAt: string | null = null;
   if (task.schedule) {
-    const next = computeNextRun(task.schedule, getTasksTimezone());
+    const next = computeNextRun(task.schedule, getTasksTimezone(), new Date(), taskAnchor(task));
     if (!next) {
       console.warn(
         `[v2/tasks] schedule '${task.schedule}' for ${task.displayId} yields no next occurrence — deactivating`,
@@ -505,7 +564,7 @@ function advanceAfterFire(taskId: string): void {
       deactivateTask(taskId, `max occurrences (${fresh.occurrenceCount}/${fresh.maxOccurrences}) or end date reached`);
       return;
     }
-    const next = computeNextRun(fresh.schedule!, getTasksTimezone());
+    const next = computeNextRun(fresh.schedule!, getTasksTimezone(), new Date(), taskAnchor(fresh));
     if (!next) {
       console.warn(
         `[v2/tasks] recurring ${fresh.displayId} has no next occurrence — deactivating`,

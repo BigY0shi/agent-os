@@ -1,6 +1,10 @@
 import { ingestFromModule } from "../memory/queue";
-import { setActivityIngestStatus, type AccountRow } from "./store";
+import { markActivityIngestFailed, setActivityIngestStatus, type AccountRow } from "./store";
 import type { ActivityRow } from "./types";
+
+/** Hardening item 8: 'failed' rows are retried by the hourly
+ *  'integration.ingest.retry' scheduler job until this attempt cap. */
+export const INGEST_MAX_ATTEMPTS = 5;
 
 /**
  * SPEC-D G2.4 — the Memory V2 ingest seam for accepted activities.
@@ -40,6 +44,6 @@ export async function ingestActivity(
     setActivityIngestStatus(activity.id, "ingested");
   } catch (err) {
     console.error(`[integrations/ingest] enqueue failed for activity ${activity.id}:`, err);
-    setActivityIngestStatus(activity.id, "failed");
+    markActivityIngestFailed(activity.id); // status 'failed' + attempts++ (item 8)
   }
 }

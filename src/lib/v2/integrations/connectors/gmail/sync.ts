@@ -9,7 +9,13 @@ import { extractEmailContent, type GmailMessagePart } from "./mime";
  * - queries `in:inbox is:important after:<ts>` + `in:sent after:<ts>`, 50-msg
  *   caps each (§8.5 sync cap);
  * - 24h default window when no watermark;
- * - watermark = latest internalDate + 20s, state saved ONLY on progress;
+ * - watermark = EXACT latest internalDate, state saved ONLY on progress
+ *   (HARDENING-2026-08-27 item 7: upstream's `+20s` skew silently dropped any
+ *   mail whose internalDate landed inside the 20-second window after the
+ *   newest processed message — the next run's `after:`/skip-filter treated it
+ *   as already-seen. The exact watermark re-lists the boundary second instead,
+ *   and per-message `dedupeKey` + INSERT OR IGNORE in the driver make the
+ *   re-listed boundary messages no-ops rather than duplicates);
  * - Turndown HTML→Markdown cleanup, <10-char bodies skipped;
  * - EXACT activity text format + sourceURL
  *   https://mail.google.com/mail/u/0/#inbox/<id> (sent: #sent/<id>);
@@ -128,10 +134,11 @@ async function processReceivedEmails(
 
       const internalDate = parseInt(fullMessage.data.internalDate || "0");
 
-      // Skip emails at or before lastSyncTime (Gmail after: is not precise
-      // at second level).
+      // Skip emails strictly BEFORE the watermark (item 7: `<` not `<=` — the
+      // boundary second is re-processed and deduped by messageId, so a message
+      // that landed in the same second as the previous newest is never lost).
       const lastSyncMs = new Date(lastSyncTime).getTime();
-      if (internalDate <= lastSyncMs) continue;
+      if (internalDate < lastSyncMs) continue;
       if (internalDate > lastEmailTime) lastEmailTime = internalDate;
 
       const sender = formatEmailSender(from);
@@ -152,6 +159,7 @@ async function processReceivedEmails(
         sourceURL,
         eventType: "GMAIL_MESSAGE_RECEIVED",
         payload: { from, subject, messageId: message.id!, threadId },
+        dedupeKey: `gmail-received:${message.id}`,
       });
     } catch (error) {
       // Silently ignore errors for individual messages (upstream parity)
@@ -195,7 +203,7 @@ async function processSentEmails(
 
       const internalDate = parseInt(fullMessage.data.internalDate || "0");
       const lastSyncMs = new Date(lastSyncTime).getTime();
-      if (internalDate <= lastSyncMs) continue;
+      if (internalDate < lastSyncMs) continue; // item 7: boundary re-processed, deduped
       if (internalDate > lastEmailTime) lastEmailTime = internalDate;
 
       const threadId = fullMessage.data.threadId || message.id!;
@@ -210,7 +218,7 @@ async function processSentEmails(
 
       const text = `Sent email to ${to} (from: ${emailAddress}, subject: "${subject}", message_id: ${message.id}, thread_id: ${threadId}) at ${date}. Snippet: "${snippet}"`;
 
-      activities.push({ text, sourceURL });
+      activities.push({ text, sourceURL, dedupeKey: `gmail-sent:${message.id}` });
     } catch (error) {
       console.error("Error processing sent email:", error);
     }
@@ -253,11 +261,12 @@ export async function gmailSync(ctx: SyncCtx): Promise<SyncResult> {
 
   const activities = [...receivedActivities, ...sentActivities];
 
-  // Only save state if emails were processed (state-on-progress-only) —
-  // +20s watermark past the newest internalDate (upstream rule).
+  // Only save state if emails were processed (state-on-progress-only).
+  // Item 7: watermark = EXACT newest internalDate (upstream's +20s skew
+  // dropped tail mail — see header). Boundary re-lists dedupe by messageId.
   const latestEmailTime = Math.max(receivedLastTime, sentLastTime);
   if (latestEmailTime > 0) {
-    const newSyncTime = new Date(latestEmailTime + 20000).toISOString();
+    const newSyncTime = new Date(latestEmailTime).toISOString();
     return {
       activities,
       state: {

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { ensureV2 } from "@/lib/v2/boot";
 import { getConnector } from "@/lib/v2/integrations/registry";
 import { verifyWebhookRequest, dispatchWebhook } from "@/lib/v2/integrations/webhooks";
+import { insertWebhookInbox, markWebhookInbox } from "@/lib/v2/integrations/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,9 +63,35 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     return NextResponse.json(challenge, noStore);
   }
 
-  // (5) Fire-and-forget; always-200.
-  void dispatchWebhook(slug, webhook).catch((err) => {
-    console.error(`[api/hooks] ${slug} dispatch failed:`, err);
-  });
+  // (5) Durable inbox (HARDENING-2026-08-27 item 11): persist the verified
+  // delivery BEFORE the 200 — fire-and-forget after a crash used to lose it.
+  // Sensitive headers are stripped at insert (verification already ran).
+  // The boot sweep (sweepWebhookInbox) re-processes rows stuck 'pending' >1min;
+  // activity dedupe keys (item 7) make any replay idempotent.
+  let inboxId: string | null = null;
+  try {
+    inboxId = insertWebhookInbox(slug, headers, rawBody);
+  } catch (err) {
+    // Inbox write failing must not turn deliveries away — degrade to the old
+    // fire-and-forget behavior, loudly.
+    console.error(`[api/hooks] ${slug} inbox persist failed (degrading to fire-and-forget):`, err);
+  }
+
+  // (6) Fire-and-forget; always-200. The inbox row settles to done/error.
+  const id = inboxId;
+  void dispatchWebhook(slug, webhook)
+    .then(() => {
+      if (id) markWebhookInbox(id, "done");
+    })
+    .catch((err) => {
+      console.error(`[api/hooks] ${slug} dispatch failed:`, err);
+      if (id) {
+        try {
+          markWebhookInbox(id, "error", err instanceof Error ? err.message.slice(0, 500) : String(err));
+        } catch {
+          /* row settles via the sweep instead */
+        }
+      }
+    });
   return NextResponse.json({ ok: true }, noStore);
 }

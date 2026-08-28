@@ -115,6 +115,11 @@ export interface NewActivity {
   sourceURL?: string;
   eventType?: string; // TriggerDef key
   payload?: Record<string, unknown>;
+  /** Stable per-item id (gmail message id, github notification id@updated,
+   *  slack ts, gcal event id@updated) — UNIQUE(account_id, dedupe_key) with
+   *  INSERT OR IGNORE makes replays/overlap windows idempotent (hardening
+   *  item 7). Omit when the source has no stable id. */
+  dedupeKey?: string;
 }
 
 export interface SyncResult {
@@ -196,6 +201,10 @@ export interface ActivityRow {
   payload: Record<string, unknown> | null;
   rejectionReason: string | null;
   ingestStatus: "pending" | "ingested" | "rejected" | "failed";
+  /** Stable per-item dedupe key (hardening item 7); NULL on legacy rows. */
+  dedupeKey: string | null;
+  /** Memory-ingest attempts so far (hardening item 8; retry cap 5). */
+  ingestAttempts: number;
   createdAt: string;
 }
 

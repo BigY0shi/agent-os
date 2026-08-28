@@ -3,7 +3,7 @@ import { uuid, now } from "../ids";
 import { emit } from "../events";
 import { redactArgs } from "../redact";
 import { readPackageSecrets } from "./secrets";
-import { WebmcpError } from "./store";
+import { WebmcpError, getPublishedSnapshot } from "./store";
 import { appendJarvisMessage, getConversation } from "../jarvis/conversations";
 
 /**
@@ -56,6 +56,10 @@ export interface WebmcpApproval {
   createdAt: string;
   resolvedAt: string | null;
   expiresAt: string;
+  /** Published package version at REQUEST time (hardening item 6): approve
+   *  refuses (409) when the package was republished since. NULL for
+   *  registry-lane approvals — those are version-less (no snapshot). */
+  pinnedVersion: number | null;
 }
 
 /** The route/UI-safe projection (raw args stripped). */
@@ -86,6 +90,7 @@ interface Row {
   created_at: string;
   resolved_at: string | null;
   expires_at: string;
+  pinned_version: number | null;
 }
 
 function parse(json: string | null): Record<string, unknown> {
@@ -120,6 +125,7 @@ function map(r: Row): WebmcpApproval {
     createdAt: r.created_at,
     resolvedAt: r.resolved_at,
     expiresAt: r.expires_at,
+    pinnedVersion: r.pinned_version ?? null,
   };
 }
 
@@ -161,6 +167,16 @@ export function createApproval(input: {
   const ts = now();
   const secretValues =
     input.slug === REGISTRY_SLUG ? [] : Object.values(readPackageSecrets(input.slug));
+  // Hardening item 6: pin the published version at REQUEST time. Registry-lane
+  // approvals stay NULL — plain F4 actions have no versioned snapshot to pin.
+  let pinnedVersion: number | null = null;
+  if (input.slug !== REGISTRY_SLUG) {
+    try {
+      pinnedVersion = getPublishedSnapshot(input.slug)?.package.version ?? null;
+    } catch {
+      /* store unavailable — resolveApproval re-checks and refuses on drift */
+    }
+  }
   const row: Row = {
     id: uuid(),
     slug: input.slug,
@@ -174,17 +190,18 @@ export function createApproval(input: {
     created_at: ts,
     resolved_at: null,
     expires_at: new Date(Date.now() + APPROVAL_TTL_MS).toISOString(),
+    pinned_version: pinnedVersion,
   };
   getDb()
     .prepare(
       `INSERT INTO webmcp_approvals
-         (id, slug, tool, args_json, redacted_args_json, requested_by, conversation_id, status, result_json, created_at, resolved_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, slug, tool, args_json, redacted_args_json, requested_by, conversation_id, status, result_json, created_at, resolved_at, expires_at, pinned_version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       row.id, row.slug, row.tool, row.args_json, row.redacted_args_json,
       row.requested_by, row.conversation_id, row.status, row.result_json,
-      row.created_at, row.resolved_at, row.expires_at,
+      row.created_at, row.resolved_at, row.expires_at, row.pinned_version,
     );
 
   const approval = map(row);
@@ -329,6 +346,23 @@ export async function resolveApproval(
   if (!a) throw new WebmcpError("approval not found", 404);
   if (a.status === "expired") throw new WebmcpError("approval expired — ask again", 410);
   if (a.status !== "pending") throw new WebmcpError(`approval already ${a.status}`, 409);
+
+  // Snapshot pinning (hardening item 6): an approve executes the CURRENTLY
+  // published snapshot — if the package was republished since the request, the
+  // user approved different behavior than what would run. Refuse; the caller
+  // must re-request against the new version. Checked BEFORE the atomic claim
+  // so the row stays pending (it expires naturally). Registry-lane rows
+  // (pinnedVersion NULL) are version-less and skip this.
+  if (action === "approve" && a.slug !== REGISTRY_SLUG && a.pinnedVersion !== null) {
+    const currentVersion = getPublishedSnapshot(a.slug)?.package.version ?? null;
+    if (currentVersion !== a.pinnedVersion) {
+      throw new WebmcpError(
+        `package '${a.slug}' was republished (v${a.pinnedVersion} → v${currentVersion ?? "unpublished"}) ` +
+          "since this approval was requested — refused; ask again to approve the current version",
+        409,
+      );
+    }
+  }
 
   // Atomic claim (review 2026-08-27): check-then-execute left a window where
   // two concurrent approve requests both saw 'pending' and executed the tool

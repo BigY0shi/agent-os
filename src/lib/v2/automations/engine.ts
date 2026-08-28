@@ -177,6 +177,7 @@ interface RunDbRow {
   id: string;
   rule_id: string;
   activity_id: string | null;
+  event_id: number | null;
   trigger_json: string;
   status: string;
   detail_json: string | null;
@@ -197,6 +198,7 @@ function runFromDb(r: RunDbRow): AutomationRunRow {
     id: r.id,
     ruleId: r.rule_id,
     activityId: r.activity_id,
+    eventId: r.event_id ?? null,
     trigger: safeParseObj(r.trigger_json),
     status: r.status as AutomationRunStatus,
     detail,
@@ -210,6 +212,7 @@ const DETAIL_CAP = 8192;
 function insertRun(input: {
   ruleId: string;
   activityId?: string | null;
+  eventId?: number | null;
   trigger: Record<string, unknown>;
   status: AutomationRunStatus;
   detail?: AutomationRunRow["detail"];
@@ -220,13 +223,22 @@ function insertRun(input: {
   if (triggerJson.length > DETAIL_CAP) triggerJson = JSON.stringify({ truncated: true });
   let detailJson = input.detail ? JSON.stringify(input.detail) : null;
   if (detailJson && detailJson.length > DETAIL_CAP) detailJson = JSON.stringify({ truncated: true });
+  // OR IGNORE: UNIQUE(rule_id, event_id) is the replay backstop (item 12) —
+  // a concurrent/replayed insert for the same (rule, event) is a no-op.
   getDb()
     .prepare(
-      `INSERT INTO automation_runs (id, rule_id, activity_id, trigger_json, status, detail_json, error, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO automation_runs (id, rule_id, activity_id, event_id, trigger_json, status, detail_json, error, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, input.ruleId, input.activityId ?? null, triggerJson, input.status, detailJson, input.error ?? null, now());
+    .run(id, input.ruleId, input.activityId ?? null, input.eventId ?? null, triggerJson, input.status, detailJson, input.error ?? null, now());
   return id;
+}
+
+/** True when this (rule, event) pair already produced a run (item 12). */
+function hasRunForEvent(ruleId: string, eventId: number): boolean {
+  return !!getDb()
+    .prepare("SELECT 1 FROM automation_runs WHERE rule_id = ? AND event_id = ? LIMIT 1")
+    .get(ruleId, eventId);
 }
 
 export function listRuns(opts: { ruleId?: string; limit?: number } = {}): AutomationRunRow[] {
@@ -709,13 +721,18 @@ function slugMatches(ruleSlug: string, eventSlug: string | null): boolean {
   return ruleSlug === eventSlug;
 }
 
-async function fireRule(rule: AutomationRule, trig: TriggerContext): Promise<void> {
+async function fireRule(rule: AutomationRule, trig: TriggerContext, eventId: number | null): Promise<void> {
+  // Item 12 replay guard: boot replay (and any redelivered event) must never
+  // re-execute actions for a (rule, event) pair that already ran.
+  if (eventId !== null && hasRunForEvent(rule.id, eventId)) return;
+
   const { pass, results } = evalConditions(rule.conditions, trig.ctx);
   if (!pass) {
     // condition_miss ONLY here — the trigger matched, conditions failed.
     insertRun({
       ruleId: rule.id,
       activityId: trig.activityId,
+      eventId,
       trigger: trig.ctx.payload as Record<string, unknown>,
       status: "condition_miss",
       detail: { conditions: results },
@@ -735,6 +752,7 @@ async function fireRule(rule: AutomationRule, trig: TriggerContext): Promise<voi
   insertRun({
     ruleId: rule.id,
     activityId: trig.activityId,
+    eventId,
     trigger: trig.ctx.payload as Record<string, unknown>,
     status,
     detail: { conditions: results, actions: actionResults },
@@ -764,22 +782,90 @@ async function fireRule(rule: AutomationRule, trig: TriggerContext): Promise<voi
 }
 
 async function handleEvent(event: V2Event): Promise<void> {
-  if (event.type === "attention.flag") return; // aggregator territory — never a rule trigger
-  if (event.source === "automation") return; // loop guard (documented above)
-  if (readSettings().automations?.enabled === false) return; // kill switch
+  try {
+    if (event.type === "attention.flag") return; // aggregator territory — never a rule trigger
+    if (event.source === "automation") return; // loop guard (documented above)
+    if (readSettings().automations?.enabled === false) return; // kill switch
 
-  const trig = buildTriggerContext(event);
-  if (!trig) return;
-  const rules = listRules({ activeOnly: true }).filter(
-    (r) => r.triggerEvent === trig.triggerKey && slugMatches(r.triggerSlug, trig.slug),
-  );
-  for (const rule of rules) {
-    try {
-      await fireRule(rule, trig);
-    } catch (err) {
-      console.error(`[v2/automations] rule '${rule.name}' (${rule.id}) fire failed:`, err);
+    const trig = buildTriggerContext(event);
+    if (!trig) return;
+    const rules = listRules({ activeOnly: true }).filter(
+      (r) => r.triggerEvent === trig.triggerKey && slugMatches(r.triggerSlug, trig.slug),
+    );
+    for (const rule of rules) {
+      try {
+        await fireRule(rule, trig, event.id ?? null);
+      } catch (err) {
+        console.error(`[v2/automations] rule '${rule.name}' (${rule.id}) fire failed:`, err);
+      }
     }
+  } finally {
+    // Item 12 durable cursor: EVERY processed event advances it (skipped
+    // events too — otherwise the replay window never shrinks). Monotonic.
+    if (typeof event.id === "number") advanceEventCursor(event.id);
   }
+}
+
+// ─── Durable event cursor (HARDENING-2026-08-27 item 12) ─────────────────────
+
+const CURSOR_META_KEY = "automations_event_cursor";
+const REPLAY_CAP = 1000;
+
+function readEventCursor(): number | null {
+  const row = getDb()
+    .prepare("SELECT value FROM meta WHERE key = ?")
+    .get(CURSOR_META_KEY) as { value: string } | undefined;
+  if (!row) return null;
+  const n = Number(row.value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function advanceEventCursor(eventId: number): void {
+  try {
+    getDb()
+      .prepare(
+        `INSERT INTO meta(key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value
+         WHERE CAST(excluded.value AS INTEGER) > CAST(meta.value AS INTEGER)`,
+      )
+      .run(CURSOR_META_KEY, String(eventId));
+  } catch (err) {
+    console.error("[v2/automations] cursor advance failed:", err);
+  }
+}
+
+/**
+ * Boot replay: dispatch is otherwise in-memory only — events persisted while
+ * the engine was down (or after its subscription died) never fired rules.
+ * Replays events newer than the cursor through the normal pipeline; the
+ * UNIQUE(rule_id, event_id) run guard makes overlap with live delivery
+ * harmless. First boot (no cursor) initializes to MAX(events.id) — history
+ * from before this feature must not spuriously fire rules.
+ */
+async function replayMissedEvents(): Promise<number> {
+  const db = getDb();
+  const cursor = readEventCursor();
+  if (cursor === null) {
+    const row = db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM events").get() as { m: number };
+    advanceEventCursor(row.m);
+    return 0;
+  }
+  const rows = db
+    .prepare("SELECT id, type, source, payload, created_at AS createdAt FROM events WHERE id > ? ORDER BY id ASC LIMIT ?")
+    .all(cursor, REPLAY_CAP) as Array<Omit<V2Event, "payload"> & { payload: string }>;
+  for (const r of rows) {
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = JSON.parse(r.payload) as Record<string, unknown>;
+    } catch {
+      /* tolerated */
+    }
+    await handleEvent({ id: r.id, type: r.type, source: r.source, payload, createdAt: r.createdAt });
+  }
+  if (rows.length > 0) {
+    console.log(`[v2/automations] replayed ${rows.length} missed event(s) through the rules engine`);
+  }
+  return rows.length;
 }
 
 // ─── Boot wiring ─────────────────────────────────────────────────────────────
@@ -809,6 +895,13 @@ export function ensureAutomations(): void {
       .then(() => handleEvent(event))
       .catch((err) => console.error("[v2/automations] event handling failed:", err));
   });
+  // Item 12: replay events persisted while no engine was subscribed. Chained
+  // onto the serial pipeline so live events queue behind the replay; the
+  // (rule_id, event_id) run guard neutralizes any overlap.
+  s.pending = s.pending
+    .then(() => replayMissedEvents())
+    .then(() => undefined)
+    .catch((err) => console.error("[v2/automations] boot replay failed:", err));
 }
 
 /** Await all in-flight rule processing (smokes). */

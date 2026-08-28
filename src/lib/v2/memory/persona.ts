@@ -812,13 +812,53 @@ interface AspectFact {
   fact: string;
 }
 
+/**
+ * Persona provenance filter (HARDENING-2026-08-27 item 3): integration-derived
+ * facts must never enter the persistent system prompt. Persona generation
+ * consumed statements/voice aspects with NO provenance filtering, so an
+ * Identity/Preference/Directive planted in an email or Slack message could
+ * write itself into every future Jarvis prompt. These SQL fragments exclude,
+ * at QUERY level:
+ *  - statements having ANY provenance episode labeled `integration:%`;
+ *  - voice aspects having ANY source episode labeled `integration:%`;
+ *  - integration-labeled episodes themselves (as trigger + content input).
+ */
+const SQL_EPISODE_IS_INTEGRATION = (epExpr: string) => `EXISTS (
+  SELECT 1 FROM episode_labels pel JOIN labels pl ON pl.id = pel.label_id
+  WHERE pel.episode_uuid = ${epExpr} AND pl.name LIKE 'integration:%')`;
+
+const SQL_STATEMENT_HAS_INTEGRATION_PROVENANCE = (stmtExpr: string) => `EXISTS (
+  SELECT 1 FROM edges pe
+  JOIN episode_labels pel ON pel.episode_uuid = pe.from_uuid
+  JOIN labels pl ON pl.id = pel.label_id
+  WHERE pe.type = 'provenance' AND pe.to_uuid = ${stmtExpr} AND pl.name LIKE 'integration:%')`;
+
+const SQL_VOICE_HAS_INTEGRATION_PROVENANCE = (vaAlias: string) => `EXISTS (
+  SELECT 1 FROM json_each(${vaAlias}.episode_uuids) pje
+  JOIN episode_labels pel ON pel.episode_uuid = pje.value
+  JOIN labels pl ON pl.id = pel.label_id
+  WHERE pl.name LIKE 'integration:%')`;
+
+/** True when the episode itself carries an integration:* label. */
+export function isIntegrationEpisode(episodeUuid: string): boolean {
+  const row = getDb()
+    .prepare(`SELECT ${SQL_EPISODE_IS_INTEGRATION("?")} AS hit`)
+    .get(episodeUuid) as { hit: number };
+  return row.hit === 1;
+}
+
 /** Valid + invalidated persona-relevant facts touching one episode, across
  *  BOTH stores (REF fetchEpisodeFactsForPersona — the graph/voice split is
- *  load-bearing; an invalidate-only episode still counts). */
+ *  load-bearing; an invalidate-only episode still counts). Integration-labeled
+ *  episodes and integration-provenance facts are excluded (hardening item 3). */
 export function fetchEpisodeFactsForPersona(episodeUuid: string): {
   validFacts: AspectFact[];
   invalidatedFacts: AspectFact[];
 } {
+  // Item 3: an integration-sourced episode never triggers or feeds persona.
+  if (isIntegrationEpisode(episodeUuid)) {
+    return { validFacts: [], invalidatedFacts: [] };
+  }
   const db = getDb();
   const graphIn = PERSONA_GRAPH_ASPECTS.map(() => "?").join(",");
   const voiceIn = PERSONA_VOICE_ASPECTS.map(() => "?").join(",");
@@ -829,7 +869,8 @@ export function fetchEpisodeFactsForPersona(episodeUuid: string): {
       `SELECT s.fact AS fact, s.aspect AS aspect
        FROM edges e JOIN statements s ON s.uuid = e.to_uuid
        WHERE e.type = 'provenance' AND e.from_uuid = ?
-         AND s.invalid_at IS NULL AND s.aspect IN (${graphIn})`,
+         AND s.invalid_at IS NULL AND s.aspect IN (${graphIn})
+         AND NOT ${SQL_STATEMENT_HAS_INTEGRATION_PROVENANCE("s.uuid")}`,
     )
     .all(episodeUuid, ...PERSONA_GRAPH_ASPECTS) as AspectFact[];
 
@@ -839,7 +880,8 @@ export function fetchEpisodeFactsForPersona(episodeUuid: string): {
       `SELECT va.fact AS fact, va.aspect AS aspect
        FROM voice_aspects va
        WHERE va.invalid_at IS NULL AND va.aspect IN (${voiceIn})
-         AND EXISTS (SELECT 1 FROM json_each(va.episode_uuids) je WHERE je.value = ?)`,
+         AND EXISTS (SELECT 1 FROM json_each(va.episode_uuids) je WHERE je.value = ?)
+         AND NOT ${SQL_VOICE_HAS_INTEGRATION_PROVENANCE("va")}`,
     )
     .all(...PERSONA_VOICE_ASPECTS, episodeUuid) as AspectFact[];
 
@@ -876,6 +918,10 @@ interface AspectData {
  */
 function getStatementsByAspectWithEpisodes(): Map<StatementAspect, AspectData> {
   const db = getDb();
+  // Hardening item 3: statements with ANY integration-labeled provenance
+  // episode are excluded from full-mode generation input (their provenance
+  // episodes are then never joined either — a clean statement's episodes are
+  // all clean by construction).
   const rows = db
     .prepare(
       `SELECT s.aspect AS aspect, s.uuid AS suuid, s.fact AS fact,
@@ -885,6 +931,7 @@ function getStatementsByAspectWithEpisodes(): Map<StatementAspect, AspectData> {
        LEFT JOIN edges e ON e.type = 'provenance' AND e.to_uuid = s.uuid
        LEFT JOIN episodes ep ON ep.uuid = e.from_uuid
        WHERE s.invalid_at IS NULL AND s.aspect IS NOT NULL
+         AND NOT ${SQL_STATEMENT_HAS_INTEGRATION_PROVENANCE("s.uuid")}
        ORDER BY s.aspect`,
     )
     .all() as {
@@ -922,8 +969,9 @@ function getStatementsByAspectWithEpisodes(): Map<StatementAspect, AspectData> {
   // Merge active voice aspects as synthetic statements (dedupe by fact text)
   const voiceRows = db
     .prepare(
-      `SELECT fact, aspect, created_at FROM voice_aspects
+      `SELECT fact, aspect, created_at FROM voice_aspects va
        WHERE invalid_at IS NULL
+         AND NOT ${SQL_VOICE_HAS_INTEGRATION_PROVENANCE("va")}
        ORDER BY created_at DESC LIMIT 200`,
     )
     .all() as { fact: string; aspect: string; created_at: string }[];

@@ -192,13 +192,24 @@ function* splitSentences(buf: { text: string }): Generator<string> {
   }
 }
 
-function ingestExchange(conversationId: string, userText: string, agentText: string): void {
+function ingestExchange(
+  conversationId: string,
+  userText: string,
+  agentText: string,
+  tainted: boolean,
+): void {
   const body = `<user>\n${userText}\n</user>\n<agent>\n${agentText}\n</agent>`;
+  // §9.4 laundering fix (HARDENING-2026-08-27 item 2): a tainted turn contains
+  // integration-derived third-party content — re-ingesting it under only the
+  // 'jarvis' label would launder that content into trusted memory (future
+  // recall of the exchange would NOT re-taint). The memory of the conversation
+  // is still wanted, so ingest proceeds — labeled honestly with an
+  // integration:* label so recall of it re-arms the write-gate.
   ingestFromModule({
     episodeBody: body,
     source: "jarvis",
     sessionId: `jarvis-${conversationId}`,
-    labelNames: ["jarvis"],
+    labelNames: tainted ? ["jarvis", "integration:jarvis-relay"] : ["jarvis"],
   }).catch((err) =>
     console.warn(
       "[v2/jarvis] exchange ingest failed (non-blocking):",
@@ -498,7 +509,7 @@ export async function askJarvisV2(
       toolCalls: run.toolCalls,
       tainted: run.tainted, // §9.4 — replay of this row re-taints a fresh session
     });
-    ingestExchange(conv.id, text, answer);
+    ingestExchange(conv.id, text, answer, run.tainted);
 
     const done: { type: "done"; costUsd?: number | null; turns?: number; durationMs: number } = {
       type: "done",

@@ -66,8 +66,14 @@ export async function applySyncResult(
   // activities as duplicates (review finding, 2026-08-27). Emits and the
   // async ingest seam run AFTER commit so listeners only ever see
   // committed rows.
+  //
+  // Dedupe (hardening item 7): insertActivity returns null when the item's
+  // dedupeKey already exists for this account (INSERT OR IGNORE) — the
+  // duplicate is silently skipped, and crucially gets NO activity.created
+  // emit and NO re-ingest (so overlap windows / crash replays / webhook
+  // redeliveries can never double-trigger automations or memory).
   const acceptedRows = tx(() => {
-    const rows: ReturnType<typeof insertActivity>[] = [];
+    const rows: NonNullable<ReturnType<typeof insertActivity>>[] = [];
     for (const item of result.activities ?? []) {
       const verdict = applyPreFilters(item.text, filters);
       if (verdict.rejected) {
@@ -79,21 +85,24 @@ export async function applySyncResult(
           payload: item.payload,
           rejectionReason: verdict.reason,
           ingestStatus: "rejected",
+          dedupeKey: item.dedupeKey,
         });
         rejected++;
         continue;
       }
-      rows.push(
-        insertActivity({
-          accountId: account.id,
-          text: item.text,
-          sourceUrl: item.sourceURL,
-          eventType: item.eventType,
-          payload: item.payload,
-          ingestStatus: "pending",
-        }),
-      );
-      accepted++;
+      const row = insertActivity({
+        accountId: account.id,
+        text: item.text,
+        sourceUrl: item.sourceURL,
+        eventType: item.eventType,
+        payload: item.payload,
+        ingestStatus: "pending",
+        dedupeKey: item.dedupeKey,
+      });
+      if (row) {
+        rows.push(row);
+        accepted++;
+      }
     }
     // Watermark rule: merge ONLY the keys the connector returned.
     if (result.state && Object.keys(result.state).length > 0) {

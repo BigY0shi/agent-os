@@ -260,6 +260,91 @@ seedSelfTools();
   check("tainted turn: execute_action REFUSED", taintedExec.isError === true && /integration/i.test(taintedExec.content[0].text));
   const taintedNav = await taintedHandlers.navigate.run({ route: "/memory" });
   check("tainted turn: read-only/UI tools still allowed", taintedNav.isError !== true);
+
+  // ── HARDENING-2026-08-27 item 1: episode-less recall must not launder ──────
+  // Derived facts (statements/entity/voiceAspects) with an EMPTY episodes list
+  // previously carried ZERO taint signal. Provenance now resolves; unresolvable
+  // provenance FAILS CLOSED.
+  const gdb = getDb();
+  const ts = new Date().toISOString();
+  const mkEpisode = (uuid) =>
+    gdb.prepare(
+      `INSERT INTO episodes (uuid, content, original_content, source, session_id, created_at, valid_at)
+       VALUES (?, 'seed', 'seed', 'smoke', 'taint-prov', ?, ?)`,
+    ).run(uuid, ts, ts);
+  const mkStatement = (uuid, epUuid) => {
+    gdb.prepare(
+      "INSERT INTO statements (uuid, fact, aspect, created_at, valid_at) VALUES (?, 'fact', 'Identity', ?, ?)",
+    ).run(uuid, ts, ts);
+    if (epUuid) {
+      gdb.prepare(
+        "INSERT INTO edges (type, from_uuid, to_uuid, created_at) VALUES ('provenance', ?, ?, ?)",
+      ).run(epUuid, uuid, ts);
+    }
+  };
+  mkEpisode("ep-intg");
+  gdb.prepare("INSERT INTO episode_labels (episode_uuid, label_id) VALUES (?, ?)").run("ep-intg", intgLabel.id);
+  mkEpisode("ep-clean");
+  gdb.prepare("INSERT INTO episode_labels (episode_uuid, label_id) VALUES (?, ?)").run("ep-clean", plainLabel.id);
+  mkStatement("st-intg", "ep-intg");
+  mkStatement("st-clean", "ep-clean");
+  mkStatement("st-orphan", null); // no provenance at all
+
+  const stmtOnly = (uuid) => ({
+    episodes: [], invalidatedFacts: [], entity: null,
+    statements: [{ uuid, fact: "fact", validAt: ts, attributes: {}, aspect: "Identity" }],
+  });
+  check(
+    "episode-less recall: integration-provenance statement TAINTS (item 1)",
+    tools.recallIntegrationLabels(stmtOnly("st-intg")).includes("integration:test"),
+    tools.recallIntegrationLabels(stmtOnly("st-intg")),
+  );
+  check("episode-less recall: clean-provenance statement stays clean", tools.recallIntegrationLabels(stmtOnly("st-clean")).length === 0);
+  check(
+    "statement with NO provenance FAILS CLOSED",
+    tools.recallIntegrationLabels(stmtOnly("st-orphan")).includes(tools.UNRESOLVED_PROVENANCE_LABEL),
+  );
+  check(
+    "statement missing its uuid FAILS CLOSED",
+    tools.recallIntegrationLabels({ episodes: [], statements: [{ fact: "f", validAt: ts, attributes: {}, aspect: null }], entity: null })
+      .includes(tools.UNRESOLVED_PROVENANCE_LABEL),
+  );
+
+  // Entity lane: entity whose statements have integration provenance taints.
+  gdb.prepare("INSERT INTO entities (uuid, name, created_at) VALUES ('ent-intg', 'Mallory', ?)").run(ts);
+  gdb.prepare("INSERT INTO edges (type, from_uuid, to_uuid, created_at) VALUES ('subject', 'st-intg', 'ent-intg', ?)").run(ts);
+  const entOnly = (uuid) => ({ episodes: [], invalidatedFacts: [], statements: [], entity: { uuid, name: "Mallory", attributes: {} } });
+  check("entity-only recall with integration provenance TAINTS", tools.recallIntegrationLabels(entOnly("ent-intg")).includes("integration:test"));
+  gdb.prepare("INSERT INTO entities (uuid, name, created_at) VALUES ('ent-empty', 'Ghost', ?)").run(ts);
+  check(
+    "entity with NO traceable statements FAILS CLOSED",
+    tools.recallIntegrationLabels(entOnly("ent-empty")).includes(tools.UNRESOLVED_PROVENANCE_LABEL),
+  );
+
+  // Voice-aspect lane: episode_uuids provenance resolves; empty fails closed.
+  gdb.prepare(
+    "INSERT INTO voice_aspects (uuid, fact, aspect, episode_uuids, created_at, valid_at) VALUES ('va-intg', 'v', 'Style', ?, ?, ?)",
+  ).run(JSON.stringify(["ep-intg"]), ts, ts);
+  gdb.prepare(
+    "INSERT INTO voice_aspects (uuid, fact, aspect, episode_uuids, created_at, valid_at) VALUES ('va-empty', 'v', 'Style', '[]', ?, ?)",
+  ).run(ts, ts);
+  const vaOnly = (uuid) => ({ episodes: [], invalidatedFacts: [], statements: [], entity: null, voiceAspects: [{ uuid, fact: "v", aspect: "Style" }] });
+  check("voice aspect with integration episode TAINTS", tools.recallIntegrationLabels(vaOnly("va-intg")).includes("integration:test"));
+  check("voice aspect with empty episode_uuids FAILS CLOSED", tools.recallIntegrationLabels(vaOnly("va-empty")).includes(tools.UNRESOLVED_PROVENANCE_LABEL));
+
+  // applyRecallTaint wires the fail-closed path into the session gate.
+  const failClosedState = tools.newTurnState();
+  tools.applyRecallTaint(failClosedState, stmtOnly("st-orphan"));
+  check("fail-closed provenance taints the session via applyRecallTaint", failClosedState.integrationTainted === true);
+
+  // ── HARDENING item 3: persona provenance filter (same seeded rows) ─────────
+  const persona = await import("../../src/lib/v2/memory/persona.ts");
+  check("isIntegrationEpisode: labeled episode detected", persona.isIntegrationEpisode("ep-intg") === true);
+  check("isIntegrationEpisode: clean episode passes", persona.isIntegrationEpisode("ep-clean") === false);
+  const intgFacts = persona.fetchEpisodeFactsForPersona("ep-intg");
+  check("persona: integration episode contributes NOTHING", intgFacts.validFacts.length === 0 && intgFacts.invalidatedFacts.length === 0, JSON.stringify(intgFacts));
+  const cleanFacts = persona.fetchEpisodeFactsForPersona("ep-clean");
+  check("persona: clean episode's facts still flow", cleanFacts.validFacts.some((f) => f.fact === "fact"), JSON.stringify(cleanFacts));
 }
 
 // ===========================================================================
@@ -298,6 +383,30 @@ let cliConvId = null;
     if (!qrow) await sleep(250);
   }
   check("exchange auto-ingested (source 'jarvis', session jarvis-<conv>)", !!qrow && qrow.source === "jarvis", JSON.stringify(qrow ? { source: qrow.source } : null));
+
+  // ── HARDENING-2026-08-27 item 2: tainted exchanges must not launder ────────
+  // A turn in a tainted conversation is re-ingested; before the fix its queue
+  // row carried only the 'jarvis' label, so future recall of it would NOT
+  // re-taint (integration content laundered into trusted memory). The tainted
+  // exchange now also carries 'integration:jarvis-relay'.
+  {
+    const tconv = conv.ensureConversation(undefined, { titleSeed: "taint relay", channel: "overlay" });
+    conv.appendJarvisMessage({ conversationId: tconv.id, role: "user", content: "earlier question" });
+    conv.appendJarvisMessage({ conversationId: tconv.id, role: "assistant", content: "earlier TAINTED answer", tainted: true });
+    await brain.askJarvisV2({ text: "Follow-up in the tainted thread?", conversationId: tconv.id }, () => {});
+    let trow = null;
+    for (let i = 0; i < 20 && !trow; i++) {
+      trow = db.prepare("SELECT * FROM ingestion_queue WHERE session_id = ? ORDER BY created_at DESC LIMIT 1").get(`jarvis-${tconv.id}`);
+      if (!trow) await sleep(250);
+    }
+    const relayLabel = db.prepare("SELECT id FROM labels WHERE name = 'integration:jarvis-relay'").get();
+    const tLabels = trow ? JSON.parse(trow.label_ids) : [];
+    check("tainted exchange ingested with 'integration:jarvis-relay' label (item 2)", !!trow && !!relayLabel && tLabels.includes(relayLabel.id), JSON.stringify({ trow: !!trow, relayLabel: !!relayLabel, tLabels }));
+    // and the earlier CLEAN exchange stays clean
+    const cleanRow = db.prepare("SELECT * FROM ingestion_queue WHERE session_id = ? ORDER BY created_at ASC LIMIT 1").get(`jarvis-${cliConvId}`);
+    const cleanLabels = cleanRow ? JSON.parse(cleanRow.label_ids) : null;
+    check("clean exchange does NOT carry the relay label", !!cleanRow && (!relayLabel || !cleanLabels.includes(relayLabel.id)));
+  }
 
   // error path: injected cli failure → error event + system row, then restore
   brain.setJarvisCliForTests(() => Promise.reject(new Error("smoke-injected cli failure")));

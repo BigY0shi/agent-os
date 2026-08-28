@@ -68,6 +68,9 @@ export async function githubSync(ctx: SyncCtx): Promise<SyncResult> {
           type,
           updatedAt,
         },
+        // Item 7: id@updatedAt — dedupes crash-replays of the same notification
+        // state while still admitting a NEW update to the same thread.
+        dedupeKey: `gh-notif:${String(n.id ?? "")}@${updatedAt}`,
       });
     }
     if (maxUpdated > cursorMs) {
@@ -110,6 +113,7 @@ export async function githubSync(ctx: SyncCtx): Promise<SyncResult> {
           state: String(issue.state ?? ""),
           updatedAt,
         },
+        dedupeKey: `gh-issue:${repo}#${Number(issue.number ?? 0)}@${updatedAt}`,
       });
     }
     if (maxUpdated > cursorMs) {

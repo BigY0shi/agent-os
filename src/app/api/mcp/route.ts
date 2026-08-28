@@ -3,6 +3,12 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ensureV2 } from "@/lib/v2/boot";
 import { handleMcpMessage } from "@/lib/v2/mcp/server";
 import { readSettings, writeSettings } from "@/lib/settings";
+import {
+  SESSION_COOKIE,
+  ensureSessionSecret,
+  legacyCookieAccepted,
+  verifySessionToken,
+} from "@/lib/authSessions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +21,7 @@ export const dynamic = "force-dynamic";
  */
 
 const SECRET_HEADER = "x-agentos-mcp-secret";
-const COOKIE = "agentos_session";
+const COOKIE = SESSION_COOKIE;
 
 function getOrCreateSecret(): string {
   const existing = readSettings().mcp?.secret;
@@ -33,12 +39,16 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb);
 }
 
+// Item 13: the session cookie is a signed token now (authSessions.ts); the
+// legacy password-hash cookie is honored only inside the 7-day grace window.
 function hasValidCookie(req: NextRequest): boolean {
   const password = process.env.AGENTOS_PASSWORD || "";
   if (!password) return false;
-  const expected = createHash("sha256").update("agentos.v1:" + password).digest("hex");
   const cookie = req.cookies.get(COOKIE)?.value;
-  return !!cookie && safeEqual(cookie, expected);
+  if (!cookie) return false;
+  const secretFile = ensureSessionSecret();
+  if (secretFile && verifySessionToken(cookie, secretFile.secret).valid) return true;
+  return legacyCookieAccepted(cookie, password, secretFile);
 }
 
 function authenticate(req: NextRequest): { ok: boolean; status?: number; error?: string } {

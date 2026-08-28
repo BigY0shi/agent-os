@@ -701,6 +701,16 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 3,
+    name: "memory_queue_leases",
+    up: (db) => {
+      // HARDENING-2026-08-27 item 9: PROCESSING rows need a lease timestamp so
+      // a crash mid-ingest can be recovered (stale PROCESSING → PENDING) and
+      // claims can be made atomically (UPDATE ... WHERE status='PENDING').
+      db.exec("ALTER TABLE ingestion_queue ADD COLUMN processing_started_at TEXT");
+    },
+  },
+  {
     version: 20,
     name: "tasks_core",
     up: (db) => {
@@ -773,6 +783,17 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 34,
+    name: "webmcp_approval_pinning",
+    up: (db) => {
+      // HARDENING-2026-08-27 item 6: a pending approval executed whatever
+      // version was published at APPROVE time — pin the package's
+      // current_version at request time; approve refuses (409) on mismatch.
+      // Registry-lane approvals (slug 'registry') are version-less: NULL.
+      db.exec("ALTER TABLE webmcp_approvals ADD COLUMN pinned_version INTEGER");
+    },
+  },
+  {
     version: 40,
     name: "integrations_core",
     up: (db) => {
@@ -791,6 +812,52 @@ export const MIGRATIONS: Migration[] = [
     name: "automations_core",
     up: (db) => {
       db.exec(M042_AUTOMATIONS_CORE);
+    },
+  },
+  {
+    version: 43,
+    name: "integrations_hardening",
+    up: (db) => {
+      // HARDENING-2026-08-27 items 7/8/11/12.
+      // (7) Activity dedupe: connectors pass a stable per-item key (gmail
+      //     message id, github notification id, slack ts, gcal event id) —
+      //     UNIQUE(account_id, dedupe_key) + INSERT OR IGNORE makes overlap
+      //     windows and crash-replays idempotent. NULL = no key (legacy rows,
+      //     connectors without keys) — the partial index skips them.
+      db.exec("ALTER TABLE activities ADD COLUMN dedupe_key TEXT");
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_dedupe
+           ON activities(account_id, dedupe_key) WHERE dedupe_key IS NOT NULL`,
+      );
+      // (8) Durable ingest retry: attempts counter, capped at 5 by the hourly
+      //     'integration.ingest.retry' scheduler job.
+      db.exec("ALTER TABLE activities ADD COLUMN ingest_attempts INTEGER NOT NULL DEFAULT 0");
+      // (11) Webhook inbox: a delivery is persisted BEFORE the route returns
+      //      200, so a crash between the 200 and dispatch no longer loses it.
+      //      Sensitive headers (secrets/signatures) are stripped before
+      //      persisting — verification happens at receipt, never on replay.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS webhook_inbox (
+          id           TEXT PRIMARY KEY,
+          slug         TEXT NOT NULL,
+          headers_json TEXT NOT NULL DEFAULT '{}',
+          raw_body     TEXT NOT NULL DEFAULT '',
+          status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done','error')),
+          error        TEXT,
+          created_at   TEXT NOT NULL,
+          processed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_webhook_inbox_status ON webhook_inbox(status, created_at);
+      `);
+      // (12) Automations durable cursor: runs remember the bus event id that
+      //      fired them; UNIQUE(rule_id, event_id) makes boot replay unable to
+      //      double-fire a rule for the same event. Cursor lives in meta
+      //      ('automations_event_cursor').
+      db.exec("ALTER TABLE automation_runs ADD COLUMN event_id INTEGER");
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_rule_event
+           ON automation_runs(rule_id, event_id) WHERE event_id IS NOT NULL`,
+      );
     },
   },
   {

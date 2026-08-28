@@ -1,8 +1,10 @@
 import { readSettings } from "../../settings";
 import { registerJobHandler, scheduleJob, removeJob, cronToRrule } from "../scheduler";
 import { getConnector } from "./registry";
-import { listActiveAccounts, getAccount, type AccountRow } from "./store";
+import { listActiveAccounts, getAccount, listRetryableIngestFailures, type AccountRow } from "./store";
 import { runAccountSync, isSyncRunning } from "./sync";
+import { ingestActivity, INGEST_MAX_ATTEMPTS } from "./ingest";
+import { sweepWebhookInbox } from "./webhooks";
 
 /**
  * SPEC-D G2.8 — scheduling glue on the REAL V2 scheduler (no croner fallback;
@@ -19,6 +21,7 @@ import { runAccountSync, isSyncRunning } from "./sync";
  */
 
 export const SYNC_JOB_KIND = "integration.sync";
+export const INGEST_RETRY_JOB_KIND = "integration.ingest.retry";
 
 export function syncJobId(accountId: string): string {
   return `integration-sync:${accountId}`;
@@ -72,6 +75,22 @@ export function ensureIntegrationSync(): void {
     await runAccountSync(accountId, "schedule"); // soft-errors internally
   });
 
+  // HARDENING-2026-08-27 item 8: activities whose memory enqueue failed used
+  // to stay ingest_status='failed' forever. Hourly sweep re-attempts them
+  // (attempt cap INGEST_MAX_ATTEMPTS, counted in activities.ingest_attempts).
+  // The webhook-inbox sweep (item 11) rides the same tick as a belt to the
+  // boot-time sweep below.
+  registerJobHandler(INGEST_RETRY_JOB_KIND, async () => {
+    await retryFailedIngests();
+    await sweepWebhookInbox();
+  });
+  scheduleJob({
+    id: "integration:ingest-retry",
+    kind: INGEST_RETRY_JOB_KIND,
+    name: "Retry failed integration ingests",
+    rrule: "FREQ=HOURLY",
+  });
+
   for (const account of listActiveAccounts()) {
     try {
       ensureAccountSyncJob(account);
@@ -83,4 +102,22 @@ export function ensureIntegrationSync(): void {
       );
     }
   }
+
+  // Item 11 boot sweep: webhook deliveries persisted before their 200 but
+  // never dispatched (crash) get re-processed now. Async — never blocks boot.
+  void sweepWebhookInbox().catch((err) =>
+    console.error("[integrations/schedule] webhook inbox boot sweep failed:", err),
+  );
+}
+
+/** One retry pass over failed ingest rows (exported for the smoke). */
+export async function retryFailedIngests(): Promise<number> {
+  let retried = 0;
+  for (const activity of listRetryableIngestFailures(INGEST_MAX_ATTEMPTS)) {
+    const account = getAccount(activity.accountId);
+    if (!account || !account.isActive) continue; // account gone — leave the row
+    await ingestActivity(activity, account); // settles 'ingested' or failed+attempts++
+    retried++;
+  }
+  return retried;
 }
