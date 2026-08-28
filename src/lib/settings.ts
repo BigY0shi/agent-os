@@ -233,6 +233,26 @@ export interface Settings {
     }>;
     showScratchpad?: boolean;  // H1.1 (chunk 2) Overview ScratchpadSlot toggle
   };
+  // SPEC-E E1 browser workstream (every field surfaced in the /browser gear — rule 16).
+  // NO "opera" browserType option, ever: Opera is Yoshi's daily browser and the agent
+  // browser must stay fully isolated from it (E4.1 invariant).
+  browser?: {
+    wsPort?: number;                    // CDP WS bridge port (E2.2), default 3738
+    browserType?: "default" | "chrome" | "brave" | "custom";
+    browserExecutable?: string;         // only when browserType === "custom"
+    profiles?: string[];                // max 5, /^[a-zA-Z0-9_-]+$/
+    sessions?: {
+      name: string;                     // /^[a-zA-Z0-9_-]+$/, max 10
+      profile: string;
+      allowedDomains?: string[];        // E4: empty/absent = unrestricted; else eTLD+1 suffix match on top-level navs
+    }[];
+    wsBind?: "local" | "lan";           // E2.2 bridge bind (CONVENTIONS §9.2), default local
+  };
+  // SPEC-E F workstream (Agents page — chunk 2+).
+  agentsPage?: {
+    heroPollMs?: number;                // default 4000 (SSE preferred; poll fallback)
+    defaultHarness?: string;            // harness id preselected in the Forge wizard
+  };
 
   [extra: string]: unknown;
 }
@@ -315,6 +335,14 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   scratchpad: { mentionDebounceSec: 8 },
   webmcp: { sandboxTimeoutMs: 5000, allowJsHandlers: true, llmGetActions: true },
+  browser: {
+    wsPort: 3738,
+    browserType: "default",
+    profiles: ["personal", "work", "misc"],
+    sessions: [],
+    wsBind: "local",
+  },
+  agentsPage: { heroPollMs: 4000 },
 };
 
 function settingsPath(): string {

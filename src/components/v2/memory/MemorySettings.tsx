@@ -348,7 +348,12 @@ export default function MemorySettings() {
           rows={3} placeholder={"Bash(docker *)"}
           className="w-full rounded-md p-2 font-mono text-[10.5px] leading-relaxed outline-none resize-y" style={inputStyle} />
       </Field>
-      <Toggle label="Browser slot" hint="Coming with Workstream E — the slot is manifest-listed but disabled." checked={false} disabled onChange={() => { }} />
+      <Toggle
+        label="Browser slot"
+        hint="Workstream E browser tools (isolated Playwright profiles — never Opera). Off = browser_* absent from the manifest and every call refuses with CAPABILITY_DISABLED. Allowlists are a guardrail, not a sandbox."
+        checked={Boolean(capability.browserEnabled)}
+        onChange={(v) => void save({ capability: { ...capability, browserEnabled: v } })}
+      />
 
       <div className="mt-3">
         <SaveBar saving={saving} saved={saved} onSave={() => void saveAll()} accent={MEMORY_ACCENT} />

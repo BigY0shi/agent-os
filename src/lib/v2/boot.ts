@@ -16,6 +16,8 @@ import { ensureIntegrationSync } from "./integrations/schedule";
 import { ensureIntegrationMetaActions } from "./integrations/metaTools";
 import { ensureAttention } from "./attention";
 import { ensureAutomations } from "./automations/engine";
+import { ensureBrowserActions } from "./mcp/browserActions";
+import { seedBrowserDrivingSkill } from "./browser/skillSeed";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -86,6 +88,8 @@ export function ensureV2(): void {
     ensureIntegrationMetaActions(); // SPEC-D G4.2: the three integration meta-tools as F4 registry actions (AFTER integrations init)
     ensureAttention(); // SPEC-D H4.1: attention.flag bus bridge + 60s pull-collector tick
     ensureAutomations(); // SPEC-D G5.1: automation rules engine ('*' bus subscription; after attention so create_attention lands)
+    ensureBrowserActions(); // SPEC-E E3.4: browser_* on the F4 registry (synced to capability.browserEnabled)
+    seedBrowserDrivingSkill(); // SPEC-E E3.5: idempotent browser-driving SKILL.md + settings.skills.modules.browser
     ensureV2Scheduler();
     ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;

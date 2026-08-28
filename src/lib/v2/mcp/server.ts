@@ -22,6 +22,7 @@ import {
   isIntegrationMetaTool,
   integrationMetaTools,
 } from "../integrations/metaTools";
+import { ensureBrowserActions } from "./browserActions";
 
 /**
  * F4 stateless MCP server (Streamable HTTP, JSON responses). Framework-free:
@@ -107,6 +108,7 @@ export async function handleMcpMessage(
   ensureMemoryActions();
   ensureTaskActions();
   ensureIntegrationMetaActions();
+  ensureBrowserActions(); // E3.4: syncs to settings.capability.browserEnabled per request
 
   // Notifications (no id) are accepted and produce no body.
   if (msg.method?.startsWith("notifications/")) return null;

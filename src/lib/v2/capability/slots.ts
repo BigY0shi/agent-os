@@ -217,6 +217,35 @@ export async function filesSlot(input: FilesOp, gate: GateOptions = {}): Promise
 
 // ---------------------------------------------------------------------------
 
-export function browserSlot(): never {
-  throw new Error("NOT_IMPLEMENTED: browser slot lands with workstream E (SPEC-E).");
+/**
+ * E3.4 — the browser slot (SPEC-E). Gate = settings.capability.browserEnabled
+ * (the /browser gear + Settings → Capabilities toggle): disabled ⇒ the tools
+ * are absent from the manifest AND every dispatch returns CAPABILITY_DISABLED.
+ * Tool-level audit (browser_tool_audit rows, redacted args, fill/type values
+ * withheld) happens inside executeBrowserTool — every call, incl. denials.
+ */
+export async function browserSlot(
+  toolName: string,
+  args: Record<string, unknown>,
+  info: { caller?: string; taskId?: string | null; agentId?: string | null } = {},
+): Promise<SlotResult> {
+  const { executeBrowserTool, isBrowserCapabilityEnabled } = await import("../browser/tools");
+  if (!isBrowserCapabilityEnabled()) {
+    return {
+      ok: false,
+      output: "",
+      error:
+        "CAPABILITY_DISABLED: the browser capability is off. Enable it in Settings → Capabilities.",
+    };
+  }
+  const res = await executeBrowserTool(toolName, args, { ...info, skipCapabilityCheck: true });
+  if (res.ok) {
+    return { ok: true, output: JSON.stringify(res.result), meta: { tool: toolName } };
+  }
+  return {
+    ok: false,
+    output: "",
+    error: `${res.error.code}: ${res.error.message}`,
+    meta: { code: res.error.code },
+  };
 }

@@ -641,6 +641,38 @@ CREATE TABLE IF NOT EXISTS automation_runs (
 CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, created_at DESC);
 `;
 
+// SPEC-E §2 browser tables (range 050-059). CONVENTIONS §1.4 amendment applied:
+// ALL timestamp columns are TEXT UTC ISO-8601 (the spec's INTEGER epoch-ms DDL is
+// superseded). Rows are history — Chromium's SingletonLock stays the real
+// exclusivity; closed_at NULL means the row's launch is (possibly) live.
+const M050_BROWSER_CORE = `
+CREATE TABLE IF NOT EXISTS browser_sessions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_name  TEXT NOT NULL,
+  profile_name  TEXT NOT NULL,
+  created_by    TEXT NOT NULL DEFAULT 'user',  -- 'user' | 'jarvis' | 'task:<taskId>' | 'agent:<agentId>'
+  task_id       TEXT,
+  agent_id      TEXT,
+  created_at    TEXT NOT NULL,
+  last_used_at  TEXT,
+  closed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_sessions_name ON browser_sessions(session_name);
+CREATE INDEX IF NOT EXISTS idx_browser_sessions_task ON browser_sessions(task_id);
+
+CREATE TABLE IF NOT EXISTS browser_tool_audit (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts            TEXT NOT NULL,
+  session_name  TEXT NOT NULL,
+  tool          TEXT NOT NULL,                 -- 'browser_navigate', ...
+  caller        TEXT NOT NULL DEFAULT 'user',  -- same vocabulary as created_by
+  args_preview  TEXT,                          -- redacted JSON, capped 2048 chars (never full payloads)
+  ok            INTEGER NOT NULL,
+  error         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_audit_ts ON browser_tool_audit(ts);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -759,6 +791,13 @@ export const MIGRATIONS: Migration[] = [
     name: "automations_core",
     up: (db) => {
       db.exec(M042_AUTOMATIONS_CORE);
+    },
+  },
+  {
+    version: 50,
+    name: "browser_core",
+    up: (db) => {
+      db.exec(M050_BROWSER_CORE);
     },
   },
 ];
