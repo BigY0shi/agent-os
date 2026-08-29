@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   // node-pty is a NATIVE module (.node binary). The bundler must not try to trace
   // or inline it — leave it as a plain runtime require, or the terminal route dies
   // with "Cannot find module ...pty.node" in the production build.
-  serverExternalPackages: ["node-pty"],
+  serverExternalPackages: ["node-pty", "better-sqlite3", "sqlite-vec"],
 };
 
 export default nextConfig;

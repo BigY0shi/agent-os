@@ -9,5 +9,8 @@ export async function register() {
     // Idea Engine's daily scan/validate loop (hard-capped at one run per day).
     const { ensureIdeaDaily } = await import("./lib/ideaDaily");
     ensureIdeaDaily();
+    // V2 foundations: agentos.db + event bus + RRULE scheduler (SPEC-A F1/F2).
+    const { ensureV2 } = await import("./lib/v2/boot");
+    ensureV2();
   }
 }

@@ -86,6 +86,28 @@ export interface Settings {
   notebook: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban: { agent?: string; board?: string };
 
+  // Operating skills (~/.agentic-os/skills/<name>/SKILL.md) injected into agent prompts.
+  // "global" = every agent call platform-wide; "modules" = extra skills per module key
+  // (deals, hire, marketing, …). Toggled from the in-app Config menu (Skills section).
+  skills: {
+    global?: string[];
+    modules?: Record<string, string[]>;
+  };
+
+  // Marketing Hub: which CLI agent plans/drafts, whether planning runs the 3-pass
+  // council (lead plan → adversarial critic → revision), and which text-post
+  // platforms are active. All editable from the Hub's gear (never config-file-only).
+  marketing: {
+    agent?: string;          // drafting/planning agent (claude/codex/cursor/pi/hermes)
+    council?: boolean;       // 3-pass planning council vs single-pass plan
+    criticAgent?: string;    // council critic (ideally a different lineage than `agent`)
+    textPlatforms?: string[]; // active text-post platforms (linkedin/x/facebook/…)
+    // Ideate backend: "local" = the in-hub CLI-agent chat; "buzz" = the riff lives in a
+    // Buzz workspace channel (posts as the Agent OS bridge; your Buzz agents reply).
+    ideateBackend?: "local" | "buzz";
+    buzzChannel?: string;    // Buzz channel name or UUID (default: marketing-ideas)
+  };
+
   // Pipeline: which provider (Ollama / CLI agent / MiniMax) drives the shape → reason → artifact flow.
   pipeline: {
     provider?: "ollama" | "cli" | "minimax";
@@ -118,6 +140,28 @@ export interface Settings {
     dailyHour?: number;        // local hour 0-23
   };
 
+  // ---- V2 foundations (SPEC-A; ultraplan/CONVENTIONS.md) ----
+  memory?: {
+    provider?: "ollama-cloud" | "ollama-local" | "cli" | "minimax";
+    modelLow?: string;
+    modelMedium?: string;
+    embedProvider?: "ollama-local" | "ollama-cloud";
+    embedModel?: string;          // changing after data exists requires scripts/v2/reembed.mjs
+    ingestEnabled?: boolean;
+    compactionEnabled?: boolean;
+    personaAutoUpdate?: boolean;
+    tokenBudget?: number;
+    labelRouterThreshold?: number;
+  };
+  capability?: {
+    folders?: { path: string; scopes: ("files" | "coding" | "exec")[] }[];
+    execAllow?: string[];         // "Bash(<glob>)"; empty = all non-denied (in-app); MCP path is deny-all when empty
+    execDeny?: string[];          // additive to built-in deny list
+    browserEnabled?: boolean;
+  };
+  mcp?: { secret?: string };
+  scheduler?: { tickSeconds?: number };
+
   [extra: string]: unknown;
 }
 
@@ -135,6 +179,15 @@ export const DEFAULT_SETTINGS: Settings = {
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
+  skills: {
+    global: ["better-agent"],
+    modules: {
+      deals: ["launchworks-agent-os"],
+      hire: ["launchworks-agent-os"],
+      marketing: ["ecommerce-growth-agent", "strategic-narrative-positioning"],
+    },
+  },
+  marketing: { agent: "claude", council: true, criticAgent: "codex", textPlatforms: ["linkedin", "x", "facebook"], ideateBackend: "local", buzzChannel: "marketing-ideas" },
   brainstorm: { kimiModel: "kimi-k2.6" },
   jarvis: { kimiModel: "kimi-k2.6" },
   contentEngine: { kimiModel: "kimi-k2.6" },
@@ -149,9 +202,28 @@ export const DEFAULT_SETTINGS: Settings = {
     dailyEnabled: false,
     dailyHour: 7,
   },
+  memory: {
+    provider: "ollama-cloud",
+    modelLow: "kimi-k2.6:cloud",
+    modelMedium: "glm-5.2:cloud",
+    embedProvider: "ollama-local",
+    embedModel: "nomic-embed-text",
+    ingestEnabled: true,
+    compactionEnabled: true,
+    personaAutoUpdate: true,
+    tokenBudget: 10000,
+    labelRouterThreshold: 0.7,
+  },
+  capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
+  mcp: {},
+  scheduler: { tickSeconds: 30 },
 };
 
 function settingsPath(): string {
+  // Test override (smoke scripts must never touch the live settings file —
+  // same rule as AGENTIC_OS_DB for agentos.db).
+  const override = process.env.AGENTIC_OS_SETTINGS;
+  if (override && override.trim()) return override.trim();
   return path.join(os.homedir(), ".agentic-os", "settings.json");
 }
 
