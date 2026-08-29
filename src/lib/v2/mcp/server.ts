@@ -16,6 +16,12 @@ import {
   isMemoryTool,
   memoryToolDefs,
 } from "../memory/mcpTools";
+import {
+  callIntegrationMetaTool,
+  ensureIntegrationMetaActions,
+  isIntegrationMetaTool,
+  integrationMetaTools,
+} from "../integrations/metaTools";
 
 /**
  * F4 stateless MCP server (Streamable HTTP, JSON responses). Framework-free:
@@ -57,7 +63,9 @@ function errText(s: string): { content: { type: "text"; text: string }[]; isErro
 }
 
 /** MCP tool defs exposed at the top level. Memory tools (A7) come from
- *  memory/mcpTools.ts with their REF-verbatim descriptions. */
+ *  memory/mcpTools.ts with their REF-verbatim descriptions; the integration
+ *  meta-tools (SPEC-D G4.1/G4.2) from integrations/metaTools.ts with their
+ *  AOC-verbatim descriptions. */
 function toolDefs() {
   return [
     {
@@ -87,6 +95,7 @@ function toolDefs() {
       },
     },
     ...memoryToolDefs(),
+    ...integrationMetaTools(),
   ];
 }
 
@@ -97,6 +106,7 @@ export async function handleMcpMessage(
   ensureCoreActions();
   ensureMemoryActions();
   ensureTaskActions();
+  ensureIntegrationMetaActions();
 
   // Notifications (no id) are accepted and produce no body.
   if (msg.method?.startsWith("notifications/")) return null;
@@ -184,6 +194,23 @@ export async function handleMcpMessage(
         }
 
         default: {
+          if (isIntegrationMetaTool(name)) {
+            // Same audit contract as execute_action (CONVENTIONS §9.1/§9.3).
+            // ctx.strict stays true through /api/mcp — destructive-annotated
+            // integration tools HARD REFUSE on this path (G4.1 semantics).
+            emit(
+              "mcp.execute",
+              {
+                key: name,
+                source: ctx.source,
+                remoteAddr: ctx.remoteAddr ?? null,
+                strict: ctx.strict,
+                args: redactArgs(args),
+              },
+              "mcp",
+            );
+            return rpcResult(msg.id, await callIntegrationMetaTool(name, args, ctx));
+          }
           if (isMemoryTool(name)) {
             // Same audit contract as execute_action (CONVENTIONS §9.1/§9.3).
             emit(

@@ -23,6 +23,9 @@ export type V2EventType =
   | "webmcp.archived" // SPEC-C D2: {slug}
   | "webmcp.approval" // Human-Gate: {id, slug, tool, status, requestedBy} on create + resolve
   | "ui.navigate" // SPEC-C D4: {route} — the overlay/pages consume, nothing runs server-side
+  | "activity.created" // SPEC-D G2.4: {activityId, accountId, slug, eventType} per ACCEPTED activity
+  | "sync.failed" // SPEC-D G2.4: {accountId, slug, trigger, error} — G5 automations + H4 attention subscribe
+  | "automation.notify" // SPEC-D G5 notify action default: {ruleId, ruleName, message, event} (source 'automation' — never re-triggers rules)
   | (string & {});
 
 export interface V2Event {

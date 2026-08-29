@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -18,6 +18,14 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/",         label: "Mission Control", icon: <LayoutGrid size={16} />, accent: "#a855f7", dim: "rgba(168,85,247,0.16)" },
+  // Integrations (SPEC-D G1): connector catalog — Gmail/GCal/Notion/GitHub/
+  // Slack/Buzz accounts, tools, activity, memory rules. Workspace per §6.2
+  // (WORKSPACE_ROUTES membership decides the section, not NAV position).
+  { href: "/integrations", label: "Integrations", icon: <Plug size={16} />, accent: "#7dd3a8", dim: "rgba(125,211,168,0.16)" },
+  // Automations (SPEC-D G5): When [trigger] if [conditions] then [actions]
+  // rules over the integration/system event stream. Workspace per §6.2
+  // (WORKSPACE_ROUTES membership decides the section, not NAV position).
+  { href: "/automations", label: "Automations", icon: <Zap size={16} />, accent: "#fcd34d", dim: "rgba(252,211,77,0.16)" },
   // The local Tasklet: reusable background agents (SDK runtime, triggers, approvals).
   // Top-level on purpose — this is the OS's core primitive, not another module.
   { href: "/agents",   label: "Agents", icon: <Bot size={16} />, accent: "#a78bfa", dim: "rgba(167,139,250,0.16)" },
@@ -73,6 +81,10 @@ const NAV: NavItem[] = [
   // WebMCP Engine (SPEC-C D3): build/test/version/publish MCP tool packages.
   // Lives in "Self" beside /tasks//today (sectionOf fallback) — not in any Set.
   { href: "/webmcp",   label: "WebMCP",   icon: <Hammer size={16} />, accent: "#b7852f", dim: "rgba(183,133,47,0.16)" },
+  // Skills-as-policies (SPEC-B B7): standing policy blocks injected into task
+  // execution + Jarvis. Lives in "Self" beside /webmcp//memory (sectionOf
+  // fallback) — not in any section Set.
+  { href: "/skills",   label: "Skills",   icon: <ScrollText size={16} />, accent: "#c4b5fd", dim: "rgba(196,181,253,0.16)" },
   { href: "/memory",   label: "Memory",   icon: <Brain size={16} />,     accent: "#22d3ee", dim: "rgba(34,211,238,0.16)" },
   // Replaced Build Guide (2026-07-26) — a static how-to earned less shelf space than a
   // real shell. /guide still renders if you navigate to it directly.
@@ -94,8 +106,10 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // drag order. A route missing from this set silently lands in "Self" no matter where it
 // sits in the array, so add new orchestration modules here as well as to NAV.
 const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
+// SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
+const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations"]);
 function sectionOf(href: string): string {
-  if (href === "/") return "Workspace";
+  if (WORKSPACE_ROUTES.has(href)) return "Workspace";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
   // model CLI routes were renamed to "CLI Agents" to make room (2026-07-28).
   if (href === "/agents") return "Agents";

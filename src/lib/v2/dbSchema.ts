@@ -380,6 +380,27 @@ CREATE TABLE IF NOT EXISTS v2_page_comments (
 CREATE INDEX IF NOT EXISTS idx_v2_page_comments_page ON v2_page_comments(page_id, created_at);
 `;
 
+const M022_SKILLS_POLICIES = `
+-- SPEC-B B7 (CONVENTIONS §11): skills-as-policies — standing policy blocks
+-- authored in-app (/skills page) and injected into task-execution prompts (B2)
+-- and the Jarvis context (C4) via skills/store.ts withSkills()/
+-- renderSkillPolicyBlock(). DISTINCT from the FILE-based operating skills
+-- (~/.agentic-os/skills/<name>/SKILL.md, platformSkills.ts), which keep
+-- fronting the CLI-agent lanes — coexistence documented in skills/store.ts.
+CREATE TABLE IF NOT EXISTS v2_skills (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  policy_md   TEXT NOT NULL DEFAULT '',
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  position    INTEGER NOT NULL DEFAULT 0,  -- injection/list order (ascending)
+  archived_at TEXT,                        -- soft-archive stamp; rows are never destroyed (house rule)
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_skills_order ON v2_skills(position, created_at);
+`;
+
 const M030_WEBMCP_CORE = `
 -- SPEC-C D1/D2: WebMCP Engine core. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
 -- secrets_json holds NAMES -> '{{secret:NAME}}' refs only; the VALUES live in
@@ -484,6 +505,142 @@ CREATE TABLE IF NOT EXISTS webmcp_approvals (
 CREATE INDEX IF NOT EXISTS idx_webmcp_approvals_status ON webmcp_approvals(status, created_at DESC);
 `;
 
+const M040_INTEGRATIONS_CORE = `
+-- SPEC-D G2.1: integrations runtime core. Timestamps TEXT UTC ISO (CONVENTIONS
+-- §1.4). Secrets NEVER stored plaintext: config_enc columns hold AES-256-GCM
+-- blobs sealed by integrations/crypto.ts (key at ~/.agentic-os/agentos.key) and
+-- are NEVER serialized into any API response (SPEC-D §8.2).
+-- NOTE: SPEC-D §2's own ingestion_rules DDL is VOID per CONVENTIONS §1.7 —
+-- integration user rules live in SPEC-A's ingestion_rules with source = <account id>.
+CREATE TABLE IF NOT EXISTS integration_definitions (
+  slug        TEXT PRIMARY KEY,              -- matches the in-repo connector slug
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  config_enc  TEXT,                          -- AES-GCM blob: { clientId, clientSecret, webhookSecret, ... }
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS integration_accounts (
+  id              TEXT PRIMARY KEY,          -- crypto.randomUUID()
+  definition_slug TEXT NOT NULL REFERENCES integration_definitions(slug),
+  account_id      TEXT NOT NULL,             -- external identity (email addr, workspace id, npub, login)
+  display_name    TEXT,
+  config_enc      TEXT NOT NULL,             -- AES-GCM blob: tokens / api key / per-account config
+  settings_json   TEXT NOT NULL DEFAULT '{}',-- { state: {...sync watermarks}, autoActivityRead: bool, triggersEnabled: bool }
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (definition_slug, account_id)       -- upsert semantics preserved from upstream
+);
+
+CREATE TABLE IF NOT EXISTS activities (
+  id               TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL REFERENCES integration_accounts(id),
+  text             TEXT NOT NULL,
+  source_url       TEXT,
+  event_type       TEXT,                     -- connector-declared trigger key, e.g. 'GMAIL_MESSAGE_RECEIVED'
+  payload_json     TEXT,                     -- structured event payload for automations (G5)
+  rejection_reason TEXT,                     -- set when a user-rule pre-filter rejects it
+  ingest_status    TEXT NOT NULL DEFAULT 'pending', -- pending|ingested|rejected|failed
+  created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activities_account ON activities(account_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_activities_ingest ON activities(ingest_status);
+
+-- args_json is REDACTED (redactArgs, CONVENTIONS §9.3) — additive vs SPEC-D §2
+-- (the DDL there had no args column; the chunk contract requires redacted call
+-- logging, matching webmcp_call_logs).
+CREATE TABLE IF NOT EXISTS integration_call_logs (
+  id          TEXT PRIMARY KEY,
+  account_id  TEXT NOT NULL,
+  tool_name   TEXT NOT NULL,
+  source      TEXT,                          -- '?source=' tag from /api/mcp, or 'ui' | 'automation:<ruleId>'
+  args_json   TEXT NOT NULL DEFAULT '{}',
+  ok          INTEGER NOT NULL,
+  error       TEXT,
+  duration_ms INTEGER,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_int_call_logs_acct ON integration_call_logs(account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS integration_sync_runs (
+  id               TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL,
+  trigger          TEXT NOT NULL,            -- 'schedule' | 'manual' | 'webhook'
+  started_at       TEXT NOT NULL,
+  finished_at      TEXT,
+  ok               INTEGER,
+  activities_count INTEGER NOT NULL DEFAULT 0,
+  error            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_int_sync_runs_acct ON integration_sync_runs(account_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS oauth_sessions (
+  state           TEXT PRIMARY KEY,          -- crypto.randomBytes(24).toString('base64url')
+  definition_slug TEXT NOT NULL,
+  code_verifier   TEXT,                      -- PKCE
+  redirect_url    TEXT NOT NULL,             -- app page to bounce back to
+  created_at      TEXT NOT NULL              -- rows older than 15 min are purged on read
+);
+`;
+
+const M041_ATTENTION_CORE = `
+-- SPEC-D H4.1: "needs my attention" store. Timestamps TEXT UTC ISO
+-- (CONVENTIONS §1.4). One row per dedupe_key — upsertByDedupeKey refreshes
+-- title/severity/payload on re-flag and reopens auto-resolved rows; a
+-- user-dismissed row is NEVER resurrected by a re-flag (attention/store.ts
+-- documents the full status semantics). Fed by the generic 'attention.flag'
+-- bus bridge (CONVENTIONS §5 payload contract) + the pull collectors.
+CREATE TABLE IF NOT EXISTS attention_items (
+  id               TEXT PRIMARY KEY,
+  dedupe_key       TEXT NOT NULL UNIQUE,      -- e.g. 'sync-fail:<accountId>', approval id
+  kind             TEXT NOT NULL,             -- approval|agent_error|sync_failed|automation|... (open set)
+  severity         TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info','warn','urgent')),
+  title            TEXT NOT NULL,
+  body             TEXT,
+  route            TEXT,                      -- in-app link the hero's [Go] follows
+  payload_json     TEXT NOT NULL DEFAULT '{}',
+  source           TEXT NOT NULL DEFAULT '',  -- emitting module ('webmcp'|'integrations'|'automations'|...)
+  status           TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done','dismissed')),
+  auto_resolved_at TEXT,                      -- set when autoResolve() cleared it (source condition ended)
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attention_open ON attention_items(status, severity, created_at);
+`;
+
+const M042_AUTOMATIONS_CORE = `
+-- SPEC-D G5.1: automations engine. Rules are DETERMINISTIC data (§8 risk 11):
+-- conditions_json is an op-whitelisted string-op list, actions_json carries
+-- {{payload.*}} STRING templates — no eval anywhere, the LLM has no role.
+-- run_tool actions on destructive-annotated tools require confirmDestructive
+-- (422 at save, re-checked at fire time). Timestamps TEXT UTC ISO.
+CREATE TABLE IF NOT EXISTS automation_rules (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  trigger_slug    TEXT NOT NULL DEFAULT 'system', -- connector slug, 'system', or '*'
+  trigger_event   TEXT NOT NULL,             -- activity eventType (GMAIL_MESSAGE_RECEIVED) or bus event type (sync.failed)
+  conditions_json TEXT NOT NULL DEFAULT '[]',-- [{ field, op, value }] — op whitelist in automations/types.ts
+  actions_json    TEXT NOT NULL DEFAULT '[]',-- [{ kind: create_attention|create_task|notify|run_tool, ... }]
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  last_fired_at   TEXT,
+  fire_count      INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS automation_runs (
+  id           TEXT PRIMARY KEY,
+  rule_id      TEXT NOT NULL REFERENCES automation_rules(id),
+  activity_id  TEXT,                         -- triggering activity, when the trigger was activity.created
+  trigger_json TEXT NOT NULL DEFAULT '{}',   -- trigger payload snapshot at fire time
+  status       TEXT NOT NULL CHECK (status IN ('ok','condition_miss','action_failed')),
+  detail_json  TEXT,                         -- per-condition / per-action results
+  error        TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, created_at DESC);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -529,6 +686,27 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 22,
+    name: "skills_policies",
+    up: (db) => {
+      db.exec(M022_SKILLS_POLICIES);
+      // ONE disabled example row (is_active=0 → never injected) so the /skills
+      // page has a visible template on first open. Editable/archivable in-app.
+      db.prepare(
+        `INSERT OR IGNORE INTO v2_skills
+           (id, title, description, policy_md, is_active, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, 0, ?, ?)`,
+      ).run(
+        "skill-example",
+        "Example: response style",
+        "A disabled sample policy — edit or archive it. Toggle Active to inject it.",
+        "- Lead with the answer, then the reasoning.\n- Prefer bullet lists over long prose.\n- Never invent identifiers; quote them from real output.",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+    },
+  },
+  {
     version: 30,
     name: "webmcp_core",
     up: (db) => {
@@ -560,6 +738,27 @@ export const MIGRATIONS: Migration[] = [
       // C3.6: conversation DELETE is archive/exile semantics, never row
       // destruction (house rule) — archived_at NULL = live.
       db.exec("ALTER TABLE jarvis_conversations ADD COLUMN archived_at TEXT");
+    },
+  },
+  {
+    version: 40,
+    name: "integrations_core",
+    up: (db) => {
+      db.exec(M040_INTEGRATIONS_CORE);
+    },
+  },
+  {
+    version: 41,
+    name: "attention_core",
+    up: (db) => {
+      db.exec(M041_ATTENTION_CORE);
+    },
+  },
+  {
+    version: 42,
+    name: "automations_core",
+    up: (db) => {
+      db.exec(M042_AUTOMATIONS_CORE);
     },
   },
 ];

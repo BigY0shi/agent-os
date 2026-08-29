@@ -9,6 +9,7 @@ import { searchV2 } from "../memory/search";
 import { formatRecallAsMarkdown } from "../memory/search/formatter";
 import { ingestFromModule } from "../memory/queue";
 import { execSlot, codingSlot, filesSlot } from "../capability/slots";
+import { withSkills } from "../skills/store";
 import type { AttentionFlagPayload } from "../eventTypes";
 import type { ChatMessage } from "../memory/types";
 import type { RecallResult } from "../memory/types";
@@ -280,6 +281,15 @@ function readPlanSteps(task: Task): PlanStep[] {
 function sys(content: string): ChatMessage {
   return { role: "system", content };
 }
+/** B7 (CONVENTIONS §11): execution-stage system prompts (PLAN + STEP incl.
+ *  write-content drafting) carry the active v2_skills policy block via
+ *  withSkills() — model-agnostic data injection, same block Jarvis C4 renders.
+ *  The SUMMARY prompt is post-hoc reporting and stays bare on purpose.
+ *  withSkills is defensive ("" on store failure), so mock-LLM runs and pure
+ *  smoke DBs pass through unchanged when no skills exist. */
+function sysWithSkills(content: string): ChatMessage {
+  return { role: "system", content: withSkills(content) };
+}
 function user(content: string): ChatMessage {
   return { role: "user", content };
 }
@@ -292,7 +302,7 @@ async function draftPlan(task: Task, conv: Conversation, recallBlock: string | n
   const s = engineSettings();
   const messages = listMessages(conv.id, { includeEphemeral: false });
   const plan = await llm().plan([
-    sys(PLAN_SYSTEM_PROMPT),
+    sysWithSkills(PLAN_SYSTEM_PROMPT),
     user(buildPlanUserPrompt({ task, recallBlock, messages })),
   ]);
 
@@ -372,7 +382,7 @@ async function runStep(
   switch (step.kind) {
     case "reason": {
       const result = await llm().step([
-        sys(STEP_SYSTEM_PROMPT),
+        sysWithSkills(STEP_SYSTEM_PROMPT),
         user(
           buildStepUserPrompt({
             task,
@@ -428,7 +438,7 @@ async function runStep(
         res = await filesSlot({ op: "read", path: p });
       } else if (op === "write") {
         const content = await llm().text([
-          sys(STEP_SYSTEM_PROMPT),
+          sysWithSkills(STEP_SYSTEM_PROMPT),
           user(buildWriteContentPrompt({ task, step, priorOutputs })),
         ]);
         res = await filesSlot({ op: "write", path: p, content });

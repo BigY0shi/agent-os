@@ -205,6 +205,21 @@ export interface Settings {
     allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
     llmGetActions?: boolean;   // D1.5: LLM-filtered getActions (default true; off = keyword scorer)
   };
+  // SPEC-D G2 integrations runtime (gear panel lands with the G1 /integrations UI).
+  integrations?: {
+    callbackOrigin?: string;   // OAuth redirect origin — must match provider app registration
+                               // (default http://localhost:3000; redirectUri = <origin>/api/v2/integrations/oauth/callback)
+    syncEnabled?: boolean;     // master kill switch for SCHEDULED syncs (default true; manual sync always runs)
+  };
+  // SPEC-D H4 attention aggregator (hero UI lands in Phase 6; store/collectors live).
+  attention?: {
+    pollMs?: number;           // collector tick cadence (default 60000, min 5000)
+    muteKinds?: string[];      // kinds hidden from the attention API/hero (rows still recorded)
+  };
+  // SPEC-D G5 automations engine (gear panel on /automations).
+  automations?: {
+    enabled?: boolean;         // kill switch: false = rules never fire (default true; /test dry-runs still work)
+  };
 
   [extra: string]: unknown;
 }

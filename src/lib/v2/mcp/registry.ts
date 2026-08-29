@@ -21,6 +21,13 @@ export interface ActionContext {
   source: string; // ?source= tag or "internal"
   strict: boolean; // true for MCP/external callers (gate deny-by-default)
   remoteAddr?: string;
+  /**
+   * Originating Jarvis conversation (G4.1 additive) — threaded onto Human-Gate
+   * approval records created INSIDE a handler (conditionally-destructive
+   * actions like execute_integration_action). Optional; only the Jarvis brain
+   * sets it.
+   */
+  conversationId?: string | null;
 }
 
 export interface ActionResult {
