@@ -10,6 +10,7 @@ import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loade
 import type { AgentDef, AgentTrigger, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
 import { INTELLIGENCE_META, MODE_META, STATUS_COLORS } from "@/lib/agentsTypes";
 import ModelSettings from "./ModelSettings";
+import { postDecision, postAnswer, decisionNotice } from "@/lib/agentsApprovalsClient";
 
 const VIOLET = "#a78bfa";
 
@@ -29,6 +30,8 @@ export default function AgentsView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  /** Why a decision did nothing, when it did nothing. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -52,15 +55,19 @@ export default function AgentsView() {
     return () => { clearInterval(a); clearInterval(b); };
   }, [refresh, refreshApprovals]);
 
+  // Optimistic removal keeps the click instant, but the server's answer is read
+  // rather than discarded: a card whose run already died says so.
   async function decide(id: string, decision: "allow" | "deny") {
     setApprovals((l) => l.filter((x) => x.id !== id));
-    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }) }).catch(() => {});
+    const out = await postDecision(id, decision);
+    setNotice(decisionNotice(out));
+    if (!out.ok) void refreshApprovals();
   }
 
   // Answering a parked question — same endpoint, `answer` instead of `decision`.
   async function answer(id: string, text: string) {
     setApprovals((l) => l.filter((x) => x.id !== id));
-    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, answer: text }) }).catch(() => {});
+    setNotice(decisionNotice(await postAnswer(id, text)));
     void refresh();
   }
 
@@ -93,6 +100,13 @@ export default function AgentsView() {
       <p className="text-[12.5px] mb-5" style={{ color: "var(--fg-dimmer)" }}>
         Reusable background agents — your tools, your subscriptions, your machine. Runs pause for approval before anything leaves the box.
       </p>
+
+      {notice && (
+        <div className="mb-3 rounded-xl border px-3.5 py-2.5 text-[12.5px]"
+          style={{ borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.07)", color: "var(--fg-dim)" }}>
+          {notice}
+        </div>
+      )}
 
       <ApprovalsStrip approvals={approvals} onDecide={decide} onAnswer={(id, text) => void answer(id, text)} />
 

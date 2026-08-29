@@ -140,9 +140,13 @@ const bandHexes = /#34d399|#60a5fa|#fbbf24|#f87171|#9ca3af/;
   check("wizard declares no second approval UI (no forked strip markup)",
     !/function ApprovalsStrip/.test(wiz) && !/Waiting on you/.test(wiz));
 
+  // The decision POST moved into the shared agentsApprovalsClient (2026-08-29),
+  // so the wizard now touches the route ONCE — the GET poll. Same intent: one
+  // decision path, never two.
   check("wizard resolves an approval with exactly ONE decision POST (no duplicate decisions)",
-    (wiz.match(/\/api\/agents\/approvals/g) || []).length === 2 &&
-    (wiz.match(/async function decideApproval/g) || []).length === 1);
+    (wiz.match(/\/api\/agents\/approvals/g) || []).length === 1 &&
+    (wiz.match(/async function decideApproval/g) || []).length === 1 &&
+    (wiz.match(/postDecision\(/g) || []).length === 1);
   check("wizard guards against an in-flight poll re-adding a resolved approval",
     wiz.includes("resolvedRef") && /resolvedRef\.current\.add\(id\)/.test(wiz) &&
     /!resolvedRef\.current\.has\(x\.id\)/.test(wiz));

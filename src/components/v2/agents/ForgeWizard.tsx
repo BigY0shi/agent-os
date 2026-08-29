@@ -23,6 +23,7 @@ import type { AgentDef, AgentPersona, AgentProvider, AgentTrigger, ApprovalReq }
 import { ModePicker, IntelPicker, TriggersEditor, RunView, ApprovalsStrip } from "@/components/AgentsView";
 import { STATUS_BAND_COLORS } from "@/components/v2/StatusBand";
 import { AGENTS_ACCENT, type AgentCardData } from "./shared";
+import { postDecision, decisionNotice } from "@/lib/agentsApprovalsClient";
 
 interface HarnessCard { id: string; name: string; description: string; kind: string }
 
@@ -96,6 +97,8 @@ export default function ForgeWizard({
   const [approvals, setApprovals] = useState<ApprovalReq[]>([]);
   /** Ids already decided here; keeps an in-flight poll from re-adding a resolved row. */
   const resolvedRef = useRef<Set<string>>(new Set());
+  /** Why a decision did nothing, when it did nothing. Cleared on the next one. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Deploy mode — existing test agents to promote.
   const [testAgents, setTestAgents] = useState<AgentCardData[]>([]);
@@ -160,9 +163,7 @@ export default function ForgeWizard({
   async function decideApproval(id: string, decision: "allow" | "deny") {
     resolvedRef.current.add(id);
     setApprovals((l) => l.filter((x) => x.id !== id));
-    await fetch("/api/agents/approvals", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }),
-    }).catch(() => {});
+    setNotice(decisionNotice(await postDecision(id, decision)));
     void pollRun();
   }
 
@@ -541,6 +542,12 @@ export default function ForgeWizard({
               {testRunStatus && <span className="text-[11px] font-mono" style={{ color: "var(--fg-dimmer)" }}>test run: {testRunStatus}</span>}
             </div>
             {/* This run's approvals, inline — the same shared strip the page uses. */}
+            {notice && (
+              <div className="rounded-xl border px-3.5 py-2.5 text-[12.5px]"
+                style={{ borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.07)", color: "var(--fg-dim)" }}>
+                {notice}
+              </div>
+            )}
             <ApprovalsStrip approvals={approvals} onDecide={(id, d) => void decideApproval(id, d)} />
             {testRunId && <RunView agentId={createdId} runId={testRunId} />}
           </div>

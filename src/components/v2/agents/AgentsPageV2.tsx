@@ -15,6 +15,7 @@ import { ApprovalsStrip, ago } from "@/components/AgentsView";
 import ModelSettings from "@/components/ModelSettings";
 import ConfigMenu from "@/components/ConfigMenu";
 import { STATUS_COLORS } from "@/lib/agentsTypes";
+import { postDecision, postAnswer, decisionNotice } from "@/lib/agentsApprovalsClient";
 import AgentsHero from "./AgentsHero";
 import AgentCardsGrid from "./AgentCardsGrid";
 import ForgeWizard from "./ForgeWizard";
@@ -33,6 +34,7 @@ export default function AgentsPageV2() {
   const [library, setLibrary] = useState(false);
   const [defaultHarness, setDefaultHarness] = useState<string | undefined>(undefined);
   const [loaded, setLoaded] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -70,19 +72,33 @@ export default function AgentsPageV2() {
     return () => { clearInterval(a); clearInterval(b); };
   }, [refresh, refreshApprovals, refreshHarnessNames]);
 
+  // Self-clearing: a decision notice is a transient explanation, not a state the
+  // page should get stuck in.
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
   const onEntries = useCallback((entries: StatusEntry[]) => {
     setStatuses(Object.fromEntries(entries.map((e) => [e.agentId, { status: e.status, detail: e.detail }])));
   }, []);
 
+  // The card leaves the strip immediately (clicking should feel instant), but the
+  // server's answer still gets read: a decision that resolved nothing says so
+  // instead of looking exactly like one that worked.
   async function decide(id: string, decision: "allow" | "deny") {
     setApprovals((l) => l.filter((x) => x.id !== id));
-    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }) }).catch(() => {});
+    const out = await postDecision(id, decision);
+    setNotice(decisionNotice(out));
+    if (!out.ok) void refreshApprovals();
   }
 
   // A parked question — the reply resumes the run inside its existing session.
   async function answer(id: string, text: string) {
     setApprovals((l) => l.filter((x) => x.id !== id));
-    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, answer: text }) }).catch(() => {});
+    const out = await postAnswer(id, text);
+    setNotice(decisionNotice(out));
     void refreshApprovals();
   }
 
@@ -120,6 +136,13 @@ export default function AgentsPageV2() {
         onForgeAgent={() => setWizard("forge")}
         onForgeHarness={() => setLibrary(true)}
       />
+
+      {notice && (
+        <div className="mb-3 rounded-xl border px-3.5 py-2.5 text-[12.5px]"
+          style={{ borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.07)", color: "var(--fg-dim)" }}>
+          {notice}
+        </div>
+      )}
 
       <ApprovalsStrip approvals={approvals} onDecide={decide} onAnswer={(id, text) => void answer(id, text)} />
 
