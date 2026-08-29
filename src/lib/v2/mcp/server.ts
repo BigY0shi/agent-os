@@ -8,6 +8,12 @@ import {
   type ActionContext,
 } from "./registry";
 import { emit } from "../events";
+import {
+  callMemoryTool,
+  ensureMemoryActions,
+  isMemoryTool,
+  memoryToolDefs,
+} from "../memory/mcpTools";
 
 /**
  * F4 stateless MCP server (Streamable HTTP, JSON responses). Framework-free:
@@ -48,8 +54,8 @@ function errText(s: string): { content: { type: "text"; text: string }[]; isErro
   return { content: [{ type: "text", text: s }], isError: true };
 }
 
-/** MCP tool defs exposed at the top level. Memory tools are wired in by A7 —
- *  until then they exist but fail loudly (NOT stubs that pretend). */
+/** MCP tool defs exposed at the top level. Memory tools (A7) come from
+ *  memory/mcpTools.ts with their REF-verbatim descriptions. */
 function toolDefs() {
   return [
     {
@@ -78,39 +84,16 @@ function toolDefs() {
         required: ["key"],
       },
     },
-    {
-      name: "memory_search",
-      description:
-        "Search Agent OS memory (episodic knowledge graph). NOT YET AVAILABLE — lands with Memory V2 (workstream A).",
-      inputSchema: {
-        type: "object",
-        properties: { intent: { type: "string" } },
-        required: ["intent"],
-      },
-    },
-    {
-      name: "memory_ingest",
-      description:
-        "Store content in Agent OS memory. NOT YET AVAILABLE — lands with Memory V2 (workstream A).",
-      inputSchema: {
-        type: "object",
-        properties: {
-          message: { type: "string" },
-          sessionId: { type: "string" },
-        },
-        required: ["message", "sessionId"],
-      },
-    },
+    ...memoryToolDefs(),
   ];
 }
-
-const NOT_READY = "Memory V2 is not yet available (workstream A in progress). This tool will activate when it lands — do not retry now.";
 
 export async function handleMcpMessage(
   msg: JsonRpcMessage,
   ctx: ActionContext,
 ): Promise<JsonRpcResponse | null> {
   ensureCoreActions();
+  ensureMemoryActions();
 
   // Notifications (no id) are accepted and produce no body.
   if (msg.method?.startsWith("notifications/")) return null;
@@ -190,12 +173,18 @@ export async function handleMcpMessage(
           }
         }
 
-        case "memory_search":
-        case "memory_ingest":
-          return rpcResult(msg.id, errText(NOT_READY));
-
-        default:
+        default: {
+          if (isMemoryTool(name)) {
+            // Same audit contract as execute_action (CONVENTIONS §9.1).
+            emit(
+              "mcp.execute",
+              { key: name, source: ctx.source, remoteAddr: ctx.remoteAddr ?? null, strict: ctx.strict },
+              "mcp",
+            );
+            return rpcResult(msg.id, await callMemoryTool(name, args, ctx));
+          }
           return rpcError(msg.id, -32602, `Unknown tool: ${name}`);
+        }
       }
     }
 

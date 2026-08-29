@@ -36,7 +36,9 @@ check("notification returns null", note === null);
 const list = await call("tools/list", {});
 const toolNames = list.result?.tools?.map((t) => t.name) ?? [];
 check("tools/list has get_actions + execute_action", toolNames.includes("get_actions") && toolNames.includes("execute_action"));
-check("memory tools present (not-ready)", toolNames.includes("memory_search") && toolNames.includes("memory_ingest"));
+const memoryToolNames = ["memory_search", "memory_ingest", "memory_about_user", "get_labels", "initialize_conversation_session"];
+check("memory tools present (A7 live)", memoryToolNames.every((n) => toolNames.includes(n)));
+check("memory tool descriptions are live (no NOT AVAILABLE)", !list.result.tools.some((t) => (t.description || "").includes("NOT YET AVAILABLE")));
 
 // get_actions discovery + schema round-trip
 const ga = await call("tools/call", { name: "get_actions", arguments: { intent: "run a shell command" } });
@@ -71,9 +73,17 @@ check("unknown tool -> -32602", unknownTool.error?.code === -32602);
 const unknownMethod = await call("resources/list", {});
 check("unknown method -> -32601", unknownMethod.error?.code === -32601);
 
-// memory tools fail loudly (not silently)
-const mem = await call("tools/call", { name: "memory_search", arguments: { intent: "x" } });
-check("memory_search fails loudly (NOT_READY)", mem.result?.isError === true && mem.result.content[0].text.includes("not yet available"));
+// memory tools are live (A7): session init returns a uuid, labels list empty,
+// persona absent → clear message, ingest without sessionId fails loudly.
+const sess = await call("tools/call", { name: "initialize_conversation_session", arguments: {} });
+const sessId = JSON.parse(sess.result?.content?.[0]?.text ?? "{}").sessionId;
+check("initialize_conversation_session returns uuid", /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessId ?? ""));
+const lbl = await call("tools/call", { name: "get_labels", arguments: {} });
+check("get_labels returns empty array on fresh DB", JSON.parse(lbl.result?.content?.[0]?.text ?? "x").length === 0);
+const about = await call("tools/call", { name: "memory_about_user", arguments: {} });
+check("memory_about_user reports no persona yet", about.result?.content?.[0]?.text?.includes("No persona document exists yet"));
+const badIngest = await call("tools/call", { name: "memory_ingest", arguments: { message: "something worth remembering about the smoke test run" } });
+check("memory_ingest without sessionId fails loudly", badIngest.result?.isError === true && badIngest.result.content[0].text.includes("sessionId"));
 
 // files action through MCP respects strict folder deny
 const fdeny = await call("tools/call", { name: "execute_action", arguments: { key: "read_file", args: { path: "C:/anything.txt" } } });
