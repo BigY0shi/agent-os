@@ -233,6 +233,153 @@ CREATE TABLE IF NOT EXISTS vecmap_${ns} (
 export const DEFAULT_EMBED_MODEL = "nomic-embed-text";
 export const DEFAULT_EMBED_DIM = 768;
 
+const M020_TASKS_CORE = `
+-- SPEC-B B1: task model. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
+-- display_id: 'tk-N' roots, 'tk-N.M' subtasks (2 levels max, enforced in store.ts).
+-- status CHECK carries REF's full 7-value enum; 'Recurring' is accepted for
+-- REF parity but never set by the v2 store — recurrence = schedule IS NOT NULL.
+CREATE TABLE IF NOT EXISTS v2_tasks (
+  id               TEXT PRIMARY KEY,
+  display_id       TEXT NOT NULL UNIQUE,
+  title            TEXT NOT NULL DEFAULT '',
+  description_md   TEXT,
+  status           TEXT NOT NULL DEFAULT 'Todo'
+    CHECK (status IN ('Todo','Waiting','Ready','Working','Review','Done','Recurring')),
+  parent_uuid      TEXT REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  child_count      INTEGER NOT NULL DEFAULT 0,
+  spec_md          TEXT,
+  plan_md          TEXT,
+  plan_status      TEXT NOT NULL DEFAULT 'none'
+    CHECK (plan_status IN ('none','drafted','approved','rejected')),
+  schedule         TEXT,             -- RRULE string, USER-LOCAL tz semantics (settings.tasks.timezone)
+  run_at           TEXT,             -- UTC ISO next wake (one-shot or next computed occurrence)
+  last_run_at      TEXT,
+  occurrence_count INTEGER NOT NULL DEFAULT 0,
+  max_occurrences  INTEGER,          -- 1 = one-shot scheduled; NULL = unlimited
+  is_active        INTEGER NOT NULL DEFAULT 1,
+  end_date         TEXT,
+  scheduled_date   TEXT,             -- 'YYYY-MM-DD' calendar pin (B4 list/calendar; no auto-fire)
+  source           TEXT NOT NULL DEFAULT 'manual',  -- manual | daily | agent | automation | seed
+  agent_id         TEXT,             -- agents-module id; NULL = generalist
+  result           TEXT,
+  error            TEXT,
+  job_id           TEXT,             -- current scheduler job id (F2)
+  metadata         TEXT NOT NULL DEFAULT '{}',
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  completed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_status ON v2_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_run_at ON v2_tasks(run_at) WHERE run_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_parent ON v2_tasks(parent_uuid);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_sched_date ON v2_tasks(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_agent ON v2_tasks(agent_id, status);
+
+-- Activity log; every store mutation appends exactly one row.
+CREATE TABLE IF NOT EXISTS v2_task_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id    TEXT NOT NULL REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,   -- created|status_change|updated|woke|plan_drafted|run_ok|run_fail|rescheduled|...
+  actor      TEXT NOT NULL,   -- 'user' | 'agent' | 'system'
+  detail     TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_task_events ON v2_task_events(task_id, id);
+
+-- Session linkage (F3/E own the sessions themselves; B stores rows).
+CREATE TABLE IF NOT EXISTS v2_task_sessions (
+  id          TEXT PRIMARY KEY,
+  task_id     TEXT NOT NULL REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL CHECK (kind IN ('coding','browser','exec')),
+  session_ref TEXT,            -- NULL until the slot echoes = status 'starting'
+  agent       TEXT,
+  dir         TEXT,
+  prompt      TEXT,
+  status      TEXT NOT NULL DEFAULT 'starting',
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_task_sessions ON v2_task_sessions(task_id);
+
+-- Task-scoped chat threads (recurring = one per run via run_no; one-shot = shared).
+CREATE TABLE IF NOT EXISTS v2_conversations (
+  id         TEXT PRIMARY KEY,
+  source     TEXT NOT NULL,   -- 'task' | 'scheduled-task' | 'daily' | 'chat'
+  task_id    TEXT REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  agent_id   TEXT,
+  run_no     INTEGER,         -- occurrence number for recurring runs; NULL for shared
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_conv_task ON v2_conversations(task_id);
+
+CREATE TABLE IF NOT EXISTS v2_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES v2_conversations(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  user_type       TEXT NOT NULL DEFAULT 'human' CHECK (user_type IN ('human','system')),
+  ephemeral       INTEGER NOT NULL DEFAULT 0,  -- trigger messages: kept for audit, hidden in UI
+  content         TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_msgs_conv ON v2_messages(conversation_id, created_at);
+
+-- Page→task outlinks for B5 scratchpad (v2_pages lands with B5; no FK on page_id yet).
+CREATE TABLE IF NOT EXISTS v2_page_task_links (
+  page_id TEXT NOT NULL,
+  task_id TEXT NOT NULL REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  PRIMARY KEY (page_id, task_id)
+);
+
+-- FTS over title + task body (description/spec), synced by triggers.
+CREATE VIRTUAL TABLE IF NOT EXISTS v2_tasks_fts USING fts5(
+  task_id UNINDEXED, title, body, tokenize='porter unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_ai AFTER INSERT ON v2_tasks BEGIN
+  INSERT INTO v2_tasks_fts(task_id, title, body)
+  VALUES (new.id, new.title, coalesce(new.description_md,'') || ' ' || coalesce(new.spec_md,''));
+END;
+CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_au AFTER UPDATE OF title, description_md, spec_md ON v2_tasks BEGIN
+  DELETE FROM v2_tasks_fts WHERE task_id = new.id;
+  INSERT INTO v2_tasks_fts(task_id, title, body)
+  VALUES (new.id, new.title, coalesce(new.description_md,'') || ' ' || coalesce(new.spec_md,''));
+END;
+CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_ad AFTER DELETE ON v2_tasks BEGIN
+  DELETE FROM v2_tasks_fts WHERE task_id = old.id;
+END;
+`;
+
+const M021_PAGES_SCRATCHPAD = `
+-- SPEC-B B5: scratchpad pages (TipTap JSON, single-client, rev-based optimistic
+-- lock — Yjs DEFERRED per SPEC-B §1.1; the doc I/O seam lives in pages/store.ts).
+CREATE TABLE IF NOT EXISTS v2_pages (
+  id         TEXT PRIMARY KEY,
+  date       TEXT,              -- 'YYYY-MM-DD' in settings.tasks.timezone; NULL = non-daily page
+  title      TEXT NOT NULL DEFAULT '',
+  doc_json   TEXT NOT NULL DEFAULT '{"type":"doc","content":[]}',
+  rev        INTEGER NOT NULL DEFAULT 0,   -- optimistic concurrency (409 on stale save)
+  metadata   TEXT NOT NULL DEFAULT '{}',   -- lastIngestHash (B6 nightly ingest), ...
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_pages_date ON v2_pages(date) WHERE date IS NOT NULL;
+
+-- @jarvis paragraph comments (REF ButlerComment, pattern-only: Yjs relative
+-- positions replaced by paragraph-node-id attrs + normalized-text fallback).
+CREATE TABLE IF NOT EXISTS v2_page_comments (
+  id               TEXT PRIMARY KEY,
+  page_id          TEXT NOT NULL REFERENCES v2_pages(id) ON DELETE CASCADE,
+  anchor_node_id   TEXT,        -- paragraph attrs.nodeId at detection time
+  anchor_text_norm TEXT,        -- normalized paragraph text (fallback anchor + dedupe key)
+  author           TEXT NOT NULL DEFAULT 'jarvis' CHECK (author IN ('jarvis','user')),
+  body_md          TEXT NOT NULL DEFAULT '',
+  conversation_id  TEXT,        -- v2_conversations (source 'daily'), nullable
+  created_at       TEXT NOT NULL,
+  resolved_at      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_v2_page_comments_page ON v2_page_comments(page_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -258,6 +405,23 @@ export const MIGRATIONS: Migration[] = [
         .get() as { value: string } | undefined;
       const dim = row ? parseInt(row.value, 10) : DEFAULT_EMBED_DIM;
       db.exec(vecDDL(dim));
+    },
+  },
+  {
+    version: 20,
+    name: "tasks_core",
+    up: (db) => {
+      db.exec(M020_TASKS_CORE);
+      // Root display-id counter lives in the shared meta table (SPEC-B's
+      // v2_meta is folded into meta; its timezone seed is void per CONVENTIONS §10).
+      db.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES ('task_root_counter', '0')").run();
+    },
+  },
+  {
+    version: 21,
+    name: "pages_scratchpad",
+    up: (db) => {
+      db.exec(M021_PAGES_SCRATCHPAD);
     },
   },
 ];

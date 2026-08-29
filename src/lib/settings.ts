@@ -161,6 +161,26 @@ export interface Settings {
   };
   mcp?: { secret?: string };
   scheduler?: { tickSeconds?: number };
+  // SPEC-B tasks: the SINGLE timezone source for schedule interpretation
+  // (CONVENTIONS §10) + the Ready editing buffer before a run starts.
+  tasks?: {
+    timezone?: string;         // IANA zone; changing it recalculates active schedules (B4.7)
+    editingBufferSec?: number; // Ready buffer before execution starts
+    // B2 execution engine (additive):
+    planApproval?: "always" | "auto";  // global plan-approval gate
+    autoApprove?: { categories?: string[]; maxSteps?: number }; // per-category skip (task metadata.category)
+    maxStepsPerRun?: number;   // hard cap on plan steps executed per run (default 12)
+    runTimeoutMin?: number;    // wall-clock budget per run + boot stuck-recovery threshold (default 30)
+    runMode?: "steps" | "sdk"; // 'sdk' is a NOT_IMPLEMENTED seam for chunk 3+
+    emptyTaskGc?: boolean;     // buffer-expiry GC of abandoned Untitled daily tasks (default true)
+    // B3 recurring seed tasks: per-seed enable toggle (default false — nothing
+    // fires until enabled in the Tasks gear). Keys match seeds.ts settingsKey.
+    seeds?: Record<string, { enabled?: boolean }>;
+  };
+  // SPEC-B B5 scratchpad (/today): @jarvis mention-scan idle debounce.
+  scratchpad?: {
+    mentionDebounceSec?: number; // default 8
+  };
 
   [extra: string]: unknown;
 }
@@ -217,6 +237,25 @@ export const DEFAULT_SETTINGS: Settings = {
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},
   scheduler: { tickSeconds: 30 },
+  tasks: {
+    timezone: "America/Chicago",
+    editingBufferSec: 120,
+    planApproval: "always",
+    // Seed categories opted into unattended runs by default — the seeds
+    // themselves ship disabled, so nothing fires until enabled in the gear.
+    autoApprove: { categories: ["brief", "planning"] },
+    maxStepsPerRun: 12,
+    runTimeoutMin: 30,
+    runMode: "steps",
+    emptyTaskGc: true,
+    seeds: {
+      morningBrief: { enabled: false },
+      eodWrapup: { enabled: false },
+      sundayPlanning: { enabled: false },
+      weeklyRetro: { enabled: false },
+    },
+  },
+  scratchpad: { mentionDebounceSec: 8 },
 };
 
 function settingsPath(): string {

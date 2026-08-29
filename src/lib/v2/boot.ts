@@ -4,6 +4,10 @@ import fs from "node:fs";
 import { ensureDb, dbPath } from "./db";
 import { ensureV2Scheduler, registerJobHandler, scheduleJob } from "./scheduler";
 import { ensureMemoryQueue } from "./memory/queue";
+import { registerTaskWakeHandler } from "./tasks/recurrence";
+import { recoverStuckTasks } from "./tasks/dispatch";
+import { ensureTaskSeeds } from "./tasks/seeds";
+import { registerScratchpadHandlers } from "./pages/butler";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -62,6 +66,10 @@ export function ensureV2(): void {
   try {
     ensureDb();
     registerCoreJobs();
+    registerTaskWakeHandler(); // SPEC-B B1: wake jobs survive restarts, handler re-registers at boot
+    recoverStuckTasks(); // SPEC-B B2: Working tasks orphaned by a dead process → Waiting + attention.flag
+    ensureTaskSeeds(); // SPEC-B B3: recurring seed tasks (idempotent by metadata.seedKey, disabled by default)
+    registerScratchpadHandlers(); // SPEC-B B5/B6: @jarvis mention handler + nightly scratchpad ingest job
     ensureV2Scheduler();
     ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;

@@ -198,7 +198,123 @@ Remaining for A8: exile old memory page (A8.1), components per SPEC §6, MemoryS
 - §9.3 one-time manual checks: `/api/mcp` from a real Claude Code client; Memory page walkthrough.
 - Known TODO stubs carried forward: title-generation module (compaction ladder step 3), `scripts/v2/reembed.mjs` (referenced by embed dim-guard + gear warning), F1.6 .99 backup push transport, entity graph visualization (explicit phase-2), episode versioning/diffing (port map S).
 
-## Phases 2-9: not started
+## Phase 2 — Tasks (SPEC-B): in progress
+
+### Chunk 1 (B1 task model + store): ✅ (2026-08-27, branch feat/v2-phase2-tasks)
+
+| Task | Status | Verified by |
+|---|---|---|
+| Migration 020 'tasks_core' (v2_tasks + events + sessions + conversations + messages + page_task_links + FTS5 w/ triggers; meta.task_root_counter seed) | ✅ | smoke-tasks + smoke-db |
+| tasks/types.ts (client-safe TaskStatus/Task/TaskEvent/TaskSession/Conversation/Message + canTransition verbatim REF task.phase.ts) | ✅ | tsc + smoke matrix |
+| tasks/store.ts (createTask displayId txn tk-N / tk-N.M 2-level cap, resolveTaskId, listTasks filters+FTS/LIKE, updateTask queue-blind, changeTaskStatus REF rules, complete/reopen, conversations B1.5, sessions, exile-delete to ~/.agentic-os/.exile/tasks/) | ✅ | smoke-tasks (58) |
+| tasks/recurrence.ts (computeNextRun tz-aware WITHOUT luxon — Intl wall-clock port; applySchedule/scheduleTask remove-then-enqueue; thin task.wake handler w/ finally-advance; loud-warn unparseable schedules) | ✅ | smoke-tasks DST/relative/weekly table |
+| settings.tasks subtree {timezone: America/Chicago, editingBufferSec: 120} | ✅ | smoke uses AGENTIC_OS_SETTINGS |
+| eventTypes +task.wake/+task.deleted; boot.ts registers task.wake handler | ✅ | smoke-tasks |
+| scheduler.ts tickOnce: respect handler self-reschedule/self-remove of its own job row (recurrence stall fix — one-shot completion no longer clobbers the re-enqueued task:<id> job) | ✅ | smoke-events-scheduler regression + smoke-tasks |
+
+**Deltas/decisions (chunk 1):**
+1. **FTS5 works natively** in better-sqlite3 — triggers (AI/AU/AD) sync title+description_md+spec_md; porter stemming verified; LIKE fallback only on MATCH error.
+2. **luxon NOT added** (no-new-deps): computeNextRun ported onto Intl.DateTimeFormat wall-clock conversion; REF's BYHOUR ≤400-day iteration + no-BYHOUR relative-interval semantics preserved; DST boundary verified (Chicago 2026-11-01).
+3. **status CHECK carries REF's 7th value 'Recurring'** for enum parity but the store never sets it — recurring = schedule IS NOT NULL (SPEC-B model).
+4. Depth cap = 2 levels (tk-N.M max) per B1 brief — stricter than REF's 3.
+5. smoke-db's hard-coded "[1,2]" migration assertions made forward-compatible (includes + strictly-increasing).
+6. v2_page_task_links has no FK on page_id (v2_pages lands with B5).
+
+**Verification:** smoke-tasks.mjs ALL PASS · regressions smoke-db + smoke-events-scheduler ALL PASS · `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**Handoff for chunk 2 (B2 engine):** replace the thin task.wake body in `tasks/recurrence.ts registerTaskWakeHandler` with dispatch.ts's staleness-guarded pipeline — keep the `finally { advanceAfterFire }` shape; buffer wakes come through the same kind. Queue-touch discipline: only applySchedule/scheduleTask/advanceAfterFire touch jobs; store.updateTask never does. scheduler contract adjustment already made (self-reschedule respect in tickOnce) — nothing else needed.
+
+### Chunk 2 (B2 execution engine — plan approval + dispatcher): ✅ (2026-08-27, branch feat/v2-phase2-tasks)
+
+| Task | Status | Verified by |
+|---|---|---|
+| tasks/prompts/plan.ts (prompts as DATA: PLAN/STEP/SUMMARY system prompts + builders; PlanSchema {planMd, steps[≤30]} / PlanStepSchema {kind reason\|exec\|coding\|files} / StepResultSchema {ok\|blocked + ONE question}; §9.4 recalled-memory-untrusted rule + wrapRecalledMemory) | ✅ | smoke-engine |
+| tasks/engine.ts — runTask claim→context→PLAN→EXECUTE pipeline: stale-claim guard (expectedUpdatedAt), in-flight registry (`__agentosV2TaskRuns`), searchV2 structured recall wrapped `<recalled_memory untrusted="true">` (failure = warn + continue), draft → plan_md + metadata.planSteps + plan_status 'drafted' → Waiting + attention.flag {kind:'task.plan-approval', dedupeKey:'task-plan-<uuid>', route:'/tasks?focus=<displayId>'}; auto-approve via planApproval='auto' OR autoApprove.categories (task metadata.category) within autoApprove.maxSteps; EXECUTE = bounded sequential step walker (reason=modelCall low, exec/coding/files=capability slots NON-STRICT gate, files-write content drafted by LLM), hard cap settings.tasks.maxStepsPerRun (12), runTimeoutMin (30) deadline, per-step task_events + streamed conversation messages; blocker/slot-fail → Waiting + attention.flag {kind:'task.blocked', question}; success → Review + result + summary message + ingestFromModule({source:'task', labelNames:['task',displayId], sessionId:'task-'+uuid}); crash → Waiting + error + `[Error] ISO:` message + flag | ✅ | smoke-engine (mock+live) |
+| approvePlan(id,{edits?,note?}) (drafted-only, planMd edit, note as user turn, enqueueTask immediate, status untouched — worker flips Working) / rejectPlan(id,reason) (plan_status 'none', planMd+planSteps cleared, event+message) / checkWaitingTaskReply(conversationId) (Waiting→Ready actor user, REF port — for B4's chat route) | ✅ | smoke-engine |
+| tasks/dispatch.ts — wake dispatcher (REF scheduled-task.logic.ts verbatim-adapt): staleness (inactive / run_at NULL / >1s future / expectedRunAt nonce mismatch → no-op, NO advance), buffer expiry (Ready+no schedule; empty daily task → exile-GC + task.gc event, gated settings.tasks.emptyTaskGc), fire-override (Todo\|Waiting+schedule), scheduled one-shot fire (Todo\|Waiting+runAt, no RRULE — keeps B1 one-shot semantics), normal fire, stuck-Working + stuck-Review(recurring) recovery; immediate runs (payload.immediate from enqueueTask) bypass run_at staleness, claim-guarded by expectedUpdatedAt instead; recoverStuckTasks() boot recovery (Working past runTimeoutMin+5 → Waiting + attention.flag {kind:'task.stuck'}) wired into boot.ts | ✅ | smoke-engine branch table |
+| recurrence.ts task.wake body replaced: try{dispatchTaskWake}finally{if(outcome.advance) advanceAfterFire} — dispatcher sets advance BEFORE risky work on claimed fires (stall fix kept), stale wakes never advance; all enqueue sites now stamp payload.expectedRunAt nonce (applySchedule/scheduleTask/advanceAfterFire/armReadyBuffer) | ✅ | smoke-engine + smoke-tasks |
+| AGENTOS_MOCK_LLM hook: EngineLlm injectable INSIDE engine.ts (plan/step/text/recall) — env picks deterministic mock (canned plan/steps keyed on MOCK_BLOCKER/MOCK_MANY_STEPS/MOCK_EXEC markers, recall=null → zero network); setEngineLlmForTests() seam; llm.ts untouched | ✅ | smoke-engine offline |
+| settings.tasks additive: planApproval ('always'), autoApprove {categories,maxSteps}, maxStepsPerRun (12), runTimeoutMin (30), runMode ('steps'; 'sdk' throws NOT_IMPLEMENTED — open-question-#1 seam), emptyTaskGc (true) | ✅ | tsc + smoke-engine |
+| eventTypes: +task.run, +task.gc documented | ✅ | tsc |
+
+**Deltas/decisions (chunk 2):**
+1. **runMode = 'steps'** shipped (SPEC-B open question #1 unresolved → per brief: bounded step-walker now, `runMode:'sdk'` seam throws NOT_IMPLEMENTED for chunk 3+). NOT the Mastra/SDK agent loop — sequential plan steps only.
+2. **plan_status 'drafted' == the brief's 'proposed'** (B1's CHECK enum). A wake hitting a drafted-unapproved plan re-parks Waiting + re-flags (same dedupeKey) and skips — a recurring fire during pending approval still advances occurrence (approval gate holds execution, schedule keeps ticking).
+3. **Task category for auto-approve = metadata.category** (migration 020 has no category column; additive, no migration). B4's settings/UI should read/write the same key.
+4. Steps live in **metadata.planSteps** (plan_md is the human markdown); approved plan without stored steps degrades to one reason step. Zones (`<plan>` page nodes) remain B5 territory — B1 stored plans in columns.
+5. Staleness = REF's run_at-based guard (NULL/future) + an expectedRunAt payload nonce; updated_at-based staleness deliberately NOT used for scheduled wakes (would break the title-edit-mid-pending-fire discipline, B3.4). Immediate runs use expectedUpdatedAt claims instead.
+6. **New dispatcher branch beyond REF's table:** scheduled one-shot fire (explicit runAt, no schedule, Todo/Waiting) — REF would no-op these; our applySchedule({runAt}) one-shots must fire.
+7. REST routes (incl. /approve) deferred to B4 per the B2=engine-only brief; engine exports approvePlan/rejectPlan/checkWaitingTaskReply for them.
+8. smoke-tasks updated for B2: AGENTOS_MOCK_LLM=1 (wake now runs the engine) + forceDue() helper syncing job.run_at/task.run_at/nonce on forced fires.
+
+**Verification:** `scripts/v2/smoke-engine.mjs` ALL PASS — mock path (main flow incl. flag payload/dedupeKey/route, ingest queue row source 'task', reject, staleness ×2, fire-override + advance, boot stuck-recovery + flag, step cap 5/20, blocker + question + chat-unblock, exec slot 'mock-exec-ok', auto-approve category, buffer GC + titled-survivor) AND live leg vs Ollama cloud (kimi-k2.6/glm-5.2): haiku task plan→approve→execute→Review with real modelCall. Regressions: smoke-tasks / smoke-events-scheduler / smoke-ingest (incl. live half) ALL PASS. `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**Handoff for chunk 3 (B3 recurring seeds + B4 Tasks page + B5 scratchpad):**
+- Engine surface: `runTask(id,{immediate?,expectedUpdatedAt?})`, `approvePlan(id,{edits?,note?})`, `rejectPlan(id,reason)`, `checkWaitingTaskReply(conversationId)` (wire into B4's chat POST), `setEngineLlmForTests`, `recoverStuckTasks`. Dispatcher branches are wake-driven — B3 seeds only need createTask + applySchedule; fires flow through the engine automatically.
+- B3 seeds should set `metadata.category` + `settings.tasks.autoApprove.categories` (e.g. 'brief') so recurring seeds run unattended; otherwise every fire parks at plan approval.
+- B4 /approve route = `approvePlan`; board 'needs you' items can subscribe to attention.flag kinds task.plan-approval / task.blocked / task.stuck (dedupeKeys `task-plan-<uuid>`, `task-blocked-<uuid>`, `task-stuck-<uuid>`).
+- B4 TasksSettings gear must expose the new settings.tasks keys (rule 16): planApproval, autoApprove, maxStepsPerRun, runTimeoutMin, emptyTaskGc.
+- B5: buffer-GC currently exiles the task only; `removeTaskItemFromPages` node-strip is the open TODO once v2_pages exists (marked in dispatch.ts).
+
+### Chunk 3 (B3 seeds + B4 REST API + Tasks page UI): ✅ (2026-08-27, branch feat/v2-phase2-tasks)
+
+| Task | Status | Verified by |
+|---|---|---|
+| B3 tasks/seeds.ts — 4 seeds (Morning Brief daily 7:00, EOD Wrap-up daily 18:00, Sunday Planning Sun 19:00, Weekly Retro scaffold Fri 16:00), metadata.seedKey upsert (json_extract), ALL created DISABLED (isActive 0, no armed job) until settings.tasks.seeds.<key>.enabled / gear toggle; spec_md carries the full discipline (idempotency heading guard, append-only, cap 5/section, plain-bullets-never-taskItems, scratchpad-unavailable → deliver via task conversation); categories 'brief'/'planning'; boot.ts ensureTaskSeeds() (idempotent) | ✅ | smoke-tasks-api seeds leg |
+| settings: tasks.seeds subtree + DEFAULT tasks.autoApprove.categories ["brief","planning"] (seeds run unattended once ENABLED; visible/editable in gear) | ✅ | tsc + smoke |
+| B4 REST src/app/api/v2/tasks/: route.ts GET(filters incl. FTS q, status CSV, source, parent, scheduledDate)/POST(create; schedule\|runAt → applySchedule); [id]/route.ts GET(task+subtasks+events+sessions+conversations, :id = uuid OR tk-*)/PATCH(fields queue-blind; schedule-block → applySchedule ONLY — isActive toggle re-derives runAt from stored schedule; status → changeTaskStatus actor user, illegal → 409, **'Working' route-gated 409 "runtime-owned"**)/DELETE(exile); [id]/approve POST {edits?,note?} → approvePlan \| {action:'reject',reason} → rejectPlan (409 on non-drafted); [id]/run POST → enqueueTask immediate + tickOnce nudge (202; 404/409 guards); [id]/chat GET(active thread, ephemeral hidden, runs list)/POST {text} → append + checkWaitingTaskReply; agents-strip GET (thin butler-activity derivation over agentsStore/agentsRuntime + v2 assignments — statusFeed replaces internals in E); recalc POST (timezone change → scheduleTask over active schedules) | ✅ | smoke-tasks-api (60 checks) |
+| B4 UI /tasks: page.tsx → TasksView (header search/new-task/gear; Row1 TaskListPanel 2fr [One-time\|Repeating tabs, "needs you" chip = Waiting/Review/plan-drafted, Done checkbox, date pill → PATCH scheduledDate, schedule text + N-left, next-run chip] beside MiniCalendar 1fr [month grid, column-colored dots from scheduledDate/runAt, click filters list]; Row2 TaskBoard 4 cols Todo / In Progress=Ready("starting…")+Working(pulse) / Waiting=Waiting("needs you")+Review("review me") / Done — HTML5 DnD, drop→PATCH (In Progress sets Ready), 409 → snap-back + toast with reason; Row3 AgentsSection cards w/ **shared src/components/v2/StatusBand.tsx** (CONVENTIONS §6 palette exact: #34d399/#60a5fa/#fbbf24/#f87171/#9ca3af), current + ≤3 upcoming per agent); TaskDetail slide-over tabs Overview(spec editable, plan rendered + Approve/Reject when drafted, result, subtasks, status timeline)/Chat(thread + input, reply unblocks Waiting)/Sessions/Activity; ?focus=tk-N deep link honored (attention.flag route); TasksSettings gear = timezone(+recalc POST on change), planApproval, autoApprove categories+maxSteps, maxStepsPerRun, runTimeoutMin, editingBufferSec, emptyTaskGc, per-seed toggles (PATCH isActive + settings mirror) | ✅ | smoke-tasks-ui 55/55 |
+| Sidebar: /tasks NAV entry (ListTodo, accent #f97316) placed after /kanban — NOT added to any section Set (sectionOf fallback lands it in "Self" as intended); /kanban untouched | ✅ | smoke-tasks-ui |
+
+**Deltas/decisions (chunk 3):**
+1. **All 4 seeds default DISABLED** (SPEC silent on per-seed defaults → brief's "default all disabled" applied); DEFAULT_SETTINGS pre-opts categories 'brief'+'planning' into autoApprove so an ENABLED seed runs unattended out of the box (visible in gear, rule 16).
+2. **Route-level 409 on status 'Working'**: canTransition lets actor 'user' do anything, so the only board-drag 409s would never fire; 'Working' is runtime-owned (drop on In Progress sets Ready, worker flips Working) — enforced in the PATCH route, message surfaced as the board toast.
+3. **No /board route**: columns derive client-side from the one list fetch (poll 5s); agents payload is its own thin GET /api/v2/tasks/agents-strip. SPEC's board+agents single-poll can be reinstated when E's statusFeed lands.
+4. **PATCH isActive re-derivation**: applySchedule({isActive}) alone would deactivate a schedule whose runAt is NULL (disabled seed) — the route passes the stored schedule through so enable recomputes runAt. Covered by a dedicated smoke check.
+5. ensureTaskSeeds leaves EXISTING seed tasks untouched (user owns them post-creation); identity = metadata.seedKey via json_extract.
+6. approve/run routes nudge tickOnce (50 ms fire-and-forget) so immediate runs don't wait out the 30 s tick interval.
+7. B6 ingest deliberately NOT wired into chat POST (chunk-4 memory-wiring pass owns the taskIngest call-site audit); engine's run-summary ingest (chunk 2) unchanged.
+
+**Verification:** `scripts/v2/smoke-tasks-api.mjs` ALL PASS (seeds idempotency ×2, disabled=no-job/enabled=job, create/list/FTS/detail-by-display-id, PATCH legal + 409 + queue-blind title edit + isActive re-arm, run→Waiting→approve→Review E2E via routes, reject, chat GET/POST + Waiting→Ready hook, DELETE exile bundle-on-disk, agents-strip band set, recalc) · `scripts/v2/smoke-tasks-ui.mjs` 55/55 · regressions: smoke-engine ALL PASS (incl. live Ollama-cloud leg), smoke-tasks ALL PASS · `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**Handoff for chunk 4 (B5 scratchpad + B6 memory-wiring):**
+- Page/API surface available to B5: `GET/POST /api/v2/tasks` (create with source 'daily' + status 'Ready' is the `[ ]`→task binding path; buffer-GC exiles empty ones), `PATCH /api/v2/tasks/[id]` (title sync w/ sourcePageId is TODO — PATCH accepts title but outlink propagation needs v2_pages), TaskDetail opens by uuid OR display id (`?focus=` works cross-page).
+- B6 call sites to wire taskIngest/ingestFromModule: chat POST (route has the marker comment), comment replies (B5.5), plus audit the engine's existing run-completion ingest = the B6.1 exactly-once pass.
+- dispatch.ts still has the `removeTaskItemFromPages` TODO (node strip on buffer-GC) — lands with v2_pages.
+- StatusBand is live at the CONVENTIONS path; agents-strip route is the seam SPEC-E's statusFeed.getStatusSnapshot() replaces (keep the response shape).
+- Gear seed toggles PATCH the task AND mirror settings.tasks.seeds — keep both in sync if B5 adds more seed-like tasks.
+
+### Chunk 4 (B5 Scratchpad + B6 memory wiring): ✅ (2026-08-27, branch feat/v2-phase2-tasks) — FINAL Phase-2 chunk
+
+| Task | Status | Verified by |
+|---|---|---|
+| Migration 021 'pages_scratchpad' — v2_pages (date UNIQUE-where-not-null, doc_json TipTap JSON, rev optimistic lock, metadata for ingest hash) + v2_page_comments (anchor_node_id + anchor_text_norm fallback, author jarvis\|user, conversation_id, resolved_at) | ✅ | smoke-pages + smoke-db |
+| pages/store.ts — getOrCreateDailyPage (date key in settings.tasks.timezone, insert-race-safe), savePage rev-CAS (RevConflictError.status=409 + current doc), savePageDocInternal (server write-backs bump rev → client's stale save 409s+refetches = the Yjs seam), listPages, comment CRUD, tree walkers (findTaskItemNodes/collectTaskUuids/removeTaskItemNodes w/ empty-taskList prune/normalizeText), link helpers, removeTaskItemFromPages (fills the dispatch.ts TODO) | ✅ | smoke-pages (57) |
+| pages/butler.ts — processPageSave: (1) `[ ]` binding SYNCHRONOUS: unbound non-empty taskItem → createTask {source daily, status Ready} + attrs taskUuid/displayId written back + link row; checked↔Done/reopen (actor user); node-text→title sync; node REMOVED → exile ONLY when title-only (no description/spec/plan/result AND status Todo/Ready/Waiting) else keep+unlink; dangling binding (task deleted elsewhere) → rebind. (2) @jarvis mention scan: paragraph gets nodeId attr → enqueueDebounced key page+node, delay settings.scratchpad.mentionDebounceSec (default 8, new settings subtree + gear); handler answers via modelCallText low + searchV2 recall wrapped `<recalled_memory untrusted>` (ButlerLlm mock seam, AGENTOS_MOCK_LLM) → v2_page_comments row + conversation source 'daily' (question+reply turns) + attention.flag {kind scratchpad.reply, severity info, route /today, dedupeKey pagecomment-<id>} + attrs.mentionHandled = djb2(text) — same text never reprocesses, EDITED text re-triggers | ✅ | smoke-pages mention legs |
+| dispatch.ts TODO filled: buffer-GC now calls removeTaskItemFromPages BEFORE deleteTask (links still exist → strip lands) | ✅ | smoke-pages buffer-GC leg |
+| REST /api/v2/pages: route.ts GET ?date= (default today, find-or-create) / ?list=1; [id]/route.ts GET + PUT {docJson, rev} → 409 {current} CAS \| 200 {rev, docJson, docChanged, bound, mentionsQueued} (butler runs post-save; butler failure ≠ lost write); [id]/comments GET/POST/PATCH{commentId,resolved} | ✅ | smoke-pages route legs |
+| UI /today: app/today/page.tsx + components/v2/pages/{ScratchpadView, Editor, CommentBubble, PageHeader, ScratchpadSettings, shared}.tsx — TipTap (StarterKit + TaskList + TaskItem.extend attrs + ReactNodeViewRenderer checkbox/chip/status-badge nodeview + paragraph global attrs nodeId/mentionHandled rendered as data-*), 1.5 s debounced autosave w/ rev CAS (409 → replace-and-toast; server write-backs adopted w/ caret restore; 5 s rev poll adopts mention stamps when clean+unfocused), displayId chip → /tasks?focus=tk-N, live status badges (poll ?source=daily), comment bubbles in a right gutter positioned by [data-node-id] (de-overlap; orphan/narrow fallback list w/ quoted anchor), prev/next/today nav, Widgets placeholder (disabled, H phase), gear = ScratchpadSettings (mentionDebounceSec, rule 16); Sidebar /today (NotebookPen, #06b6d4 unused accent, Self via sectionOf fallback, beside /tasks) | ✅ | smoke-pages-ui 47/47 |
+| B6 wiring: chat POST now ingests each user turn (source 'task', labels [task, tk-N], session task-<uuid> — same bucket as the engine's run-summary ingest, verified present from chunk 2); mention exchanges ingest (source 'scratchpad', label scratchpad, session scratchpad-<date>); NIGHTLY 'scratchpad.ingest' job (boot-registered, FREQ=DAILY at the UTC approximation of 23:55 local) ingests the day's page text iff non-empty AND changed since last ingest (hash in page metadata) | ✅ | smoke-pages B6 legs + smoke-tasks-api B6 check |
+| New deps (SPEC-sanctioned minimum set, NO Yjs): @tiptap/react 3.30.5, @tiptap/starter-kit 3.30.5, @tiptap/extension-task-list 3.30.5, @tiptap/extension-task-item 3.30.5 (+@tiptap/core/pm 3.30.5 as auto peers) | ✅ | package.json + smoke-pages-ui |
+
+**Deltas/decisions (chunk 4):**
+1. **Task binding is server-side in the save path** (butler), not a client NodeView create-on-mount (REF pattern): the PUT response returns the doc with attrs written back and the client adopts it with caret restore — one writer, no cursor-destruction NodeView traps, and the smoke can drive the whole contract through the route.
+2. **jarvisMention is plain-text detection** ('@jarvis' substring in a paragraph), not @tiptap/extension-mention — the mention package is outside the sanctioned minimum dep set and adds nothing the contract needs.
+3. Mention handler failure leaves the node UNstamped (retry on next save); bare '@jarvis' with no ask is stamped without burning a model call.
+4. Removal-cleanup keeps tasks that are Working/Review/Done even when content-empty (in-flight/finished work counts as context).
+5. patchPageMetadata does NOT bump rev (metadata is server bookkeeping, not doc content) — the nightly ingest never forces a client refetch.
+6. smoke-tasks-api gained a B6 wait-for-queue-row check after the chat POST — also fixes a teardown race the fire-and-forget ingest exposed (in-flight fetch at process.exit → libuv assert; server processes never exit, test now settles it explicitly).
+
+**Verification:** `scripts/v2/smoke-pages.mjs` ALL PASS exit 0 (daily find-or-create per date + race, CAS 409+recovery, bind attrs/link/source/status, checkbox Done/reopen, title sync, removal exile-vs-keep, removeTaskItemFromPages strip + rev bump, dispatch buffer-GC strip, mention debounce → comment+conversation+flag payload exact, processed-once + edited-retrigger, nightly ingest once/skip-unchanged/re-ingest-changed/empty-skip + job row, comments CRUD) · `scripts/v2/smoke-pages-ui.mjs` 47/47 · regressions: smoke-tasks-api ALL PASS exit 0, smoke-engine 64 PASS exit 0, smoke-tasks ALL PASS, smoke-events-scheduler ALL PASS, smoke-db ALL PASS · `npx tsc --noEmit` clean. NOT COMMITTED — orchestrator owns git.
+
+**PHASE 2 (SPEC-B Tasks + Scratchpad) COMPLETE — B1–B6 delivered.** Still open from SPEC-B §7 (deliberate, not dropped):
+- **B7 skills-as-policies group** (CONVENTIONS §11): allowed to slip to Phase 5 alongside G — owned, unbuilt.
+- **B5.8 SelectionBubble convert-to-tasks** (marked "phase 2, optional" in the spec) and the multi-day DailyScroller (upgraded to single-day + prev/next nav per the chunk-4 brief; H1 embeds `<Editor>` for the Homepage).
+- **runMode 'sdk'** execution seam still throws NOT_IMPLEMENTED (open question #1 — bounded step-walker is the shipped engine).
+- **plan/outcome/log zone TipTap nodes (B5.7)** — plans live in plan_md columns (chunk-2 decision); page-zone rendering lands if/when TaskDetail moves its body to TipTap.
+- Yjs/hocuspocus stays DEFERRED by design (§1.1); the pageStore doc-I/O seam is in place for it.
+
+## Phases 3-9: not started
 
 ### Post-gate fix (orchestrator, 2026-08-27): golden gate now 12/12
 Case-8 root cause was two-layered; both fixed and verified by a final full-capture gate run (12/12 PASS):
