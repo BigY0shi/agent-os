@@ -220,6 +220,19 @@ export interface Settings {
   automations?: {
     enabled?: boolean;         // kill switch: false = rules never fire (default true; /test dry-runs still work)
   };
+  // SPEC-D H2 home widget grid. `cells` unset = the DEFAULT_HOME_CELLS const in
+  // src/lib/v2/widgets/types.ts (fallback at read time so default-layout changes
+  // reach untouched installs — deliberately NOT copied into DEFAULT_SETTINGS).
+  home?: {
+    cells?: Array<{
+      id: string;
+      widgetSlug: string;
+      size: "S" | "M" | "L";
+      order: number;
+      config?: Record<string, unknown>;
+    }>;
+    showScratchpad?: boolean;  // H1.1 (chunk 2) Overview ScratchpadSlot toggle
+  };
 
   [extra: string]: unknown;
 }
