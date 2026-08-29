@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Shell from "@/components/Shell";
 import { HydrateFleet } from "@/components/layout/HydrateFleet";
+import JarvisOmnipresence from "@/components/v2/jarvis/JarvisOmnipresence";
 import { AuroraBackground } from "@/components/layout/AuroraBackground";
 import { ParticleField } from "@/components/layout/ParticleField";
 
@@ -37,6 +38,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="relative z-10">
           <Shell>{children}</Shell>
         </div>
+        {/* SPEC-C C1: Jarvis on every route — orb + hotkey SSE + C2b overlay */}
+        <JarvisOmnipresence />
       </body>
     </html>
   );

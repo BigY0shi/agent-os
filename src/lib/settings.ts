@@ -122,7 +122,25 @@ export interface Settings {
   // Empty string = the module's built-in default (blank kimiModel = auto-resolve
   // preferring k2.6; blank claude models = the pinned CLAUDE_MODEL).
   brainstorm: { kimiModel?: string };                       // the council's Kimi seat
-  jarvis: { kimiModel?: string };                           // Kimi voice provider's brain
+  // Jarvis: Kimi brain model + SPEC-C C2/C2b voice-capture + hotkey knobs
+  // (all surfaced in the Jarvis gear — rule 16).
+  jarvis: {
+    kimiModel?: string;                                     // Kimi voice provider's brain
+    // SPEC-C C3 brain engine: "sdk" = warm Claude Agent SDK session with tools
+    // (memory/hub/registry/navigate); "cli" = answer-only fallback via cliComplete
+    // + memory recall, NO tools (clearly meta-tagged in the stream).
+    engine?: "sdk" | "cli";
+    cliAgent?: string;     // cli-lane agent id (claude/codex/cursor/… per cliComplete matrix)
+    voice?: {
+      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
+      autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
+      pushToTalk?: boolean;  // true = hold-to-record; false = click-to-toggle
+    };
+    hotkey?: {
+      key?: string;          // in-app fallback keybind (default "F13")
+      enabled?: boolean;     // in-app keydown listener on/off
+    };
+  };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
@@ -181,6 +199,11 @@ export interface Settings {
   scratchpad?: {
     mentionDebounceSec?: number; // default 8
   };
+  // SPEC-C D1/D2 WebMCP Engine (gear panel lands with the D3 builder UI).
+  webmcp?: {
+    sandboxTimeoutMs?: number; // 'js' handler wall-clock cap (default 5000)
+    allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
+  };
 
   [extra: string]: unknown;
 }
@@ -209,7 +232,13 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   marketing: { agent: "claude", council: true, criticAgent: "codex", textPlatforms: ["linkedin", "x", "facebook"], ideateBackend: "local", buzzChannel: "marketing-ideas" },
   brainstorm: { kimiModel: "kimi-k2.6" },
-  jarvis: { kimiModel: "kimi-k2.6" },
+  jarvis: {
+    kimiModel: "kimi-k2.6",
+    engine: "sdk",
+    cliAgent: "claude",
+    voice: { provider: "webspeech", autoSend: false, pushToTalk: true },
+    hotkey: { key: "F13", enabled: true },
+  },
   contentEngine: { kimiModel: "kimi-k2.6" },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
@@ -256,6 +285,7 @@ export const DEFAULT_SETTINGS: Settings = {
     },
   },
   scratchpad: { mentionDebounceSec: 8 },
+  webmcp: { sandboxTimeoutMs: 5000, allowJsHandlers: true },
 };
 
 function settingsPath(): string {

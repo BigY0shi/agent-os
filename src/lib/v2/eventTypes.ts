@@ -19,6 +19,9 @@ export type V2EventType =
   | "agent.status"
   | "attention.flag" // CONVENTIONS §5: {kind, severity, title, route, dedupeKey}
   | "mcp.execute"
+  | "webmcp.published" // SPEC-C D2: {slug, version, tools[]}
+  | "webmcp.archived" // SPEC-C D2: {slug}
+  | "ui.navigate" // SPEC-C D4: {route} — the overlay/pages consume, nothing runs server-side
   | (string & {});
 
 export interface V2Event {

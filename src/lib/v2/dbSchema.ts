@@ -380,6 +380,87 @@ CREATE TABLE IF NOT EXISTS v2_page_comments (
 CREATE INDEX IF NOT EXISTS idx_v2_page_comments_page ON v2_page_comments(page_id, created_at);
 `;
 
+const M030_WEBMCP_CORE = `
+-- SPEC-C D1/D2: WebMCP Engine core. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
+-- secrets_json holds NAMES -> '{{secret:NAME}}' refs only; the VALUES live in
+-- ~/.agentic-os/webmcp/<slug>.secrets.json (never in the DB, never in responses).
+CREATE TABLE IF NOT EXISTS webmcp_packages (
+  id              TEXT PRIMARY KEY,
+  slug            TEXT NOT NULL UNIQUE,      -- ^[a-z0-9][a-z0-9-]{1,40}$
+  name            TEXT NOT NULL,
+  description     TEXT NOT NULL DEFAULT '',
+  icon            TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','archived')),
+  current_version INTEGER NOT NULL DEFAULT 0,
+  secrets_json    TEXT NOT NULL DEFAULT '{}',
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+-- The tool rows ARE the draft working set; published behavior comes ONLY from
+-- webmcp_package_versions snapshots (draft-vs-published drift rule, SPEC-C §8.10).
+CREATE TABLE IF NOT EXISTS webmcp_tools (
+  id                  TEXT PRIMARY KEY,
+  package_id          TEXT NOT NULL REFERENCES webmcp_packages(id) ON DELETE CASCADE,
+  name                TEXT NOT NULL,         -- exactly the name advertised to agents (invariant §8.7)
+  description         TEXT NOT NULL DEFAULT '',
+  input_schema_json   TEXT NOT NULL DEFAULT '{"type":"object","properties":{}}',
+  handler_kind        TEXT NOT NULL CHECK (handler_kind IN ('internal','http','js')),
+  handler_config_json TEXT NOT NULL DEFAULT '{}',
+  requires_approval   INTEGER NOT NULL DEFAULT 0,
+  position            INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  UNIQUE(package_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS webmcp_package_versions (
+  id            TEXT PRIMARY KEY,
+  package_id    TEXT NOT NULL REFERENCES webmcp_packages(id) ON DELETE CASCADE,
+  version       INTEGER NOT NULL,
+  snapshot_json TEXT NOT NULL,               -- frozen {package, tools[]} at publish time
+  published_at  TEXT NOT NULL,
+  UNIQUE(package_id, version)
+);
+
+-- Append-only. args_json is REDACTED (redactArgs, CONVENTIONS §9.3) + 4KB-capped.
+CREATE TABLE IF NOT EXISTS webmcp_call_logs (
+  id           TEXT PRIMARY KEY,
+  package_slug TEXT NOT NULL,
+  tool_name    TEXT NOT NULL,
+  source       TEXT NOT NULL DEFAULT '',
+  args_json    TEXT NOT NULL DEFAULT '{}',
+  ok           INTEGER NOT NULL,
+  error        TEXT,
+  duration_ms  INTEGER NOT NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_webmcp_logs_pkg ON webmcp_call_logs(package_slug, created_at DESC);
+`;
+
+const M031_JARVIS_CONVERSATIONS = `
+-- SPEC-C C3: Jarvis brain conversation persistence. Timestamps TEXT UTC ISO
+-- (CONVENTIONS §1.4). pageContext is NEVER stored here (C5 privacy rule —
+-- per-request only); message content is the user's/assistant's raw text.
+CREATE TABLE IF NOT EXISTS jarvis_conversations (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  channel    TEXT NOT NULL DEFAULT 'overlay' CHECK (channel IN ('overlay','page')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jarvis_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES jarvis_conversations(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  content         TEXT NOT NULL,
+  tool_calls_json TEXT,                      -- [{name, summary, ok}] per assistant turn, else NULL
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jarvis_messages_conv ON jarvis_messages(conversation_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -422,6 +503,20 @@ export const MIGRATIONS: Migration[] = [
     name: "pages_scratchpad",
     up: (db) => {
       db.exec(M021_PAGES_SCRATCHPAD);
+    },
+  },
+  {
+    version: 30,
+    name: "webmcp_core",
+    up: (db) => {
+      db.exec(M030_WEBMCP_CORE);
+    },
+  },
+  {
+    version: 31,
+    name: "jarvis_conversations",
+    up: (db) => {
+      db.exec(M031_JARVIS_CONVERSATIONS);
     },
   },
 ];
