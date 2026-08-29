@@ -186,6 +186,91 @@ console.log("\n── §D deploy gate warning mode ──");
   check("D6 settings restore: hard mode back on (guard blocks again)", !!restored.block && restored.block.status === 409);
 }
 
+// ── §D2 force-deploy override (per-deploy; the SETTING is never touched) ─────
+console.log("");
+console.log("── §D2 force-deploy override (hard mode + forceDeploy) ──");
+{
+  writeSettings(); // hard mode — the default the override has to punch through
+  const mk = async (name) => {
+    const c = await (await agentsRoute.POST(req("/api/agents", "POST", { name, instructions: "reply ok" }))).json();
+    await patchAgent(c.agent.id, { lifecycle: "test" });
+    return c.agent.id;
+  };
+
+  const fId = await mk("smoke force agent");
+
+  // The plain block must ADVERTISE that a way through exists, so the UI can
+  // offer it without string-matching the error message.
+  const blocked = await patchAgent(fId, { lifecycle: "deployed" });
+  const blockedJson = await blocked.json();
+  check("D7 hard-mode block still 409s without force", blocked.status === 409);
+  check("D8 ...and flags itself overridable for the UI", blockedJson.overridable === true, blockedJson);
+
+  const forced = await patchAgent(fId, { lifecycle: "deployed", forceDeploy: true });
+  const forcedJson = await forced.json();
+  check("D9 forceDeploy deploys with NO done run", forced.status === 200 && forcedJson.agent.lifecycle === "deployed", forcedJson);
+  check("D10 ...and says plainly that nothing proved it works",
+    typeof forcedJson.warning === "string" && /overrode|WITHOUT/i.test(forcedJson.warning), forcedJson);
+
+  const stamped = await store.loadAgent(fId);
+  check("D11 the override is stamped on the agent record",
+    !!stamped.deployOverride && typeof stamped.deployOverride.at === "number", stamped.deployOverride);
+  check("D12 a reason rides along when given", await (async () => {
+    const rId = await mk("smoke force reason");
+    await patchAgent(rId, { lifecycle: "deployed", forceDeploy: true, deployReason: "demo for the board" });
+    const a = await store.loadAgent(rId);
+    return a.deployOverride?.reason === "demo for the board";
+  })());
+
+  // The whole point: one deploy, not a mode. The next agent is gated again.
+  const nextId = await mk("smoke still gated");
+  const stillBlocked = await patchAgent(nextId, { lifecycle: "deployed" });
+  check("D13 the SETTING is untouched — the next deploy is gated again", stillBlocked.status === 409);
+  // Read the settings FILE, not a cached accessor: the claim is that nothing
+  // persisted the override, and only the file can prove that.
+  const onDiskSettings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  check("D14 settings.agents.requireTestRun was never written to disk",
+    onDiskSettings.agents?.requireTestRun !== false, onDiskSettings.agents ?? null);
+
+  // force must NOT be able to deploy an agent that can never fire.
+  const ntId = await mk("smoke force no trigger");
+  await store.saveAgent({ ...(await store.loadAgent(ntId)), lifecycle: "test", triggers: [] });
+  const ntRes = await patchAgent(ntId, { lifecycle: "deployed", forceDeploy: true });
+  const ntJson = await ntRes.json();
+  check("D15 force does NOT bypass the zero-trigger block", ntRes.status === 409, ntJson);
+  check("D16 ...and that block is NOT advertised as overridable", ntJson.overridable === undefined, ntJson);
+
+  // deployOverride is server-stamped; a request body must never be able to forge it.
+  const forgeId = await mk("smoke forge override");
+  await store.saveRunMeta({
+    id: "smoke-forge-run", agentId: forgeId, trigger: "manual", status: "done",
+    startedAt: Date.now() - 9000, endedAt: Date.now() - 8000, result: "ok",
+  });
+  await patchAgent(forgeId, { lifecycle: "deployed", deployOverride: { at: 1, reason: "forged" } });
+  const forgeCheck = await store.loadAgent(forgeId);
+  check("D17 deployOverride cannot be forged from the request body",
+    forgeCheck.deployOverride === undefined, forgeCheck.deployOverride);
+
+  // In warning mode force is a no-op: nothing was overridden, so nothing is stamped.
+  writeSettings({ agents: { requireTestRun: false } });
+  const wId = await mk("smoke force in warn mode");
+  await patchAgent(wId, { lifecycle: "deployed", forceDeploy: true });
+  const wAgent = await store.loadAgent(wId);
+  check("D18 force is a no-op when the gate is already off (no false override stamp)",
+    wAgent.lifecycle === "deployed" && wAgent.deployOverride === undefined, wAgent.deployOverride);
+
+  // The library path shares the guard, so it must honour force identically.
+  writeSettings();
+  const libId = await mk("smoke force via lib");
+  const libBlocked = await lc.transitionLifecycle(libId, "deployed");
+  check("D19 transitionLifecycle blocks without force", "error" in libBlocked && libBlocked.status === 409);
+  const libForced = await lc.transitionLifecycle(libId, "deployed", { force: true });
+  check("D20 transitionLifecycle honours force (shared guard, one code path)",
+    "agent" in libForced && libForced.agent.lifecycle === "deployed" && !!libForced.agent.deployOverride, libForced);
+
+  writeSettings(); // leave hard mode on for later sections
+}
+
 // ── §E status snapshot reflects the fleet (?once=1) ──────────────────────────
 console.log("\n── §E status feed reflects the forge ──");
 {

@@ -28,7 +28,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const agent = await loadAgent(id);
   if (!agent) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const body = await req.json().catch(() => null) as (Partial<AgentDef> & { instructions?: string }) | null;
+  const body = await req.json().catch(() => null) as
+    (Partial<AgentDef> & { instructions?: string; forceDeploy?: boolean; deployReason?: string }) | null;
   if (!body) return NextResponse.json({ error: "bad body" }, { status: 400 });
 
   if (typeof body.instructions === "string" && body.instructions.trim()) {
@@ -51,10 +52,28 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const to = body.lifecycle as AgentLifecycle;
     // F1.2 deploy guard (CONVENTIONS §11): shared checkDeployGuard — hard 409
     // when agents.requireTestRun (default), else a warning rides the response.
+    // `forceDeploy: true` overrides the test-run gate for THIS request only and
+    // never touches the setting; it cannot override the trigger requirement.
+    // The 409 carries `overridable` so the UI knows which blocks offer a way
+    // through, instead of matching on the error string.
     if (to === "deployed" && effectiveLifecycle(agent) !== "deployed") {
-      const gate = await checkDeployGuard(id, agent);
-      if (gate.block) return NextResponse.json({ error: gate.block.error }, { status: gate.block.status });
+      const gate = await checkDeployGuard(id, agent, { force: body.forceDeploy === true });
+      if (gate.block) {
+        return NextResponse.json(
+          { error: gate.block.error, ...(gate.block.overridable ? { overridable: true } : {}) },
+          { status: gate.block.status },
+        );
+      }
       if (gate.warning) deployWarning = gate.warning;
+      // Server-stamped. deployOverride is never read off the body — see below.
+      if (gate.overrode) {
+        patch.deployOverride = {
+          at: Date.now(),
+          ...(typeof body.deployReason === "string" && body.deployReason.trim()
+            ? { reason: body.deployReason.trim().slice(0, 300) }
+            : {}),
+        };
+      }
     }
     patch.lifecycle = to;
   }

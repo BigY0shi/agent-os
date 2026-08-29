@@ -50,24 +50,48 @@ export async function hasSuccessfulRun(agentId: string): Promise<boolean> {
  *   true  (default) → no successful run = HARD block (409)
  *   false           → no successful run = allowed, but a WARNING string is
  *                     returned for the UI to surface as an amber banner.
- * The ≥1-trigger requirement stays hard in both modes (trivially satisfiable —
- * manual counts). ASK-YOSHI: CONVENTIONS §11 suggests warning as the default.
+ *
+ * `opts.force` is the per-deploy override (2026-08-29): it lifts the test-run
+ * requirement for THIS deploy only, without touching the setting. The default
+ * stays strict — the escape hatch is a deliberate act each time, not a mode you
+ * can leave switched on and forget.
+ *
+ * force does NOT lift the ≥1-trigger requirement, in either mode. That one is
+ * not a policy: an agent with no trigger can never fire, so calling it
+ * "deployed" would simply be false. A setting can be relaxed; arithmetic can't.
  */
 export async function checkDeployGuard(
   agentId: string,
   def: AgentDef,
-): Promise<{ block?: { error: string; status: number }; warning?: string }> {
+  opts?: { force?: boolean },
+): Promise<{
+  block?: { error: string; status: number; overridable?: boolean };
+  warning?: string;
+  /** True only when force actually lifted a gate that would have blocked. */
+  overrode?: boolean;
+}> {
   if (!def.triggers?.length) {
+    // Deliberately NOT overridable — see above.
     return { block: { error: "deploy requires at least one trigger (manual counts)", status: 409 } };
   }
   if (await hasSuccessfulRun(agentId)) return {};
   const requireTestRun = readSettings().agents?.requireTestRun !== false;
-  if (requireTestRun) {
+  if (requireTestRun && !opts?.force) {
     return {
       block: {
         error: "deploy requires at least one successful (done) run — run the agent in Test first",
         status: 409,
+        overridable: true,
       },
+    };
+  }
+  // force is a no-op when the setting is already off; only report an override
+  // when one actually happened.
+  if (requireTestRun && opts?.force) {
+    return {
+      overrode: true,
+      warning:
+        "deployed WITHOUT a successful test run — you overrode the gate, so nothing has proven this agent works",
     };
   }
   return {
@@ -84,7 +108,8 @@ export async function checkDeployGuard(
 export async function transitionLifecycle(
   agentId: string,
   to: AgentLifecycle,
-): Promise<{ agent: AgentDef; warning?: string } | { error: string; status: number }> {
+  opts?: { force?: boolean; reason?: string },
+): Promise<{ agent: AgentDef; warning?: string } | { error: string; status: number; overridable?: boolean }> {
   if (!(AGENT_LIFECYCLES as readonly string[]).includes(to)) {
     return { error: `unknown lifecycle "${to}"`, status: 400 };
   }
@@ -92,13 +117,20 @@ export async function transitionLifecycle(
   if (!def) return { error: "agent not found", status: 404 };
 
   let warning: string | undefined;
+  let overrode = false;
   if (to === "deployed" && effectiveLifecycle(def) !== "deployed") {
-    const gate = await checkDeployGuard(agentId, def);
+    const gate = await checkDeployGuard(agentId, def, opts);
     if (gate.block) return gate.block;
     warning = gate.warning;
+    overrode = !!gate.overrode;
   }
 
   const next: AgentDef = { ...def, lifecycle: to };
+  // Stamped on the record, not just logged: an agent deployed without ever
+  // passing a run should stay distinguishable from one that earned it.
+  if (overrode) {
+    next.deployOverride = { at: Date.now(), ...(opts?.reason ? { reason: opts.reason.slice(0, 300) } : {}) };
+  }
   await saveAgent(next);
   return warning ? { agent: next, warning } : { agent: next };
 }

@@ -99,6 +99,8 @@ export default function ForgeWizard({
   const resolvedRef = useRef<Set<string>>(new Set());
   /** Why a decision did nothing, when it did nothing. Cleared on the next one. */
   const [notice, setNotice] = useState<string | null>(null);
+  /** The last deploy 409 was the overridable one (missing test run). */
+  const [canForce, setCanForce] = useState(false);
 
   // Deploy mode — existing test agents to promote.
   const [testAgents, setTestAgents] = useState<AgentCardData[]>([]);
@@ -241,15 +243,22 @@ export default function ForgeWizard({
   }
 
   /** [Deploy] — the guard's 409 is surfaced verbatim; warning mode banners. */
-  async function deploy(agentId: string) {
-    setBusy(true); setErr(null); setWarning(null);
+  /** `force` sends the per-deploy override for the test-run gate. The setting is
+   *  untouched — the next deploy is gated again. Only offered when the 409 said
+   *  `overridable`, so the un-overridable block (no trigger) shows no way out. */
+  async function deploy(agentId: string, force = false) {
+    setBusy(true); setErr(null); setWarning(null); setCanForce(false);
     try {
       const r = await fetch(`/api/agents/${agentId}`, {
         method: "PATCH", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ lifecycle: "deployed" }),
+        body: JSON.stringify(force ? { lifecycle: "deployed", forceDeploy: true } : { lifecycle: "deployed" }),
       });
       const j = await r.json().catch(() => ({}));
-      if (r.status === 409) { setErr(j.error ?? "deploy blocked (409)"); setBusy(false); return; }
+      if (r.status === 409) {
+        setErr(j.error ?? "deploy blocked (409)");
+        setCanForce(j.overridable === true);
+        setBusy(false); return;
+      }
       if (!r.ok) { setErr(j.error ?? `deploy failed (${r.status})`); setBusy(false); return; }
       if (j.warning) setWarning(j.warning);
       setDeployed(true);
@@ -566,8 +575,22 @@ export default function ForgeWizard({
           </div>
         )}
         {err && (
-          <div className="rounded-lg border px-3 py-2 text-[12px] text-rose-300 flex items-center gap-2" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.06)" }}>
-            <AlertTriangle size={13} /> {err}
+          <div className="rounded-lg border px-3 py-2 text-[12px] text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.06)" }}>
+            <div className="flex items-center gap-2"><AlertTriangle size={13} /> {err}</div>
+            {/* Only for the overridable block. The trigger block offers nothing,
+                because forcing it would deploy an agent that cannot ever fire. */}
+            {canForce && createdId && (
+              <div className="mt-2 flex items-center gap-2.5">
+                <button onClick={() => void deploy(createdId, true)} disabled={busy}
+                  className="px-3 h-8 rounded-lg border text-[12px] flex items-center gap-1.5 disabled:opacity-40 transition hover:brightness-125"
+                  style={{ borderColor: "rgba(251,191,36,0.55)", color: STATUS_BAND_COLORS.waiting, background: "rgba(251,191,36,0.08)" }}>
+                  {busy ? <Loader2 size={12} className="animate-spin" /> : <AlertTriangle size={12} />} Deploy anyway
+                </button>
+                <span className="text-[11px]" style={{ color: "var(--fg-dimmer)" }}>
+                  Overrides this deploy only — the gate stays on for the next one.
+                </span>
+              </div>
+            )}
           </div>
         )}
 

@@ -54,6 +54,10 @@ export interface AgentDefV2Fields {
   lifecycle?: AgentLifecycle;
   /** FK into the harnesses table; absent = plain single-run (today's behavior). */
   harnessId?: string;
+  /** Stamped when a deploy overrode the test-run gate (F1.2). Present = this
+   *  agent went live without ever completing a run, on purpose. Server-set
+   *  only; never accepted from a request body. */
+  deployOverride?: { at: number; reason?: string };
   persona?: AgentPersona;
   /** WebMCP/Fd4 tool package ids; absent = today's {mcp, browser} only. */
   toolIds?: string[];
