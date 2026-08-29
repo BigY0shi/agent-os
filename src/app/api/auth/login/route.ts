@@ -1,16 +1,19 @@
 import { cookies } from "next/headers";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, createHash } from "node:crypto";
+import {
+  SESSION_COOKIE as COOKIE,
+  SESSION_TTL_S,
+  ensureSessionSecret,
+  legacyToken,
+  mintSessionToken,
+} from "@/lib/authSessions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const COOKIE = "agentos_session";
-
-function token(pw: string): string {
-  return createHash("sha256").update("agentos.v1:" + pw).digest("hex");
-}
-
 // POST { password } → sets the session cookie if it matches AGENTOS_PASSWORD.
+// HARDENING-2026-08-27 item 13: the cookie is a RANDOM signed session token
+// (30-day expiry, sliding refresh in src/proxy.ts) — never a password hash.
 export async function POST(req: Request) {
   let body: { password?: string };
   try { body = await req.json(); } catch { return Response.json({ ok: false, error: "bad request" }, { status: 400 }); }
@@ -22,19 +25,24 @@ export async function POST(req: Request) {
   }
 
   // constant-time compare on the hashes (equal length, no early-exit timing leak)
-  const a = Buffer.from(token(provided));
-  const b = Buffer.from(token(expected));
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+  const a = Buffer.from(createHash("sha256").update("login:" + provided).digest());
+  const b = Buffer.from(createHash("sha256").update("login:" + expected).digest());
+  if (!timingSafeEqual(a, b)) {
     return Response.json({ ok: false, error: "Wrong password." }, { status: 401 });
   }
 
+  const secretFile = ensureSessionSecret();
+  // Degraded lane (secret file unwritable — logged loudly inside
+  // ensureSessionSecret): fall back to the legacy hash so login still works.
+  const value = secretFile ? mintSessionToken(secretFile.secret) : legacyToken(expected);
+
   const c = await cookies();
-  c.set(COOKIE, token(expected), {
+  c.set(COOKIE, value, {
     path: "/",
     httpOnly: true,
     sameSite: "lax",
     secure: false, // LAN is plain http; Secure would drop the cookie
-    maxAge: 60 * 60 * 24 * 30, // 30 days
+    maxAge: SESSION_TTL_S, // 30 days (proxy slides it)
   });
   return Response.json({ ok: true });
 }

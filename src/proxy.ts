@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createHash } from "node:crypto";
+import {
+  SESSION_COOKIE as COOKIE,
+  SESSION_TTL_S,
+  ensureSessionSecret,
+  legacyCookieAccepted,
+  mintSessionToken,
+  verifySessionToken,
+} from "@/lib/authSessions";
 
 // LAN access gate. Next 16 renamed `middleware` → `proxy` (Node.js runtime by default,
-// so process.env + node:crypto are available). This runs before every route and blocks
-// anyone without a valid session cookie — because the dashboard can drive the user's
-// authed CLI agents, read the vault, and run commands, so a LAN-exposed instance MUST
-// be gated. Password lives in AGENTOS_PASSWORD (.env.local); the cookie holds its hash.
-
-const COOKIE = "agentos_session";
-
-function token(pw: string): string {
-  return createHash("sha256").update("agentos.v1:" + pw).digest("hex");
-}
+// so process.env + node:crypto/node:fs are available). This runs before every route and
+// blocks anyone without a valid session cookie — because the dashboard can drive the
+// user's authed CLI agents, read the vault, and run commands, so a LAN-exposed instance
+// MUST be gated. Password lives in AGENTOS_PASSWORD (.env.local).
+//
+// HARDENING-2026-08-27 item 13: the cookie is now a RANDOM signed session token
+// (30-day expiry, sliding refresh) minted at login — no longer a deterministic
+// password hash (theft = indefinite replay + offline dictionary oracle). The old
+// hash cookie stays accepted for 7 days from deploy (grace, upgraded on sight)
+// so existing sessions survive. See src/lib/authSessions.ts for the lane choice
+// (stateless HMAC vs DB-backed) rationale.
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,10 +28,14 @@ export function proxy(request: NextRequest) {
   // Always let the login screen, the auth API, and framework/static assets through.
   // Agent webhooks are also exempt: external systems can't hold a session cookie,
   // and the route enforces its own per-agent secret (x-agent-secret header).
+  // /api/hooks/ (SPEC-D §5.9 integration webhooks) follows the same pattern:
+  // the route enforces its own per-definition secret (x-hook-secret header /
+  // connector HMAC) and answers 200-empty for unknown slugs.
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/agents/hook/") ||
+    pathname.startsWith("/api/hooks/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt"
@@ -35,6 +47,18 @@ export function proxy(request: NextRequest) {
   // secret header pass through for the ROUTE to validate strictly (401 on
   // mismatch); cookie-holders fall through to the normal session check below.
   if (pathname.startsWith("/api/mcp") && request.headers.has("x-agentos-mcp-secret")) {
+    return NextResponse.next();
+  }
+
+  // Jarvis OS-global hotkey (SPEC-C C2): the AutoHotkey helper can't hold a
+  // session cookie. POSTs carrying the hotkey secret header pass through for
+  // the ROUTE to validate strictly (timing-safe compare, 401 on mismatch) —
+  // same pattern as /api/mcp above. GET, /stream and /setup stay cookie-gated.
+  if (
+    pathname === "/api/jarvis/hotkey" &&
+    request.method === "POST" &&
+    request.headers.has("x-agentos-hotkey-secret")
+  ) {
     return NextResponse.next();
   }
 
@@ -51,8 +75,32 @@ export function proxy(request: NextRequest) {
   }
 
   const cookie = request.cookies.get(COOKIE)?.value;
-  if (cookie && cookie === token(password)) {
-    return NextResponse.next();
+  if (cookie) {
+    const secretFile = ensureSessionSecret();
+    const setCookie = (res: NextResponse, value: string) => {
+      res.cookies.set(COOKIE, value, {
+        path: "/",
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false, // LAN is plain http; Secure would drop the cookie
+        maxAge: SESSION_TTL_S,
+      });
+      return res;
+    };
+    if (secretFile) {
+      const check = verifySessionToken(cookie, secretFile.secret);
+      if (check.valid) {
+        const res = NextResponse.next();
+        // Sliding refresh: re-mint when less than half the lifetime remains.
+        return check.shouldRefresh ? setCookie(res, mintSessionToken(secretFile.secret)) : res;
+      }
+    }
+    // Grace lane: the pre-hardening deterministic hash cookie, accepted for 7
+    // days from the secret file's creation — upgraded to a signed token here.
+    if (legacyCookieAccepted(cookie, password, secretFile)) {
+      const res = NextResponse.next();
+      return secretFile ? setCookie(res, mintSessionToken(secretFile.secret)) : res;
+    }
   }
 
   // Not authenticated.

@@ -122,7 +122,25 @@ export interface Settings {
   // Empty string = the module's built-in default (blank kimiModel = auto-resolve
   // preferring k2.6; blank claude models = the pinned CLAUDE_MODEL).
   brainstorm: { kimiModel?: string };                       // the council's Kimi seat
-  jarvis: { kimiModel?: string };                           // Kimi voice provider's brain
+  // Jarvis: Kimi brain model + SPEC-C C2/C2b voice-capture + hotkey knobs
+  // (all surfaced in the Jarvis gear — rule 16).
+  jarvis: {
+    kimiModel?: string;                                     // Kimi voice provider's brain
+    // SPEC-C C3 brain engine: "sdk" = warm Claude Agent SDK session with tools
+    // (memory/hub/registry/navigate); "cli" = answer-only fallback via cliComplete
+    // + memory recall, NO tools (clearly meta-tagged in the stream).
+    engine?: "sdk" | "cli";
+    cliAgent?: string;     // cli-lane agent id (claude/codex/cursor/… per cliComplete matrix)
+    voice?: {
+      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
+      autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
+      pushToTalk?: boolean;  // true = hold-to-record; false = click-to-toggle
+    };
+    hotkey?: {
+      key?: string;          // in-app fallback keybind (default "F13")
+      enabled?: boolean;     // in-app keydown listener on/off
+    };
+  };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
@@ -161,6 +179,123 @@ export interface Settings {
   };
   mcp?: { secret?: string };
   scheduler?: { tickSeconds?: number };
+  // SPEC-B tasks: the SINGLE timezone source for schedule interpretation
+  // (CONVENTIONS §10) + the Ready editing buffer before a run starts.
+  tasks?: {
+    timezone?: string;         // IANA zone; changing it recalculates active schedules (B4.7)
+    editingBufferSec?: number; // Ready buffer before execution starts
+    // B2 execution engine (additive):
+    planApproval?: "always" | "auto";  // global plan-approval gate
+    autoApprove?: { categories?: string[]; maxSteps?: number }; // per-category skip (task metadata.category)
+    maxStepsPerRun?: number;   // hard cap on plan steps executed per run (default 12)
+    runTimeoutMin?: number;    // wall-clock budget per run + boot stuck-recovery threshold (default 30)
+    runMode?: "steps" | "sdk"; // 'sdk' is a NOT_IMPLEMENTED seam for chunk 3+
+    emptyTaskGc?: boolean;     // buffer-expiry GC of abandoned Untitled daily tasks (default true)
+    // B3 recurring seed tasks: per-seed enable toggle (default false — nothing
+    // fires until enabled in the Tasks gear). Keys match seeds.ts settingsKey.
+    seeds?: Record<string, { enabled?: boolean }>;
+  };
+  // SPEC-B B5 scratchpad (/today): @jarvis mention-scan idle debounce.
+  scratchpad?: {
+    mentionDebounceSec?: number; // default 8
+  };
+  // SPEC-C D1/D2 WebMCP Engine (gear panel lands with the D3 builder UI).
+  webmcp?: {
+    sandboxTimeoutMs?: number; // 'js' handler wall-clock cap (default 5000)
+    allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
+    llmGetActions?: boolean;   // D1.5: LLM-filtered getActions (default true; off = keyword scorer)
+  };
+  // SPEC-D G2 integrations runtime (gear panel lands with the G1 /integrations UI).
+  integrations?: {
+    callbackOrigin?: string;   // OAuth redirect origin — must match provider app registration
+                               // (default http://localhost:3000; redirectUri = <origin>/api/v2/integrations/oauth/callback)
+    syncEnabled?: boolean;     // master kill switch for SCHEDULED syncs (default true; manual sync always runs)
+  };
+  // SPEC-D H4 attention aggregator (hero UI lands in Phase 6; store/collectors live).
+  attention?: {
+    pollMs?: number;           // collector tick cadence (default 60000, min 5000)
+    muteKinds?: string[];      // kinds hidden from the attention API/hero (rows still recorded)
+  };
+  // SPEC-D G5 automations engine (gear panel on /automations).
+  automations?: {
+    enabled?: boolean;         // kill switch: false = rules never fire (default true; /test dry-runs still work)
+  };
+  // SPEC-D H2 home widget grid. `cells` unset = the DEFAULT_HOME_CELLS const in
+  // src/lib/v2/widgets/types.ts (fallback at read time so default-layout changes
+  // reach untouched installs — deliberately NOT copied into DEFAULT_SETTINGS).
+  home?: {
+    cells?: Array<{
+      id: string;
+      widgetSlug: string;
+      size: "S" | "M" | "L";
+      order: number;
+      config?: Record<string, unknown>;
+    }>;
+    showScratchpad?: boolean;  // H1.1 (chunk 2) Overview ScratchpadSlot toggle
+  };
+  // SPEC-E E1 browser workstream (every field surfaced in the /browser gear — rule 16).
+  // NO "opera" browserType option, ever: Opera is Yoshi's daily browser and the agent
+  // browser must stay fully isolated from it (E4.1 invariant).
+  browser?: {
+    wsPort?: number;                    // CDP WS bridge port (E2.2), default 3738
+    browserType?: "default" | "chrome" | "brave" | "custom";
+    browserExecutable?: string;         // only when browserType === "custom"
+    profiles?: string[];                // max 5, /^[a-zA-Z0-9_-]+$/
+    sessions?: {
+      name: string;                     // /^[a-zA-Z0-9_-]+$/, max 10
+      profile: string;
+      allowedDomains?: string[];        // E4: empty/absent = unrestricted; else eTLD+1 suffix match on top-level navs
+    }[];
+    wsBind?: "local" | "lan";           // E2.2 bridge bind (CONVENTIONS §9.2), default local
+  };
+  // SPEC-E F workstream (Agents page — chunk 2+).
+  agentsPage?: {
+    heroPollMs?: number;                // default 4000 (SSE preferred; poll fallback)
+    defaultHarness?: string;            // harness id preselected in the Forge wizard
+  };
+  // CONVENTIONS §11 deploy gate. requireTestRun=true → promoting to "deployed"
+  // without a successful test run is a HARD 409; false → it succeeds with a
+  // WARNING surfaced in the UI. Default true (the shipped chunk-3 guard) —
+  // ASK-YOSHI flag: CONVENTIONS §11 suggests warning as the default; flip in
+  // the Agents gear.
+  agents?: {
+    requireTestRun?: boolean;
+    // A background run has no chat window; when an agent needs a decision only
+    // the user can make it emits the ASK-USER marker and the run parks on the
+    // approvals queue until you reply.
+    askUser?: {
+      enabled?: boolean;    // default true — inject the protocol + park on the marker
+      heuristic?: boolean;  // default FALSE — also park when a turn merely ENDS in "?"
+      timeoutMin?: number;  // default 240 (4h, matching the approval park)
+    };
+  };
+  // SPEC-F I — AnyNotes. Rule 16: every knob here gets an in-app gear
+  // (AnyNotesSettings, chunk 2); nothing is config-file-only.
+  anynotes?: {
+    autoIngest?: boolean;      // I2.2 Memory V2 ingest gate (default true)
+    jarvisAgent?: string;      // AgentPicker id routed through cliComplete (rule 11: no silent fallback)
+    defaultStatus?: "inbox" | "kept" | "archived"; // status a fresh capture lands in
+    maxSnapshotChars?: number; // cap on the stored content_md snapshot
+  };
+  // SPEC-F K — Newsletter. Rule 16: every knob here gets an in-app gear
+  // (NewsletterSettings, chunk 4). NOTHING secret lives here — the addy.io key
+  // stays in ~/.agentic-os/newsletter/config.json, read only by
+  // src/lib/v2/newsletter/config.ts, which hands out booleans.
+  newsletter?: {
+    syncEnabled?: boolean;      // master kill switch for SCHEDULED syncs (manual always runs)
+    syncRrule?: string;         // K3.3 schedule (default FREQ=MINUTELY;INTERVAL=30)
+    editionEnabled?: boolean;   // kill switch for the SCHEDULED daily edition (manual rebuild always runs)
+    editionTime?: string;       // HH:MM local — K4.1 daily edition build
+    sections?: string[];        // edition section names (K4.1)
+    dedupeThreshold?: number;   // K3.2 embedding cosine floor (default 0.86)
+    dedupeWindowDays?: number;  // K3.2 bounded candidate scan (default 3)
+    trackerHosts?: string[];    // hosts whose links are redirect wrappers to unwrap
+    parseAgent?: string;        // AgentPicker id routed through cliComplete (rule 11)
+    lookbackDays?: number;      // first-sync window when there is no watermark (default 1)
+    addyDomain?: string;        // display/hint only — e.g. "yoshi.addy.io"
+    gmailAccountId?: string;    // which SPEC-D gmail integration account to sync (CONVENTIONS §7)
+    gmailLabel?: string;        // optional Gmail label filter for unknown-alias mail
+  };
 
   [extra: string]: unknown;
 }
@@ -189,7 +324,13 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   marketing: { agent: "claude", council: true, criticAgent: "codex", textPlatforms: ["linkedin", "x", "facebook"], ideateBackend: "local", buzzChannel: "marketing-ideas" },
   brainstorm: { kimiModel: "kimi-k2.6" },
-  jarvis: { kimiModel: "kimi-k2.6" },
+  jarvis: {
+    kimiModel: "kimi-k2.6",
+    engine: "sdk",
+    cliAgent: "claude",
+    voice: { provider: "webspeech", autoSend: false, pushToTalk: true },
+    hotkey: { key: "F13", enabled: true },
+  },
   contentEngine: { kimiModel: "kimi-k2.6" },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
@@ -217,6 +358,60 @@ export const DEFAULT_SETTINGS: Settings = {
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},
   scheduler: { tickSeconds: 30 },
+  tasks: {
+    timezone: "America/Chicago",
+    editingBufferSec: 120,
+    planApproval: "always",
+    // Seed categories opted into unattended runs by default — the seeds
+    // themselves ship disabled, so nothing fires until enabled in the gear.
+    autoApprove: { categories: ["brief", "planning"] },
+    maxStepsPerRun: 12,
+    runTimeoutMin: 30,
+    runMode: "steps",
+    emptyTaskGc: true,
+    seeds: {
+      morningBrief: { enabled: false },
+      eodWrapup: { enabled: false },
+      sundayPlanning: { enabled: false },
+      weeklyRetro: { enabled: false },
+    },
+  },
+  scratchpad: { mentionDebounceSec: 8 },
+  webmcp: { sandboxTimeoutMs: 5000, allowJsHandlers: true, llmGetActions: true },
+  browser: {
+    wsPort: 3738,
+    browserType: "default",
+    profiles: ["personal", "work", "misc"],
+    sessions: [],
+    wsBind: "local",
+  },
+  agentsPage: { heroPollMs: 4000 },
+  agents: {
+    requireTestRun: true,
+    // heuristic defaults OFF: a rhetorical closing question is common in agent
+    // reports, and a false positive parks a finished run instead of completing
+    // it. The marker is the reliable signal; the heuristic is the opt-in net.
+    askUser: { enabled: true, heuristic: false, timeoutMin: 240 },
+  },
+  anynotes: {
+    autoIngest: true,
+    jarvisAgent: "claude",
+    defaultStatus: "inbox",
+    maxSnapshotChars: 24000,
+  },
+  newsletter: {
+    syncEnabled: true,
+    syncRrule: "FREQ=MINUTELY;INTERVAL=30",
+    editionEnabled: true,
+    editionTime: "06:30",
+    sections: ["AI & Agents", "Dev & Tools", "Business", "Security", "Everything Else"],
+    dedupeThreshold: 0.86,
+    dedupeWindowDays: 3,
+    parseAgent: "claude",
+    lookbackDays: 1,
+    addyDomain: "",
+    gmailLabel: "",
+  },
 };
 
 function settingsPath(): string {

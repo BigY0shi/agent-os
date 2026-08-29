@@ -40,13 +40,16 @@ check("meta.embed_dim = 768", meta.embed_dim === "768");
 check("meta.embed_model set", !!meta.embed_model);
 
 const versions = db.prepare("SELECT version FROM migrations ORDER BY version").all().map((r) => r.version);
-check("migrations 1,2 applied", JSON.stringify(versions) === "[1,2]");
+// Later workstreams append to MIGRATIONS (020-029 = SPEC-B, …) — assert the
+// foundations applied and the ledger is strictly increasing, not an exact list.
+check("migrations 1,2 applied", versions.includes(1) && versions.includes(2));
+check("migration versions strictly increasing", versions.every((v, i) => i === 0 || v > versions[i - 1]));
 
 // Idempotent re-open (fresh process state simulated by closing the singleton)
 __closeForTests();
 db = ensureDb();
 const versions2 = db.prepare("SELECT version FROM migrations").all().length;
-check("re-open idempotent (still 2 migrations)", versions2 === 2);
+check("re-open idempotent (same migration count)", versions2 === versions.length);
 
 // agent_id column present on episodes (CONVENTIONS §4)
 const epCols = db.prepare("PRAGMA table_info(episodes)").all().map((r) => r.name);

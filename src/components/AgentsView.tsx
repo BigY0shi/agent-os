@@ -6,16 +6,17 @@
 // cards when a gated/constitution action wants out.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Bot, Play, Plus, ShieldAlert, Square, X, ChevronRight, RefreshCw, Loader2, ThumbsUp, ThumbsDown, MessageCircleQuestion } from "lucide-react";
 import type { AgentDef, AgentTrigger, ApprovalReq, McpServerHealth, RunEvent, RunMeta } from "@/lib/agentsTypes";
 import { INTELLIGENCE_META, MODE_META, STATUS_COLORS } from "@/lib/agentsTypes";
 import ModelSettings from "./ModelSettings";
+import { postDecision, postAnswer, decisionNotice } from "@/lib/agentsApprovalsClient";
 
 const VIOLET = "#a78bfa";
 
 type AgentCard = AgentDef & { lastRun: RunMeta | null; active: boolean };
 
-function ago(ts: number): string {
+export function ago(ts: number): string {
   const m = Math.floor((Date.now() - ts) / 60000);
   if (m < 1) return "just now";
   if (m < 60) return `${m}m ago`;
@@ -29,6 +30,8 @@ export default function AgentsView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  /** Why a decision did nothing, when it did nothing. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -52,9 +55,20 @@ export default function AgentsView() {
     return () => { clearInterval(a); clearInterval(b); };
   }, [refresh, refreshApprovals]);
 
+  // Optimistic removal keeps the click instant, but the server's answer is read
+  // rather than discarded: a card whose run already died says so.
   async function decide(id: string, decision: "allow" | "deny") {
     setApprovals((l) => l.filter((x) => x.id !== id));
-    await fetch("/api/agents/approvals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }) }).catch(() => {});
+    const out = await postDecision(id, decision);
+    setNotice(decisionNotice(out));
+    if (!out.ok) void refreshApprovals();
+  }
+
+  // Answering a parked question — same endpoint, `answer` instead of `decision`.
+  async function answer(id: string, text: string) {
+    setApprovals((l) => l.filter((x) => x.id !== id));
+    setNotice(decisionNotice(await postAnswer(id, text)));
+    void refresh();
   }
 
   async function runNow(id: string) {
@@ -87,28 +101,14 @@ export default function AgentsView() {
         Reusable background agents — your tools, your subscriptions, your machine. Runs pause for approval before anything leaves the box.
       </p>
 
-      {approvals.length > 0 && (
-        <div className="mb-5 rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.06)" }}>
-          <div className="text-[11px] font-mono uppercase tracking-widest flex items-center gap-2 text-amber-300">
-            <ShieldAlert size={13} /> Waiting on you — {approvals.length} pending action{approvals.length > 1 ? "s" : ""}
-          </div>
-          {approvals.map((a) => (
-            <div key={a.id} className="rounded-xl border p-3" style={{ borderColor: "rgba(251,191,36,0.3)", background: "rgba(0,0,0,0.25)" }}>
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="text-[13px]" style={{ color: "var(--fg)" }}>
-                  <b>{a.agentName}</b> wants <code className="text-amber-300">{a.toolName}</code>
-                  <span className="ml-2 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}>{a.reason}</span>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => decide(a.id, "allow")} className="px-3 h-8 rounded-lg border text-[12px] text-emerald-300" style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>Approve</button>
-                  <button onClick={() => decide(a.id, "deny")} className="px-3 h-8 rounded-lg border text-[12px] text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)" }}>Deny</button>
-                </div>
-              </div>
-              <pre className="mt-2 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all max-h-32 overflow-y-auto" style={{ color: "var(--fg-dim)" }}>{a.inputPreview}</pre>
-            </div>
-          ))}
+      {notice && (
+        <div className="mb-3 rounded-xl border px-3.5 py-2.5 text-[12.5px]"
+          style={{ borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.07)", color: "var(--fg-dim)" }}>
+          {notice}
         </div>
       )}
+
+      <ApprovalsStrip approvals={approvals} onDecide={decide} onAnswer={(id, text) => void answer(id, text)} />
 
       {loaded && agents.length === 0 && !creating && (
         <div className="rounded-2xl border border-dashed p-10 text-center" style={{ borderColor: "var(--panel-border)" }}>
@@ -154,6 +154,97 @@ export default function AgentsView() {
 
       {creating && <CreateModal onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); void refresh(); setOpenId(id); }} />}
       {openId && <AgentDrawer id={openId} onClose={() => { setOpenId(null); void refresh(); }} onRun={runNow} />}
+    </div>
+  );
+}
+
+// ---- approvals strip (shared with the v2 agents page) ---------------------
+//
+// Two card kinds share the strip, because to the user they are the same event:
+// a run stopped and needs them. kind "question" renders a reply box instead of
+// Approve/Deny — the answer goes back into the run's still-open input queue and
+// it carries on from where it stopped.
+
+export function ApprovalsStrip({ approvals, onDecide, onAnswer }: {
+  approvals: ApprovalReq[];
+  onDecide: (id: string, decision: "allow" | "deny") => void;
+  onAnswer?: (id: string, answer: string) => void;
+}) {
+  if (approvals.length === 0) return null;
+  const questions = approvals.filter((a) => a.kind === "question").length;
+  return (
+    <div className="mb-5 rounded-2xl border p-4 space-y-3" style={{ borderColor: "rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.06)" }}>
+      <div className="text-[11px] font-mono uppercase tracking-widest flex items-center gap-2 text-amber-300">
+        <ShieldAlert size={13} /> Waiting on you — {approvals.length} pending
+        {questions > 0 ? ` (${questions} question${questions > 1 ? "s" : ""})` : ` action${approvals.length > 1 ? "s" : ""}`}
+      </div>
+      {approvals.map((a) => (
+        a.kind === "question" ? (
+          <QuestionCard key={a.id} req={a} onAnswer={onAnswer} onSkip={() => onDecide(a.id, "deny")} />
+        ) : (
+          <div key={a.id} className="rounded-xl border p-3" style={{ borderColor: "rgba(251,191,36,0.3)", background: "rgba(0,0,0,0.25)" }}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-[13px]" style={{ color: "var(--fg)" }}>
+                <b>{a.agentName}</b> wants <code className="text-amber-300">{a.toolName}</code>
+                <span className="ml-2 text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}>{a.reason}</span>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => onDecide(a.id, "allow")} className="px-3 h-8 rounded-lg border text-[12px] text-emerald-300" style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>Approve</button>
+                <button onClick={() => onDecide(a.id, "deny")} className="px-3 h-8 rounded-lg border text-[12px] text-rose-300" style={{ borderColor: "rgba(248,113,113,0.5)", background: "rgba(248,113,113,0.08)" }}>Deny</button>
+              </div>
+            </div>
+            <pre className="mt-2 text-[11px] leading-relaxed overflow-x-auto whitespace-pre-wrap break-all max-h-32 overflow-y-auto" style={{ color: "var(--fg-dim)" }}>{a.inputPreview}</pre>
+          </div>
+        )
+      ))}
+    </div>
+  );
+}
+
+function QuestionCard({ req, onAnswer, onSkip }: { req: ApprovalReq; onAnswer?: (id: string, answer: string) => void; onSkip: () => void }) {
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  function send() {
+    const text = draft.trim();
+    if (!text || !onAnswer) return;
+    setSending(true);
+    onAnswer(req.id, text);
+  }
+
+  return (
+    <div className="rounded-xl border p-3" style={{ borderColor: "rgba(251,191,36,0.45)", background: "rgba(0,0,0,0.25)" }}>
+      <div className="flex items-center gap-2 flex-wrap text-[13px]" style={{ color: "var(--fg)" }}>
+        <MessageCircleQuestion size={14} className="text-amber-300 shrink-0" />
+        <b>{req.agentName}</b> is asking you
+        <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border" style={{ borderColor: "rgba(251,191,36,0.4)", color: "#fbbf24" }}>question</span>
+      </div>
+      <div className="mt-2 text-[12.5px] whitespace-pre-wrap" style={{ color: "var(--fg-dim)" }}>{req.question ?? req.inputPreview}</div>
+      <div className="mt-2.5 flex items-end gap-2">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); }}
+          placeholder="Your answer — it goes straight back into the running agent (Ctrl+Enter)"
+          rows={2}
+          disabled={sending}
+          className="flex-1 bg-black/40 border rounded-lg px-2.5 py-2 text-[12.5px] outline-none resize-y disabled:opacity-50"
+          style={{ borderColor: "rgba(251,191,36,0.35)", color: "var(--fg)" }}
+        />
+        <div className="flex flex-col gap-1.5">
+          <button onClick={send} disabled={sending || !draft.trim()}
+            className="px-3 h-8 rounded-lg border text-[12px] text-emerald-300 disabled:opacity-40"
+            style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>
+            {sending ? "Sending…" : "Reply"}
+          </button>
+          <button onClick={onSkip} disabled={sending}
+            className="px-3 h-8 rounded-lg border text-[11.5px] disabled:opacity-40"
+            style={{ borderColor: "var(--panel-border)", color: "var(--fg-dimmer)" }}
+            title="End the run unanswered instead of replying">
+            Skip
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -212,7 +303,7 @@ function CreateModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
   );
 }
 
-function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; onChange: (m: AgentDef["permissionMode"]) => void }) {
+export function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; onChange: (m: AgentDef["permissionMode"]) => void }) {
   return (
     <div>
       <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Permissions</div>
@@ -233,7 +324,7 @@ function ModePicker({ value, onChange }: { value: AgentDef["permissionMode"]; on
   );
 }
 
-function IntelPicker({ value, onChange }: { value: AgentDef["intelligence"]; onChange: (m: AgentDef["intelligence"]) => void }) {
+export function IntelPicker({ value, onChange }: { value: AgentDef["intelligence"]; onChange: (m: AgentDef["intelligence"]) => void }) {
   return (
     <div>
       <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>Intelligence</div>
@@ -404,7 +495,7 @@ function trigSummary(t: AgentTrigger): string {
   }
 }
 
-function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentTrigger[]) => void }) {
+export function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentTrigger[]) => void }) {
   const [adding, setAdding] = useState<AgentTrigger["type"] | null>(null);
   const [f1, setF1] = useState("");  // query / url / path / cron
   const [f2, setF2] = useState("");  // interval / glob
@@ -484,7 +575,7 @@ function TriggersEditor({ agent, onSave }: { agent: AgentDef; onSave: (t: AgentT
 
 // ---- live run transcript --------------------------------------------------
 
-function RunView({ agentId, runId }: { agentId: string; runId: string }) {
+export function RunView({ agentId, runId }: { agentId: string; runId: string }) {
   const [meta, setMeta] = useState<RunMeta | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [mcp, setMcp] = useState<McpServerHealth[]>([]);
@@ -588,6 +679,13 @@ function EventLine({ ev }: { ev: RunEvent }) {
   if (ev.kind === "tool") return <div style={{ color: "#7dd3fc" }}>▸ {ev.toolName} <span style={{ color: "var(--fg-dimmer)" }}>{ev.detail}</span></div>;
   if (ev.kind === "tool-result") return <div style={{ color: ev.text === "error" ? "#f87171" : "var(--fg-dimmer)" }} className="pl-3 break-all">{ev.detail}</div>;
   if (ev.kind === "approval") return <div className="text-amber-300">⏸ {ev.toolName}: {ev.detail}</div>;
+  if (ev.kind === "question") return (
+    <div className="rounded-lg border px-2.5 py-2" style={{ borderColor: "rgba(251,191,36,0.45)", background: "rgba(251,191,36,0.08)" }}>
+      <div className="text-amber-300">⏸ asking you — {ev.detail}</div>
+      <div className="mt-1 whitespace-pre-wrap" style={{ color: "var(--fg)" }}>{ev.text}</div>
+      <div className="mt-1 text-[10.5px]" style={{ color: "var(--fg-dimmer)" }}>Answer it in the &quot;Waiting on you&quot; strip.</div>
+    </div>
+  );
   if (ev.kind === "status") return <div style={{ color: "var(--fg-dimmer)" }}>· {ev.detail}</div>;
   if (ev.kind === "init") return <div style={{ color: "var(--fg-dimmer)" }}>⚙ {ev.detail}</div>;
   if (ev.kind === "error") return <div className="text-rose-300">✖ {ev.text}</div>;

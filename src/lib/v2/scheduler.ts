@@ -73,12 +73,25 @@ export function scheduleJob(input: ScheduleJobInput): JobRow {
   const id = input.id ?? uuid();
   const runAt = input.runAt ?? (input.rrule ? nextFromRrule(input.rrule, new Date()) : null);
   const db = getDb();
+  // ON CONFLICT: keep the EXISTING run_at when the incoming run_at was merely
+  // DERIVED from an unchanged rrule — deterministic jobs are re-registered on
+  // every boot, and recomputing run_at from `now` pushed overdue
+  // (missed-while-down) jobs into the future instead of letting the boot tick
+  // fire them (review 2026-08-27). An explicit runAt or a changed rrule still
+  // takes the new value.
+  const preserveDerivedRunAt = !input.runAt && input.rrule ? 1 : 0;
   db.prepare(
     `INSERT INTO jobs(id, kind, name, payload, rrule, run_at, enabled, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        kind=excluded.kind, name=excluded.name, payload=excluded.payload,
-       rrule=excluded.rrule, run_at=excluded.run_at, enabled=excluded.enabled`,
+       run_at=CASE
+         WHEN ${preserveDerivedRunAt} = 1 AND jobs.rrule IS excluded.rrule AND jobs.run_at IS NOT NULL
+           THEN jobs.run_at
+         ELSE excluded.run_at
+       END,
+       rrule=excluded.rrule,
+       enabled=excluded.enabled`,
   ).run(
     id,
     input.kind,
@@ -152,6 +165,25 @@ export async function tickOnce(): Promise<number> {
           emit("job.failed", { id: job.id, kind: job.kind, name: job.name, error }, "scheduler");
         }
       }
+      // A handler may remove or reschedule ITS OWN job (task.wake recurrence
+      // does remove-then-enqueue on the same deterministic id — SPEC-B stall
+      // fix). Respect what the handler left behind instead of clobbering it.
+      const afterRow = db
+        .prepare("SELECT run_at, rrule FROM jobs WHERE id = ?")
+        .get(job.id) as { run_at: string | null; rrule: string | null } | undefined;
+      if (!afterRow) {
+        fired++;
+        continue; // handler removed the job — nothing to update
+      }
+      if (afterRow.run_at !== job.run_at || afterRow.rrule !== job.rrule) {
+        // Self-rescheduled: keep its run_at/enabled, record bookkeeping only.
+        db.prepare(
+          "UPDATE jobs SET last_run_at = ?, last_status = ?, last_error = ? WHERE id = ?",
+        ).run(now(), status, error, job.id);
+        fired++;
+        continue;
+      }
+
       // Recompute next fire AFTER the run — repeats advance from now (no backfill).
       let nextRunAt: string | null = null;
       let enabled = job.enabled;

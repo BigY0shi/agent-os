@@ -1,0 +1,139 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+import { emit } from "../events";
+import { getConnector } from "./registry";
+import {
+  findAccountByExternalId,
+  finishSyncRun,
+  getDefinitionConfig,
+  listStaleWebhookInbox,
+  markWebhookInbox,
+  startSyncRun,
+  type AccountRow,
+  type WebhookInboxRow,
+} from "./store";
+import { buildCallCtx } from "./runtime";
+import { applySyncResult } from "./sync";
+import type { WebhookInput } from "./types";
+
+/**
+ * SPEC-D G2.5 — webhook dispatch for /api/hooks/[slug] (§5.9). The route owns
+ * the HTTP contract (raw-body-first read, unknown-slug 200, secret 401,
+ * always-200 fire-and-forget); this module owns the IDENTIFY → accounts →
+ * PROCESS flow, gated per account on autoActivityRead (upstream contract).
+ * Connector-specific verification (Slack signing-secret HMAC over rawBody)
+ * lands with G3.6 — checkWebhookSecret is the generic x-hook-secret gate.
+ */
+
+/** Generic secret gate: x-hook-secret must equal the definition's webhookSecret.
+ *  Unconfigured secret = fail CLOSED (401) — a hook nobody set up accepts nothing. */
+export function checkWebhookSecret(slug: string, headers: Record<string, string>): boolean {
+  const expected = getDefinitionConfig(slug).webhookSecret;
+  if (!expected) return false;
+  const got = headers["x-hook-secret"] ?? "";
+  // Hash both sides so the compare is constant-time regardless of length —
+  // a bare length check before timingSafeEqual leaks the secret's length.
+  const a = createHash("sha256").update(got).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
+}
+
+/**
+ * G3.6 — the verification front door for /api/hooks/[slug]: a connector that
+ * implements `verifyWebhook` REPLACES the generic header gate (Slack's v0
+ * signing-secret HMAC runs over webhook.rawBody — §8.6: verify BEFORE any
+ * parse-derived data is trusted); everyone else keeps the x-hook-secret check.
+ * The definition config is decrypted HERE so connectors never touch the store.
+ */
+export function verifyWebhookRequest(slug: string, webhook: WebhookInput): boolean {
+  const connector = getConnector(slug);
+  if (connector?.verifyWebhook) {
+    return connector.verifyWebhook(webhook, getDefinitionConfig(slug));
+  }
+  return checkWebhookSecret(slug, webhook.headers);
+}
+
+/** Run one connector's PROCESS for one account (activity path shared with sync). */
+export async function runProcess(
+  account: AccountRow,
+  webhook: WebhookInput,
+): Promise<{ accepted: number; rejected: number }> {
+  const connector = getConnector(account.definitionSlug);
+  if (!connector?.process) return { accepted: 0, rejected: 0 };
+  const runId = startSyncRun(account.id, "webhook");
+  try {
+    const ctx = buildCallCtx(account);
+    const result = await connector.process(webhook, {
+      config: ctx.config,
+      defConfig: ctx.defConfig,
+      timezone: ctx.timezone,
+      accountId: account.id, // G3: token-refresh persistence seam (googleClient)
+    });
+    const counts = await applySyncResult(account, result);
+    finishSyncRun(runId, { ok: true, activitiesCount: counts.accepted });
+    return counts;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    finishSyncRun(runId, { ok: false, error: message });
+    emit(
+      "sync.failed",
+      { accountId: account.id, slug: account.definitionSlug, trigger: "webhook", error: message },
+      "integrations",
+    );
+    return { accepted: 0, rejected: 0 };
+  }
+}
+
+/** IDENTIFY → active accounts (autoActivityRead-gated) → PROCESS each. */
+export async function dispatchWebhook(slug: string, webhook: WebhookInput): Promise<void> {
+  const connector = getConnector(slug);
+  if (!connector?.identify || !connector.process) return;
+  let externalIds: string[] = [];
+  try {
+    externalIds = await connector.identify(webhook);
+  } catch (err) {
+    console.error(`[integrations/webhooks] ${slug} identify failed:`, err);
+    return;
+  }
+  for (const externalId of externalIds) {
+    const account = findAccountByExternalId(slug, externalId);
+    if (!account || !account.isActive) continue;
+    if (account.settings.autoActivityRead === false) continue; // upstream gate
+    await runProcess(account, webhook);
+  }
+}
+
+// ─── Durable inbox (HARDENING-2026-08-27 item 11) ────────────────────────────
+
+/** Dispatch one persisted inbox row and settle its status. Never throws. */
+export async function dispatchInboxRow(row: WebhookInboxRow): Promise<void> {
+  let body: unknown = null;
+  try {
+    body = row.rawBody ? JSON.parse(row.rawBody) : null;
+  } catch {
+    body = null;
+  }
+  try {
+    await dispatchWebhook(row.slug, { headers: row.headers, body, rawBody: row.rawBody });
+    markWebhookInbox(row.id, "done");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[integrations/webhooks] inbox ${row.id} (${row.slug}) dispatch failed:`, message);
+    markWebhookInbox(row.id, "error", message.slice(0, 500));
+  }
+}
+
+const INBOX_STALE_MS = 60_000;
+
+/**
+ * Re-process 'pending' inbox rows older than 1 minute — deliveries whose 200
+ * was sent but whose dispatch never settled (crash/restart). Idempotent via
+ * the item-7 activity dedupe keys. Wired from ensureIntegrationSync (boot) and
+ * the hourly ingest-retry job (belt).
+ */
+export async function sweepWebhookInbox(): Promise<number> {
+  const stale = listStaleWebhookInbox(INBOX_STALE_MS);
+  for (const row of stale) {
+    await dispatchInboxRow(row);
+  }
+  return stale.length;
+}

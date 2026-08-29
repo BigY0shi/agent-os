@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Send, Zap, Cpu, Radio, Maximize2, X, Newspaper, Target, ListChecks, Trophy, CheckCircle2, TrendingUp, Sparkles, FileText, Brain, Circle, Globe, History } from "lucide-react";
 import JarvisBuilds from "./JarvisBuilds";
+import { getEffectivePageContext } from "@/lib/v2/jarvis/pageContext";
 import JarvisRealtime from "./JarvisRealtime";
 import JarvisGeminiLive from "./JarvisGeminiLive";
 import JarvisKimiVoice from "./JarvisKimiVoice";
@@ -893,6 +894,10 @@ export default function JarvisView() {
     busyRef.current = false; setBusy(false);
   }
 
+  // CR.1: chat lane repointed to the V2 brain (POST /api/v2/jarvis/ask, SSE).
+  // The conversation id from the meta event threads follow-up turns.
+  const v2ConversationRef = useRef<string | null>(null);
+
   const ask = useCallback(async (prompt: string) => {
     const p = normalizeHeard((prompt || "").trim());
     if (!p || busyRef.current) return;
@@ -942,20 +947,92 @@ export default function JarvisView() {
     setTurns((t) => [{ id: hermesId, who: "hermes", text: mode === "agent" ? "On it, sir…" : "…", working: true }, { id: youId, who: "you", text: p }, ...t]);
     setStatus(mode === "agent" ? "JARVIS is acting…" : "JARVIS is thinking…");
     try {
-      const history = [...turns].reverse().slice(-6).map((x) => ({ role: (x.who === "you" ? "user" : "assistant") as "user" | "assistant", content: x.text }));
-      const r = await fetch("/api/hermes/jarvis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: p, mode, history }) });
-      const j = await r.json();
-      const reply = String(j.text || j.error || "(no response)").trim();
-      setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: reply, working: false } : x));
-      setStatus(j.ms ? `Replied in ${(j.ms / 1000).toFixed(1)}s` : "Done.");
-      logTurn(p, reply, mode === "agent" ? "agent" : "chat");
-      if (j.ok !== false) speak(reply); else { setPhase("idle"); if (wakeOnRef.current) restartWake(); }
+      // CR.1: V2 brain SSE lane — sentence/done/error parse; meta threads the
+      // conversation (server-side history — no client history payload needed);
+      // tool events surface in the status line; navigate jumps the app.
+      const started = Date.now();
+      const r = await fetch("/api/v2/jarvis/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: p,
+          conversationId: v2ConversationRef.current ?? undefined,
+          pageContext: getEffectivePageContext() ?? undefined,
+        }),
+      });
+      if (!r.ok || !r.body) throw new Error(`brain ${r.status}`);
+      const reader = r.body.getReader();
+      const dec = new TextDecoder();
+      let carry = "";
+      let reply = "";
+      let errText: string | null = null;
+      let navRoute: string | null = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        carry += dec.decode(value, { stream: true });
+        const frames = carry.split("\n\n");
+        carry = frames.pop() ?? "";
+        for (const f of frames) {
+          const line = f.split("\n").find((ln) => ln.startsWith("data: "));
+          if (!line) continue;
+          try {
+            const ev = JSON.parse(line.slice(6)) as {
+              type?: string; text?: string; message?: string; error?: string;
+              conversationId?: string; name?: string; state?: string; summary?: string; route?: string;
+            };
+            if (ev.type === "meta" && ev.conversationId) {
+              v2ConversationRef.current = ev.conversationId;
+            } else if (ev.type === "sentence" && ev.text) {
+              reply += (reply ? " " : "") + ev.text;
+              setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: reply } : x));
+            } else if (ev.type === "tool" && ev.name && ev.state !== "start") {
+              setStatus(`⚙ ${ev.name}${ev.state === "error" ? " failed" : ""}${ev.summary ? ` — ${ev.summary}` : ""}`);
+            } else if (ev.type === "navigate" && ev.route && ev.route.startsWith("/")) {
+              navRoute = ev.route;
+            } else if (ev.type === "error") {
+              errText = ev.message ?? ev.error ?? "brain failure";
+            }
+            // unknown event types ignored (SSE superset, forward-compat)
+          } catch { /* partial frame */ }
+        }
+      }
+      const finalReply = reply || errText || "(no response)";
+      setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: finalReply, working: false } : x));
+      setStatus(errText ? `Brain error: ${errText}` : `Replied in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+      logTurn(p, finalReply, mode === "agent" ? "agent" : "chat");
+      if (!errText && reply) speak(finalReply); else { setPhase("idle"); if (wakeOnRef.current) restartWake(); }
+      if (navRoute) window.location.href = navRoute;
     } catch (e) {
       setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: "Error reaching Jarvis: " + String(e), working: false } : x));
       setStatus("Something went wrong reaching the agent."); setPhase("idle");
     }
     busyRef.current = false; setBusy(false);
   }, [mode, turns, voice]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── SPEC-C C2b retrofit: review-before-send ────────────────────────────────
+  // Voice transcripts land in the INPUT FIELD for review — releasing the mic /
+  // finishing an utterance never fires a request anymore. Enter/Send is the
+  // only dispatch, unless the user opted back into the old behavior via
+  // settings.jarvis.voice.autoSend (default OFF; toggled in the Jarvis gear).
+  const voiceAutoSendRef = useRef(false);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive) voiceAutoSendRef.current = !!(j?.settings?.jarvis?.voice?.autoSend);
+      })
+      .catch(() => { /* default stays: review-first */ });
+    return () => { alive = false; };
+  }, []);
+  const deliverTranscript = useCallback((raw: string) => {
+    const text = (raw || "").trim();
+    if (!text) return;
+    if (voiceAutoSendRef.current) { setStatus("Heard: " + text); ask(text); return; } // autoSend opt-in only
+    setInput((prev) => (prev ? (/\s$/.test(prev) ? prev + text : prev + " " + text) : text));
+    setStatus(`Heard: “${text}” — review, edit, then press Enter to send.`);
+  }, [ask]);
 
   // Restart the wake recognizer (uses ONLY refs → no stale closures). A short
   // gap minimizes the mic flicker; backoff stops genuine error-loops.
@@ -986,7 +1063,8 @@ export default function JarvisView() {
       rec.onend = () => { listeningRef.current = false; setListening(false); if (phaseRef.current === "listening") setPhase("idle");
         if (liveRef.current && !busyRef.current && !typingRef.current) { setTimeout(() => { if (liveRef.current && !busyRef.current && !listeningRef.current && !typingRef.current) startListening(); }, 350); }
         else if (wakeOnRef.current && !busyRef.current) scheduleWakeRestart(); };
-      rec.onresult = (e) => { const t = e?.results?.[0]?.[0]?.transcript || ""; if (t.trim()) { setStatus("Heard: " + t); ask(t); } };
+      // C2b: push-to-talk release routes the transcript to the input for review — never auto-sends (autoSend-gated inside deliverTranscript).
+      rec.onresult = (e) => { const t = e?.results?.[0]?.[0]?.transcript || ""; if (t.trim()) deliverTranscript(t); };
       recRef.current = rec;
     }
     try { rec.start(); } catch {}
@@ -1023,10 +1101,10 @@ export default function JarvisView() {
         const m = low.match(/\b(jarvis|jervis|jarviss|harvis|hermes|hey jarvis|ok jarvis)\b/);
         if (m) {
           const after = raw.slice((m.index ?? 0) + m[0].length).replace(/^[\s,.:!?]+/, "").trim();
-          if (after.length > 1) { try { rec!.stop(); } catch {} setStatus("Heard: " + after); ask(after); }
+          if (after.length > 1) { try { rec!.stop(); } catch {} deliverTranscript(after); } // C2b: wake opens the capture buffer, not a request
           else { armedRef.current = true; setPhase("listening"); setStatus("Yes, sir? I'm listening…"); sfxRef.current?.wake(); }
         } else if (armedRef.current) {
-          armedRef.current = false; try { rec!.stop(); } catch {} setStatus("Heard: " + raw); ask(raw);
+          armedRef.current = false; try { rec!.stop(); } catch {} deliverTranscript(raw); // C2b review-first
         }
       };
       wakeRef.current = rec;

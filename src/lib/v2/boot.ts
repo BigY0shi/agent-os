@@ -3,6 +3,24 @@ import os from "node:os";
 import fs from "node:fs";
 import { ensureDb, dbPath } from "./db";
 import { ensureV2Scheduler, registerJobHandler, scheduleJob } from "./scheduler";
+import { ensureMemoryQueue } from "./memory/queue";
+import { registerTaskWakeHandler } from "./tasks/recurrence";
+import { recoverStuckTasks } from "./tasks/dispatch";
+import { ensureTaskSeeds } from "./tasks/seeds";
+import { registerScratchpadHandlers } from "./pages/butler";
+import { loadPublishedIntoRegistry } from "./webmcp/store";
+import { seedSelfTools } from "./webmcp/seedSelfTools";
+import { installHubSeam } from "./webmcp/hub";
+import { ensureTaskActions } from "./mcp/taskActions";
+import { ensureIntegrationSync } from "./integrations/schedule";
+import { ensureIntegrationMetaActions } from "./integrations/metaTools";
+import { ensureAttention } from "./attention";
+import { ensureAnynotesAttention } from "./anynotes/attention";
+import { ensureNewsletterJobs } from "./newsletter/jobs";
+import { ensureAutomations } from "./automations/engine";
+import { ensureBrowserActions } from "./mcp/browserActions";
+import { seedBrowserDrivingSkill } from "./browser/skillSeed";
+import { ensureBrowserWs } from "./browser/wsBridge";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -61,7 +79,27 @@ export function ensureV2(): void {
   try {
     ensureDb();
     registerCoreJobs();
+    registerTaskWakeHandler(); // SPEC-B B1: wake jobs survive restarts, handler re-registers at boot
+    recoverStuckTasks(); // SPEC-B B2: Working tasks orphaned by a dead process → Waiting + attention.flag
+    ensureTaskSeeds(); // SPEC-B B3: recurring seed tasks (idempotent by metadata.seedKey, disabled by default)
+    registerScratchpadHandlers(); // SPEC-B B5/B6: @jarvis mention handler + nightly scratchpad ingest job
+    ensureTaskActions(); // SPEC-C D4: ui.navigate / tasks_create / tasks_list registry actions
+    seedSelfTools(); // SPEC-C D4-lite: idempotent create+publish of the 'agentos' package
+    loadPublishedIntoRegistry(); // SPEC-C D2: re-register ALL published WebMCP snapshots after restart
+    installHubSeam(); // SPEC-C D3: globalThis.__agentosMcpHub for the C3 brain
+    ensureIntegrationSync(); // SPEC-D G2.8: 'integration.sync' handler + per-account schedule jobs
+    ensureIntegrationMetaActions(); // SPEC-D G4.2: the three integration meta-tools as F4 registry actions (AFTER integrations init)
+    ensureAttention(); // SPEC-D H4.1: attention.flag bus bridge + 60s pull-collector tick
+    ensureAnynotesAttention(); // SPEC-F I4.1: anynote.reply.jarvis → attention.flag (after ensureAttention so the generic bridge is listening)
+    ensureNewsletterJobs(); // SPEC-F K3.3: 'newsletter.sync' handler + the recurring job (real scheduler, no croner)
+    ensureAutomations(); // SPEC-D G5.1: automation rules engine ('*' bus subscription; after attention so create_attention lands)
+    ensureBrowserActions(); // SPEC-E E3.4: browser_* on the F4 registry (synced to capability.browserEnabled)
+    seedBrowserDrivingSkill(); // SPEC-E E3.5: idempotent browser-driving SKILL.md + settings.skills.modules.browser
+    // SPEC-E E2.2: CDP WS bridge on settings.browser.wsPort (async listen —
+    // never blocks boot; a port conflict logs loudly inside ensureBrowserWs).
+    void ensureBrowserWs().catch((err) => console.error("[v2] browser WS bridge failed:", err));
     ensureV2Scheduler();
+    ensureMemoryQueue(); // A2.4: drains PENDING ingestion_queue rows (5s poll)
     globalThis.__agentosV2Booted = true;
     console.log(`[v2] foundations booted (db: ${dbPath()})`);
   } catch (err) {

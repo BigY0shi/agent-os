@@ -233,6 +233,630 @@ CREATE TABLE IF NOT EXISTS vecmap_${ns} (
 export const DEFAULT_EMBED_MODEL = "nomic-embed-text";
 export const DEFAULT_EMBED_DIM = 768;
 
+const M020_TASKS_CORE = `
+-- SPEC-B B1: task model. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
+-- display_id: 'tk-N' roots, 'tk-N.M' subtasks (2 levels max, enforced in store.ts).
+-- status CHECK carries REF's full 7-value enum; 'Recurring' is accepted for
+-- REF parity but never set by the v2 store — recurrence = schedule IS NOT NULL.
+CREATE TABLE IF NOT EXISTS v2_tasks (
+  id               TEXT PRIMARY KEY,
+  display_id       TEXT NOT NULL UNIQUE,
+  title            TEXT NOT NULL DEFAULT '',
+  description_md   TEXT,
+  status           TEXT NOT NULL DEFAULT 'Todo'
+    CHECK (status IN ('Todo','Waiting','Ready','Working','Review','Done','Recurring')),
+  parent_uuid      TEXT REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  child_count      INTEGER NOT NULL DEFAULT 0,
+  spec_md          TEXT,
+  plan_md          TEXT,
+  plan_status      TEXT NOT NULL DEFAULT 'none'
+    CHECK (plan_status IN ('none','drafted','approved','rejected')),
+  schedule         TEXT,             -- RRULE string, USER-LOCAL tz semantics (settings.tasks.timezone)
+  run_at           TEXT,             -- UTC ISO next wake (one-shot or next computed occurrence)
+  last_run_at      TEXT,
+  occurrence_count INTEGER NOT NULL DEFAULT 0,
+  max_occurrences  INTEGER,          -- 1 = one-shot scheduled; NULL = unlimited
+  is_active        INTEGER NOT NULL DEFAULT 1,
+  end_date         TEXT,
+  scheduled_date   TEXT,             -- 'YYYY-MM-DD' calendar pin (B4 list/calendar; no auto-fire)
+  source           TEXT NOT NULL DEFAULT 'manual',  -- manual | daily | agent | automation | seed
+  agent_id         TEXT,             -- agents-module id; NULL = generalist
+  result           TEXT,
+  error            TEXT,
+  job_id           TEXT,             -- current scheduler job id (F2)
+  metadata         TEXT NOT NULL DEFAULT '{}',
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL,
+  completed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_status ON v2_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_run_at ON v2_tasks(run_at) WHERE run_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_parent ON v2_tasks(parent_uuid);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_sched_date ON v2_tasks(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_v2_tasks_agent ON v2_tasks(agent_id, status);
+
+-- Activity log; every store mutation appends exactly one row.
+CREATE TABLE IF NOT EXISTS v2_task_events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id    TEXT NOT NULL REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,   -- created|status_change|updated|woke|plan_drafted|run_ok|run_fail|rescheduled|...
+  actor      TEXT NOT NULL,   -- 'user' | 'agent' | 'system'
+  detail     TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_task_events ON v2_task_events(task_id, id);
+
+-- Session linkage (F3/E own the sessions themselves; B stores rows).
+CREATE TABLE IF NOT EXISTS v2_task_sessions (
+  id          TEXT PRIMARY KEY,
+  task_id     TEXT NOT NULL REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL CHECK (kind IN ('coding','browser','exec')),
+  session_ref TEXT,            -- NULL until the slot echoes = status 'starting'
+  agent       TEXT,
+  dir         TEXT,
+  prompt      TEXT,
+  status      TEXT NOT NULL DEFAULT 'starting',
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_task_sessions ON v2_task_sessions(task_id);
+
+-- Task-scoped chat threads (recurring = one per run via run_no; one-shot = shared).
+CREATE TABLE IF NOT EXISTS v2_conversations (
+  id         TEXT PRIMARY KEY,
+  source     TEXT NOT NULL,   -- 'task' | 'scheduled-task' | 'daily' | 'chat'
+  task_id    TEXT REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  agent_id   TEXT,
+  run_no     INTEGER,         -- occurrence number for recurring runs; NULL for shared
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_conv_task ON v2_conversations(task_id);
+
+CREATE TABLE IF NOT EXISTS v2_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES v2_conversations(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  user_type       TEXT NOT NULL DEFAULT 'human' CHECK (user_type IN ('human','system')),
+  ephemeral       INTEGER NOT NULL DEFAULT 0,  -- trigger messages: kept for audit, hidden in UI
+  content         TEXT NOT NULL,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_msgs_conv ON v2_messages(conversation_id, created_at);
+
+-- Page→task outlinks for B5 scratchpad (v2_pages lands with B5; no FK on page_id yet).
+CREATE TABLE IF NOT EXISTS v2_page_task_links (
+  page_id TEXT NOT NULL,
+  task_id TEXT NOT NULL REFERENCES v2_tasks(id) ON DELETE CASCADE,
+  PRIMARY KEY (page_id, task_id)
+);
+
+-- FTS over title + task body (description/spec), synced by triggers.
+CREATE VIRTUAL TABLE IF NOT EXISTS v2_tasks_fts USING fts5(
+  task_id UNINDEXED, title, body, tokenize='porter unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_ai AFTER INSERT ON v2_tasks BEGIN
+  INSERT INTO v2_tasks_fts(task_id, title, body)
+  VALUES (new.id, new.title, coalesce(new.description_md,'') || ' ' || coalesce(new.spec_md,''));
+END;
+CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_au AFTER UPDATE OF title, description_md, spec_md ON v2_tasks BEGIN
+  DELETE FROM v2_tasks_fts WHERE task_id = new.id;
+  INSERT INTO v2_tasks_fts(task_id, title, body)
+  VALUES (new.id, new.title, coalesce(new.description_md,'') || ' ' || coalesce(new.spec_md,''));
+END;
+CREATE TRIGGER IF NOT EXISTS v2_tasks_fts_ad AFTER DELETE ON v2_tasks BEGIN
+  DELETE FROM v2_tasks_fts WHERE task_id = old.id;
+END;
+`;
+
+const M021_PAGES_SCRATCHPAD = `
+-- SPEC-B B5: scratchpad pages (TipTap JSON, single-client, rev-based optimistic
+-- lock — Yjs DEFERRED per SPEC-B §1.1; the doc I/O seam lives in pages/store.ts).
+CREATE TABLE IF NOT EXISTS v2_pages (
+  id         TEXT PRIMARY KEY,
+  date       TEXT,              -- 'YYYY-MM-DD' in settings.tasks.timezone; NULL = non-daily page
+  title      TEXT NOT NULL DEFAULT '',
+  doc_json   TEXT NOT NULL DEFAULT '{"type":"doc","content":[]}',
+  rev        INTEGER NOT NULL DEFAULT 0,   -- optimistic concurrency (409 on stale save)
+  metadata   TEXT NOT NULL DEFAULT '{}',   -- lastIngestHash (B6 nightly ingest), ...
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_v2_pages_date ON v2_pages(date) WHERE date IS NOT NULL;
+
+-- @jarvis paragraph comments (REF ButlerComment, pattern-only: Yjs relative
+-- positions replaced by paragraph-node-id attrs + normalized-text fallback).
+CREATE TABLE IF NOT EXISTS v2_page_comments (
+  id               TEXT PRIMARY KEY,
+  page_id          TEXT NOT NULL REFERENCES v2_pages(id) ON DELETE CASCADE,
+  anchor_node_id   TEXT,        -- paragraph attrs.nodeId at detection time
+  anchor_text_norm TEXT,        -- normalized paragraph text (fallback anchor + dedupe key)
+  author           TEXT NOT NULL DEFAULT 'jarvis' CHECK (author IN ('jarvis','user')),
+  body_md          TEXT NOT NULL DEFAULT '',
+  conversation_id  TEXT,        -- v2_conversations (source 'daily'), nullable
+  created_at       TEXT NOT NULL,
+  resolved_at      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_v2_page_comments_page ON v2_page_comments(page_id, created_at);
+`;
+
+const M022_SKILLS_POLICIES = `
+-- SPEC-B B7 (CONVENTIONS §11): skills-as-policies — standing policy blocks
+-- authored in-app (/skills page) and injected into task-execution prompts (B2)
+-- and the Jarvis context (C4) via skills/store.ts withSkills()/
+-- renderSkillPolicyBlock(). DISTINCT from the FILE-based operating skills
+-- (~/.agentic-os/skills/<name>/SKILL.md, platformSkills.ts), which keep
+-- fronting the CLI-agent lanes — coexistence documented in skills/store.ts.
+CREATE TABLE IF NOT EXISTS v2_skills (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  policy_md   TEXT NOT NULL DEFAULT '',
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  position    INTEGER NOT NULL DEFAULT 0,  -- injection/list order (ascending)
+  archived_at TEXT,                        -- soft-archive stamp; rows are never destroyed (house rule)
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_v2_skills_order ON v2_skills(position, created_at);
+`;
+
+const M030_WEBMCP_CORE = `
+-- SPEC-C D1/D2: WebMCP Engine core. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
+-- secrets_json holds NAMES -> '{{secret:NAME}}' refs only; the VALUES live in
+-- ~/.agentic-os/webmcp/<slug>.secrets.json (never in the DB, never in responses).
+CREATE TABLE IF NOT EXISTS webmcp_packages (
+  id              TEXT PRIMARY KEY,
+  slug            TEXT NOT NULL UNIQUE,      -- ^[a-z0-9][a-z0-9-]{1,40}$
+  name            TEXT NOT NULL,
+  description     TEXT NOT NULL DEFAULT '',
+  icon            TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','archived')),
+  current_version INTEGER NOT NULL DEFAULT 0,
+  secrets_json    TEXT NOT NULL DEFAULT '{}',
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+-- The tool rows ARE the draft working set; published behavior comes ONLY from
+-- webmcp_package_versions snapshots (draft-vs-published drift rule, SPEC-C §8.10).
+CREATE TABLE IF NOT EXISTS webmcp_tools (
+  id                  TEXT PRIMARY KEY,
+  package_id          TEXT NOT NULL REFERENCES webmcp_packages(id) ON DELETE CASCADE,
+  name                TEXT NOT NULL,         -- exactly the name advertised to agents (invariant §8.7)
+  description         TEXT NOT NULL DEFAULT '',
+  input_schema_json   TEXT NOT NULL DEFAULT '{"type":"object","properties":{}}',
+  handler_kind        TEXT NOT NULL CHECK (handler_kind IN ('internal','http','js')),
+  handler_config_json TEXT NOT NULL DEFAULT '{}',
+  requires_approval   INTEGER NOT NULL DEFAULT 0,
+  position            INTEGER NOT NULL DEFAULT 0,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  UNIQUE(package_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS webmcp_package_versions (
+  id            TEXT PRIMARY KEY,
+  package_id    TEXT NOT NULL REFERENCES webmcp_packages(id) ON DELETE CASCADE,
+  version       INTEGER NOT NULL,
+  snapshot_json TEXT NOT NULL,               -- frozen {package, tools[]} at publish time
+  published_at  TEXT NOT NULL,
+  UNIQUE(package_id, version)
+);
+
+-- Append-only. args_json is REDACTED (redactArgs, CONVENTIONS §9.3) + 4KB-capped.
+CREATE TABLE IF NOT EXISTS webmcp_call_logs (
+  id           TEXT PRIMARY KEY,
+  package_slug TEXT NOT NULL,
+  tool_name    TEXT NOT NULL,
+  source       TEXT NOT NULL DEFAULT '',
+  args_json    TEXT NOT NULL DEFAULT '{}',
+  ok           INTEGER NOT NULL,
+  error        TEXT,
+  duration_ms  INTEGER NOT NULL,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_webmcp_logs_pkg ON webmcp_call_logs(package_slug, created_at DESC);
+`;
+
+const M031_JARVIS_CONVERSATIONS = `
+-- SPEC-C C3: Jarvis brain conversation persistence. Timestamps TEXT UTC ISO
+-- (CONVENTIONS §1.4). pageContext is NEVER stored here (C5 privacy rule —
+-- per-request only); message content is the user's/assistant's raw text.
+CREATE TABLE IF NOT EXISTS jarvis_conversations (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  channel    TEXT NOT NULL DEFAULT 'overlay' CHECK (channel IN ('overlay','page')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jarvis_messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES jarvis_conversations(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  content         TEXT NOT NULL,
+  tool_calls_json TEXT,                      -- [{name, summary, ok}] per assistant turn, else NULL
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jarvis_messages_conv ON jarvis_messages(conversation_id, created_at);
+`;
+
+const M033_WEBMCP_APPROVALS = `
+-- SPEC-C Human-Gate (Phase-4 chunk 2): pending approval records for
+-- requires_approval tools invoked interactively. args_json is the RAW
+-- (schema-validated) args kept for execution on approve; redacted_args_json
+-- (redactArgs, CONVENTIONS §9.3) is the ONLY variant that ever leaves the
+-- server. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
+CREATE TABLE IF NOT EXISTS webmcp_approvals (
+  id                 TEXT PRIMARY KEY,
+  slug               TEXT NOT NULL,             -- package slug, or 'registry' for plain registry-action keys
+  tool               TEXT NOT NULL,             -- tool name (or full registry key when slug='registry')
+  args_json          TEXT NOT NULL DEFAULT '{}',
+  redacted_args_json TEXT NOT NULL DEFAULT '{}',
+  requested_by       TEXT NOT NULL DEFAULT '',  -- ExecuteCtx.source ('jarvis', 'mcp:*', ...)
+  conversation_id    TEXT,                      -- jarvis_conversations id, nullable
+  status             TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','denied','expired')),
+  result_json        TEXT,                      -- ExecuteResult stored on approve
+  created_at         TEXT NOT NULL,
+  resolved_at        TEXT,
+  expires_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_webmcp_approvals_status ON webmcp_approvals(status, created_at DESC);
+`;
+
+const M040_INTEGRATIONS_CORE = `
+-- SPEC-D G2.1: integrations runtime core. Timestamps TEXT UTC ISO (CONVENTIONS
+-- §1.4). Secrets NEVER stored plaintext: config_enc columns hold AES-256-GCM
+-- blobs sealed by integrations/crypto.ts (key at ~/.agentic-os/agentos.key) and
+-- are NEVER serialized into any API response (SPEC-D §8.2).
+-- NOTE: SPEC-D §2's own ingestion_rules DDL is VOID per CONVENTIONS §1.7 —
+-- integration user rules live in SPEC-A's ingestion_rules with source = <account id>.
+CREATE TABLE IF NOT EXISTS integration_definitions (
+  slug        TEXT PRIMARY KEY,              -- matches the in-repo connector slug
+  enabled     INTEGER NOT NULL DEFAULT 1,
+  config_enc  TEXT,                          -- AES-GCM blob: { clientId, clientSecret, webhookSecret, ... }
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS integration_accounts (
+  id              TEXT PRIMARY KEY,          -- crypto.randomUUID()
+  definition_slug TEXT NOT NULL REFERENCES integration_definitions(slug),
+  account_id      TEXT NOT NULL,             -- external identity (email addr, workspace id, npub, login)
+  display_name    TEXT,
+  config_enc      TEXT NOT NULL,             -- AES-GCM blob: tokens / api key / per-account config
+  settings_json   TEXT NOT NULL DEFAULT '{}',-- { state: {...sync watermarks}, autoActivityRead: bool, triggersEnabled: bool }
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL,
+  UNIQUE (definition_slug, account_id)       -- upsert semantics preserved from upstream
+);
+
+CREATE TABLE IF NOT EXISTS activities (
+  id               TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL REFERENCES integration_accounts(id),
+  text             TEXT NOT NULL,
+  source_url       TEXT,
+  event_type       TEXT,                     -- connector-declared trigger key, e.g. 'GMAIL_MESSAGE_RECEIVED'
+  payload_json     TEXT,                     -- structured event payload for automations (G5)
+  rejection_reason TEXT,                     -- set when a user-rule pre-filter rejects it
+  ingest_status    TEXT NOT NULL DEFAULT 'pending', -- pending|ingested|rejected|failed
+  created_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activities_account ON activities(account_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_activities_ingest ON activities(ingest_status);
+
+-- args_json is REDACTED (redactArgs, CONVENTIONS §9.3) — additive vs SPEC-D §2
+-- (the DDL there had no args column; the chunk contract requires redacted call
+-- logging, matching webmcp_call_logs).
+CREATE TABLE IF NOT EXISTS integration_call_logs (
+  id          TEXT PRIMARY KEY,
+  account_id  TEXT NOT NULL,
+  tool_name   TEXT NOT NULL,
+  source      TEXT,                          -- '?source=' tag from /api/mcp, or 'ui' | 'automation:<ruleId>'
+  args_json   TEXT NOT NULL DEFAULT '{}',
+  ok          INTEGER NOT NULL,
+  error       TEXT,
+  duration_ms INTEGER,
+  created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_int_call_logs_acct ON integration_call_logs(account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS integration_sync_runs (
+  id               TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL,
+  trigger          TEXT NOT NULL,            -- 'schedule' | 'manual' | 'webhook'
+  started_at       TEXT NOT NULL,
+  finished_at      TEXT,
+  ok               INTEGER,
+  activities_count INTEGER NOT NULL DEFAULT 0,
+  error            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_int_sync_runs_acct ON integration_sync_runs(account_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS oauth_sessions (
+  state           TEXT PRIMARY KEY,          -- crypto.randomBytes(24).toString('base64url')
+  definition_slug TEXT NOT NULL,
+  code_verifier   TEXT,                      -- PKCE
+  redirect_url    TEXT NOT NULL,             -- app page to bounce back to
+  created_at      TEXT NOT NULL              -- rows older than 15 min are purged on read
+);
+`;
+
+const M041_ATTENTION_CORE = `
+-- SPEC-D H4.1: "needs my attention" store. Timestamps TEXT UTC ISO
+-- (CONVENTIONS §1.4). One row per dedupe_key — upsertByDedupeKey refreshes
+-- title/severity/payload on re-flag and reopens auto-resolved rows; a
+-- user-dismissed row is NEVER resurrected by a re-flag (attention/store.ts
+-- documents the full status semantics). Fed by the generic 'attention.flag'
+-- bus bridge (CONVENTIONS §5 payload contract) + the pull collectors.
+CREATE TABLE IF NOT EXISTS attention_items (
+  id               TEXT PRIMARY KEY,
+  dedupe_key       TEXT NOT NULL UNIQUE,      -- e.g. 'sync-fail:<accountId>', approval id
+  kind             TEXT NOT NULL,             -- approval|agent_error|sync_failed|automation|... (open set)
+  severity         TEXT NOT NULL DEFAULT 'info' CHECK (severity IN ('info','warn','urgent')),
+  title            TEXT NOT NULL,
+  body             TEXT,
+  route            TEXT,                      -- in-app link the hero's [Go] follows
+  payload_json     TEXT NOT NULL DEFAULT '{}',
+  source           TEXT NOT NULL DEFAULT '',  -- emitting module ('webmcp'|'integrations'|'automations'|...)
+  status           TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','done','dismissed')),
+  auto_resolved_at TEXT,                      -- set when autoResolve() cleared it (source condition ended)
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_attention_open ON attention_items(status, severity, created_at);
+`;
+
+const M042_AUTOMATIONS_CORE = `
+-- SPEC-D G5.1: automations engine. Rules are DETERMINISTIC data (§8 risk 11):
+-- conditions_json is an op-whitelisted string-op list, actions_json carries
+-- {{payload.*}} STRING templates — no eval anywhere, the LLM has no role.
+-- run_tool actions on destructive-annotated tools require confirmDestructive
+-- (422 at save, re-checked at fire time). Timestamps TEXT UTC ISO.
+CREATE TABLE IF NOT EXISTS automation_rules (
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  trigger_slug    TEXT NOT NULL DEFAULT 'system', -- connector slug, 'system', or '*'
+  trigger_event   TEXT NOT NULL,             -- activity eventType (GMAIL_MESSAGE_RECEIVED) or bus event type (sync.failed)
+  conditions_json TEXT NOT NULL DEFAULT '[]',-- [{ field, op, value }] — op whitelist in automations/types.ts
+  actions_json    TEXT NOT NULL DEFAULT '[]',-- [{ kind: create_attention|create_task|notify|run_tool, ... }]
+  is_active       INTEGER NOT NULL DEFAULT 1,
+  last_fired_at   TEXT,
+  fire_count      INTEGER NOT NULL DEFAULT 0,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS automation_runs (
+  id           TEXT PRIMARY KEY,
+  rule_id      TEXT NOT NULL REFERENCES automation_rules(id),
+  activity_id  TEXT,                         -- triggering activity, when the trigger was activity.created
+  trigger_json TEXT NOT NULL DEFAULT '{}',   -- trigger payload snapshot at fire time
+  status       TEXT NOT NULL CHECK (status IN ('ok','condition_miss','action_failed')),
+  detail_json  TEXT,                         -- per-condition / per-action results
+  error        TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, created_at DESC);
+`;
+
+// SPEC-E §2 browser tables (range 050-059). CONVENTIONS §1.4 amendment applied:
+// ALL timestamp columns are TEXT UTC ISO-8601 (the spec's INTEGER epoch-ms DDL is
+// superseded). Rows are history — Chromium's SingletonLock stays the real
+// exclusivity; closed_at NULL means the row's launch is (possibly) live.
+const M050_BROWSER_CORE = `
+CREATE TABLE IF NOT EXISTS browser_sessions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_name  TEXT NOT NULL,
+  profile_name  TEXT NOT NULL,
+  created_by    TEXT NOT NULL DEFAULT 'user',  -- 'user' | 'jarvis' | 'task:<taskId>' | 'agent:<agentId>'
+  task_id       TEXT,
+  agent_id      TEXT,
+  created_at    TEXT NOT NULL,
+  last_used_at  TEXT,
+  closed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_sessions_name ON browser_sessions(session_name);
+CREATE INDEX IF NOT EXISTS idx_browser_sessions_task ON browser_sessions(task_id);
+
+CREATE TABLE IF NOT EXISTS browser_tool_audit (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts            TEXT NOT NULL,
+  session_name  TEXT NOT NULL,
+  tool          TEXT NOT NULL,                 -- 'browser_navigate', ...
+  caller        TEXT NOT NULL DEFAULT 'user',  -- same vocabulary as created_by
+  args_preview  TEXT,                          -- redacted JSON, capped 2048 chars (never full payloads)
+  ok            INTEGER NOT NULL,
+  error         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_audit_ts ON browser_tool_audit(ts);
+`;
+
+// SPEC-E §2 F-workstream tables (range 050-059, slot 051 per the chunk-3
+// brief). CONVENTIONS §1.4 amendment applied: ALL timestamp columns are TEXT
+// UTC ISO-8601 (the spec's INTEGER epoch-ms DDL is superseded).
+// harnesses.definition is pure-data JSON (HarnessDef, rule 17); DELETE is
+// {exiled:true} inside that JSON — rows are NEVER dropped (house rule).
+const M051_AGENTS_HARNESSES_STATUS = `
+CREATE TABLE IF NOT EXISTS harnesses (
+  id          TEXT PRIMARY KEY,                -- kebab id, e.g. 'ralph-loop'
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  kind        TEXT NOT NULL DEFAULT 'loop',    -- 'loop' | 'oneshot' | 'council' | 'custom'
+  definition  TEXT NOT NULL,                   -- JSON HarnessDef (SPEC-E §5.2)
+  builtin     INTEGER NOT NULL DEFAULT 0,      -- seeded rows; editable but never deletable
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_status_events (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts       TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  status   TEXT NOT NULL,                      -- 'running' | 'idle' | 'waiting' | 'error' | 'offline'
+  run_id   TEXT,
+  detail   TEXT                                -- short human line: 'run started (manual)', 'approval pending'
+);
+CREATE INDEX IF NOT EXISTS idx_agent_status_agent_ts ON agent_status_events(agent_id, ts);
+`;
+
+// SPEC-F §2 AnyNotes tables (range 060-069, slot 060 — the first free F slot).
+// The spec's DDL is already TEXT-ISO throughout, so CONVENTIONS §1.4 is a no-op
+// here (nothing to amend). Two departures from the spec text, both deliberate:
+//   1. `pending` on anynote_replies stays INTEGER 0/1 — it is a BOOLEAN flag,
+//      not a timestamp, so §1.4 does not touch it.
+//   2. The spec named ONE exile table (anynotes_exile). A note's replies carry a
+//      FK to anynotes(id) and db.ts runs `foreign_keys = ON`, so exiling a note
+//      without moving its thread first is a constraint error. anynote_replies_exile
+//      is therefore its sibling: exile copies note + thread out, then deletes
+//      thread-then-note. Nothing is ever destroyed (house rule).
+const M060_ANYNOTES = `
+CREATE TABLE IF NOT EXISTS anynotes (
+  id            TEXT PRIMARY KEY,
+  url           TEXT,
+  type          TEXT NOT NULL CHECK (type IN ('tweet','article','video','screenshot','text')),
+  title         TEXT NOT NULL DEFAULT '',
+  author        TEXT,
+  site          TEXT,
+  content_md    TEXT NOT NULL DEFAULT '',
+  media_path    TEXT,
+  thumb_url     TEXT,
+  status        TEXT NOT NULL DEFAULT 'inbox' CHECK (status IN ('inbox','kept','archived')),
+  labels        TEXT NOT NULL DEFAULT '[]',
+  meta          TEXT NOT NULL DEFAULT '{}',
+  episode_id    TEXT,
+  captured_at   TEXT NOT NULL,
+  updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_anynotes_inbox ON anynotes(status, captured_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anynotes_type  ON anynotes(type,   captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS anynote_replies (
+  id           TEXT PRIMARY KEY,
+  note_id      TEXT NOT NULL REFERENCES anynotes(id),
+  author       TEXT NOT NULL CHECK (author IN ('user','jarvis')),
+  body         TEXT NOT NULL,
+  pending      INTEGER NOT NULL DEFAULT 0,
+  error        TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anynote_replies ON anynote_replies(note_id, created_at);
+
+CREATE TABLE IF NOT EXISTS anynotes_exile (
+  id            TEXT PRIMARY KEY,
+  url           TEXT,
+  type          TEXT NOT NULL,
+  title         TEXT NOT NULL DEFAULT '',
+  author        TEXT,
+  site          TEXT,
+  content_md    TEXT NOT NULL DEFAULT '',
+  media_path    TEXT,
+  thumb_url     TEXT,
+  status        TEXT NOT NULL DEFAULT 'inbox',
+  labels        TEXT NOT NULL DEFAULT '[]',
+  meta          TEXT NOT NULL DEFAULT '{}',
+  episode_id    TEXT,
+  captured_at   TEXT NOT NULL,
+  updated_at    TEXT,
+  exiled_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS anynote_replies_exile (
+  id           TEXT PRIMARY KEY,
+  note_id      TEXT NOT NULL,
+  author       TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  pending      INTEGER NOT NULL DEFAULT 0,
+  error        TEXT,
+  created_at   TEXT NOT NULL,
+  exiled_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anynote_replies_exile ON anynote_replies_exile(note_id, created_at);
+`;
+
+// SPEC-F §2 Newsletter tables (range 060-069, slot 061 — 060 is anynotes).
+// Departures from the spec DDL, all deliberate:
+//   1. CONVENTIONS §1.4 — `newsletter_state.lastSyncTime` is stored as TEXT UTC
+//      ISO, not the spec's "unix ms". It is a timestamp; ISO keeps lexical
+//      order == chronological order and matches every other watermark in the db
+//      (integrations' account_state does the same).
+//   2. Two additive indexes the spec omitted (`newsletter_emails.subscription_id`
+//      and `newsletter_story_sources.email_id`) — both are read paths the sync
+//      and the edition builder actually take.
+//   3. `newsletter_stories.first_seen` stays a YYYY-MM-DD DATE bucket, not a
+//      timestamp: it is the edition-date key, and §1.4 governs instants.
+const M061_NEWSLETTER = `
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  topic        TEXT,
+  alias_id     TEXT,
+  alias_email  TEXT,
+  signup_url   TEXT,
+  cadence      TEXT NOT NULL DEFAULT 'unknown' CHECK (cadence IN ('daily','weekly','monthly','unknown')),
+  status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','dead')),
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_nl_subs_status ON newsletter_subscriptions(status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nl_subs_alias
+  ON newsletter_subscriptions(alias_email) WHERE alias_email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS newsletter_emails (
+  id              TEXT PRIMARY KEY,
+  gmail_id        TEXT NOT NULL UNIQUE,
+  thread_id       TEXT,
+  subscription_id TEXT REFERENCES newsletter_subscriptions(id),
+  from_addr       TEXT,
+  to_addr         TEXT,
+  subject         TEXT,
+  received_at     TEXT NOT NULL,
+  content_md      TEXT NOT NULL DEFAULT '',
+  parse_status    TEXT NOT NULL DEFAULT 'pending' CHECK (parse_status IN ('pending','parsed','failed','skipped')),
+  parse_error     TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_recv ON newsletter_emails(received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_ps   ON newsletter_emails(parse_status);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_sub  ON newsletter_emails(subscription_id, received_at DESC);
+
+CREATE TABLE IF NOT EXISTS newsletter_stories (
+  id            TEXT PRIMARY KEY,
+  title         TEXT NOT NULL,
+  canonical_url TEXT,
+  summary       TEXT NOT NULL DEFAULT '',
+  topic         TEXT,
+  embedding     BLOB,
+  first_seen    TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nl_stories_url
+  ON newsletter_stories(canonical_url) WHERE canonical_url IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nl_stories_seen ON newsletter_stories(first_seen);
+
+CREATE TABLE IF NOT EXISTS newsletter_story_sources (
+  story_id    TEXT NOT NULL REFERENCES newsletter_stories(id),
+  email_id    TEXT NOT NULL REFERENCES newsletter_emails(id),
+  source_name TEXT NOT NULL,
+  item_url    TEXT,
+  item_title  TEXT,
+  PRIMARY KEY (story_id, email_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nl_sources_email ON newsletter_story_sources(email_id);
+
+CREATE TABLE IF NOT EXISTS newsletter_editions (
+  date       TEXT PRIMARY KEY,
+  built_at   TEXT NOT NULL,
+  content    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS newsletter_state (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -258,6 +882,194 @@ export const MIGRATIONS: Migration[] = [
         .get() as { value: string } | undefined;
       const dim = row ? parseInt(row.value, 10) : DEFAULT_EMBED_DIM;
       db.exec(vecDDL(dim));
+    },
+  },
+  {
+    version: 3,
+    name: "memory_queue_leases",
+    up: (db) => {
+      // HARDENING-2026-08-27 item 9: PROCESSING rows need a lease timestamp so
+      // a crash mid-ingest can be recovered (stale PROCESSING → PENDING) and
+      // claims can be made atomically (UPDATE ... WHERE status='PENDING').
+      db.exec("ALTER TABLE ingestion_queue ADD COLUMN processing_started_at TEXT");
+    },
+  },
+  {
+    version: 20,
+    name: "tasks_core",
+    up: (db) => {
+      db.exec(M020_TASKS_CORE);
+      // Root display-id counter lives in the shared meta table (SPEC-B's
+      // v2_meta is folded into meta; its timezone seed is void per CONVENTIONS §10).
+      db.prepare("INSERT OR IGNORE INTO meta(key, value) VALUES ('task_root_counter', '0')").run();
+    },
+  },
+  {
+    version: 21,
+    name: "pages_scratchpad",
+    up: (db) => {
+      db.exec(M021_PAGES_SCRATCHPAD);
+    },
+  },
+  {
+    version: 22,
+    name: "skills_policies",
+    up: (db) => {
+      db.exec(M022_SKILLS_POLICIES);
+      // ONE disabled example row (is_active=0 → never injected) so the /skills
+      // page has a visible template on first open. Editable/archivable in-app.
+      db.prepare(
+        `INSERT OR IGNORE INTO v2_skills
+           (id, title, description, policy_md, is_active, position, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 0, 0, ?, ?)`,
+      ).run(
+        "skill-example",
+        "Example: response style",
+        "A disabled sample policy — edit or archive it. Toggle Active to inject it.",
+        "- Lead with the answer, then the reasoning.\n- Prefer bullet lists over long prose.\n- Never invent identifiers; quote them from real output.",
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+    },
+  },
+  {
+    version: 30,
+    name: "webmcp_core",
+    up: (db) => {
+      db.exec(M030_WEBMCP_CORE);
+    },
+  },
+  {
+    version: 31,
+    name: "jarvis_conversations",
+    up: (db) => {
+      db.exec(M031_JARVIS_CONVERSATIONS);
+    },
+  },
+  {
+    version: 32,
+    name: "webmcp_spec",
+    up: (db) => {
+      // SPEC-C D3.2/D5: Spec-shaped package metadata (auth kind, schedule, mcp
+      // type, config manifest — see webmcp/types.ts WebmcpSpec). NULL = no spec
+      // authored yet. Validated on write via WebmcpSpecSchema (store.setPackageSpec).
+      db.exec("ALTER TABLE webmcp_packages ADD COLUMN spec_json TEXT");
+    },
+  },
+  {
+    version: 33,
+    name: "webmcp_approvals",
+    up: (db) => {
+      db.exec(M033_WEBMCP_APPROVALS);
+      // C3.6: conversation DELETE is archive/exile semantics, never row
+      // destruction (house rule) — archived_at NULL = live.
+      db.exec("ALTER TABLE jarvis_conversations ADD COLUMN archived_at TEXT");
+    },
+  },
+  {
+    version: 34,
+    name: "webmcp_approval_pinning",
+    up: (db) => {
+      // HARDENING-2026-08-27 item 6: a pending approval executed whatever
+      // version was published at APPROVE time — pin the package's
+      // current_version at request time; approve refuses (409) on mismatch.
+      // Registry-lane approvals (slug 'registry') are version-less: NULL.
+      db.exec("ALTER TABLE webmcp_approvals ADD COLUMN pinned_version INTEGER");
+    },
+  },
+  {
+    version: 40,
+    name: "integrations_core",
+    up: (db) => {
+      db.exec(M040_INTEGRATIONS_CORE);
+    },
+  },
+  {
+    version: 41,
+    name: "attention_core",
+    up: (db) => {
+      db.exec(M041_ATTENTION_CORE);
+    },
+  },
+  {
+    version: 42,
+    name: "automations_core",
+    up: (db) => {
+      db.exec(M042_AUTOMATIONS_CORE);
+    },
+  },
+  {
+    version: 43,
+    name: "integrations_hardening",
+    up: (db) => {
+      // HARDENING-2026-08-27 items 7/8/11/12.
+      // (7) Activity dedupe: connectors pass a stable per-item key (gmail
+      //     message id, github notification id, slack ts, gcal event id) —
+      //     UNIQUE(account_id, dedupe_key) + INSERT OR IGNORE makes overlap
+      //     windows and crash-replays idempotent. NULL = no key (legacy rows,
+      //     connectors without keys) — the partial index skips them.
+      db.exec("ALTER TABLE activities ADD COLUMN dedupe_key TEXT");
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_dedupe
+           ON activities(account_id, dedupe_key) WHERE dedupe_key IS NOT NULL`,
+      );
+      // (8) Durable ingest retry: attempts counter, capped at 5 by the hourly
+      //     'integration.ingest.retry' scheduler job.
+      db.exec("ALTER TABLE activities ADD COLUMN ingest_attempts INTEGER NOT NULL DEFAULT 0");
+      // (11) Webhook inbox: a delivery is persisted BEFORE the route returns
+      //      200, so a crash between the 200 and dispatch no longer loses it.
+      //      Sensitive headers (secrets/signatures) are stripped before
+      //      persisting — verification happens at receipt, never on replay.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS webhook_inbox (
+          id           TEXT PRIMARY KEY,
+          slug         TEXT NOT NULL,
+          headers_json TEXT NOT NULL DEFAULT '{}',
+          raw_body     TEXT NOT NULL DEFAULT '',
+          status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done','error')),
+          error        TEXT,
+          created_at   TEXT NOT NULL,
+          processed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_webhook_inbox_status ON webhook_inbox(status, created_at);
+      `);
+      // (12) Automations durable cursor: runs remember the bus event id that
+      //      fired them; UNIQUE(rule_id, event_id) makes boot replay unable to
+      //      double-fire a rule for the same event. Cursor lives in meta
+      //      ('automations_event_cursor').
+      db.exec("ALTER TABLE automation_runs ADD COLUMN event_id INTEGER");
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_rule_event
+           ON automation_runs(rule_id, event_id) WHERE event_id IS NOT NULL`,
+      );
+    },
+  },
+  {
+    version: 50,
+    name: "browser_core",
+    up: (db) => {
+      db.exec(M050_BROWSER_CORE);
+    },
+  },
+  {
+    version: 51,
+    name: "agents_harnesses_status",
+    up: (db) => {
+      db.exec(M051_AGENTS_HARNESSES_STATUS);
+    },
+  },
+  {
+    version: 60,
+    name: "anynotes",
+    up: (db) => {
+      db.exec(M060_ANYNOTES);
+    },
+  },
+  {
+    version: 61,
+    name: "newsletter",
+    up: (db) => {
+      db.exec(M061_NEWSLETTER);
     },
   },
 ];

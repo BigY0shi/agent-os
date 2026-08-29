@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -18,6 +18,22 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: "/",         label: "Mission Control", icon: <LayoutGrid size={16} />, accent: "#a855f7", dim: "rgba(168,85,247,0.16)" },
+  // Integrations (SPEC-D G1): connector catalog — Gmail/GCal/Notion/GitHub/
+  // Slack/Buzz accounts, tools, activity, memory rules. Workspace per §6.2
+  // (WORKSPACE_ROUTES membership decides the section, not NAV position).
+  { href: "/integrations", label: "Integrations", icon: <Plug size={16} />, accent: "#7dd3a8", dim: "rgba(125,211,168,0.16)" },
+  // Automations (SPEC-D G5): When [trigger] if [conditions] then [actions]
+  // rules over the integration/system event stream. Workspace per §6.2
+  // (WORKSPACE_ROUTES membership decides the section, not NAV position).
+  { href: "/automations", label: "Automations", icon: <Zap size={16} />, accent: "#fcd34d", dim: "rgba(252,211,77,0.16)" },
+  // AnyNotes (SPEC-F I3.3): paste-a-link / drop-a-screenshot / jot-a-note inbox
+  // with @jarvis reply threads. Workspace per SPEC-F §3 (WORKSPACE_ROUTES
+  // membership decides the section — NAV position alone lands it in "Self").
+  { href: "/anynotes", label: "AnyNotes", icon: <StickyNote size={16} />, accent: "#e8a33d", dim: "rgba(232,163,61,0.16)" },
+  // Newsletter (SPEC-F K4.2): the daily paper built from addy-aliased
+  // newsletters — deduped stories with per-source chips. Workspace per SPEC-F
+  // §3 (WORKSPACE_ROUTES membership decides the section, not NAV position).
+  { href: "/newsletter", label: "Newsletter", icon: <Newspaper size={16} />, accent: "#4d9de0", dim: "rgba(77,157,224,0.16)" },
   // The local Tasklet: reusable background agents (SDK runtime, triggers, approvals).
   // Top-level on purpose — this is the OS's core primitive, not another module.
   { href: "/agents",   label: "Agents", icon: <Bot size={16} />, accent: "#a78bfa", dim: "rgba(167,139,250,0.16)" },
@@ -25,6 +41,7 @@ const NAV: NavItem[] = [
   { href: "/room",     label: "AI Agent Mastermind", icon: <MessagesSquare size={16} />, accent: "#a855f7", dim: "rgba(168,85,247,0.16)" },
   { href: "/pipeline", label: "Pipeline", icon: <Workflow size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
   { href: "/deals",    label: "Deal Desk", icon: <CheckCircle2 size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
+  { href: "/marketing", label: "Marketing Hub", icon: <Megaphone size={16} />, accent: "#ec4899", dim: "rgba(236,72,153,0.16)" },
   // Sibling of Deal Desk: same pipeline, pointed at salaried job postings instead of gigs.
   { href: "/hire",     label: "Hire Engine", icon: <Factory size={16} />, accent: "#fb923c", dim: "rgba(251,146,60,0.16)" },
   { href: "/audit",    label: "Audit Console", icon: <Radar size={16} />, accent: "#34d399", dim: "rgba(52,211,153,0.16)" },
@@ -50,6 +67,10 @@ const NAV: NavItem[] = [
   { href: "/local",       label: "Local",       icon: <Cpu size={18} />,                             accent: "#5eead4", dim: "rgba(94,234,212,0.16)" },
   { href: "/engine",      label: "Local Engine", icon: <Boxes size={18} />,                           accent: "#38bdf8", dim: "rgba(56,189,248,0.16)" },
   { href: "/agent-kanban", label: "Agent Kanban", icon: <LayoutDashboard size={18} />,                accent: "#7dd3fc", dim: "rgba(125,211,252,0.16)" },
+  // Agent browser (SPEC-E E2): isolated Playwright Chromium sessions + CDP live
+  // view + headed handoff. Also in ORCHESTRATION_ROUTES below (documented
+  // gotcha: NAV membership alone lands a route in "Self").
+  { href: "/browser",      label: "Browser",      icon: <Globe size={16} />,                           accent: "#38bdf8", dim: "rgba(56,189,248,0.16)" },
   // Personal
   { href: "/loop",     label: "Loop",     icon: <Repeat size={16} />,   accent: "#2dd4bf", dim: "rgba(45,212,191,0.16)" },
   // Calendar → materials → metrics loop; sits with its content siblings (SEO, Thumbnails, Video).
@@ -63,6 +84,19 @@ const NAV: NavItem[] = [
   { href: "/thumbnails", label: "Thumbnails", icon: <ImageIcon size={16} />, accent: "#fb7185", dim: "rgba(251,113,133,0.16)" },
   { href: "/notebook", label: "Notebook", icon: <NotebookText size={16} />, accent: "#fde047", dim: "rgba(253,224,71,0.16)" },
   { href: "/kanban",   label: "Kanban",   icon: <Columns3 size={16} />,  accent: "#14b8a6", dim: "rgba(20,184,166,0.16)" },
+  // Tasks V2 (SPEC-B): list + calendar + drag-drop board + agents strip. Lives in
+  // "Self" by default (sectionOf fallback) — do NOT add to the section Sets.
+  { href: "/tasks",    label: "Tasks",    icon: <ListTodo size={16} />,  accent: "#f97316", dim: "rgba(249,115,22,0.16)" },
+  // Scratchpad V2 (SPEC-B B5): daily page, [ ]→task binding, @jarvis replies.
+  // Lives in "Self" beside /tasks (sectionOf fallback) — not in any section Set.
+  { href: "/today",    label: "Today",    icon: <NotebookPen size={16} />, accent: "#06b6d4", dim: "rgba(6,182,212,0.16)" },
+  // WebMCP Engine (SPEC-C D3): build/test/version/publish MCP tool packages.
+  // Lives in "Self" beside /tasks//today (sectionOf fallback) — not in any Set.
+  { href: "/webmcp",   label: "WebMCP",   icon: <Hammer size={16} />, accent: "#b7852f", dim: "rgba(183,133,47,0.16)" },
+  // Skills-as-policies (SPEC-B B7): standing policy blocks injected into task
+  // execution + Jarvis. Lives in "Self" beside /webmcp//memory (sectionOf
+  // fallback) — not in any section Set.
+  { href: "/skills",   label: "Skills",   icon: <ScrollText size={16} />, accent: "#c4b5fd", dim: "rgba(196,181,253,0.16)" },
   { href: "/memory",   label: "Memory",   icon: <Brain size={16} />,     accent: "#22d3ee", dim: "rgba(34,211,238,0.16)" },
   // Replaced Build Guide (2026-07-26) — a static how-to earned less shelf space than a
   // real shell. /guide still renders if you navigate to it directly.
@@ -83,9 +117,11 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // NOTE: membership here is what decides the group — NOT position in NAV and not the saved
 // drag order. A route missing from this set silently lands in "Self" no matter where it
 // sits in the array, so add new orchestration modules here as well as to NAV.
-const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban"]);
+const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban", "/browser"]);
+// SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
+const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynotes", "/newsletter"]);
 function sectionOf(href: string): string {
-  if (href === "/") return "Workspace";
+  if (WORKSPACE_ROUTES.has(href)) return "Workspace";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
   // model CLI routes were renamed to "CLI Agents" to make room (2026-07-28).
   if (href === "/agents") return "Agents";
@@ -102,6 +138,8 @@ export default function Sidebar() {
   const [customize, setCustomize] = useState(false);
   const [dragHref, setDragHref] = useState<string | null>(null);
   const [overHref, setOverHref] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  useEffect(() => { fetch("/api/version").then((r) => r.json()).then((j) => setVersion(j.version || "")).catch(() => {}); }, []);
 
   // load saved prefs (client only)
   useEffect(() => {
@@ -176,6 +214,11 @@ export default function Sidebar() {
           <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-faint)]">
             Agentic OS · v0.2
           </span>
+          {version && version !== "unknown" && (
+            <span className="font-mono text-[9px] tracking-[0.18em] text-[var(--color-ink-faint)]" title="Pack build — compare against the newest in the AI Profit Boardroom">
+              build {version}
+            </span>
+          )}
         </div>
       </Link>
 

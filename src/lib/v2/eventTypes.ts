@@ -9,9 +9,27 @@ export type V2EventType =
   | "job.failed"
   | "task.created"
   | "task.status"
+  | "task.wake"
+  | "task.run" // B2 engine: {taskId, displayId, status: 'started'|'ok'|'failed', ...}
+  | "task.gc" // B2 dispatcher: empty daily task exiled at buffer expiry
+  | "task.deleted"
+  | "page.created" // B5: daily page find-or-create
+  | "scratchpad.reply" // B5: @jarvis mention answered ({pageId, commentId, nodeId})
+  | "scratchpad.ingested" // B6: nightly page-text ingest ran
   | "agent.status"
   | "attention.flag" // CONVENTIONS §5: {kind, severity, title, route, dedupeKey}
   | "mcp.execute"
+  | "webmcp.published" // SPEC-C D2: {slug, version, tools[]}
+  | "webmcp.archived" // SPEC-C D2: {slug}
+  | "webmcp.approval" // Human-Gate: {id, slug, tool, status, requestedBy} on create + resolve
+  | "ui.navigate" // SPEC-C D4: {route} — the overlay/pages consume, nothing runs server-side
+  | "activity.created" // SPEC-D G2.4: {activityId, accountId, slug, eventType} per ACCEPTED activity
+  | "sync.failed" // SPEC-D G2.4: {accountId, slug, trigger, error} — G5 automations + H4 attention subscribe
+  | "automation.notify" // SPEC-D G5 notify action default: {ruleId, ruleName, message, event} (source 'automation' — never re-triggers rules)
+  | "anynote.captured" // SPEC-F I2.1: {id, type, title}
+  | "anynote.reply.jarvis" // SPEC-F I3.1: {noteId, replyId, ok} — I4.1 turns this into an attention.flag
+  | "newsletter.email.ingested" // SPEC-F K3.1: {emailId, gmailId, subscriptionId, subject} per NEW email row
+  | "newsletter.edition.built" // SPEC-F K4.1 (chunk 4): {date, stories} — the H3 widget refresh trigger
   | (string & {});
 
 export interface V2Event {

@@ -8,6 +8,21 @@ import {
   type ActionContext,
 } from "./registry";
 import { emit } from "../events";
+import { redactArgs } from "../redact";
+import { ensureTaskActions } from "./taskActions";
+import {
+  callMemoryTool,
+  ensureMemoryActions,
+  isMemoryTool,
+  memoryToolDefs,
+} from "../memory/mcpTools";
+import {
+  callIntegrationMetaTool,
+  ensureIntegrationMetaActions,
+  isIntegrationMetaTool,
+  integrationMetaTools,
+} from "../integrations/metaTools";
+import { ensureBrowserActions } from "./browserActions";
 
 /**
  * F4 stateless MCP server (Streamable HTTP, JSON responses). Framework-free:
@@ -48,8 +63,10 @@ function errText(s: string): { content: { type: "text"; text: string }[]; isErro
   return { content: [{ type: "text", text: s }], isError: true };
 }
 
-/** MCP tool defs exposed at the top level. Memory tools are wired in by A7 —
- *  until then they exist but fail loudly (NOT stubs that pretend). */
+/** MCP tool defs exposed at the top level. Memory tools (A7) come from
+ *  memory/mcpTools.ts with their REF-verbatim descriptions; the integration
+ *  meta-tools (SPEC-D G4.1/G4.2) from integrations/metaTools.ts with their
+ *  AOC-verbatim descriptions. */
 function toolDefs() {
   return [
     {
@@ -78,39 +95,20 @@ function toolDefs() {
         required: ["key"],
       },
     },
-    {
-      name: "memory_search",
-      description:
-        "Search Agent OS memory (episodic knowledge graph). NOT YET AVAILABLE — lands with Memory V2 (workstream A).",
-      inputSchema: {
-        type: "object",
-        properties: { intent: { type: "string" } },
-        required: ["intent"],
-      },
-    },
-    {
-      name: "memory_ingest",
-      description:
-        "Store content in Agent OS memory. NOT YET AVAILABLE — lands with Memory V2 (workstream A).",
-      inputSchema: {
-        type: "object",
-        properties: {
-          message: { type: "string" },
-          sessionId: { type: "string" },
-        },
-        required: ["message", "sessionId"],
-      },
-    },
+    ...memoryToolDefs(),
+    ...integrationMetaTools(),
   ];
 }
-
-const NOT_READY = "Memory V2 is not yet available (workstream A in progress). This tool will activate when it lands — do not retry now.";
 
 export async function handleMcpMessage(
   msg: JsonRpcMessage,
   ctx: ActionContext,
 ): Promise<JsonRpcResponse | null> {
   ensureCoreActions();
+  ensureMemoryActions();
+  ensureTaskActions();
+  ensureIntegrationMetaActions();
+  ensureBrowserActions(); // E3.4: syncs to settings.capability.browserEnabled per request
 
   // Notifications (no id) are accepted and produce no body.
   if (msg.method?.startsWith("notifications/")) return null;
@@ -173,9 +171,16 @@ export async function handleMcpMessage(
             return rpcResult(msg.id, errText(`Invalid args for '${key}': ${parsed.error.message}`));
           }
           // CONVENTIONS §9.1: every external execute_action is audited.
+          // Args are logged REDACTED via the shared redactArgs (CONVENTIONS §9.3).
           emit(
             "mcp.execute",
-            { key, source: ctx.source, remoteAddr: ctx.remoteAddr ?? null, strict: ctx.strict },
+            {
+              key,
+              source: ctx.source,
+              remoteAddr: ctx.remoteAddr ?? null,
+              strict: ctx.strict,
+              args: redactArgs(parsed.data),
+            },
             "mcp",
           );
           try {
@@ -190,12 +195,41 @@ export async function handleMcpMessage(
           }
         }
 
-        case "memory_search":
-        case "memory_ingest":
-          return rpcResult(msg.id, errText(NOT_READY));
-
-        default:
+        default: {
+          if (isIntegrationMetaTool(name)) {
+            // Same audit contract as execute_action (CONVENTIONS §9.1/§9.3).
+            // ctx.strict stays true through /api/mcp — destructive-annotated
+            // integration tools HARD REFUSE on this path (G4.1 semantics).
+            emit(
+              "mcp.execute",
+              {
+                key: name,
+                source: ctx.source,
+                remoteAddr: ctx.remoteAddr ?? null,
+                strict: ctx.strict,
+                args: redactArgs(args),
+              },
+              "mcp",
+            );
+            return rpcResult(msg.id, await callIntegrationMetaTool(name, args, ctx));
+          }
+          if (isMemoryTool(name)) {
+            // Same audit contract as execute_action (CONVENTIONS §9.1/§9.3).
+            emit(
+              "mcp.execute",
+              {
+                key: name,
+                source: ctx.source,
+                remoteAddr: ctx.remoteAddr ?? null,
+                strict: ctx.strict,
+                args: redactArgs(args),
+              },
+              "mcp",
+            );
+            return rpcResult(msg.id, await callMemoryTool(name, args, ctx));
+          }
           return rpcError(msg.id, -32602, `Unknown tool: ${name}`);
+        }
       }
     }
 
