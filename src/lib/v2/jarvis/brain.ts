@@ -286,6 +286,7 @@ async function askSdk(
 
   // Per-turn wiring: tool events flow straight into this turn's stream.
   b.toolState.toolCalls = [];
+  b.toolState.conversationId = conv.id; // Human-Gate approvals thread back to this conversation
   b.emitRef.current = (ev) => onEvent(ev);
 
   const abort = () => {

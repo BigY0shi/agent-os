@@ -461,6 +461,29 @@ CREATE TABLE IF NOT EXISTS jarvis_messages (
 CREATE INDEX IF NOT EXISTS idx_jarvis_messages_conv ON jarvis_messages(conversation_id, created_at);
 `;
 
+const M033_WEBMCP_APPROVALS = `
+-- SPEC-C Human-Gate (Phase-4 chunk 2): pending approval records for
+-- requires_approval tools invoked interactively. args_json is the RAW
+-- (schema-validated) args kept for execution on approve; redacted_args_json
+-- (redactArgs, CONVENTIONS §9.3) is the ONLY variant that ever leaves the
+-- server. Timestamps TEXT UTC ISO (CONVENTIONS §1.4).
+CREATE TABLE IF NOT EXISTS webmcp_approvals (
+  id                 TEXT PRIMARY KEY,
+  slug               TEXT NOT NULL,             -- package slug, or 'registry' for plain registry-action keys
+  tool               TEXT NOT NULL,             -- tool name (or full registry key when slug='registry')
+  args_json          TEXT NOT NULL DEFAULT '{}',
+  redacted_args_json TEXT NOT NULL DEFAULT '{}',
+  requested_by       TEXT NOT NULL DEFAULT '',  -- ExecuteCtx.source ('jarvis', 'mcp:*', ...)
+  conversation_id    TEXT,                      -- jarvis_conversations id, nullable
+  status             TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','denied','expired')),
+  result_json        TEXT,                      -- ExecuteResult stored on approve
+  created_at         TEXT NOT NULL,
+  resolved_at        TEXT,
+  expires_at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_webmcp_approvals_status ON webmcp_approvals(status, created_at DESC);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -517,6 +540,26 @@ export const MIGRATIONS: Migration[] = [
     name: "jarvis_conversations",
     up: (db) => {
       db.exec(M031_JARVIS_CONVERSATIONS);
+    },
+  },
+  {
+    version: 32,
+    name: "webmcp_spec",
+    up: (db) => {
+      // SPEC-C D3.2/D5: Spec-shaped package metadata (auth kind, schedule, mcp
+      // type, config manifest — see webmcp/types.ts WebmcpSpec). NULL = no spec
+      // authored yet. Validated on write via WebmcpSpecSchema (store.setPackageSpec).
+      db.exec("ALTER TABLE webmcp_packages ADD COLUMN spec_json TEXT");
+    },
+  },
+  {
+    version: 33,
+    name: "webmcp_approvals",
+    up: (db) => {
+      db.exec(M033_WEBMCP_APPROVALS);
+      // C3.6: conversation DELETE is archive/exile semantics, never row
+      // destruction (house rule) — archived_at NULL = live.
+      db.exec("ALTER TABLE jarvis_conversations ADD COLUMN archived_at TEXT");
     },
   },
 ];

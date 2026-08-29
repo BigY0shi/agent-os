@@ -203,6 +203,7 @@ export interface Settings {
   webmcp?: {
     sandboxTimeoutMs?: number; // 'js' handler wall-clock cap (default 5000)
     allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
+    llmGetActions?: boolean;   // D1.5: LLM-filtered getActions (default true; off = keyword scorer)
   };
 
   [extra: string]: unknown;
@@ -285,7 +286,7 @@ export const DEFAULT_SETTINGS: Settings = {
     },
   },
   scratchpad: { mentionDebounceSec: 8 },
-  webmcp: { sandboxTimeoutMs: 5000, allowJsHandlers: true },
+  webmcp: { sandboxTimeoutMs: 5000, allowJsHandlers: true, llmGetActions: true },
 };
 
 function settingsPath(): string {

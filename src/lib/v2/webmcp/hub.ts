@@ -1,5 +1,6 @@
 import { listPackages, getPublishedSnapshot, type WebmcpSnapshot } from "./store";
 import { executeTool, type ExecuteResult } from "./execute";
+import { selectActionNames } from "./actionSelection";
 
 /**
  * SPEC-C D3 hub contract — the seam the C3 brain (and F4's route, indirectly
@@ -55,12 +56,11 @@ function snapshotTools(snapshot: WebmcpSnapshot): HubToolSchema[] {
 }
 
 /**
- * Tool schemas for one published package ('all' | undefined = every published
- * package). intentFilter applies the same keyword scoring as F4 searchActions
- * (the LLM-filtered selection is a chunk-3 concern); no matches → ALL tools
- * (parse-failure→all-tools rule) with a loud log.
+ * Sync enumeration of published tool schemas ('all' | undefined = every
+ * published package). No filtering — this is the brain's tool-advertising path
+ * (buildJarvisToolHandlers is sync) and the base set every filter starts from.
  */
-export function getActions(slugOrAll?: string, intentFilter?: string): HubToolSchema[] {
+export function listPublishedToolSchemas(slugOrAll?: string): HubToolSchema[] {
   const slugs =
     !slugOrAll || slugOrAll === "all"
       ? listPublishedPackages().map((p) => p.slug)
@@ -70,8 +70,11 @@ export function getActions(slugOrAll?: string, intentFilter?: string): HubToolSc
     const snapshot = getPublishedSnapshot(slug);
     if (snapshot) tools.push(...snapshotTools(snapshot));
   }
-  if (!intentFilter?.trim()) return tools;
+  return tools;
+}
 
+/** The keyword scorer — D1.5's fallback path (settings.webmcp.llmGetActions off). */
+function keywordFilter(tools: HubToolSchema[], intentFilter: string): HubToolSchema[] {
   const terms = intentFilter
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -94,16 +97,46 @@ export function getActions(slugOrAll?: string, intentFilter?: string): HubToolSc
   return scored.map((s) => s.t);
 }
 
+/**
+ * SPEC-C D1.5 — tool schemas for one published package ('all' | undefined =
+ * every published package), intent-filtered through the ported
+ * ACTION_SELECTION prompt (provider-routed modelCall, low tier, temp 0.3).
+ * JSON-parse failure / LLM error / nothing-valid → ALL tools + loud
+ * console.error (never silently narrow, handled in selectActionNames).
+ * settings.webmcp.llmGetActions=false → the keyword scorer fallback.
+ */
+export async function getActions(slugOrAll?: string, intentFilter?: string): Promise<HubToolSchema[]> {
+  const tools = listPublishedToolSchemas(slugOrAll);
+  const intent = intentFilter?.trim();
+  if (!intent) return tools;
+
+  const outcome = await selectActionNames(
+    intent,
+    tools.map((t) => ({
+      name: t.name,
+      description: `[${t.package}] ${t.description}`,
+      inputSchema: t.inputSchema,
+      scope: t.package,
+    })),
+  );
+  if (outcome.mode === "off") return keywordFilter(tools, intent);
+  if (outcome.mode === "all") return tools; // loud log already emitted
+  // LLM order preserved (dependency ordering contract).
+  const byName = new Map(tools.map((t) => [t.name, t]));
+  return outcome.names.map((n) => byName.get(n)!).filter(Boolean);
+}
+
 export function executeAction(
   slug: string,
   tool: string,
   args: Record<string, unknown>,
-  opts: { source: string; interactive?: boolean; strict?: boolean },
+  opts: { source: string; interactive?: boolean; strict?: boolean; conversationId?: string | null },
 ): Promise<ExecuteResult> {
   return executeTool(slug, tool, args, {
     source: opts.source,
     interactive: opts.interactive ?? false,
     strict: opts.strict ?? false,
+    conversationId: opts.conversationId ?? null,
   });
 }
 

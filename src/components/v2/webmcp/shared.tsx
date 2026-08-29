@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import type { WebmcpSpec } from "@/lib/v2/webmcp/types";
 
 // ── WebMCP shared atoms (SPEC-C D3) ──────────────────────────────────────────
 // Muted-neobrutalist idiom (CSS vars --fg/--panel/--panel-border), tool-brass
@@ -30,6 +31,7 @@ export interface PkgSummary {
   status: "draft" | "published" | "archived";
   currentVersion: number;
   toolCount?: number;
+  spec?: WebmcpSpec | null;
   updatedAt: string;
 }
 

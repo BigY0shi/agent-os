@@ -39,6 +39,7 @@ const componentFiles = [
   "src/components/v2/webmcp/WebmcpView.tsx",
   "src/components/v2/webmcp/PackageList.tsx",
   "src/components/v2/webmcp/PackageEditor.tsx",
+  "src/components/v2/webmcp/SpecForm.tsx",
   "src/components/v2/webmcp/ToolDesigner.tsx",
   "src/components/v2/webmcp/TestRunner.tsx",
   "src/components/v2/webmcp/VersionsPanel.tsx",
@@ -72,7 +73,8 @@ check("WebmcpSettings surfaces sandboxTimeoutMs + allowJsHandlers", gear.include
 const view = read("src/components/v2/webmcp/WebmcpView.tsx");
 check("WebmcpView mounts the gear (ConfigMenu → WebmcpSettings)", view.includes("<ConfigMenu") && view.includes("<WebmcpSettings"));
 const settingsSrc = read("src/lib/settings.ts");
-check("settings.webmcp defaults present", /webmcp: \{ sandboxTimeoutMs: 5000, allowJsHandlers: true \}/.test(settingsSrc));
+check("settings.webmcp defaults present", /webmcp: \{ sandboxTimeoutMs: 5000, allowJsHandlers: true, llmGetActions: true \}/.test(settingsSrc));
+check("WebmcpSettings surfaces the D1.5 llmGetActions toggle (rule 16)", gear.includes("llmGetActions"));
 
 // ── secrets stay write-only client-side ─────────────────────────────────────
 const secretsCmp = read("src/components/v2/webmcp/SecretsPanel.tsx");
@@ -94,6 +96,7 @@ const routeMap = [
   ["/tools", "src/app/api/v2/webmcp/packages/[id]/tools/route.ts"],
   ["/test", "src/app/api/v2/webmcp/packages/[id]/test/route.ts"],
   ["/publish", "src/app/api/v2/webmcp/packages/[id]/publish/route.ts"],
+  ["/export", "src/app/api/v2/webmcp/packages/[id]/export/route.ts"],
   ["/secrets", "src/app/api/v2/webmcp/packages/[id]/secrets/route.ts"],
   ["/logs", "src/app/api/v2/webmcp/packages/[id]/logs/route.ts"],
 ];
@@ -103,6 +106,26 @@ for (const [frag, routeFile] of routeMap) {
   check(`a component calls …${frag}`, allCmp.includes(frag));
 }
 check("package detail fetched by slug", allCmp.includes("/api/v2/webmcp/packages/${slug}"));
+
+// ── Phase-4 chunk 1: Spec tab (D3.2) + exporter UI (D5.1) ───────────────────
+const editor = read("src/components/v2/webmcp/PackageEditor.tsx");
+check("PackageEditor mounts the Spec tab", editor.includes('key: "spec"') && editor.includes("<SpecForm"));
+const specForm = read("src/components/v2/webmcp/SpecForm.tsx");
+check(
+  "SpecForm edits authKind + schedule + mcpType + config manifest",
+  specForm.includes("authKind") && specForm.includes("frequency") && specForm.includes("mcpType") && specForm.includes("configManifest"),
+);
+check("SpecForm PATCHes { spec } to the package route", specForm.includes('method: "PATCH"') && specForm.includes("spec: next"));
+const versionsCmp = read("src/components/v2/webmcp/VersionsPanel.tsx");
+check(
+  "VersionsPanel has the export UI (mode picker + confirm + POST /export)",
+  versionsCmp.includes("/export") && versionsCmp.includes("window.confirm") && /"client"[\s\S]*?"internal"/.test(versionsCmp),
+);
+check("export UI surfaces the returned path", versionsCmp.includes("exportResult.path"));
+const dbSchemaSrc = read("src/lib/v2/dbSchema.ts");
+check("migration 032 'webmcp_spec' adds spec_json", /version: 32,\s*\n\s*name: "webmcp_spec"/.test(dbSchemaSrc) && dbSchemaSrc.includes("ADD COLUMN spec_json"));
+const typesSrc = read("src/lib/v2/webmcp/types.ts");
+check("WebmcpSpecSchema is strict (loud 400 on unknown keys)", typesSrc.includes("WebmcpSpecSchema = z.strictObject"));
 
 // ── CR.1: ask lanes repointed, voice semantics preserved ────────────────────
 const jm = read("src/components/dashboard/JarvisModule.tsx");
@@ -180,6 +203,25 @@ check("logs route ?tool= filter", filtered.json.logs.length === 3 && filtered.js
 check("error rows carry ok=false + error text", filtered.json.logs.concat(p2.json.logs, p1.json.logs).some((l) => l.ok === false && l.error === "boom"));
 const missing = await logsRoute.GET(new NextRequest("http://127.0.0.1/x"), { params: Promise.resolve({ id: "nope" }) });
 check("logs route 404s on unknown package", missing.status === 404);
+
+// ── dynamic leg: export route contract (Phase-4 chunk 1) ────────────────────
+const exportRoute = await import("../../src/app/api/v2/webmcp/packages/[id]/export/route.ts");
+const callExport = async (id, body) => {
+  const res = await exportRoute.POST(
+    new NextRequest(`http://127.0.0.1/api/v2/webmcp/packages/${id}/export`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    }),
+    { params: Promise.resolve({ id }) },
+  );
+  return { status: res.status, json: await res.json() };
+};
+check("export route: unknown mode → 400", (await callExport("ui-logs", { mode: "tarball" })).status === 400);
+check("export route: missing mode → 400", (await callExport("ui-logs", {})).status === 400);
+const neverPub = await callExport("ui-logs", { mode: "client" });
+check("export route: never published → 409 with a loud message", neverPub.status === 409 && /never been published/.test(neverPub.json.error ?? ""), neverPub.json);
+check("export route: unknown package → 404", (await callExport("no-such", { mode: "client" })).status === 404);
 
 // ---------------------------------------------------------------------------
 const { __closeForTests } = await import("../../src/lib/v2/db.ts");

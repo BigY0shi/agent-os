@@ -15,6 +15,8 @@ const settingsDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-webmcp-set-")
 process.env.AGENTIC_OS_SETTINGS = path.join(settingsDir, "settings.json");
 const webmcpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-webmcp-sec-"));
 process.env.AGENTIC_OS_WEBMCP_DIR = webmcpDir;
+// D1.5: keep the LLM-filtered getActions leg deterministic + offline.
+process.env.AGENTOS_MOCK_LLM = "1";
 
 const store = await import("../../src/lib/v2/webmcp/store.ts");
 const { executeTool, executeDraftTool } = await import("../../src/lib/v2/webmcp/execute.ts");
@@ -338,9 +340,12 @@ check("pages_append lands paragraphs on today's page", draftAppend.ok === true &
 check("globalThis.__agentosMcpHub seam installed", typeof globalThis.__agentosMcpHub?.executeAction === "function" && typeof globalThis.__agentosMcpHub?.getActions === "function" && typeof globalThis.__agentosMcpHub?.listPublishedPackages === "function");
 const hubPkgs = hub.listPublishedPackages();
 check("hub lists published packages only", hubPkgs.some((p) => p.slug === "agentos") && !hubPkgs.some((p) => p.slug === "smoke-echo"));
-const hubActions = hub.getActions("all", "create a task");
+// D1.5: getActions is now async (LLM-filtered; AGENTOS_MOCK_LLM=1 set at the
+// top of this file keeps it deterministic + offline).
+const hubActions = await hub.getActions("all", "create a task");
 check("hub getActions intent filter ranks tasks_create", hubActions[0]?.name === "tasks_create" && hubActions[0].package === "agentos");
-check("hub getActions('agentos') returns exact advertised names", hub.getActions("agentos").map((t) => t.name).sort().join(",") === SEED_NAMES.join(","));
+check("hub getActions('agentos') returns exact advertised names", (await hub.getActions("agentos")).map((t) => t.name).sort().join(",") === SEED_NAMES.join(","));
+check("hub listPublishedToolSchemas stays sync (brain enumeration path)", hub.listPublishedToolSchemas("agentos").map((t) => t.name).sort().join(",") === SEED_NAMES.join(","));
 
 // ---------------------------------------------------------------------------
 // L. Packages route smoke (create via route + 409)

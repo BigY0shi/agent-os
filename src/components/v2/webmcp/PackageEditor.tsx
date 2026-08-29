@@ -1,11 +1,11 @@
 "use client";
 
-// SPEC-C D3 — package detail pane: tabs Tools | Test | Versions | Logs |
-// Secrets over GET /api/v2/webmcp/packages/[slug], plus name/description
+// SPEC-C D3 — package detail pane: tabs Spec | Tools | Test | Versions |
+// Logs | Secrets over GET /api/v2/webmcp/packages/[slug], plus name/description
 // edits and the publish / archive / delete-draft (exile) actions.
 
 import { useCallback, useEffect, useState } from "react";
-import { Archive, FlaskConical, History, KeyRound, ListOrdered, Loader2, Trash2, Wrench } from "lucide-react";
+import { Archive, FileCog, FlaskConical, History, KeyRound, ListOrdered, Loader2, Trash2, Wrench } from "lucide-react";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import {
   WEBMCP_ACCENT,
@@ -14,15 +14,17 @@ import {
   inputStyle,
   type PkgDetail,
 } from "./shared";
+import SpecForm from "./SpecForm";
 import ToolDesigner from "./ToolDesigner";
 import TestRunner from "./TestRunner";
 import VersionsPanel from "./VersionsPanel";
 import LogsPanel from "./LogsPanel";
 import SecretsPanel from "./SecretsPanel";
 
-type Tab = "tools" | "test" | "versions" | "logs" | "secrets";
+type Tab = "spec" | "tools" | "test" | "versions" | "logs" | "secrets";
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: "spec", label: "Spec", icon: <FileCog size={13} /> },
   { key: "tools", label: "Tools", icon: <Wrench size={13} /> },
   { key: "test", label: "Test", icon: <FlaskConical size={13} /> },
   { key: "versions", label: "Versions", icon: <History size={13} /> },
@@ -199,6 +201,9 @@ export default function PackageEditor({
         ))}
       </div>
 
+      {tab === "spec" && (
+        <SpecForm slug={pkg.slug} spec={pkg.spec} readOnly={readOnly} onChanged={changed} />
+      )}
       {tab === "tools" && (
         <ToolDesigner slug={pkg.slug} tools={detail.tools} allowJsHandlers={allowJsHandlers} readOnly={readOnly} onChanged={changed} />
       )}

@@ -8,7 +8,11 @@ import { getLabel } from "../memory/labels";
 import { getAction, listActions, searchActions, actionJsonSchema } from "../mcp/registry";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
-import { listPublishedPackages, getActions as hubGetActions, executeAction as hubExecuteAction } from "../webmcp/hub";
+import { listPublishedPackages, listPublishedToolSchemas, executeAction as hubExecuteAction } from "../webmcp/hub";
+import { selectActionNames } from "../webmcp/actionSelection";
+import { createApproval } from "../webmcp/approvals";
+import { getPublishedSnapshot } from "../webmcp/store";
+import type { ApprovalRequiredInfo } from "../webmcp/execute";
 import { wrapRecalledMemory } from "./prompts/system";
 import type { JarvisToolCallSummary } from "./conversations";
 
@@ -37,6 +41,8 @@ export interface JarvisTurnState {
   /** Set when recall surfaced integration:*-labeled episodes; sticky for the session. */
   integrationTainted: boolean;
   toolCalls: JarvisToolCallSummary[];
+  /** The session's conversation id — threaded onto Human-Gate approval records. */
+  conversationId?: string;
 }
 
 export function newTurnState(): JarvisTurnState {
@@ -45,15 +51,15 @@ export function newTurnState(): JarvisTurnState {
 
 export type JarvisToolEvent =
   | { type: "tool"; name: string; state: "start" | "done" | "error"; summary?: string }
-  | { type: "navigate"; route: string };
+  | { type: "navigate"; route: string }
+  /** Human-Gate: a pending approval was created — the overlay renders Approve/Deny inline. */
+  | { type: "approval"; id: string; slug: string; tool: string; redactedArgs: Record<string, unknown>; expiresAt: string };
 
 export type JarvisToolEmit = (ev: JarvisToolEvent) => void;
 
 /** Tools that stay usable under integration taint (read-only / UI-only). */
 export const SAFE_UNDER_TAINT = new Set(["memory_search", "get_actions", "navigate"]);
 
-const APPROVAL_REFUSAL =
-  "requires human approval — the approval UI lands with the Human-Gate wiring; not executed.";
 const TAINT_REFUSAL =
   "REFUSED: this turn's recalled memory included integration-sourced content " +
   "(integration:* label), so destructive/spawning tools require human approval " +
@@ -175,6 +181,55 @@ export function buildJarvisToolHandlers(opts: {
     return null;
   };
 
+  /** Human-Gate: surface a pending approval to the model AND the overlay. */
+  const approvalRequired = (info: ApprovalRequiredInfo, recordName: string): McpTextResult => {
+    record(recordName, false, `requires human approval — request ${info.id} pending`);
+    emit({
+      type: "approval",
+      id: info.id,
+      slug: info.slug,
+      tool: info.tool,
+      redactedArgs: info.redactedArgs,
+      expiresAt: info.expiresAt,
+    });
+    return text(
+      `'${recordName}' requires human approval — an approval request (${info.id}) has been shown to the user ` +
+        `(expires ${info.expiresAt}). Tell them what it will do and ask them to Approve or Deny it. Do NOT retry the tool.`,
+      true,
+    );
+  };
+
+  /** Human-Gate for registry-gated actions: create the pending record here.
+   *  `<slug>/<tool>` keys whose slug is a published package resolve to the
+   *  package lane (approve executes via webmcp published snapshot); anything
+   *  else records slug 'registry' (approve runs the registry handler). */
+  const createRegistryApproval = (key: string, args: Record<string, unknown>): ApprovalRequiredInfo => {
+    let slug = "registry";
+    let tool = key;
+    const slash = key.indexOf("/");
+    if (slash > 0) {
+      const maybeSlug = key.slice(0, slash);
+      const maybeTool = key.slice(slash + 1);
+      try {
+        const snap = getPublishedSnapshot(maybeSlug);
+        if (snap?.tools.some((t) => t.name === maybeTool)) {
+          slug = maybeSlug;
+          tool = maybeTool;
+        }
+      } catch {
+        /* store unavailable → registry lane */
+      }
+    }
+    const a = createApproval({
+      slug,
+      tool,
+      args,
+      requestedBy: "jarvis",
+      conversationId: state.conversationId ?? null,
+    });
+    return { id: a.id, slug: a.slug, tool: a.tool, redactedArgs: a.redactedArgs, expiresAt: a.expiresAt };
+  };
+
   const handlers: Record<string, JarvisToolHandler> = {
     memory_search: {
       description:
@@ -257,7 +312,32 @@ export function buildJarvisToolHandlers(opts: {
           ensureCoreActions();
           ensureTaskActions();
           const intent = typeof args.intent === "string" ? args.intent.trim() : "";
-          const actions = intent ? searchActions(intent, Number(args.limit) || 3) : listActions();
+          let actions = listActions();
+          if (intent) {
+            // D1.5: the SAME shared LLM selector hub.getActions uses (ported
+            // ACTION_SELECTION prompt), run over the full registry superset
+            // (core + memory + task + every published webmcp `<slug>/<tool>`).
+            // 'off' (settings gate) and 'all' (LLM/parse failure — loud log
+            // already emitted) fall back to the keyword scorer.
+            const outcome = await selectActionNames(
+              intent,
+              actions.map((a) => ({
+                name: a.key,
+                description: a.description,
+                inputSchema: actionJsonSchema(a),
+                scope: a.module,
+              })),
+            );
+            if (outcome.mode === "selected") {
+              const byKey = new Map(actions.map((a) => [a.key, a]));
+              actions = outcome.names
+                .map((n) => byKey.get(n))
+                .filter((a): a is NonNullable<typeof a> => Boolean(a))
+                .slice(0, 10); // dependency chains kept; hard cap keeps output sane
+            } else {
+              actions = searchActions(intent, Number(args.limit) || 3);
+            }
+          }
           if (actions.length === 0) {
             record("get_actions", true, "no matches");
             const all = listActions().map((a) => a.key);
@@ -309,10 +389,6 @@ export function buildJarvisToolHandlers(opts: {
         }
         const refused = gateTaint("execute_action");
         if (refused) return refused;
-        if (action.requiresApproval) {
-          record(`execute_action:${key}`, false, "refused (requires approval)");
-          return text(`'${key}' ${APPROVAL_REFUSAL}`, true);
-        }
         emit({ type: "tool", name: key, state: "start" });
         try {
           const parsed = action.inputSchema.safeParse(args);
@@ -321,6 +397,12 @@ export function buildJarvisToolHandlers(opts: {
             record(`execute_action:${key}`, false, msg);
             emit({ type: "tool", name: key, state: "error", summary: msg });
             return text(msg, true);
+          }
+          // Human-Gate (§9.4 taint already refused above — no approval path around taint).
+          if (action.requiresApproval) {
+            const info = createRegistryApproval(key, parsed.data as Record<string, unknown>);
+            emit({ type: "tool", name: key, state: "error", summary: `awaiting human approval (${info.id})` });
+            return approvalRequired(info, key);
           }
           const result = await action.handler(parsed.data as Record<string, unknown>, {
             source: "jarvis",
@@ -361,7 +443,7 @@ export function buildJarvisToolHandlers(opts: {
 
   // ── Published hub tools, advertised under their EXACT names (§8.7) ─────────
   try {
-    const hubTools = hubGetActions();
+    const hubTools = listPublishedToolSchemas();
     for (const t of hubTools) {
       if (handlers[t.name]) {
         console.warn(
@@ -379,8 +461,17 @@ export function buildJarvisToolHandlers(opts: {
           if (refused) return refused;
           emit({ type: "tool", name: toolName, state: "start" });
           try {
-            // Approval-required hub tools refuse inside webmcp/execute.ts — surfaced as-is.
-            const result = await hubExecuteAction(pkg, toolName, args, { source: "jarvis", interactive: true });
+            // Approval-required hub tools: webmcp/execute.ts's Human-Gate creates
+            // the pending record and hands it back on result.approval.
+            const result = await hubExecuteAction(pkg, toolName, args, {
+              source: "jarvis",
+              interactive: true,
+              conversationId: state.conversationId ?? null,
+            });
+            if (result.approval) {
+              emit({ type: "tool", name: toolName, state: "error", summary: `awaiting human approval (${result.approval.id})` });
+              return approvalRequired(result.approval, `${pkg}/${toolName}`);
+            }
             const summary = result.ok ? (result.output || "ok").slice(0, 200) : (result.error ?? "failed");
             record(toolName, result.ok, summary);
             emit({ type: "tool", name: toolName, state: result.ok ? "done" : "error", summary });
