@@ -145,15 +145,19 @@ check("state is ONE-SHOT (replay → error redirect)", replay.redirect.startsWit
 const noState = await oauth.handleCallback({ code: "good-code" });
 check("missing state → error redirect", noState.redirect.startsWith("/integrations?error="));
 
-// provider error param
+// provider error param — HARDENING-2026-08-27 item 4: the redirect carries an
+// ALLOWLISTED short code only (raw provider bodies can echo creds and are
+// attacker-shaped URL content); the detail goes to console.error server-side.
 const { state: st2 } = oauth.startOAuth("_test", "/integrations");
 const provErr = await oauth.handleCallback({ state: st2, error: "access_denied", error_description: "user said no" });
-check("provider error → error redirect with description", provErr.redirect.includes(encodeURIComponent("user said no")));
+check("provider error → allowlisted code 'provider_denied' (no raw description in URL)",
+  provErr.redirect === "/integrations?error=provider_denied" && !provErr.redirect.includes("user"), provErr.redirect);
 
-// bad code → token endpoint 400 surfaces as error redirect
+// bad code → token endpoint 400 → allowlisted 'token_exchange_failed', never the body
 const { state: st3 } = oauth.startOAuth("_test");
 const badCode = await oauth.handleCallback({ state: st3, code: "wrong" });
-check("token-exchange failure → error redirect (HTTP 400 named)", badCode.redirect.includes("error=") && decodeURIComponent(badCode.redirect).includes("400"));
+check("token-exchange failure → code 'token_exchange_failed' only (item 4)",
+  badCode.redirect === "/integrations?error=token_exchange_failed" && !decodeURIComponent(badCode.redirect).includes("400"), badCode.redirect);
 
 // ---------------------------------------------------------------------------
 // E. TTL purge + callback ROUTE handler

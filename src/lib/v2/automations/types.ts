@@ -112,6 +112,10 @@ export interface AutomationRunRow {
   id: string;
   ruleId: string;
   activityId: string | null;
+  /** Bus event id that produced this run (hardening item 12) — the
+   *  UNIQUE(rule_id, event_id) guard keys boot-replay idempotency. NULL on
+   *  legacy rows and test dry-runs. */
+  eventId: number | null;
   trigger: Record<string, unknown>;
   status: AutomationRunStatus;
   detail: {

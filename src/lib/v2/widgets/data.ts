@@ -18,6 +18,10 @@ import {
   type AccountRow,
 } from "@/lib/v2/integrations/store";
 import { callTool } from "@/lib/v2/integrations/runtime";
+import { getStatusSnapshot } from "@/lib/v2/agents/statusFeed";
+import { listNotes, listReplies, pendingJarvisCount } from "@/lib/v2/anynotes/store";
+import { getEdition, listEditionDates } from "@/lib/v2/newsletter/store";
+import type { EditionDoc } from "@/lib/v2/newsletter/types";
 import { listTasks } from "@/lib/v2/tasks/store";
 import type { Task } from "@/lib/v2/tasks/types";
 import { GET as fleetRuntimeGET } from "@/app/api/fleet/runtime/route";
@@ -25,7 +29,9 @@ import { GET as dealsListGET } from "@/app/api/deals/list/route";
 import { getWidget } from "./registry";
 import {
   SEVERITY_RANK,
+  type AnynotesRecentPayload,
   type CalendarPayload,
+  type NewsletterEditionPayload,
   type TasksUpcomingPayload,
   type WidgetData,
 } from "./types";
@@ -183,10 +189,11 @@ async function pipelineStatsData(config: Config): Promise<WidgetData> {
 }
 
 // ─── agent-status ────────────────────────────────────────────────────────────
-// Wraps the /api/fleet/runtime agents array (same derivation KPIGrid trusts);
-// rendered client-side with the SHARED StatusBand (CONVENTIONS §6). An agent
-// with no runs on disk maps to 'offline' — the fleet feed reports it 'idle'
-// but with lastRunAt null, and a band that has never run is not resting.
+// Band status comes from SPEC-E's statusFeed.getStatusSnapshot() — THE single
+// derivation (CONVENTIONS §6); this widget no longer re-derives (the old
+// "never ran → offline" special case is superseded by the §6 mapping). The
+// /api/fleet/runtime wrap remains only for the display extras (lastRunAt,
+// run counts, spend) KPIGrid already trusts.
 
 export interface AgentStatusEntry {
   id: string;
@@ -200,11 +207,12 @@ export interface AgentStatusEntry {
 
 async function agentStatusData(config: Config): Promise<WidgetData> {
   const maxAgents = Math.min(num(config.maxAgents, 8), 50);
-  const rt = await readFleetRuntime();
+  const [rt, snapshot] = await Promise.all([readFleetRuntime(), getStatusSnapshot()]);
+  const bandById = new Map(snapshot.map((s) => [s.agentId, s.status]));
   const agents: AgentStatusEntry[] = rt.agents.slice(0, maxAgents).map((a) => ({
     id: a.id,
     name: a.name,
-    status: a.lastRunAt == null ? "offline" : a.status,
+    status: bandById.get(a.id) ?? "offline",
     lastRunAt: a.lastRunAt,
     lastRunStatus: a.lastRunStatus,
     runs: a.runs,
@@ -260,19 +268,69 @@ function tasksUpcomingData(config: Config): WidgetData<TasksUpcomingPayload> {
   return { available: true, scope, tasks: tasks.map(taskWire) };
 }
 
-// ─── newsletter-edition + anynotes-recent (H3.2 placeholder contracts) ───────
-// The §6.6 payload contracts live in types.ts (NewsletterEditionPayload /
-// AnynotesRecentPayload) for SPEC-F workstreams K and I — those workstreams
-// REPLACE these stubs (CONVENTIONS §8: fill the route, never register a second
-// widget). Until then the honest envelope, so the picker greys them with the
-// reason.
+// ─── newsletter-edition (SPEC-F K4.3 — the placeholder FILLED) ──────────────
+// Reads the LATEST stored EditionDoc (same process, same db). Unlike an empty
+// AnyNotes table, "no edition row at all" is genuinely UNAVAILABLE — there is
+// no document, no date and no stats to render — so it answers honestly with
+// the reason and the fix, rather than an empty card that looks like today's
+// paper. An edition that exists but has zero stories IS available: an empty
+// news day is a real answer.
 
-function newsletterEditionData(): WidgetData {
-  return { available: false, reason: "workstream not built — the Newsletter module (SPEC-F K) fills this route" };
+function newsletterEditionData(config: Config): WidgetData<NewsletterEditionPayload> {
+  const maxStories = Math.min(num(config.maxStories, 5), 25);
+  const date = listEditionDates(1)[0];
+  if (!date) {
+    return {
+      available: false,
+      reason:
+        "no edition built yet — the daily job builds one at settings.newsletter.editionTime, or build one now on /newsletter",
+    };
+  }
+  const row = getEdition(date);
+  const doc = row?.content as EditionDoc | null;
+  if (!doc || !Array.isArray(doc.sections) || !doc.stats) {
+    return { available: false, reason: `edition ${date} is stored but unreadable — rebuild it on /newsletter` };
+  }
+
+  // Top N headlines across the document, keeping section order.
+  let budget = maxStories;
+  const sections: NewsletterEditionPayload["edition"]["sections"] = [];
+  for (const section of doc.sections) {
+    if (budget <= 0) break;
+    const stories = section.stories.slice(0, budget).map((s) => ({
+      id: s.id,
+      title: s.title,
+      url: s.url ?? null,
+      sources: s.sources.map((src) => src.name),
+    }));
+    if (stories.length === 0) continue;
+    budget -= stories.length;
+    sections.push({ topic: section.topic, stories });
+  }
+
+  return {
+    available: true,
+    edition: { date: doc.date, builtAt: doc.builtAt, sections },
+    stats: doc.stats,
+  };
 }
 
-function anynotesRecentData(): WidgetData {
-  return { available: false, reason: "workstream not built — the AnyNotes module (SPEC-F I) fills this route" };
+// ─── anynotes-recent (SPEC-F I4.1 — the placeholder FILLED) ─────────────────
+// Reads the workstream-I store directly (same process, same db). An empty
+// inbox is `available: true` with zero notes — "nothing captured yet" is a
+// real answer, not an unavailable source.
+
+function anynotesRecentData(config: Config): WidgetData<AnynotesRecentPayload> {
+  const maxItems = Math.min(num(config.maxItems, 10), 50);
+  const notes = listNotes({ status: "all", limit: maxItems }).map((n) => ({
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    url: n.url,
+    capturedAt: n.capturedAt,
+    replyCount: listReplies(n.id).length,
+  }));
+  return { available: true, notes, pendingJarvis: pendingJarvisCount() };
 }
 
 // ─── calendar (H3.3 — first connector-powered widget, proves the G4 path) ────
@@ -369,9 +427,9 @@ export async function getWidgetData(slug: string, config: Config = {}): Promise<
       case "tasks-upcoming":
         return tasksUpcomingData(config);
       case "newsletter-edition":
-        return newsletterEditionData();
+        return newsletterEditionData(config);
       case "anynotes-recent":
-        return anynotesRecentData();
+        return anynotesRecentData(config);
       case "calendar":
         return await calendarData(config);
       default:

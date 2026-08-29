@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { loadAgent, safeId } from "@/lib/agentsStore";
 import { startRun } from "@/lib/agentsRuntime";
+import { lifecycleAllowsTriggers } from "@/lib/v2/agents/lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,9 +12,12 @@ export const dynamic = "force-dynamic";
 // x-agent-secret header IS the auth. The request body is handed to the run as
 // the trigger payload.
 
+// Hash both sides so neither content nor length leaks through timing — the
+// house pattern set by the hardening pass (see api/mcp/route.ts safeEqual).
 function secretsMatch(a: string, b: string): boolean {
-  const ba = Buffer.from(a), bb = Buffer.from(b);
-  return ba.length === bb.length && timingSafeEqual(ba, bb);
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -28,6 +32,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const given = req.headers.get("x-agent-secret") ?? "";
   if (!hook.secret || !given || !secretsMatch(given, hook.secret)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Lifecycle gate (Yoshi, 2026-08-28): webhooks obey the same skip set as the
+  // scheduled trigger tick — an agent in ideation/forge/test/retired does not
+  // fire. Checked AFTER the secret so an unauthenticated caller cannot probe an
+  // agent's lifecycle by reading the status code.
+  if (!lifecycleAllowsTriggers(agent)) {
+    return NextResponse.json(
+      { error: `agent lifecycle "${agent.lifecycle ?? "deployed"}" does not fire triggers — deploy it first` },
+      { status: 403 },
+    );
   }
 
   const raw = await req.text().catch(() => "");

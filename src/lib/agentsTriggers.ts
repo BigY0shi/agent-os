@@ -21,6 +21,7 @@ import { Cron } from "croner";
 import type { AgentDef, AgentTrigger } from "./agentsTypes";
 import { agentDir, listAgents } from "./agentsStore";
 import { startRun } from "./agentsRuntime";
+import { lifecycleAllowsTriggers } from "./v2/agents/lifecycle";
 
 const TICK_MS = 60_000;
 const MIN_GMAIL_INTERVAL = 10;   // minutes — a check-run costs a model call
@@ -212,6 +213,9 @@ async function tick(): Promise<void> {
   const now = Date.now();
   for (const def of agents) {
     if (!def.enabled) continue;
+    // F1.2: lifecycle ∈ {ideation, forge, test, retired} never trigger-fires;
+    // absent lifecycle = "deployed" so nothing pre-existing stops firing.
+    if (!lifecycleAllowsTriggers(def)) continue;
     const pollers = def.triggers.filter((t) => t.type !== "manual" && t.type !== "webhook");
     if (!pollers.length) continue;
     const cursors = await readCursors(def.id);

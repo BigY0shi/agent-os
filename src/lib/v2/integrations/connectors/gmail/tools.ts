@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import type { gmail_v1 } from "googleapis";
@@ -461,9 +462,13 @@ export function getGmailTools(): ConnectorTool[] {
     },
     {
       name: "gmail_download_attachment",
-      description: "Downloads an email attachment to a specified location",
+      description:
+        "Downloads an email attachment into the Agent OS downloads folder (~/.agentic-os/downloads/gmail)",
       inputSchema: jsonSchema(DownloadAttachmentSchema),
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      // Writes attacker-controllable bytes to disk — upstream shipped this as
+      // readOnly with a free-form savePath (arbitrary file write, incl.
+      // Startup folders). Destructive + path-confined here (review 2026-08-27).
+      annotations: { readOnlyHint: false, destructiveHint: true },
     },
   ];
 }
@@ -1042,7 +1047,14 @@ export async function callGmailTool(
         }
 
         const buffer = Buffer.from(attachmentResponse.data.data, "base64url");
-        const savePath = validatedArgs.savePath || process.cwd();
+        // Confinement (review 2026-08-27): email bytes never choose their own
+        // destination. Everything lands under the fixed downloads root; the
+        // model-supplied savePath survives only as a sanitized subfolder name.
+        const downloadRoot = path.join(os.homedir(), ".agentic-os", "downloads", "gmail");
+        const subdir = validatedArgs.savePath
+          ? path.basename(validatedArgs.savePath).replace(/[^a-zA-Z0-9._ -]/g, "_")
+          : "";
+        const savePath = subdir ? path.join(downloadRoot, subdir) : downloadRoot;
         let filename = validatedArgs.filename;
 
         if (!filename) {
@@ -1068,10 +1080,23 @@ export async function callGmailTool(
             `attachment-${validatedArgs.attachmentId}`;
         }
 
+        // basename + charset scrub: no traversal, no absolute paths, no
+        // reserved characters — an email-supplied name is untrusted input.
+        filename = path.basename(filename).replace(/[^a-zA-Z0-9._ -]/g, "_") || "attachment";
         if (!fs.existsSync(savePath)) {
           fs.mkdirSync(savePath, { recursive: true });
         }
-        const fullPath = path.join(savePath, filename);
+        let fullPath = path.join(savePath, filename);
+        // Never overwrite (house rule: nothing is destroyed) — suffix instead.
+        if (fs.existsSync(fullPath)) {
+          const ext = path.extname(filename);
+          const stem = filename.slice(0, filename.length - ext.length);
+          let n = 1;
+          do {
+            fullPath = path.join(savePath, `${stem} (${n})${ext}`);
+            n++;
+          } while (fs.existsSync(fullPath));
+        }
         fs.writeFileSync(fullPath, buffer);
 
         return {

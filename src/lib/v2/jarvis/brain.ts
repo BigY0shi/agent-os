@@ -158,7 +158,11 @@ function userMsg(text: string): SDKUserMessage {
   } as SDKUserMessage;
 }
 
-function historyBlock(conversationId: string, excludeLatestUserText?: string, cap = 20): string {
+function historyBlock(
+  conversationId: string,
+  excludeLatestUserText?: string,
+  cap = 20,
+): { block: string; tainted: boolean } {
   let msgs = listMessages(conversationId);
   // The current turn's user row is persisted BEFORE the lanes run — drop it so
   // history never duplicates the live message.
@@ -167,9 +171,16 @@ function historyBlock(conversationId: string, excludeLatestUserText?: string, ca
     msgs = msgs.slice(0, -1);
   }
   msgs = msgs.slice(-cap);
-  if (msgs.length === 0) return "";
+  // §9.4: replaying a tainted turn puts integration-derived content back into
+  // the model's context — the fresh session must inherit the taint, or a
+  // restart/rebuild silently resets the write-gate (review finding 2026-08-27).
+  const tainted = msgs.some((m) => m.tainted === true);
+  if (msgs.length === 0) return { block: "", tainted };
   const lines = msgs.map((m) => `${m.role === "user" ? "User" : "Jarvis"}: ${m.content.slice(0, 800)}`);
-  return `<conversation_history>\nEarlier turns of this conversation (resumed):\n${lines.join("\n")}\n</conversation_history>`;
+  return {
+    block: `<conversation_history>\nEarlier turns of this conversation (resumed):\n${lines.join("\n")}\n</conversation_history>`,
+    tainted,
+  };
 }
 
 function* splitSentences(buf: { text: string }): Generator<string> {
@@ -181,13 +192,24 @@ function* splitSentences(buf: { text: string }): Generator<string> {
   }
 }
 
-function ingestExchange(conversationId: string, userText: string, agentText: string): void {
+function ingestExchange(
+  conversationId: string,
+  userText: string,
+  agentText: string,
+  tainted: boolean,
+): void {
   const body = `<user>\n${userText}\n</user>\n<agent>\n${agentText}\n</agent>`;
+  // §9.4 laundering fix (HARDENING-2026-08-27 item 2): a tainted turn contains
+  // integration-derived third-party content — re-ingesting it under only the
+  // 'jarvis' label would launder that content into trusted memory (future
+  // recall of the exchange would NOT re-taint). The memory of the conversation
+  // is still wanted, so ingest proceeds — labeled honestly with an
+  // integration:* label so recall of it re-arms the write-gate.
   ingestFromModule({
     episodeBody: body,
     source: "jarvis",
     sessionId: `jarvis-${conversationId}`,
-    labelNames: ["jarvis"],
+    labelNames: tainted ? ["jarvis", "integration:jarvis-relay"] : ["jarvis"],
   }).catch((err) =>
     console.warn(
       "[v2/jarvis] exchange ingest failed (non-blocking):",
@@ -228,6 +250,16 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
       systemPrompt: { type: "preset", preset: "claude_code", append: stable },
       includePartialMessages: true,
       permissionMode: "bypassPermissions",
+      // Jarvis mutates the OS ONLY through the gated MCP tools below — the
+      // preset's native Bash/Write/Edit would bypass every capability gate,
+      // the Human-Gate, and the §9.4 taint rule (review finding 2026-08-27).
+      // Belt and braces: allowlist the MCP server AND deny the native suite.
+      allowedTools: ["mcp__agentos"],
+      disallowedTools: [
+        "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "Task",
+        "WebFetch", "WebSearch", "Read", "Glob", "Grep", "TodoWrite",
+        "KillShell", "BashOutput",
+      ],
       mcpServers: { agentos: server },
       env: Object.fromEntries(
         Object.entries(sanitizeSpawnEnv({ ...process.env, NO_COLOR: "1" })).filter(
@@ -263,7 +295,7 @@ async function askSdk(
   input: JarvisAskInput,
   onEvent: (ev: JarvisAskEvent) => void,
   signal?: AbortSignal,
-): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; costUsd: number | null; turns: number }> {
+): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number }> {
   const stable = buildStableSystemPrompt();
   const sig = toolsSignature();
 
@@ -303,7 +335,8 @@ async function askSdk(
   if (resumed) {
     // History EXCLUDES the just-persisted user turn (it rides as the live text).
     const history = historyBlock(conv.id, input.text);
-    if (history) parts.push(history);
+    if (history.block) parts.push(history.block);
+    if (history.tainted) b.toolState.integrationTainted = true;
   }
   parts.push(input.text);
   b.push(userMsg(parts.join("\n\n")));
@@ -349,6 +382,7 @@ async function askSdk(
   return {
     answer: sentences.join(" "),
     toolCalls: [...b.toolState.toolCalls],
+    tainted: b.toolState.integrationTainted,
     costUsd: cost,
     turns: b.turns,
   };
@@ -363,9 +397,10 @@ async function askCli(
   input: JarvisAskInput,
   onEvent: (ev: JarvisAskEvent) => void,
   signal?: AbortSignal,
-): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"] }> {
+): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean }> {
   // Recall — same searchV2 store as the sdk lane's memory_search tool.
   let recallBlock: string | null = null;
+  let recallTainted = false;
   try {
     const result = (await searchV2(input.text, { structured: true, source: "jarvis" })) as RecallResult;
     const nonEmpty =
@@ -375,6 +410,7 @@ async function askCli(
       if (md?.trim()) recallBlock = wrapRecalledMemory(md);
       const tainted = recallIntegrationLabels(result);
       if (tainted.length) {
+        recallTainted = true; // the turn row gets marked so replay re-taints an sdk session
         console.warn(
           `[v2/jarvis] cli-lane recall included integration-labeled episodes (${tainted.join(", ")}) — answer-only lane has no tools, nothing to gate`,
         );
@@ -391,7 +427,7 @@ async function askCli(
   const prompt = [
     buildSystemPrompt({ pageContext: input.pageContext }),
     CLI_ANSWER_ONLY_NOTE,
-    history || null,
+    history.block || null,
     recallBlock,
     `The user says:\n${input.text}`,
     "Respond as Jarvis, in character, plain prose.",
@@ -411,7 +447,7 @@ async function askCli(
     sentences.push(tail);
     onEvent({ type: "sentence", text: tail });
   }
-  return { answer: sentences.join(" "), toolCalls: [] };
+  return { answer: sentences.join(" "), toolCalls: [], tainted: recallTainted || history.tainted };
 }
 
 // ---------------------------------------------------------------------------
@@ -471,8 +507,9 @@ export async function askJarvisV2(
       role: "assistant",
       content: answer,
       toolCalls: run.toolCalls,
+      tainted: run.tainted, // §9.4 — replay of this row re-taints a fresh session
     });
-    ingestExchange(conv.id, text, answer);
+    ingestExchange(conv.id, text, answer, run.tainted);
 
     const done: { type: "done"; costUsd?: number | null; turns?: number; durationMs: number } = {
       type: "done",

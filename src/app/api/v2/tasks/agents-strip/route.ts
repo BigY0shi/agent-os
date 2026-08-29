@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ensureV2 } from "@/lib/v2/boot";
 import { listAgents, listRuns } from "@/lib/agentsStore";
-import { agentHasActiveRun, pendingApprovals } from "@/lib/agentsRuntime";
+import { getStatusSnapshot } from "@/lib/v2/agents/statusFeed";
 import { listTasks } from "@/lib/v2/tasks/store";
 import type { StatusBandKind } from "@/components/v2/StatusBand";
 
@@ -13,26 +13,22 @@ const noStore = { headers: { "cache-control": "no-store" } };
 /**
  * GET /api/v2/tasks/agents-strip — the B4 AgentsSection payload.
  *
- * THIN by design: a butler-activity-style derivation over the agents module's
- * current state (agentsStore run metas + agentsRuntime in-flight registry +
- * v2 task assignments). SPEC-E's statusFeed.getStatusSnapshot() replaces these
- * internals later; the response shape is the stable part.
- *
- * Band derivation (CONVENTIONS §6 order):
- *   disabled → offline · running run → running · Waiting/Review task assigned
- *   or pending approval → waiting · last run failed → error · else idle.
+ * Band status comes from SPEC-E's statusFeed.getStatusSnapshot() — THE single
+ * derivation (CONVENTIONS §6); this route no longer re-derives (the task
+ * overlay it used to compute locally now lives inside statusFeed). What stays
+ * here is the payload dressing: last-run info + the task lists the strip
+ * renders.
  */
 export async function GET() {
   ensureV2();
   try {
-    const [defs, approvals] = await Promise.all([listAgents(), pendingApprovals().catch(() => [])]);
-    const approvalAgentIds = new Set(approvals.map((a) => a.agentId));
+    const [defs, snapshot] = await Promise.all([listAgents(), getStatusSnapshot()]);
+    const bandById = new Map(snapshot.map((s) => [s.agentId, s]));
 
     const agents = await Promise.all(
       defs.map(async (def) => {
         const runs = await listRuns(def.id, 5).catch(() => []);
         const lastRun = runs[0] ?? null;
-        const running = agentHasActiveRun(def.id);
 
         const assigned = listTasks({ agentId: def.id, limit: 100 });
         const needsYou = assigned.filter((t) => t.status === "Waiting" || t.status === "Review");
@@ -43,12 +39,7 @@ export async function GET() {
           .slice(0, 3)
           .map((t) => ({ displayId: t.displayId, title: t.title, nextRunAt: t.runAt }));
 
-        let band: StatusBandKind;
-        if (!def.enabled) band = "offline";
-        else if (running || current) band = "running";
-        else if (needsYou.length > 0 || approvalAgentIds.has(def.id)) band = "waiting";
-        else if (lastRun?.status === "error") band = "error";
-        else band = "idle";
+        const band: StatusBandKind = bandById.get(def.id)?.status ?? "offline";
 
         return {
           id: def.id,

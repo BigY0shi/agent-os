@@ -1,0 +1,365 @@
+// SPEC-E X.2 — smoke-agents-forge: the ForgeWizard's API path, OFFLINE.
+// Covers: harness seeds + CRUD/exile over the route · the wizard's create
+// path (POST /api/agents + PATCH V2 fields + lifecycle "test") · lifecycle
+// transitions + the deploy guard's 409 leg AND the CONVENTIONS §11 warning
+// mode (agents.requireTestRun=false → deploy succeeds with a warning) · the
+// status snapshot reflecting the new agent (?once=1) · the telemetry route
+// (listSessionRows({agentId}) + listStatusEvents) · the draft route's
+// validation leg (no CLI is ever spawned here).
+//
+// Live-SDK legs (ralph-loop ≥2 iterations, phases approval card, deploy E2E
+// with a real test run) are OUT of scope — see the Phase 7 manual checklist.
+// Run: npx tsx scripts/v2/smoke-agents-forge.mjs
+import path from "node:path";
+import os from "node:os";
+import fs from "node:fs";
+
+// ── temp env BEFORE any src imports (smoke-harnesses recipe) ─────────────────
+const stamp = Date.now();
+const tmpDb = path.join(os.tmpdir(), `agentos-smoke-forge-${stamp}.db`);
+process.env.AGENTIC_OS_DB = tmpDb;
+const settingsDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-forge-settings-"));
+const settingsFile = path.join(settingsDir, "settings.json");
+process.env.AGENTIC_OS_SETTINGS = settingsFile;
+const agentsDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-forge-agents-"));
+process.env.AGENTIC_OS_AGENTS_DIR = agentsDir;
+process.env.OLLAMA_URL = "http://127.0.0.1:1"; // dead port — nothing may reach a live model
+
+const baseSettings = {
+  memory: { ingestEnabled: false },
+  capability: { browserEnabled: false },
+  tasks: { timezone: "America/Chicago" },
+  browser: { wsPort: 0, wsBind: "local", profiles: [], sessions: [] },
+};
+const writeSettings = (extra = {}) =>
+  fs.writeFileSync(settingsFile, JSON.stringify({ ...baseSettings, ...extra }));
+writeSettings(); // default: agents.requireTestRun absent → DEFAULT_SETTINGS true (hard gate)
+
+let failures = 0;
+const check = (name, cond, extra = "") => {
+  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${cond ? "" : extra ? `  [${JSON.stringify(extra).slice(0, 300)}]` : ""}`);
+  if (!cond) failures++;
+};
+
+const { NextRequest } = await import("next/server.js");
+const store = await import("../../src/lib/agentsStore.ts");
+const lc = await import("../../src/lib/v2/agents/lifecycle.ts");
+const harnessRoute = await import("../../src/app/api/v2/harnesses/route.ts");
+const agentsRoute = await import("../../src/app/api/agents/route.ts");
+const idRoute = await import("../../src/app/api/agents/[id]/route.ts");
+const statusRoute = await import("../../src/app/api/v2/agents/status/route.ts");
+const telemetryRoute = await import("../../src/app/api/v2/agents/[id]/telemetry/route.ts");
+const draftRoute = await import("../../src/app/api/v2/agents/draft/route.ts");
+
+const req = (url, method = "GET", body = null) =>
+  new NextRequest(`http://127.0.0.1:3737${url}`, {
+    method,
+    ...(body ? { body: JSON.stringify(body), headers: { "content-type": "application/json" } } : {}),
+  });
+const patchAgent = (id, body) =>
+  idRoute.PATCH(req(`/api/agents/${id}`, "PATCH", body), { params: Promise.resolve({ id }) });
+
+// ── §A harness seeds + CRUD/exile over the route ─────────────────────────────
+console.log("\n── §A harnesses route: seeds + CRUD + exile ──");
+{
+  const list = await (await harnessRoute.GET(req("/api/v2/harnesses"))).json();
+  const ids = (list.harnesses ?? []).map((h) => h.id).sort();
+  check("A1 GET lazy-seeds the 4 builtins",
+    JSON.stringify(ids) === JSON.stringify(["fable-harness", "feat-loop", "oneshot-plain", "ralph-loop"]), ids);
+
+  const created = await (await harnessRoute.POST(req("/api/v2/harnesses", "POST", {
+    name: "Forge Smoke", kind: "loop",
+    definition: { systemPreamble: "FORGE SMOKE", loop: { maxIterations: 2, stopWhen: "FS-DONE" } },
+  }))).json();
+  check("A2 POST creates a user harness", created.harness?.id === "forge-smoke", created);
+
+  const patched = await (await harnessRoute.PATCH(req("/api/v2/harnesses", "PATCH", { id: "forge-smoke", description: "patched by smoke" }))).json();
+  check("A3 PATCH round-trips", patched.harness?.description === "patched by smoke", patched);
+
+  const builtinEdit = await (await harnessRoute.PATCH(req("/api/v2/harnesses", "PATCH", { id: "ralph-loop", description: "builtins are editable" }))).json();
+  check("A4 builtins are EDITABLE", builtinEdit.harness?.description === "builtins are editable", builtinEdit);
+
+  const del = await harnessRoute.DELETE(req("/api/v2/harnesses", "DELETE", { id: "forge-smoke" }));
+  check("A5 DELETE exiles the user row", del.status === 200 && (await del.json()).ok === true);
+  const after = await (await harnessRoute.GET(req("/api/v2/harnesses"))).json();
+  check("A6 exiled row hidden from the default list", !after.harnesses.some((h) => h.id === "forge-smoke"));
+  const withEx = await (await harnessRoute.GET(req("/api/v2/harnesses?includeExiled=1"))).json();
+  check("A7 ...but present with ?includeExiled=1 (never dropped)", withEx.harnesses.some((h) => h.id === "forge-smoke"));
+
+  const delBuiltin = await harnessRoute.DELETE(req("/api/v2/harnesses", "DELETE", { id: "fable-harness" }));
+  check("A8 builtin DELETE → 409 (surfaced to the library UI)", delBuiltin.status === 409);
+}
+
+// ── §B the wizard's create path (POST + PATCH V2 fields, lifecycle test) ─────
+console.log("\n── §B wizard create path ──");
+let agentId = null;
+{
+  const created = await (await agentsRoute.POST(req("/api/agents", "POST", {
+    name: "smoke forge echo",
+    description: "smoke wizard agent",
+    instructions: "Reply with today's date and stop.",
+    permissionMode: "bypass",
+    intelligence: "fast",
+  }))).json();
+  agentId = created.agent?.id ?? null;
+  check("B1 POST /api/agents creates the agent (manual trigger default)",
+    !!agentId && created.agent.triggers?.[0]?.type === "manual", created);
+
+  const patchRes = await patchAgent(agentId, {
+    lifecycle: "test",
+    harnessId: "oneshot-plain",
+    persona: { name: "Smoke Voice", voiceRules: "terse", bannedPhrases: ["synergy"] },
+    provider: { kind: "ollama", model: "smoke-model" },
+    browserSessions: ["research"],
+    toolIds: ["pkg-a"],
+    connectorIds: [],
+  });
+  const patchJson = await patchRes.json();
+  check("B2 PATCH lands every V2 field + lifecycle test", patchRes.status === 200 &&
+    patchJson.agent.lifecycle === "test" && patchJson.agent.harnessId === "oneshot-plain" &&
+    patchJson.agent.persona?.name === "Smoke Voice" && patchJson.agent.provider?.kind === "ollama" &&
+    patchJson.agent.browserSessions?.[0] === "research" && patchJson.agent.toolIds?.[0] === "pkg-a", patchJson);
+
+  const onDisk = await store.loadAgent(agentId);
+  check("B3 V2 fields round-trip to agent.json on disk",
+    onDisk?.lifecycle === "test" && onDisk?.persona?.name === "Smoke Voice" && onDisk?.provider?.model === "smoke-model");
+  check("B4 test lifecycle parks the trigger tick (F1.2)", lc.lifecycleAllowsTriggers(onDisk) === false);
+
+  const badPersona = await patchAgent(agentId, { persona: { name: "x" } });
+  check("B5 malformed persona → 400", badPersona.status === 400);
+  const badLc = await patchAgent(agentId, { lifecycle: "imaginary" });
+  check("B6 unknown lifecycle → 400", badLc.status === 400);
+}
+
+// ── §C deploy guard: the 409 leg, then deploy after a done run ───────────────
+console.log("\n── §C deploy guard (hard mode — default) ──");
+{
+  const denied = await patchAgent(agentId, { lifecycle: "deployed" });
+  const deniedJson = await denied.json();
+  check("C1 deploy BEFORE any done run → 409", denied.status === 409, `status ${denied.status}`);
+  check("C2 the 409 error text tells the user what to do (surfaced by the wizard)",
+    /successful|Test first/i.test(deniedJson.error ?? ""), deniedJson);
+
+  const deniedLib = await lc.transitionLifecycle(agentId, "deployed");
+  check("C3 transitionLifecycle agrees (shared checkDeployGuard)", "error" in deniedLib && deniedLib.status === 409);
+
+  await store.saveRunMeta({
+    id: "smoke-run-1", agentId, trigger: "manual", status: "done",
+    startedAt: Date.now() - 9000, endedAt: Date.now() - 8000, result: "ok",
+  });
+  const okRes = await patchAgent(agentId, { lifecycle: "deployed" });
+  const okJson = await okRes.json();
+  check("C4 deploy AFTER a done run → 200, lifecycle deployed", okRes.status === 200 && okJson.agent.lifecycle === "deployed", okJson);
+  check("C5 hard mode carries NO warning", okJson.warning === undefined, okJson);
+  const onDisk = await store.loadAgent(agentId);
+  check("C6 deployed agent re-enters the trigger tick", lc.lifecycleAllowsTriggers(onDisk) === true);
+}
+
+// ── §D warning mode (CONVENTIONS §11: agents.requireTestRun=false) ───────────
+console.log("\n── §D deploy gate warning mode ──");
+{
+  writeSettings({ agents: { requireTestRun: false } });
+  const created = await (await agentsRoute.POST(req("/api/agents", "POST", {
+    name: "smoke warn agent", instructions: "reply ok",
+  }))).json();
+  const warnId = created.agent.id;
+  await patchAgent(warnId, { lifecycle: "test" });
+
+  const res = await patchAgent(warnId, { lifecycle: "deployed" });
+  const j = await res.json();
+  check("D1 requireTestRun=false: deploy WITHOUT a done run succeeds", res.status === 200 && j.agent.lifecycle === "deployed", j);
+  check("D2 ...and the response carries the WARNING for the amber banner",
+    typeof j.warning === "string" && /without a successful test run/.test(j.warning), j);
+
+  const libRes = await lc.transitionLifecycle(warnId, "test"); // back to test
+  check("D3 transitionLifecycle back to test is unguarded", "agent" in libRes && libRes.agent.lifecycle === "test");
+  const libDeploy = await lc.transitionLifecycle(warnId, "deployed");
+  check("D4 transitionLifecycle warning mode agrees", "agent" in libDeploy && typeof libDeploy.warning === "string", libDeploy);
+
+  // No-trigger leg stays HARD in both modes.
+  await store.saveAgent({ ...(await store.loadAgent(warnId)), lifecycle: "test", triggers: [] });
+  const noTrig = await patchAgent(warnId, { lifecycle: "deployed" });
+  check("D5 zero triggers → 409 even in warning mode", noTrig.status === 409);
+
+  writeSettings(); // restore hard mode
+  const restored = await lc.checkDeployGuard("nonexistent-id", { triggers: [{ type: "manual" }] });
+  check("D6 settings restore: hard mode back on (guard blocks again)", !!restored.block && restored.block.status === 409);
+}
+
+// ── §D2 force-deploy override (per-deploy; the SETTING is never touched) ─────
+console.log("");
+console.log("── §D2 force-deploy override (hard mode + forceDeploy) ──");
+{
+  writeSettings(); // hard mode — the default the override has to punch through
+  const mk = async (name) => {
+    const c = await (await agentsRoute.POST(req("/api/agents", "POST", { name, instructions: "reply ok" }))).json();
+    await patchAgent(c.agent.id, { lifecycle: "test" });
+    return c.agent.id;
+  };
+
+  const fId = await mk("smoke force agent");
+
+  // The plain block must ADVERTISE that a way through exists, so the UI can
+  // offer it without string-matching the error message.
+  const blocked = await patchAgent(fId, { lifecycle: "deployed" });
+  const blockedJson = await blocked.json();
+  check("D7 hard-mode block still 409s without force", blocked.status === 409);
+  check("D8 ...and flags itself overridable for the UI", blockedJson.overridable === true, blockedJson);
+
+  const forced = await patchAgent(fId, { lifecycle: "deployed", forceDeploy: true });
+  const forcedJson = await forced.json();
+  check("D9 forceDeploy deploys with NO done run", forced.status === 200 && forcedJson.agent.lifecycle === "deployed", forcedJson);
+  check("D10 ...and says plainly that nothing proved it works",
+    typeof forcedJson.warning === "string" && /overrode|WITHOUT/i.test(forcedJson.warning), forcedJson);
+
+  const stamped = await store.loadAgent(fId);
+  check("D11 the override is stamped on the agent record",
+    !!stamped.deployOverride && typeof stamped.deployOverride.at === "number", stamped.deployOverride);
+  check("D12 a reason rides along when given", await (async () => {
+    const rId = await mk("smoke force reason");
+    await patchAgent(rId, { lifecycle: "deployed", forceDeploy: true, deployReason: "demo for the board" });
+    const a = await store.loadAgent(rId);
+    return a.deployOverride?.reason === "demo for the board";
+  })());
+
+  // The whole point: one deploy, not a mode. The next agent is gated again.
+  const nextId = await mk("smoke still gated");
+  const stillBlocked = await patchAgent(nextId, { lifecycle: "deployed" });
+  check("D13 the SETTING is untouched — the next deploy is gated again", stillBlocked.status === 409);
+  // Read the settings FILE, not a cached accessor: the claim is that nothing
+  // persisted the override, and only the file can prove that.
+  const onDiskSettings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  check("D14 settings.agents.requireTestRun was never written to disk",
+    onDiskSettings.agents?.requireTestRun !== false, onDiskSettings.agents ?? null);
+
+  // force must NOT be able to deploy an agent that can never fire.
+  const ntId = await mk("smoke force no trigger");
+  await store.saveAgent({ ...(await store.loadAgent(ntId)), lifecycle: "test", triggers: [] });
+  const ntRes = await patchAgent(ntId, { lifecycle: "deployed", forceDeploy: true });
+  const ntJson = await ntRes.json();
+  check("D15 force does NOT bypass the zero-trigger block", ntRes.status === 409, ntJson);
+  check("D16 ...and that block is NOT advertised as overridable", ntJson.overridable === undefined, ntJson);
+
+  // deployOverride is server-stamped; a request body must never be able to forge it.
+  const forgeId = await mk("smoke forge override");
+  await store.saveRunMeta({
+    id: "smoke-forge-run", agentId: forgeId, trigger: "manual", status: "done",
+    startedAt: Date.now() - 9000, endedAt: Date.now() - 8000, result: "ok",
+  });
+  await patchAgent(forgeId, { lifecycle: "deployed", deployOverride: { at: 1, reason: "forged" } });
+  const forgeCheck = await store.loadAgent(forgeId);
+  check("D17 deployOverride cannot be forged from the request body",
+    forgeCheck.deployOverride === undefined, forgeCheck.deployOverride);
+
+  // In warning mode force is a no-op: nothing was overridden, so nothing is stamped.
+  writeSettings({ agents: { requireTestRun: false } });
+  const wId = await mk("smoke force in warn mode");
+  await patchAgent(wId, { lifecycle: "deployed", forceDeploy: true });
+  const wAgent = await store.loadAgent(wId);
+  check("D18 force is a no-op when the gate is already off (no false override stamp)",
+    wAgent.lifecycle === "deployed" && wAgent.deployOverride === undefined, wAgent.deployOverride);
+
+  // The library path shares the guard, so it must honour force identically.
+  writeSettings();
+  const libId = await mk("smoke force via lib");
+  const libBlocked = await lc.transitionLifecycle(libId, "deployed");
+  check("D19 transitionLifecycle blocks without force", "error" in libBlocked && libBlocked.status === 409);
+  const libForced = await lc.transitionLifecycle(libId, "deployed", { force: true });
+  check("D20 transitionLifecycle honours force (shared guard, one code path)",
+    "agent" in libForced && libForced.agent.lifecycle === "deployed" && !!libForced.agent.deployOverride, libForced);
+
+  writeSettings(); // leave hard mode on for later sections
+}
+
+// ── §E status snapshot reflects the fleet (?once=1) ──────────────────────────
+console.log("\n── §E status feed reflects the forge ──");
+{
+  // Park the first agent back in test so both bands are represented.
+  await patchAgent(agentId, { lifecycle: "test" });
+  const once = await (await statusRoute.GET(req("/api/v2/agents/status?once=1"))).json();
+  check("E1 ?once=1 returns the snapshot", Array.isArray(once.agents) && once.agents.length >= 2, once);
+  const mine = once.agents.find((a) => a.agentId === agentId);
+  check("E2 test-lifecycle agent → offline with the lifecycle word as detail",
+    mine?.status === "offline" && mine?.detail === "test", mine);
+
+  await patchAgent(agentId, { lifecycle: "deployed" }); // has a done run — allowed
+  const once2 = await (await statusRoute.GET(req("/api/v2/agents/status?once=1"))).json();
+  const mine2 = once2.agents.find((a) => a.agentId === agentId);
+  check("E3 deployed + no live run → idle", mine2?.status === "idle", mine2);
+
+  const { getDb } = await import("../../src/lib/v2/db.ts");
+  const rows = getDb().prepare("SELECT status FROM agent_status_events WHERE agent_id = ? ORDER BY id").all(agentId);
+  check("E4 agent_status_events recorded the transitions (offline→idle)",
+    rows.length >= 2 && rows.some((r) => r.status === "offline") && rows.some((r) => r.status === "idle"), rows);
+}
+
+// ── §F telemetry route (RunsTab side data) ───────────────────────────────────
+console.log("\n── §F telemetry route ──");
+{
+  const res = await telemetryRoute.GET(req(`/api/v2/agents/${agentId}/telemetry`), { params: Promise.resolve({ id: agentId }) });
+  const j = await res.json();
+  check("F1 telemetry 200 with sessions[] + statusEvents[]",
+    res.status === 200 && Array.isArray(j.sessions) && Array.isArray(j.statusEvents), j);
+  check("F2 no browser sessions driven yet (honest empty)", j.sessions.length === 0);
+  check("F3 statusEvents history present for this agent",
+    j.statusEvents.length >= 1 && j.statusEvents.every((e) => e.agent_id === agentId), j.statusEvents.slice(0, 3));
+  const bad = await telemetryRoute.GET(req("/api/v2/agents/..%2F/telemetry"), { params: Promise.resolve({ id: "../evil" }) });
+  check("F4 bad id → 400", bad.status === 400);
+}
+
+// ── §G draft route (validation only — NO CLI spawn offline) ──────────────────
+console.log("\n── §G draft route validation ──");
+{
+  const res = await draftRoute.POST(req("/api/v2/agents/draft", "POST", {}));
+  check("G1 missing idea → 400 (no provider spawned)", res.status === 400);
+  const j = await res.json();
+  check("G2 error names the problem", /idea/.test(j.error ?? ""), j);
+}
+
+// ── §H webhook trigger obeys the lifecycle gate (Yoshi, 2026-08-28) ──────────
+// The scheduled tick already skips ideation/forge/test/retired; the hook route
+// now applies the SAME predicate, so an undeployed agent cannot be fired from
+// outside. Ordering matters: the secret is checked FIRST, so a caller without
+// the secret gets 401 and learns nothing about the agent's lifecycle.
+console.log("\n── §H webhook lifecycle gate ──");
+{
+  const hookRoute = await import("../../src/app/api/agents/hook/[id]/route.ts");
+  const SECRET = "smoke-hook-secret";
+  const hookReq = (secret) =>
+    new NextRequest(`http://127.0.0.1:3737/api/agents/hook/${agentId}`, {
+      method: "POST",
+      body: JSON.stringify({ ping: 1 }),
+      headers: { "content-type": "application/json", ...(secret ? { "x-agent-secret": secret } : {}) },
+    });
+  const call = (secret) => hookRoute.POST(hookReq(secret), { params: Promise.resolve({ id: agentId }) });
+
+  await patchAgent(agentId, { triggers: [{ type: "webhook", secret: SECRET }] });
+
+  // Park it back in "test" — the state the gate exists to catch.
+  await patchAgent(agentId, { lifecycle: "test" });
+  const parked = await call(SECRET);
+  const parkedJson = await parked.json();
+  check("H1 authenticated hook on a TEST agent → 403 (no run started)", parked.status === 403, parkedJson);
+  check("H2 the 403 names the lifecycle and the remedy",
+    /lifecycle|deploy/i.test(parkedJson.error ?? ""), parkedJson);
+
+  const noSecret = await call("");
+  check("H3 missing secret → 401, NOT 403 (lifecycle is not probeable)", noSecret.status === 401);
+  const wrongSecret = await call("not-the-secret");
+  check("H4 wrong secret → 401 regardless of lifecycle", wrongSecret.status === 401);
+
+  const src = fs.readFileSync("src/app/api/agents/hook/[id]/route.ts", "utf8");
+  // "Forked skip set" = the route re-deciding which lifecycles fire, instead of
+  // calling the predicate. Prose mentioning the states is fine; a Set/array
+  // literal or an equality test against a lifecycle name is not.
+  const codeOnly = src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  check("H5 hook route wired to the SHARED predicate (no forked skip set)",
+    /lifecycleAllowsTriggers\(agent\)/.test(codeOnly) &&
+    !/new Set\(|lifecycle\s*===\s*["']/.test(codeOnly), codeOnly.slice(0, 200));
+  check("H6 hook secret compare is hash-then-timingSafeEqual (no length leak)",
+    /createHash\("sha256"\)/.test(src) && !/ba\.length === bb\.length/.test(src));
+}
+
+// ── cleanup note ─────────────────────────────────────────────────────────────
+console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}  (temp db: ${tmpDb}, agents: ${agentsDir})`);
+process.exit(failures === 0 ? 0 : 1); // route imports hold ensureV2 timers

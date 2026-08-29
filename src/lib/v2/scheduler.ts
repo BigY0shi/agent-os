@@ -73,12 +73,25 @@ export function scheduleJob(input: ScheduleJobInput): JobRow {
   const id = input.id ?? uuid();
   const runAt = input.runAt ?? (input.rrule ? nextFromRrule(input.rrule, new Date()) : null);
   const db = getDb();
+  // ON CONFLICT: keep the EXISTING run_at when the incoming run_at was merely
+  // DERIVED from an unchanged rrule — deterministic jobs are re-registered on
+  // every boot, and recomputing run_at from `now` pushed overdue
+  // (missed-while-down) jobs into the future instead of letting the boot tick
+  // fire them (review 2026-08-27). An explicit runAt or a changed rrule still
+  // takes the new value.
+  const preserveDerivedRunAt = !input.runAt && input.rrule ? 1 : 0;
   db.prepare(
     `INSERT INTO jobs(id, kind, name, payload, rrule, run_at, enabled, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        kind=excluded.kind, name=excluded.name, payload=excluded.payload,
-       rrule=excluded.rrule, run_at=excluded.run_at, enabled=excluded.enabled`,
+       run_at=CASE
+         WHEN ${preserveDerivedRunAt} = 1 AND jobs.rrule IS excluded.rrule AND jobs.run_at IS NOT NULL
+           THEN jobs.run_at
+         ELSE excluded.run_at
+       END,
+       rrule=excluded.rrule,
+       enabled=excluded.enabled`,
   ).run(
     id,
     input.kind,

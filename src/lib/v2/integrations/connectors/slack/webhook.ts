@@ -78,11 +78,17 @@ export function slackEventToActivities(
 
   const type = String(event.type ?? "");
   const user = String(event.user ?? "");
+  // Item 7: Slack's per-delivery event_id dedupes x-slack-retry-num
+  // redeliveries; message activities use channel:ts instead so the WEBHOOK
+  // lane and the POLL-fallback lane collide on the same key (one activity per
+  // message however it arrived). event_id remains the fallback.
+  const eventId = String(body.event_id ?? "");
 
   // Never re-capture the bridge bot's own messages (echo loop guard).
   if (opts.botUserId && user && user === opts.botUserId) return { activities: [] };
 
   if (type === "app_mention") {
+    const ts = String(event.ts ?? "");
     activities.push({
       text: `Slack mention in ${channel} from ${user}: "${String(event.text ?? "")}"`,
       sourceURL,
@@ -92,13 +98,15 @@ export function slackEventToActivities(
         channel,
         user,
         text: String(event.text ?? ""),
-        ts: String(event.ts ?? ""),
+        ts,
         ...(event.thread_ts ? { threadTs: String(event.thread_ts) } : {}),
       },
+      dedupeKey: ts ? `slack-mention:${channel}:${ts}` : eventId ? `slack-evt:${eventId}` : undefined,
     });
   } else if (type === "message" && String(event.channel_type ?? "") === "im") {
     // Skip other bots' messages and message_changed/deleted subtypes.
     if (!event.bot_id && !event.subtype) {
+      const ts = String(event.ts ?? "");
       activities.push({
         text: `Slack DM from ${user}: "${String(event.text ?? "")}"`,
         sourceURL,
@@ -108,8 +116,9 @@ export function slackEventToActivities(
           channel,
           user,
           text: String(event.text ?? ""),
-          ts: String(event.ts ?? ""),
+          ts,
         },
+        dedupeKey: ts ? `slack-im:${channel}:${ts}` : eventId ? `slack-evt:${eventId}` : undefined,
       });
     }
   } else if (type === "reaction_added") {
@@ -124,6 +133,9 @@ export function slackEventToActivities(
         channel: String(item.channel ?? ""),
         itemTs: String(item.ts ?? ""),
       },
+      dedupeKey: eventId
+        ? `slack-evt:${eventId}`
+        : `slack-reaction:${String(item.channel ?? "")}:${String(item.ts ?? "")}:${String(event.reaction ?? "")}:${user}`,
     });
   }
 

@@ -641,6 +641,222 @@ CREATE TABLE IF NOT EXISTS automation_runs (
 CREATE INDEX IF NOT EXISTS idx_automation_runs_rule ON automation_runs(rule_id, created_at DESC);
 `;
 
+// SPEC-E §2 browser tables (range 050-059). CONVENTIONS §1.4 amendment applied:
+// ALL timestamp columns are TEXT UTC ISO-8601 (the spec's INTEGER epoch-ms DDL is
+// superseded). Rows are history — Chromium's SingletonLock stays the real
+// exclusivity; closed_at NULL means the row's launch is (possibly) live.
+const M050_BROWSER_CORE = `
+CREATE TABLE IF NOT EXISTS browser_sessions (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_name  TEXT NOT NULL,
+  profile_name  TEXT NOT NULL,
+  created_by    TEXT NOT NULL DEFAULT 'user',  -- 'user' | 'jarvis' | 'task:<taskId>' | 'agent:<agentId>'
+  task_id       TEXT,
+  agent_id      TEXT,
+  created_at    TEXT NOT NULL,
+  last_used_at  TEXT,
+  closed_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_sessions_name ON browser_sessions(session_name);
+CREATE INDEX IF NOT EXISTS idx_browser_sessions_task ON browser_sessions(task_id);
+
+CREATE TABLE IF NOT EXISTS browser_tool_audit (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts            TEXT NOT NULL,
+  session_name  TEXT NOT NULL,
+  tool          TEXT NOT NULL,                 -- 'browser_navigate', ...
+  caller        TEXT NOT NULL DEFAULT 'user',  -- same vocabulary as created_by
+  args_preview  TEXT,                          -- redacted JSON, capped 2048 chars (never full payloads)
+  ok            INTEGER NOT NULL,
+  error         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_browser_audit_ts ON browser_tool_audit(ts);
+`;
+
+// SPEC-E §2 F-workstream tables (range 050-059, slot 051 per the chunk-3
+// brief). CONVENTIONS §1.4 amendment applied: ALL timestamp columns are TEXT
+// UTC ISO-8601 (the spec's INTEGER epoch-ms DDL is superseded).
+// harnesses.definition is pure-data JSON (HarnessDef, rule 17); DELETE is
+// {exiled:true} inside that JSON — rows are NEVER dropped (house rule).
+const M051_AGENTS_HARNESSES_STATUS = `
+CREATE TABLE IF NOT EXISTS harnesses (
+  id          TEXT PRIMARY KEY,                -- kebab id, e.g. 'ralph-loop'
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  kind        TEXT NOT NULL DEFAULT 'loop',    -- 'loop' | 'oneshot' | 'council' | 'custom'
+  definition  TEXT NOT NULL,                   -- JSON HarnessDef (SPEC-E §5.2)
+  builtin     INTEGER NOT NULL DEFAULT 0,      -- seeded rows; editable but never deletable
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_status_events (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts       TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  status   TEXT NOT NULL,                      -- 'running' | 'idle' | 'waiting' | 'error' | 'offline'
+  run_id   TEXT,
+  detail   TEXT                                -- short human line: 'run started (manual)', 'approval pending'
+);
+CREATE INDEX IF NOT EXISTS idx_agent_status_agent_ts ON agent_status_events(agent_id, ts);
+`;
+
+// SPEC-F §2 AnyNotes tables (range 060-069, slot 060 — the first free F slot).
+// The spec's DDL is already TEXT-ISO throughout, so CONVENTIONS §1.4 is a no-op
+// here (nothing to amend). Two departures from the spec text, both deliberate:
+//   1. `pending` on anynote_replies stays INTEGER 0/1 — it is a BOOLEAN flag,
+//      not a timestamp, so §1.4 does not touch it.
+//   2. The spec named ONE exile table (anynotes_exile). A note's replies carry a
+//      FK to anynotes(id) and db.ts runs `foreign_keys = ON`, so exiling a note
+//      without moving its thread first is a constraint error. anynote_replies_exile
+//      is therefore its sibling: exile copies note + thread out, then deletes
+//      thread-then-note. Nothing is ever destroyed (house rule).
+const M060_ANYNOTES = `
+CREATE TABLE IF NOT EXISTS anynotes (
+  id            TEXT PRIMARY KEY,
+  url           TEXT,
+  type          TEXT NOT NULL CHECK (type IN ('tweet','article','video','screenshot','text')),
+  title         TEXT NOT NULL DEFAULT '',
+  author        TEXT,
+  site          TEXT,
+  content_md    TEXT NOT NULL DEFAULT '',
+  media_path    TEXT,
+  thumb_url     TEXT,
+  status        TEXT NOT NULL DEFAULT 'inbox' CHECK (status IN ('inbox','kept','archived')),
+  labels        TEXT NOT NULL DEFAULT '[]',
+  meta          TEXT NOT NULL DEFAULT '{}',
+  episode_id    TEXT,
+  captured_at   TEXT NOT NULL,
+  updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_anynotes_inbox ON anynotes(status, captured_at DESC);
+CREATE INDEX IF NOT EXISTS idx_anynotes_type  ON anynotes(type,   captured_at DESC);
+
+CREATE TABLE IF NOT EXISTS anynote_replies (
+  id           TEXT PRIMARY KEY,
+  note_id      TEXT NOT NULL REFERENCES anynotes(id),
+  author       TEXT NOT NULL CHECK (author IN ('user','jarvis')),
+  body         TEXT NOT NULL,
+  pending      INTEGER NOT NULL DEFAULT 0,
+  error        TEXT,
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anynote_replies ON anynote_replies(note_id, created_at);
+
+CREATE TABLE IF NOT EXISTS anynotes_exile (
+  id            TEXT PRIMARY KEY,
+  url           TEXT,
+  type          TEXT NOT NULL,
+  title         TEXT NOT NULL DEFAULT '',
+  author        TEXT,
+  site          TEXT,
+  content_md    TEXT NOT NULL DEFAULT '',
+  media_path    TEXT,
+  thumb_url     TEXT,
+  status        TEXT NOT NULL DEFAULT 'inbox',
+  labels        TEXT NOT NULL DEFAULT '[]',
+  meta          TEXT NOT NULL DEFAULT '{}',
+  episode_id    TEXT,
+  captured_at   TEXT NOT NULL,
+  updated_at    TEXT,
+  exiled_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS anynote_replies_exile (
+  id           TEXT PRIMARY KEY,
+  note_id      TEXT NOT NULL,
+  author       TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  pending      INTEGER NOT NULL DEFAULT 0,
+  error        TEXT,
+  created_at   TEXT NOT NULL,
+  exiled_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_anynote_replies_exile ON anynote_replies_exile(note_id, created_at);
+`;
+
+// SPEC-F §2 Newsletter tables (range 060-069, slot 061 — 060 is anynotes).
+// Departures from the spec DDL, all deliberate:
+//   1. CONVENTIONS §1.4 — `newsletter_state.lastSyncTime` is stored as TEXT UTC
+//      ISO, not the spec's "unix ms". It is a timestamp; ISO keeps lexical
+//      order == chronological order and matches every other watermark in the db
+//      (integrations' account_state does the same).
+//   2. Two additive indexes the spec omitted (`newsletter_emails.subscription_id`
+//      and `newsletter_story_sources.email_id`) — both are read paths the sync
+//      and the edition builder actually take.
+//   3. `newsletter_stories.first_seen` stays a YYYY-MM-DD DATE bucket, not a
+//      timestamp: it is the edition-date key, and §1.4 governs instants.
+const M061_NEWSLETTER = `
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  topic        TEXT,
+  alias_id     TEXT,
+  alias_email  TEXT,
+  signup_url   TEXT,
+  cadence      TEXT NOT NULL DEFAULT 'unknown' CHECK (cadence IN ('daily','weekly','monthly','unknown')),
+  status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','dead')),
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_nl_subs_status ON newsletter_subscriptions(status, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nl_subs_alias
+  ON newsletter_subscriptions(alias_email) WHERE alias_email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS newsletter_emails (
+  id              TEXT PRIMARY KEY,
+  gmail_id        TEXT NOT NULL UNIQUE,
+  thread_id       TEXT,
+  subscription_id TEXT REFERENCES newsletter_subscriptions(id),
+  from_addr       TEXT,
+  to_addr         TEXT,
+  subject         TEXT,
+  received_at     TEXT NOT NULL,
+  content_md      TEXT NOT NULL DEFAULT '',
+  parse_status    TEXT NOT NULL DEFAULT 'pending' CHECK (parse_status IN ('pending','parsed','failed','skipped')),
+  parse_error     TEXT,
+  created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_recv ON newsletter_emails(received_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_ps   ON newsletter_emails(parse_status);
+CREATE INDEX IF NOT EXISTS idx_nl_emails_sub  ON newsletter_emails(subscription_id, received_at DESC);
+
+CREATE TABLE IF NOT EXISTS newsletter_stories (
+  id            TEXT PRIMARY KEY,
+  title         TEXT NOT NULL,
+  canonical_url TEXT,
+  summary       TEXT NOT NULL DEFAULT '',
+  topic         TEXT,
+  embedding     BLOB,
+  first_seen    TEXT NOT NULL,
+  created_at    TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_nl_stories_url
+  ON newsletter_stories(canonical_url) WHERE canonical_url IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_nl_stories_seen ON newsletter_stories(first_seen);
+
+CREATE TABLE IF NOT EXISTS newsletter_story_sources (
+  story_id    TEXT NOT NULL REFERENCES newsletter_stories(id),
+  email_id    TEXT NOT NULL REFERENCES newsletter_emails(id),
+  source_name TEXT NOT NULL,
+  item_url    TEXT,
+  item_title  TEXT,
+  PRIMARY KEY (story_id, email_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nl_sources_email ON newsletter_story_sources(email_id);
+
+CREATE TABLE IF NOT EXISTS newsletter_editions (
+  date       TEXT PRIMARY KEY,
+  built_at   TEXT NOT NULL,
+  content    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS newsletter_state (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -666,6 +882,16 @@ export const MIGRATIONS: Migration[] = [
         .get() as { value: string } | undefined;
       const dim = row ? parseInt(row.value, 10) : DEFAULT_EMBED_DIM;
       db.exec(vecDDL(dim));
+    },
+  },
+  {
+    version: 3,
+    name: "memory_queue_leases",
+    up: (db) => {
+      // HARDENING-2026-08-27 item 9: PROCESSING rows need a lease timestamp so
+      // a crash mid-ingest can be recovered (stale PROCESSING → PENDING) and
+      // claims can be made atomically (UPDATE ... WHERE status='PENDING').
+      db.exec("ALTER TABLE ingestion_queue ADD COLUMN processing_started_at TEXT");
     },
   },
   {
@@ -741,6 +967,17 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 34,
+    name: "webmcp_approval_pinning",
+    up: (db) => {
+      // HARDENING-2026-08-27 item 6: a pending approval executed whatever
+      // version was published at APPROVE time — pin the package's
+      // current_version at request time; approve refuses (409) on mismatch.
+      // Registry-lane approvals (slug 'registry') are version-less: NULL.
+      db.exec("ALTER TABLE webmcp_approvals ADD COLUMN pinned_version INTEGER");
+    },
+  },
+  {
     version: 40,
     name: "integrations_core",
     up: (db) => {
@@ -759,6 +996,80 @@ export const MIGRATIONS: Migration[] = [
     name: "automations_core",
     up: (db) => {
       db.exec(M042_AUTOMATIONS_CORE);
+    },
+  },
+  {
+    version: 43,
+    name: "integrations_hardening",
+    up: (db) => {
+      // HARDENING-2026-08-27 items 7/8/11/12.
+      // (7) Activity dedupe: connectors pass a stable per-item key (gmail
+      //     message id, github notification id, slack ts, gcal event id) —
+      //     UNIQUE(account_id, dedupe_key) + INSERT OR IGNORE makes overlap
+      //     windows and crash-replays idempotent. NULL = no key (legacy rows,
+      //     connectors without keys) — the partial index skips them.
+      db.exec("ALTER TABLE activities ADD COLUMN dedupe_key TEXT");
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_activities_dedupe
+           ON activities(account_id, dedupe_key) WHERE dedupe_key IS NOT NULL`,
+      );
+      // (8) Durable ingest retry: attempts counter, capped at 5 by the hourly
+      //     'integration.ingest.retry' scheduler job.
+      db.exec("ALTER TABLE activities ADD COLUMN ingest_attempts INTEGER NOT NULL DEFAULT 0");
+      // (11) Webhook inbox: a delivery is persisted BEFORE the route returns
+      //      200, so a crash between the 200 and dispatch no longer loses it.
+      //      Sensitive headers (secrets/signatures) are stripped before
+      //      persisting — verification happens at receipt, never on replay.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS webhook_inbox (
+          id           TEXT PRIMARY KEY,
+          slug         TEXT NOT NULL,
+          headers_json TEXT NOT NULL DEFAULT '{}',
+          raw_body     TEXT NOT NULL DEFAULT '',
+          status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done','error')),
+          error        TEXT,
+          created_at   TEXT NOT NULL,
+          processed_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_webhook_inbox_status ON webhook_inbox(status, created_at);
+      `);
+      // (12) Automations durable cursor: runs remember the bus event id that
+      //      fired them; UNIQUE(rule_id, event_id) makes boot replay unable to
+      //      double-fire a rule for the same event. Cursor lives in meta
+      //      ('automations_event_cursor').
+      db.exec("ALTER TABLE automation_runs ADD COLUMN event_id INTEGER");
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_rule_event
+           ON automation_runs(rule_id, event_id) WHERE event_id IS NOT NULL`,
+      );
+    },
+  },
+  {
+    version: 50,
+    name: "browser_core",
+    up: (db) => {
+      db.exec(M050_BROWSER_CORE);
+    },
+  },
+  {
+    version: 51,
+    name: "agents_harnesses_status",
+    up: (db) => {
+      db.exec(M051_AGENTS_HARNESSES_STATUS);
+    },
+  },
+  {
+    version: 60,
+    name: "anynotes",
+    up: (db) => {
+      db.exec(M060_ANYNOTES);
+    },
+  },
+  {
+    version: 61,
+    name: "newsletter",
+    up: (db) => {
+      db.exec(M061_NEWSLETTER);
     },
   },
 ];

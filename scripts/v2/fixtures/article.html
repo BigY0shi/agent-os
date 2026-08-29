@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fixture: The Quiet Cost of Fallbacks | Agent OS Smoke Press</title>
+  <meta property="og:site_name" content="Agent OS Smoke Press">
+  <meta property="og:title" content="The Quiet Cost of Fallbacks">
+  <meta property="og:image" content="https://example.invalid/fixture-hero.png">
+  <meta name="description" content="A fixture article used by smoke-anynotes.mjs to exercise the readability path offline.">
+  <script>window.__tracker = { fire: function () { /* readability must drop this */ } };</script>
+  <style>.ad { display: none }</style>
+</head>
+<body>
+  <header class="site-nav">
+    <a href="/">Agent OS Smoke Press</a>
+    <nav><a href="/tech">Tech</a><a href="/ops">Ops</a><a href="/about">About</a></nav>
+  </header>
+  <aside class="ad"><p>Sponsored: buy more servers.</p></aside>
+
+  <article>
+    <h1>The Quiet Cost of Fallbacks</h1>
+    <p class="byline">By Dana Restrepo</p>
+
+    <p>A fallback is a promise that the system will keep working when something
+    breaks. The trouble is that a fallback which is never surfaced is
+    indistinguishable from the thing it replaced, and so the breakage becomes
+    invisible rather than fixed.</p>
+
+    <p>The pattern shows up everywhere. A capture pipeline that silently returns
+    a bare link when extraction fails looks, from the outside, exactly like a
+    pipeline that never needed extraction at all. A router that quietly retries
+    against a second model produces an answer nobody asked that model for.</p>
+
+    <h2>Loud degradation</h2>
+
+    <p>The alternative is not to remove the fallback. It is to make the fallback
+    announce itself: the degraded artifact is saved, and the caller is told, in
+    the same breath, exactly which step failed and why. The user keeps the link
+    and also keeps the truth.</p>
+
+    <ul>
+      <li>Persist the degraded result — never lose the user's input.</li>
+      <li>Return the failure reason verbatim, not a generic apology.</li>
+      <li>Record which mode produced the artifact, so later readers can tell.</li>
+    </ul>
+
+    <p>None of this is expensive. It costs one extra field on the record and one
+    honest sentence in the response body. What it buys is a system whose failures
+    can be counted, which is the only kind of system that can be improved.</p>
+  </article>
+
+  <footer><p>&copy; 2026 Agent OS Smoke Press. All rights reserved.</p></footer>
+</body>
+</html>

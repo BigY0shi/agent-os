@@ -64,6 +64,10 @@ export async function slackSync(ctx: SyncCtx): Promise<SyncResult> {
           teamId && channel ? `https://app.slack.com/client/${teamId}/${channel}` : undefined,
         eventType: "SLACK_MESSAGE_RECEIVED",
         payload: { kind: "im", channel, user, text: String(m.text ?? ""), ts },
+        // Item 7: ts is unique within a channel — also collides with the
+        // webhook lane's key for the same message (poll + Events API double
+        // capture dedupes to one activity).
+        dedupeKey: `slack-im:${channel}:${ts}`,
       });
     }
     if (maxTs && maxTs !== sinceTs) newState[`ts:${channel}`] = maxTs;

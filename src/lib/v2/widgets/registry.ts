@@ -211,10 +211,23 @@ export const WIDGETS: WidgetDef[] = [
     slug: "newsletter-edition",
     title: "Newsletter",
     description:
-      "Latest newsletter edition (workstream K). Not built yet — the data route answers honestly until it lands.",
+      "The latest newspaper edition — top headlines with how many newsletters carried each story.",
     icon: "Newspaper",
     minSize: "M",
     defaultSize: "M",
+    configSchema: [
+      {
+        key: "maxStories",
+        label: "Headlines",
+        type: "select",
+        options: [
+          { label: "5", value: "5" },
+          { label: "8", value: "8" },
+          { label: "12", value: "12" },
+        ],
+        default: "5",
+      },
+    ],
     dataKind: "endpoint",
     sourceModule: "newsletter",
   },
@@ -222,7 +235,7 @@ export const WIDGETS: WidgetDef[] = [
     slug: "anynotes-recent",
     title: "AnyNotes",
     description:
-      "Recently captured AnyNotes (workstream I). Not built yet — the data route answers honestly until it lands.",
+      "Recently captured AnyNotes with their reply counts, plus how many @jarvis replies are still generating.",
     icon: "StickyNote",
     minSize: "S",
     defaultSize: "M",

@@ -5,6 +5,7 @@ import { formatRecallAsMarkdown } from "../memory/search/formatter";
 import type { RecallResult } from "../memory/types";
 import { ingestFromModule } from "../memory/queue";
 import { getLabel } from "../memory/labels";
+import { integrationLabelsForProvenance } from "../memory/graph";
 import { getAction, listActions, searchActions, actionJsonSchema } from "../mcp/registry";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
@@ -66,20 +67,58 @@ const TAINT_REFUSAL =
   "(integration:* label), so destructive/spawning tools require human approval " +
   "(CONVENTIONS §9.4). Tell the user what you would have done and ask them to run it themselves.";
 
-/** integration:*-label detection over a structured recall result (exported for the smoke). */
+/** Sentinel taint label used when a derived fact's provenance cannot be
+ *  established — fail closed (HARDENING-2026-08-27 item 1). */
+export const UNRESOLVED_PROVENANCE_LABEL = "integration:unresolved-provenance";
+
+/**
+ * integration:*-label detection over a structured recall result (exported for
+ * the smoke). Two sources of taint signal:
+ *   (a) the recalled EPISODES' own labels (original §9.4 rule);
+ *   (b) the PROVENANCE episodes behind derived facts — statements, voice
+ *       aspects, entity attributes — resolved via memory/graph.ts. An
+ *       episode-less recall (entity_lookup/relationship queries) previously
+ *       carried integration-derived content with zero taint signal
+ *       (review finding 2026-08-27). Provenance that cannot be established
+ *       FAILS CLOSED via UNRESOLVED_PROVENANCE_LABEL.
+ */
 export function recallIntegrationLabels(result: RecallResult): string[] {
+  const names = new Set<string>();
+
+  // (a) episode labels
   const ids = new Set<string>();
   for (const ep of result.episodes) for (const id of ep.labelIds ?? []) ids.add(id);
-  const names: string[] = [];
   for (const id of ids) {
     try {
       const name = getLabel(id)?.name;
-      if (name && /^integration:/i.test(name)) names.push(name);
+      if (name && /^integration:/i.test(name)) names.add(name);
     } catch {
       /* label lookup failure = no taint signal from that id */
     }
   }
-  return names;
+
+  // (b) provenance of derived facts
+  const statementUuids: string[] = [];
+  let missingStatementUuid = false;
+  for (const s of result.statements ?? []) {
+    if (typeof s.uuid === "string" && s.uuid) statementUuids.push(s.uuid);
+    else missingStatementUuid = true; // hand-built result without uuid → fail closed
+  }
+  const voiceAspectUuids = (result.voiceAspects ?? []).map((v) => v.uuid).filter(Boolean);
+  const entityUuid = result.entity?.uuid ?? null;
+
+  if (statementUuids.length > 0 || voiceAspectUuids.length > 0 || entityUuid) {
+    const { labels, unresolved } = integrationLabelsForProvenance({
+      statementUuids,
+      voiceAspectUuids,
+      entityUuid,
+    });
+    for (const l of labels) names.add(l);
+    if (unresolved) names.add(UNRESOLVED_PROVENANCE_LABEL);
+  }
+  if (missingStatementUuid) names.add(UNRESOLVED_PROVENANCE_LABEL);
+
+  return [...names];
 }
 
 /** Apply the §9.4 taint rule to a turn/session state from a recall result.
@@ -420,6 +459,13 @@ export function buildJarvisToolHandlers(opts: {
           if (metaApproval && typeof metaApproval.id === "string") {
             emit({ type: "tool", name: key, state: "error", summary: `awaiting human approval (${metaApproval.id})` });
             return approvalRequired(metaApproval, key);
+          }
+          // §9.4 extension (review 2026-08-27): LIVE third-party content is the
+          // same injection surface as recalled third-party content. Any
+          // integration round trip — read or write — taints the session so the
+          // rest of it runs under the write-gate.
+          if (key === "execute_integration_action") {
+            state.integrationTainted = true;
           }
           const summary = result.ok ? (result.output || "ok").slice(0, 200) : (result.error ?? "failed");
           record(`execute_action:${key}`, result.ok, summary);

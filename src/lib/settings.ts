@@ -233,6 +233,69 @@ export interface Settings {
     }>;
     showScratchpad?: boolean;  // H1.1 (chunk 2) Overview ScratchpadSlot toggle
   };
+  // SPEC-E E1 browser workstream (every field surfaced in the /browser gear — rule 16).
+  // NO "opera" browserType option, ever: Opera is Yoshi's daily browser and the agent
+  // browser must stay fully isolated from it (E4.1 invariant).
+  browser?: {
+    wsPort?: number;                    // CDP WS bridge port (E2.2), default 3738
+    browserType?: "default" | "chrome" | "brave" | "custom";
+    browserExecutable?: string;         // only when browserType === "custom"
+    profiles?: string[];                // max 5, /^[a-zA-Z0-9_-]+$/
+    sessions?: {
+      name: string;                     // /^[a-zA-Z0-9_-]+$/, max 10
+      profile: string;
+      allowedDomains?: string[];        // E4: empty/absent = unrestricted; else eTLD+1 suffix match on top-level navs
+    }[];
+    wsBind?: "local" | "lan";           // E2.2 bridge bind (CONVENTIONS §9.2), default local
+  };
+  // SPEC-E F workstream (Agents page — chunk 2+).
+  agentsPage?: {
+    heroPollMs?: number;                // default 4000 (SSE preferred; poll fallback)
+    defaultHarness?: string;            // harness id preselected in the Forge wizard
+  };
+  // CONVENTIONS §11 deploy gate. requireTestRun=true → promoting to "deployed"
+  // without a successful test run is a HARD 409; false → it succeeds with a
+  // WARNING surfaced in the UI. Default true (the shipped chunk-3 guard) —
+  // ASK-YOSHI flag: CONVENTIONS §11 suggests warning as the default; flip in
+  // the Agents gear.
+  agents?: {
+    requireTestRun?: boolean;
+    // A background run has no chat window; when an agent needs a decision only
+    // the user can make it emits the ASK-USER marker and the run parks on the
+    // approvals queue until you reply.
+    askUser?: {
+      enabled?: boolean;    // default true — inject the protocol + park on the marker
+      heuristic?: boolean;  // default FALSE — also park when a turn merely ENDS in "?"
+      timeoutMin?: number;  // default 240 (4h, matching the approval park)
+    };
+  };
+  // SPEC-F I — AnyNotes. Rule 16: every knob here gets an in-app gear
+  // (AnyNotesSettings, chunk 2); nothing is config-file-only.
+  anynotes?: {
+    autoIngest?: boolean;      // I2.2 Memory V2 ingest gate (default true)
+    jarvisAgent?: string;      // AgentPicker id routed through cliComplete (rule 11: no silent fallback)
+    defaultStatus?: "inbox" | "kept" | "archived"; // status a fresh capture lands in
+    maxSnapshotChars?: number; // cap on the stored content_md snapshot
+  };
+  // SPEC-F K — Newsletter. Rule 16: every knob here gets an in-app gear
+  // (NewsletterSettings, chunk 4). NOTHING secret lives here — the addy.io key
+  // stays in ~/.agentic-os/newsletter/config.json, read only by
+  // src/lib/v2/newsletter/config.ts, which hands out booleans.
+  newsletter?: {
+    syncEnabled?: boolean;      // master kill switch for SCHEDULED syncs (manual always runs)
+    syncRrule?: string;         // K3.3 schedule (default FREQ=MINUTELY;INTERVAL=30)
+    editionEnabled?: boolean;   // kill switch for the SCHEDULED daily edition (manual rebuild always runs)
+    editionTime?: string;       // HH:MM local — K4.1 daily edition build
+    sections?: string[];        // edition section names (K4.1)
+    dedupeThreshold?: number;   // K3.2 embedding cosine floor (default 0.86)
+    dedupeWindowDays?: number;  // K3.2 bounded candidate scan (default 3)
+    trackerHosts?: string[];    // hosts whose links are redirect wrappers to unwrap
+    parseAgent?: string;        // AgentPicker id routed through cliComplete (rule 11)
+    lookbackDays?: number;      // first-sync window when there is no watermark (default 1)
+    addyDomain?: string;        // display/hint only — e.g. "yoshi.addy.io"
+    gmailAccountId?: string;    // which SPEC-D gmail integration account to sync (CONVENTIONS §7)
+    gmailLabel?: string;        // optional Gmail label filter for unknown-alias mail
+  };
 
   [extra: string]: unknown;
 }
@@ -315,6 +378,40 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   scratchpad: { mentionDebounceSec: 8 },
   webmcp: { sandboxTimeoutMs: 5000, allowJsHandlers: true, llmGetActions: true },
+  browser: {
+    wsPort: 3738,
+    browserType: "default",
+    profiles: ["personal", "work", "misc"],
+    sessions: [],
+    wsBind: "local",
+  },
+  agentsPage: { heroPollMs: 4000 },
+  agents: {
+    requireTestRun: true,
+    // heuristic defaults OFF: a rhetorical closing question is common in agent
+    // reports, and a false positive parks a finished run instead of completing
+    // it. The marker is the reliable signal; the heuristic is the opt-in net.
+    askUser: { enabled: true, heuristic: false, timeoutMin: 240 },
+  },
+  anynotes: {
+    autoIngest: true,
+    jarvisAgent: "claude",
+    defaultStatus: "inbox",
+    maxSnapshotChars: 24000,
+  },
+  newsletter: {
+    syncEnabled: true,
+    syncRrule: "FREQ=MINUTELY;INTERVAL=30",
+    editionEnabled: true,
+    editionTime: "06:30",
+    sections: ["AI & Agents", "Dev & Tools", "Business", "Security", "Everything Else"],
+    dedupeThreshold: 0.86,
+    dedupeWindowDays: 3,
+    parseAgent: "claude",
+    lookbackDays: 1,
+    addyDomain: "",
+    gmailLabel: "",
+  },
 };
 
 function settingsPath(): string {

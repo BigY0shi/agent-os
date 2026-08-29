@@ -664,6 +664,108 @@ export function getVoiceAspect(uuid: string): VoiceAspectNode | null {
   return row ? voiceFromRow(row) : null;
 }
 
+// ---------------------------------------------------------------------------
+// Recall provenance → label resolution (HARDENING-2026-08-27 item 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve which `integration:*` labels sit on the PROVENANCE episodes behind a
+ * recall result's derived facts (statements via provenance edges, voice
+ * aspects via their episode_uuids list, an entity via its statements' — valid
+ * AND invalidated — provenance). Used by the Jarvis §9.4 taint gate so
+ * episode-less recall (statements/entity/voiceAspects only) can no longer
+ * launder integration-derived content past the write-gate.
+ *
+ * FAIL CLOSED: any derived fact whose provenance cannot be established (no
+ * provenance edge, empty episode_uuids, lookup failure) sets `unresolved` —
+ * callers must treat unresolved as tainted.
+ */
+export function integrationLabelsForProvenance(input: {
+  statementUuids?: string[];
+  voiceAspectUuids?: string[];
+  entityUuid?: string | null;
+}): { labels: string[]; unresolved: boolean } {
+  const labels = new Set<string>();
+  let unresolved = false;
+  const db = getDb();
+
+  const stmtUuids = new Set(input.statementUuids ?? []);
+  try {
+    // Entity provenance rides through its statements (valid + invalidated —
+    // an attribute may only survive on an invalidated chain).
+    if (input.entityUuid) {
+      const entityStmts = getStatementsForEntity(input.entityUuid, { includeInvalidated: true });
+      if (entityStmts.length === 0) {
+        // Entity attributes with no traceable statements = no provenance → fail closed.
+        unresolved = true;
+      }
+      for (const s of entityStmts) stmtUuids.add(s.uuid);
+    }
+
+    if (stmtUuids.size > 0) {
+      const ids = [...stmtUuids];
+      const ph = ids.map(() => "?").join(",");
+      // Statements lacking ANY provenance edge cannot be attributed → fail closed.
+      const withProv = db
+        .prepare(
+          `SELECT COUNT(DISTINCT to_uuid) AS c FROM edges
+           WHERE type = 'provenance' AND to_uuid IN (${ph})`,
+        )
+        .get(...ids) as { c: number };
+      if (withProv.c < ids.length) unresolved = true;
+      const rows = db
+        .prepare(
+          `SELECT DISTINCT l.name AS name FROM edges e
+           JOIN episode_labels el ON el.episode_uuid = e.from_uuid
+           JOIN labels l ON l.id = el.label_id
+           WHERE e.type = 'provenance' AND e.to_uuid IN (${ph})
+             AND l.name LIKE 'integration:%'`,
+        )
+        .all(...ids) as { name: string }[];
+      for (const r of rows) labels.add(r.name);
+    }
+
+    const vaUuids = input.voiceAspectUuids ?? [];
+    if (vaUuids.length > 0) {
+      const ph = vaUuids.map(() => "?").join(",");
+      const vaRows = db
+        .prepare(`SELECT uuid, episode_uuids FROM voice_aspects WHERE uuid IN (${ph})`)
+        .all(...vaUuids) as { uuid: string; episode_uuids: string }[];
+      if (vaRows.length < vaUuids.length) unresolved = true; // unknown uuid → fail closed
+      const epUuids = new Set<string>();
+      for (const r of vaRows) {
+        const list = parseJson<string[]>(r.episode_uuids, []);
+        if (!Array.isArray(list) || list.length === 0) {
+          unresolved = true; // voice aspect with no episode provenance
+          continue;
+        }
+        for (const ep of list) epUuids.add(ep);
+      }
+      if (epUuids.size > 0) {
+        const eps = [...epUuids];
+        const eph = eps.map(() => "?").join(",");
+        const rows = db
+          .prepare(
+            `SELECT DISTINCT l.name AS name FROM episode_labels el
+             JOIN labels l ON l.id = el.label_id
+             WHERE el.episode_uuid IN (${eph}) AND l.name LIKE 'integration:%'`,
+          )
+          .all(...eps) as { name: string }[];
+        for (const r of rows) labels.add(r.name);
+      }
+    }
+  } catch (err) {
+    // Any lookup failure = provenance cannot be established → fail closed.
+    console.warn(
+      "[v2/memory/graph] provenance label resolution failed (failing closed):",
+      err instanceof Error ? err.message : err,
+    );
+    unresolved = true;
+  }
+
+  return { labels: [...labels], unresolved };
+}
+
 /** Duplicate path: append the episode to the survivor's episode_uuids JSON
  *  list, deduped (REF appendEpisodeToVoiceAspect). */
 export function appendVoiceAspectEpisode(uuid: string, episodeUuid: string): void {

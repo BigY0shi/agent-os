@@ -1287,6 +1287,7 @@ function normalizeToRecallResult(
 
   const statements: RecallResult["statements"] =
     handlerResult.statements?.map((s) => ({
+      uuid: s.uuid, // provenance handle for the §9.4 taint gate (hardening item 1)
       fact: s.fact,
       validAt: s.validAt,
       attributes: (s.attributes || {}) as Record<string, string>,

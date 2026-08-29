@@ -38,3 +38,19 @@ export function redactArgs(
 
   return walk(args, false);
 }
+
+/**
+ * Replace every OCCURRENCE of a resolved secret VALUE inside free text with
+ * [redacted] (HARDENING-2026-08-27 item 5). Used on http-lane error/output
+ * text before it is persisted or returned — a provider that echoes an
+ * Authorization header back in its error body would otherwise land the secret
+ * in SQLite call logs and model context. Secrets shorter than 4 chars are
+ * skipped (masking single characters would shred the text).
+ */
+export function redactText(text: string, secretValues: readonly string[]): string {
+  let out = text;
+  for (const s of secretValues) {
+    if (typeof s === "string" && s.length >= 4) out = out.split(s).join(REDACTED);
+  }
+  return out;
+}

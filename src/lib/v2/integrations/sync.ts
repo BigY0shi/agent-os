@@ -1,4 +1,5 @@
 import { emit } from "../events";
+import { tx } from "../db";
 import { getConnector } from "./registry";
 import {
   IntegrationError,
@@ -59,46 +60,70 @@ export async function applySyncResult(
   let accepted = 0;
   let rejected = 0;
 
-  for (const item of result.activities ?? []) {
-    const verdict = applyPreFilters(item.text, filters);
-    if (verdict.rejected) {
-      insertActivity({
+  // Phase 1 — SYNCHRONOUS transaction: activity rows + watermark commit
+  // together. Without this, a crash after inserts but before the state merge
+  // leaves the watermark behind and the next run re-inserts the same
+  // activities as duplicates (review finding, 2026-08-27). Emits and the
+  // async ingest seam run AFTER commit so listeners only ever see
+  // committed rows.
+  //
+  // Dedupe (hardening item 7): insertActivity returns null when the item's
+  // dedupeKey already exists for this account (INSERT OR IGNORE) — the
+  // duplicate is silently skipped, and crucially gets NO activity.created
+  // emit and NO re-ingest (so overlap windows / crash replays / webhook
+  // redeliveries can never double-trigger automations or memory).
+  const acceptedRows = tx(() => {
+    const rows: NonNullable<ReturnType<typeof insertActivity>>[] = [];
+    for (const item of result.activities ?? []) {
+      const verdict = applyPreFilters(item.text, filters);
+      if (verdict.rejected) {
+        insertActivity({
+          accountId: account.id,
+          text: item.text,
+          sourceUrl: item.sourceURL,
+          eventType: item.eventType,
+          payload: item.payload,
+          rejectionReason: verdict.reason,
+          ingestStatus: "rejected",
+          dedupeKey: item.dedupeKey,
+        });
+        rejected++;
+        continue;
+      }
+      const row = insertActivity({
         accountId: account.id,
         text: item.text,
         sourceUrl: item.sourceURL,
         eventType: item.eventType,
         payload: item.payload,
-        rejectionReason: verdict.reason,
-        ingestStatus: "rejected",
+        ingestStatus: "pending",
+        dedupeKey: item.dedupeKey,
       });
-      rejected++;
-      continue;
+      if (row) {
+        rows.push(row);
+        accepted++;
+      }
     }
-    const row = insertActivity({
-      accountId: account.id,
-      text: item.text,
-      sourceUrl: item.sourceURL,
-      eventType: item.eventType,
-      payload: item.payload,
-      ingestStatus: "pending",
-    });
-    accepted++;
+    // Watermark rule: merge ONLY the keys the connector returned.
+    if (result.state && Object.keys(result.state).length > 0) {
+      mergeAccountState(account.id, result.state);
+    }
+    return rows;
+  });
+
+  // Phase 2 — post-commit side effects.
+  for (const row of acceptedRows) {
     emit(
       "activity.created",
       {
         activityId: row.id,
         accountId: account.id,
         slug: account.definitionSlug,
-        eventType: item.eventType ?? null,
+        eventType: row.eventType ?? null,
       },
       "integrations",
     );
     await ingestActivity(row, account); // never throws (marks 'failed' internally)
-  }
-
-  // Watermark rule: merge ONLY the keys the connector returned.
-  if (result.state && Object.keys(result.state).length > 0) {
-    mergeAccountState(account.id, result.state);
   }
   return { accepted, rejected };
 }

@@ -121,7 +121,7 @@ const mockGmail = {
         if (gmailState.failNext) throw new Error("gmail API down (fixture)");
         gmailState.listCalls.push(params);
         if (params.q.includes("in:inbox")) {
-          return { data: { messages: [{ id: "m1" }, { id: "m2" }] } };
+          return { data: { messages: (gmailState.inboxIds ?? ["m1", "m2"]).map((id) => ({ id })) } };
         }
         if (params.q.includes("in:sent")) {
           return { data: { messages: [{ id: "s1" }] } };
@@ -276,25 +276,59 @@ check(
 check("sent sourceURL is the #sent deep link", aSent?.sourceUrl === "https://mail.google.com/mail/u/0/#sent/s1");
 check("sent activity emits NO trigger event", aSent?.eventType === null);
 
-// Watermark: newest internalDate (sent s1) + 20s, saved as state.
+// Watermark (HARDENING-2026-08-27 item 7): EXACT newest internalDate (sent
+// s1) — the old +20s skew dropped mail landing inside the 20s window.
 const gmailStateRow = store.getAccountState(gmailAccount.id);
-check("watermark = newest internalDate + 20s", gmailStateRow.lastSyncTime === new Date(T3 + 20000).toISOString(), gmailStateRow);
+check("watermark = EXACT newest internalDate (no +20s skew)", gmailStateRow.lastSyncTime === new Date(T3).toISOString(), gmailStateRow);
 check("lastUserEventTime mirrors lastSyncTime", gmailStateRow.lastUserEventTime === gmailStateRow.lastSyncTime);
 check("emailAddress persisted in state", gmailStateRow.emailAddress === "yoshi@example.com");
 check("first inbox query used the 24h default window", /^in:inbox is:important after:\d+$/.test(gmailState.listCalls[0]?.q ?? ""), gmailState.listCalls[0]);
 check("inbox + sent queries capped at 50", gmailState.listCalls.slice(0, 2).every((c) => c.maxResults === 50));
 
-// Second run: same fixture, internalDates now <= watermark → 0 new.
+// Second run: m1/m2 fall before the watermark; s1 sits ON it and is
+// re-processed, but its dedupe_key (item 7) makes the insert a no-op.
 const run2 = await sync.runAccountSync(gmailAccount.id, "manual");
-check("second gmail sync → 0 new (watermark respected)", run2.ok === true && run2.activitiesCount === 0, run2);
+check("second gmail sync → 0 new (watermark + dedupe respected)", run2.ok === true && run2.activitiesCount === 0, run2);
 check("no duplicate activity rows", store.listActivities(gmailAccount.id).length === 3);
 check("watermark unchanged on no-progress run", store.getAccountState(gmailAccount.id).lastSyncTime === gmailStateRow.lastSyncTime);
+check(
+  "activities carry gmail dedupe keys",
+  store.listActivities(gmailAccount.id).every((a) => /^gmail-(received|sent):/.test(a.dedupeKey ?? "")),
+  store.listActivities(gmailAccount.id).map((a) => a.dedupeKey),
+);
+
+// Item-7 tail-loss leg: a message landing INSIDE what used to be the +20s
+// window (internalDate = newest + 5s) was previously filtered as
+// before-watermark on the next run — LOST mail. Now it must be captured.
+gmailFixtures.m3 = {
+  id: "m3",
+  threadId: "t-4",
+  internalDate: String(T3 + 5000),
+  payload: {
+    mimeType: "text/plain",
+    headers: [
+      { name: "From", value: "Carol <carol@example.com>" },
+      { name: "Subject", value: "Landed in the skew window" },
+      { name: "Date", value: "Wed, 27 Aug 2026 10:55:00 -0500" },
+    ],
+    body: { data: b64("This message arrived 5 seconds after the previous newest one.") },
+  },
+};
+gmailState.inboxIds = ["m1", "m2", "m3"];
+const runTail = await sync.runAccountSync(gmailAccount.id, "manual");
+check("tail-window message captured (was LOST under +20s skew)", runTail.ok === true && runTail.activitiesCount === 1, runTail);
+check("no duplicates from the boundary re-list", store.listActivities(gmailAccount.id).length === 4);
+check(
+  "watermark advanced to the tail message",
+  store.getAccountState(gmailAccount.id).lastSyncTime === new Date(T3 + 5000).toISOString(),
+  store.getAccountState(gmailAccount.id),
+);
 
 // Taint label comes from the DRIVER (ingest seam) — verify, don't duplicate.
 const gmailLabel = getDb().prepare("SELECT id FROM labels WHERE name = 'integration:gmail'").get();
 check("label 'integration:gmail' created by the ingest seam", !!gmailLabel);
 const qRows = getDb().prepare("SELECT * FROM ingestion_queue WHERE source = 'integration:gmail'").all();
-check("3 queue rows, source integration:gmail, pending offline", qRows.length === 3 && qRows.every((r) => r.status === "PENDING"));
+check("4 queue rows, source integration:gmail, pending offline", qRows.length === 4 && qRows.every((r) => r.status === "PENDING")); // 3 + the item-7 tail-window message
 check(
   "queue metadata carries mail sourceURL + untrusted marker",
   qRows.every((r) => {
@@ -311,7 +345,7 @@ check("gmail API error → soft {ok:false, 0 activities}", run3.ok === false && 
 const errRun = store.latestSyncRun(gmailAccount.id);
 check("sync_run row records the error", errRun.ok === false && errRun.error.includes("gmail API down"));
 check("sync.failed emitted for the gmail account", syncFailed.some((e) => e.payload.accountId === gmailAccount.id && e.payload.slug === "gmail"));
-check("failed run added no activities", store.listActivities(gmailAccount.id).length === 3);
+check("failed run added no activities", store.listActivities(gmailAccount.id).length === 4);
 
 // ---------------------------------------------------------------------------
 // C. Gmail tool dispatch — tz-aware date rewriting observed at the mock

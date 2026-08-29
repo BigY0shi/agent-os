@@ -227,6 +227,12 @@ const POLL_MS = 5000;
 export function ensureMemoryQueue(): void {
   const s = state();
   if (s.timer) return;
+  // Item 9 boot recovery: rescue rows a crashed process left PROCESSING.
+  try {
+    recoverStaleProcessing();
+  } catch (err) {
+    console.error("[v2/memory/queue] boot recovery failed:", err);
+  }
   s.timer = setInterval(() => {
     void drain();
   }, POLL_MS);
@@ -252,12 +258,72 @@ function ingestEnabled(): boolean {
   return readSettings().memory?.ingestEnabled !== false;
 }
 
-function nextPending(): QueueRow | undefined {
-  return getDb()
+/**
+ * ATOMIC claim (HARDENING-2026-08-27 item 9): pick the oldest PENDING row,
+ * then flip it to PROCESSING guarded by `WHERE status = 'PENDING'` — only ONE
+ * claimant wins (changes === 1); losers loop to the next candidate. The
+ * processing_started_at lease lets recoverStaleProcessing() rescue rows a
+ * crashed process stranded.
+ */
+export function claimNextPending(): QueueRow | undefined {
+  const db = getDb();
+  for (let i = 0; i < 10; i++) {
+    const row = db
+      .prepare(
+        "SELECT * FROM ingestion_queue WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 1",
+      )
+      .get() as QueueRow | undefined;
+    if (!row) return undefined;
+    const claimed = db
+      .prepare(
+        `UPDATE ingestion_queue
+         SET status = 'PROCESSING', error = NULL, processing_started_at = ?
+         WHERE id = ? AND status = 'PENDING'`,
+      )
+      .run(now(), row.id);
+    if (claimed.changes === 1) return row;
+    // Lost the race for this row — try the next candidate.
+  }
+  return undefined;
+}
+
+/** Lease timeout: PROCESSING older than this is presumed crashed. */
+export const PROCESSING_STALE_MS = 10 * 60 * 1000;
+
+/**
+ * Boot/periodic recovery (item 9): PROCESSING rows whose lease expired (or
+ * that predate the lease column — processing_started_at NULL) go back to
+ * PENDING with retry_count+1; rows already at the retry cap go to FAILED
+ * (loud, retryable via the UI's retry path… which enforces the same cap).
+ */
+export function recoverStaleProcessing(): number {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - PROCESSING_STALE_MS).toISOString();
+  const failed = db
     .prepare(
-      "SELECT * FROM ingestion_queue WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 1",
+      `UPDATE ingestion_queue
+       SET status = 'FAILED', error = 'stale PROCESSING recovered at retry cap (crash mid-ingest)', processed_at = ?
+       WHERE status = 'PROCESSING'
+         AND (processing_started_at IS NULL OR processing_started_at < ?)
+         AND retry_count >= ${MAX_RETRIES}`,
     )
-    .get() as QueueRow | undefined;
+    .run(now(), cutoff);
+  const recovered = db
+    .prepare(
+      `UPDATE ingestion_queue
+       SET status = 'PENDING', retry_count = retry_count + 1, processing_started_at = NULL
+       WHERE status = 'PROCESSING'
+         AND (processing_started_at IS NULL OR processing_started_at < ?)`,
+    )
+    .run(cutoff);
+  const total = failed.changes + recovered.changes;
+  if (total > 0) {
+    console.warn(
+      `[v2/memory/queue] recovered ${recovered.changes} stale PROCESSING row(s) to PENDING` +
+        (failed.changes ? `, ${failed.changes} to FAILED (retry cap)` : ""),
+    );
+  }
+  return total;
 }
 
 /** Drain PENDING rows oldest-first, one at a time. Never throws. */
@@ -267,8 +333,9 @@ async function drain(): Promise<number> {
   s.draining = true;
   let processed = 0;
   try {
+    recoverStaleProcessing(); // cheap: touches PROCESSING rows only (item 9)
     while (ingestEnabled()) {
-      const row = nextPending();
+      const row = claimNextPending();
       if (!row) break;
       await processQueueItem(row);
       processed++;
@@ -297,9 +364,8 @@ function setStage(queueId: string, stage: string): void {
 
 async function processQueueItem(row: QueueRow): Promise<void> {
   const db = getDb();
-  db.prepare("UPDATE ingestion_queue SET status = 'PROCESSING', error = NULL WHERE id = ?").run(
-    row.id,
-  );
+  // Row was already flipped to PROCESSING (+ lease stamp) by claimNextPending
+  // — no second UPDATE here (item 9: the claim is the single writer).
 
   try {
     const body = IngestBodySchema.parse(JSON.parse(row.data)) as ParsedIngestBody & {

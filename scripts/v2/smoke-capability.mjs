@@ -90,10 +90,11 @@ check("glob finds hello.txt", gl.ok && gl.output.includes("hello.txt"));
 const gr = await slots.filesSlot({ op: "grep", dir: workDir, query: "second" });
 check("grep finds line", gr.ok && gr.output.includes("hello.txt:1"));
 
-// browser slot stub
-let threw = false;
-try { slots.browserSlot(); } catch (e) { threw = String(e).includes("NOT_IMPLEMENTED"); }
-check("browserSlot throws NOT_IMPLEMENTED", threw);
+// browser slot (SPEC-E E3.4 — implemented; this settings file has
+// browserEnabled:false, so dispatch refuses with CAPABILITY_DISABLED).
+// Deep coverage lives in smoke-browser.mjs.
+const br = await slots.browserSlot("browser_list_sessions", {});
+check("browserSlot disabled → CAPABILITY_DISABLED", !br.ok && String(br.error).includes("CAPABILITY_DISABLED"));
 
 try { fs.rmSync(tmp, { force: true }); fs.rmSync(settingsDir, { recursive: true, force: true }); } catch {}
 console.log(failures === 0 ? "\nsmoke-capability: ALL PASS" : `\nsmoke-capability: ${failures} FAILURES`);

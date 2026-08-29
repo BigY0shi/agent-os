@@ -1,12 +1,15 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { emit } from "../events";
 import { getConnector } from "./registry";
 import {
   findAccountByExternalId,
   finishSyncRun,
   getDefinitionConfig,
+  listStaleWebhookInbox,
+  markWebhookInbox,
   startSyncRun,
   type AccountRow,
+  type WebhookInboxRow,
 } from "./store";
 import { buildCallCtx } from "./runtime";
 import { applySyncResult } from "./sync";
@@ -27,9 +30,11 @@ export function checkWebhookSecret(slug: string, headers: Record<string, string>
   const expected = getDefinitionConfig(slug).webhookSecret;
   if (!expected) return false;
   const got = headers["x-hook-secret"] ?? "";
-  const a = Buffer.from(got);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  // Hash both sides so the compare is constant-time regardless of length —
+  // a bare length check before timingSafeEqual leaks the secret's length.
+  const a = createHash("sha256").update(got).digest();
+  const b = createHash("sha256").update(expected).digest();
+  return timingSafeEqual(a, b);
 }
 
 /**
@@ -95,4 +100,40 @@ export async function dispatchWebhook(slug: string, webhook: WebhookInput): Prom
     if (account.settings.autoActivityRead === false) continue; // upstream gate
     await runProcess(account, webhook);
   }
+}
+
+// ─── Durable inbox (HARDENING-2026-08-27 item 11) ────────────────────────────
+
+/** Dispatch one persisted inbox row and settle its status. Never throws. */
+export async function dispatchInboxRow(row: WebhookInboxRow): Promise<void> {
+  let body: unknown = null;
+  try {
+    body = row.rawBody ? JSON.parse(row.rawBody) : null;
+  } catch {
+    body = null;
+  }
+  try {
+    await dispatchWebhook(row.slug, { headers: row.headers, body, rawBody: row.rawBody });
+    markWebhookInbox(row.id, "done");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[integrations/webhooks] inbox ${row.id} (${row.slug}) dispatch failed:`, message);
+    markWebhookInbox(row.id, "error", message.slice(0, 500));
+  }
+}
+
+const INBOX_STALE_MS = 60_000;
+
+/**
+ * Re-process 'pending' inbox rows older than 1 minute — deliveries whose 200
+ * was sent but whose dispatch never settled (crash/restart). Idempotent via
+ * the item-7 activity dedupe keys. Wired from ensureIntegrationSync (boot) and
+ * the hourly ingest-retry job (belt).
+ */
+export async function sweepWebhookInbox(): Promise<number> {
+  const stale = listStaleWebhookInbox(INBOX_STALE_MS);
+  for (const row of stale) {
+    await dispatchInboxRow(row);
+  }
+  return stale.length;
 }

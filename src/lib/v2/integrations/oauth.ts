@@ -100,28 +100,65 @@ export function startOAuth(slug: string, returnTo?: string): { url: string; stat
 }
 
 export interface CallbackOutcome {
-  redirect: string; // app path to bounce the browser to (?connected= | ?error=)
+  redirect: string; // app path to bounce the browser to (?connected= | ?error=<code>)
   account?: AccountRow;
+}
+
+/**
+ * Allowlisted short error codes for the callback redirect (HARDENING-2026-08-27
+ * item 4): raw token-endpoint/setup error bodies used to flow into the
+ * redirect query string (they can echo credentials, and are attacker-shaped
+ * content landing in a URL). The redirect now carries ONLY one of these codes;
+ * full detail goes to console.error server-side, redacted of secret values.
+ */
+export const OAUTH_ERROR_CODES = [
+  "oauth_state_invalid",
+  "provider_denied",
+  "no_code",
+  "token_exchange_failed",
+  "account_setup_failed",
+] as const;
+export type OauthErrorCode = (typeof OAUTH_ERROR_CODES)[number];
+
+/** Replace occurrences of secret values in server-side log text. */
+function redactSecrets(text: string, secrets: (string | undefined)[]): string {
+  let out = text;
+  for (const s of secrets) {
+    if (s && s.length >= 4) out = out.split(s).join("[redacted]");
+  }
+  return out;
 }
 
 /** Exchange the code, run the connector's setup, upsert the account. */
 export async function handleCallback(
   params: Record<string, string>,
 ): Promise<CallbackOutcome> {
-  const fail = (redirectUrl: string, message: string): CallbackOutcome => ({
-    redirect: `${redirectUrl}?error=${encodeURIComponent(message)}`,
-  });
+  const fail = (redirectUrl: string, code: OauthErrorCode, detail?: string): CallbackOutcome => {
+    if (detail) console.error(`[integrations/oauth] callback failed (${code}): ${detail}`);
+    return { redirect: `${redirectUrl}?error=${code}` };
+  };
 
   const state = params.state ?? "";
   const session = state ? popOauthSession(state) : null; // ONE-SHOT + TTL purge
-  if (!session) return fail("/integrations", "OAuth state is unknown, already used, or expired");
-
-  if (params.error) {
-    return fail(session.redirectUrl, params.error_description || params.error);
-  }
-  if (!params.code) return fail(session.redirectUrl, "provider returned no code");
+  if (!session) return fail("/integrations", "oauth_state_invalid");
 
   const slug = session.definitionSlug;
+  let clientSecret: string | undefined;
+  try {
+    clientSecret = getDefinitionConfig(slug).clientSecret;
+  } catch {
+    /* definition unreadable — nothing to redact */
+  }
+
+  if (params.error) {
+    return fail(
+      session.redirectUrl,
+      "provider_denied",
+      redactSecrets(`${slug}: ${params.error_description || params.error}`.slice(0, 500), [clientSecret]),
+    );
+  }
+  if (!params.code) return fail(session.redirectUrl, "no_code", `${slug}: provider returned no code`);
+
   let tokens: Record<string, unknown>;
   try {
     const oauth2 = requireOauthSpec(slug);
@@ -134,7 +171,11 @@ export async function handleCallback(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return fail(session.redirectUrl, message);
+    return fail(
+      session.redirectUrl,
+      "token_exchange_failed",
+      redactSecrets(`${slug}: ${message}`.slice(0, 800), [clientSecret]),
+    );
   }
 
   try {
@@ -149,7 +190,13 @@ export async function handleCallback(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return fail(session.redirectUrl, message);
+    // Token values may appear in setup errors — redact them alongside the client secret.
+    const tokenValues = Object.values(tokens).filter((v): v is string => typeof v === "string");
+    return fail(
+      session.redirectUrl,
+      "account_setup_failed",
+      redactSecrets(`${slug}: ${message}`.slice(0, 800), [clientSecret, ...tokenValues]),
+    );
   }
 }
 

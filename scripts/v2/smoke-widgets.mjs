@@ -339,15 +339,28 @@ const EXPECTED_SLUGS = [
 }
 
 // ---------------------------------------------------------------------------
-// H. newsletter-edition + anynotes-recent (H3.2) — contract stubs stay honest
+// H. newsletter-edition stub + anynotes-recent (FILLED by SPEC-F I4.1)
 // ---------------------------------------------------------------------------
 {
+  // SPEC-F K4.3 replaced the newsletter stub with the real EditionDoc read.
+  // With NO edition row at all the widget is genuinely UNAVAILABLE — there is
+  // no document, date or stats to render — so it answers with the reason and
+  // the fix rather than an empty card that looks like today's paper. (This is
+  // the opposite call from anynotes-recent below, deliberately: an empty notes
+  // TABLE is a real answer; a missing edition DOCUMENT is not.) The populated
+  // payload is covered by smoke-newsletter-ui §G against a seeded edition.
   const news = await (await dataReq("newsletter-edition", {})).json();
-  check("newsletter-edition → {available:false, reason 'workstream not built'} until SPEC-F K fills it",
-    news.available === false && /workstream not built/i.test(news.reason ?? ""), news);
+  check("newsletter-edition with no edition row → honest {available:false} naming the fix",
+    news.available === false && /no edition built yet/i.test(news.reason ?? "") &&
+      /\/newsletter/.test(news.reason ?? ""), news);
+  // SPEC-F I4.1 replaced the anynotes stub with the real store read. An EMPTY
+  // AnyNotes table is `available:true` with zero notes — "nothing captured
+  // yet" is a real answer, not an unavailable source (the honest-metrics rule
+  // forbids fabrication, not emptiness). Depth of the payload is covered by
+  // smoke-anynotes-ui §H against a seeded note.
   const notes = await (await dataReq("anynotes-recent", {})).json();
-  check("anynotes-recent → {available:false, reason 'workstream not built'} until SPEC-F I fills it",
-    notes.available === false && /workstream not built/i.test(notes.reason ?? ""), notes);
+  check("anynotes-recent → available:true with a real notes array (SPEC-F I4.1 filled the placeholder)",
+    notes.available === true && Array.isArray(notes.notes) && typeof notes.pendingJarvis === "number", notes);
 }
 
 // ---------------------------------------------------------------------------

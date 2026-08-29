@@ -1,6 +1,6 @@
 import vm from "node:vm";
 import { readSettings } from "../../settings";
-import { redactArgs } from "../redact";
+import { redactArgs, redactText } from "../redact";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureMemoryActions } from "../memory/mcpTools";
 import { ensureTaskActions } from "../mcp/taskActions";
@@ -331,7 +331,12 @@ async function run(
         out = await runInternal(tool, args, ctx);
         break;
       case "http":
+        // Hardening item 5: a provider that echoes request headers (e.g. an
+        // Authorization bearer) puts resolved secret VALUES into its
+        // response/error body — redact them before the text is returned or
+        // persisted anywhere.
         out = await runHttp(tool, args, slug);
+        out.output = redactText(out.output, secretValues);
         break;
       case "js":
         out = await runJs(tool, args);
@@ -347,7 +352,9 @@ async function run(
       logs: out.logs,
     };
   } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
+    // Hardening item 5: error text (http bodies especially) is redacted of
+    // secret values before it is persisted to webmcp_call_logs or returned.
+    const error = redactText(err instanceof Error ? err.message : String(err), secretValues);
     log(false, error);
     return { ok: false, output: "", error, durationMs: Date.now() - started };
   }
