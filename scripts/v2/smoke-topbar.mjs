@@ -51,6 +51,12 @@ check("B2 every route resolves to a non-empty title", blank.length === 0, blank.
 
 // A route's title should relate to its path — the failure mode was a title that
 // looked fine but belonged to a different module.
+//
+// Three titles are deliberately editorial and do NOT echo their path (confirmed
+// by Yoshi, 2026-08-29). They are pinned rather than merely logged: a printed
+// note blends into a passing run, so a FOURTH mismatch would have slipped by
+// unread — which is how the original bug survived in the first place.
+const EDITORIAL = new Set(["/guide", "/pipeline", "/room"]);
 const unrelated = ALL.filter((r) => {
   if (r === "/") return false;
   const slug = r.split("/").filter(Boolean)[0].replace(/[[\]]/g, "");
@@ -58,7 +64,13 @@ const unrelated = ALL.filter((r) => {
   const s = slug.toLowerCase().replace(/[^a-z]/g, "");
   return !title.includes(s.slice(0, 4)) && !s.includes(title.slice(0, 4));
 });
-console.log(`  (routes whose title is not obviously derived from the path: ${unrelated.length ? unrelated.join(", ") : "none"})`);
+const unexpected = unrelated.filter((r) => !EDITORIAL.has(r));
+check("B3 no NEW route title has drifted from its path", unexpected.length === 0,
+  unexpected.map((r) => `${r} -> "${metaFor(r).title}"`).join(", "));
+
+const goneEditorial = [...EDITORIAL].filter((r) => ALL.includes(r) && !unrelated.includes(r));
+check("B4 the pinned editorial titles are still editorial", goneEditorial.length === 0,
+  `now derive from their path: ${goneEditorial.join(", ")}`);
 
 // ── §C the three resolution steps ───────────────────────────────────────────
 console.log("\n── §C metaFor resolution order ──");
