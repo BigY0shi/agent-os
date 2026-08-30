@@ -35,6 +35,8 @@ export default function SubscriptionManager({
   const [name, setName] = useState("");
   const [topic, setTopic] = useState("");
   const [signupUrl, setSignupUrl] = useState("");
+  /** Optional: reuse an alias you already own rather than spending a new one. */
+  const [aliasEmail, setAliasEmail] = useState("");
   const [cadence, setCadence] = useState<Cadence>("unknown");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +65,7 @@ export default function SubscriptionManager({
           name: name.trim(),
           topic: topic.trim() || undefined,
           signupUrl: signupUrl.trim() || undefined,
+          aliasEmail: aliasEmail.trim() || undefined,
           cadence,
         }),
       });
@@ -77,6 +80,7 @@ export default function SubscriptionManager({
       setName("");
       setTopic("");
       setSignupUrl("");
+      setAliasEmail("");
       setCadence("unknown");
       onChanged();
     } catch (err) {
@@ -151,6 +155,13 @@ export default function SubscriptionManager({
               value={signupUrl}
               onChange={(e) => setSignupUrl(e.target.value)}
               placeholder="Signup URL (https://…)"
+              className="rounded-md px-2 h-8 text-[12px] outline-none"
+              style={inputStyle}
+            />
+            <input
+              value={aliasEmail}
+              onChange={(e) => setAliasEmail(e.target.value)}
+              placeholder="Existing alias (optional — blank mints a new one)"
               className="rounded-md px-2 h-8 text-[12px] outline-none"
               style={inputStyle}
             />
