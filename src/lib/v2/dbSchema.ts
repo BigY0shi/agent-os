@@ -857,6 +857,26 @@ CREATE TABLE IF NOT EXISTS newsletter_state (
 );
 `;
 
+/**
+ * SPEC-F K — source chips come from the SENDER, not the subscription.
+ *
+ * Two changes, one cause. The original design assumed a disposable alias per
+ * newsletter, so the subscription WAS the source identity. addy quotas make
+ * that expensive: a sector alias shared by several publications is the real
+ * usage pattern, and under it every chip read the sector's name.
+ *
+ * `from_name` keeps the display name off the From header ("Stratechery"),
+ * which is the publication's own idea of what it is called. Dropping the
+ * unique index lets several subscriptions share one alias; attribution no
+ * longer depends on the alias being unique, because the mail says who sent it.
+ */
+const M062_NEWSLETTER_SENDER_CHIPS = `
+ALTER TABLE newsletter_emails ADD COLUMN from_name TEXT;
+DROP INDEX IF EXISTS idx_nl_subs_alias;
+CREATE INDEX IF NOT EXISTS idx_nl_subs_alias
+  ON newsletter_subscriptions(alias_email) WHERE alias_email IS NOT NULL;
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -1070,6 +1090,13 @@ export const MIGRATIONS: Migration[] = [
     name: "newsletter",
     up: (db) => {
       db.exec(M061_NEWSLETTER);
+    },
+  },
+  {
+    version: 62,
+    name: "newsletter_sender_chips",
+    up: (db) => {
+      db.exec(M062_NEWSLETTER_SENDER_CHIPS);
     },
   },
 ];

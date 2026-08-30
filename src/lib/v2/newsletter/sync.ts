@@ -93,6 +93,23 @@ export function extractAddress(raw: string): string {
   return m ? m[0].trim().toLowerCase() : "";
 }
 
+/**
+ * "Stratechery <news@stratechery.com>" → "Stratechery".
+ *
+ * The publication's own name for itself, which is what belongs on a source
+ * chip. Quotes are stripped; a bare address yields "" so callers fall through
+ * to the address. Never returns something containing '@' — a From header with
+ * no display name would otherwise produce a chip identical to the address.
+ */
+export function extractDisplayName(raw: string): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "";
+  const angled = value.indexOf("<");
+  const name = (angled >= 0 ? value.slice(0, angled) : "").trim().replace(/^["']|["']$/g, "").trim();
+  if (!name || name.includes("@")) return "";
+  return name.slice(0, 120);
+}
+
 /** ALL addresses on a header (Delivered-To / To can carry several). */
 export function extractAddresses(raw: string): string[] {
   const out = new Set<string>();
@@ -126,6 +143,7 @@ interface ParsedMessage {
   threadId: string | null;
   internalDate: number;
   fromAddr: string;
+  fromName: string;
   toAddr: string;
   toAll: string[];
   subject: string;
@@ -143,6 +161,7 @@ function parseMessage(msg: gmail_v1.Schema$Message): ParsedMessage {
     threadId: msg.threadId ?? null,
     internalDate: parseInt(msg.internalDate ?? "0", 10),
     fromAddr: extractAddress(header(headers, "From")) || header(headers, "From"),
+    fromName: extractDisplayName(header(headers, "From")),
     toAddr: toAll[0] ?? "",
     toAll,
     subject: header(headers, "Subject") || "(no subject)",
@@ -267,6 +286,7 @@ export async function syncOnce(
           threadId: msg.threadId,
           subscriptionId: subscription?.id ?? null,
           fromAddr: msg.fromAddr,
+          fromName: msg.fromName || null,
           toAddr: subscription?.aliasEmail ?? msg.toAddr,
           subject: msg.subject,
           receivedAt: new Date(msg.internalDate).toISOString(),

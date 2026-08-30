@@ -224,8 +224,22 @@ export interface AbsorbResult {
   storyIds: string[];
 }
 
-/** The display name for a story's source chip. */
+/**
+ * The display name for a story's source chip.
+ *
+ * The SENDER wins. A chip names the publication that ran the story, and the
+ * only thing that reliably knows that is the mail itself — the subscription is
+ * whatever bucket the alias happens to belong to. Under one-alias-per-sector
+ * (the real usage pattern, since addy quotas are finite) a subscription covers
+ * several publications, so preferring its name labelled every story in a sector
+ * identically.
+ *
+ * The subscription name still serves as the fallback: it is the human's own
+ * label, and it beats a bare address when a sender set no display name.
+ */
 export function sourceNameFor(email: NewsletterEmail, subscriptionName?: string | null): string {
+  const sender = email.fromName?.trim();
+  if (sender) return sender;
   if (subscriptionName && subscriptionName.trim()) return subscriptionName.trim();
   return email.fromAddr?.trim() || email.subject?.trim() || "Unknown source";
 }

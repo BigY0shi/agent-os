@@ -95,6 +95,35 @@ let subA = null;
     tables,
   );
 
+  // ── migration 062: sender chips + shared aliases ──────────────────────────
+  const emailCols = ensureDb().prepare("PRAGMA table_info(newsletter_emails)").all().map((c) => c.name);
+  check("A1b migration 062 added newsletter_emails.from_name", emailCols.includes("from_name"), emailCols.join(","));
+
+  const aliasIdx = ensureDb()
+    .prepare("SELECT name, \"unique\" AS uniq FROM pragma_index_list('newsletter_subscriptions') WHERE name = 'idx_nl_subs_alias'")
+    .get();
+  check("A1c the alias index still exists (lookups stay fast)", !!aliasIdx, JSON.stringify(aliasIdx ?? null));
+  check("A1d ...but is no longer UNIQUE — one addy alias may serve a whole sector",
+    !!aliasIdx && aliasIdx.uniq === 0, JSON.stringify(aliasIdx ?? null));
+
+  // The behaviour, not just the schema: two publications behind one alias.
+  {
+    const shared = "ai-sector-abc@yoshi.addy.io";
+    const one = store.createSubscription({ name: "Shared A", aliasId: "al-1", aliasEmail: shared });
+    let two = null;
+    let threw = null;
+    try {
+      two = store.createSubscription({ name: "Shared B", aliasId: "al-2", aliasEmail: shared });
+    } catch (err) {
+      threw = err;
+    }
+    check("A1e two subscriptions CAN now share one alias", !!two && !threw,
+      threw ? String(threw.message).slice(0, 90) : "");
+    check("A1f the shared-alias lookup is deterministic (oldest wins, not planner order)",
+      store.findSubscriptionByAlias(shared)?.id === one.id &&
+        store.findSubscriptionByAlias(shared)?.id === one.id);
+  }
+
   subA = store.createSubscription({
     name: "TLDR",
     topic: "AI & Agents",
@@ -543,11 +572,43 @@ const FIXTURE_DATE = "2026-08-20";
     "E12 with NO vector and no URL there is no match (degraded = URL-only, never a guess)",
     dedupe.findDuplicate({ canonicalUrl: null, embedding: null }) === null,
   );
+  // Migration 062 inverted this: the SENDER names the chip, because a chip names
+  // the publication that ran the story and only the mail knows that. The
+  // subscription name is the human's fallback label, not the answer.
   check(
-    "E12b sourceNameFor prefers the subscription name and falls back to the sender — never a fabricated label",
-    dedupe.sourceNameFor(e3, "Import AI") === "Import AI" &&
-      dedupe.sourceNameFor(e3, null) === "jack@importai.net" &&
-      dedupe.sourceNameFor({ fromAddr: null, subject: null }, null) === "Unknown source",
+    "E12b sourceNameFor prefers the SENDER display name over the subscription",
+    dedupe.sourceNameFor({ ...e3, fromName: "Import AI Weekly" }, "AI newsletters") === "Import AI Weekly",
+  );
+  check(
+    "E12c ...falls back to the subscription name when the sender set none",
+    dedupe.sourceNameFor(e3, "Import AI") === "Import AI",
+  );
+  check(
+    "E12d ...then the address, then the subject, never a fabricated label",
+    dedupe.sourceNameFor(e3, null) === "jack@importai.net" &&
+      dedupe.sourceNameFor({ fromAddr: null, fromName: null, subject: "Issue 42" }, null) === "Issue 42" &&
+      dedupe.sourceNameFor({ fromAddr: null, fromName: null, subject: null }, null) === "Unknown source",
+  );
+  // The whole point of the change: one addy alias per SECTOR, several
+  // publications behind it, each still named correctly on its own chip.
+  check(
+    "E12e a SHARED alias still labels each publication distinctly",
+    (() => {
+      const shared = "ai-sector@yoshi.addy.io";
+      const names = [
+        { fromName: "Stratechery", fromAddr: "n@stratechery.com", toAddr: shared },
+        { fromName: "TLDR", fromAddr: "d@tldr.tech", toAddr: shared },
+        { fromName: "Import AI", fromAddr: "jack@importai.net", toAddr: shared },
+      ].map((e) => dedupe.sourceNameFor(e, "AI newsletters"));
+      return new Set(names).size === 3 && !names.includes("AI newsletters");
+    })(),
+  );
+  check(
+    "E12f extractDisplayName reads the name and refuses to echo a bare address",
+    sync.extractDisplayName("Stratechery <news@stratechery.com>") === "Stratechery" &&
+      sync.extractDisplayName('"Ben\'s Bites" <ben@bensbites.co>') === "Ben\'s Bites" &&
+      sync.extractDisplayName("news@stratechery.com") === "" &&
+      sync.extractDisplayName("") === "",
   );
   check(
     "E13 normalizeItems drops junk and clamps at 15",
@@ -797,6 +858,55 @@ googleClient.__setGoogleMockForTests({
     { run4, heldBefore },
   );
   delete MESSAGES["sy-6"];
+}
+
+// ═══ §Fb subscribe: mint a new alias vs reuse one you own ════════════════════
+console.log("");
+console.log("── §Fb subscribe route: alias reuse spends no quota ──");
+{
+  const subsRoute = await import("../../src/app/api/newsletter/subscriptions/route.ts");
+  const post = (body) =>
+    subsRoute.POST(
+      new NextRequest("http://127.0.0.1:3737/api/newsletter/subscriptions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  let addyCalls = 0;
+  config.__setAddyTransportForTests(async (url, init) => {
+    addyCalls++;
+    if (url.endsWith("/aliases") && (init.method ?? "GET") === "POST") {
+      return new Response(
+        JSON.stringify({ data: { id: "new-1", email: "mint9@yoshi.addy.io", active: true } }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    }
+    return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+  });
+
+  const minted = await (await post({ name: "Fb Minted" })).json();
+  check("Fb1 with no alias given, one is minted from addy",
+    minted.subscription?.aliasEmail === "mint9@yoshi.addy.io" && addyCalls === 1,
+    JSON.stringify({ minted: minted.subscription?.aliasEmail, addyCalls }));
+
+  // The point of the feature: reusing an alias must not touch addy at all.
+  const before = addyCalls;
+  const reused = await (await post({ name: "Fb Reused", aliasEmail: "MINT9@yoshi.addy.io" })).json();
+  check("Fb2 reusing an alias spends NO addy call (quota untouched)", addyCalls === before,
+    `addyCalls went ${before} -> ${addyCalls}`);
+  check("Fb3 ...and the alias is stored lowercased on the new row",
+    reused.subscription?.aliasEmail === "mint9@yoshi.addy.io", reused.subscription?.aliasEmail);
+  check("Fb4 ...inheriting the sibling's aliasId so activate/deactivate still works",
+    reused.subscription?.aliasId === "new-1", reused.subscription?.aliasId);
+  check("Fb5 both subscriptions now live behind the ONE alias",
+    store.listSubscriptions().filter((x) => x.aliasEmail === "mint9@yoshi.addy.io").length === 2);
+
+  const bad = await post({ name: "Fb Bad", aliasEmail: "not-an-address" });
+  check("Fb6 a malformed alias is rejected 400 before any addy call", bad.status === 400, `${bad.status}`);
+
+  config.__setAddyTransportForTests(null);
 }
 
 // ═══ §G jobs (K3.3) — the REAL scheduler, no croner ══════════════════════════

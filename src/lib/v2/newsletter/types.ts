@@ -43,6 +43,9 @@ export interface NewsletterEmail {
   threadId: string | null;
   subscriptionId: string | null;
   fromAddr: string | null;
+  /** Display name off the From header ("Stratechery"), when the sender set one.
+   *  This is the source chip — see dedupe.sourceNameFor. */
+  fromName: string | null;
   toAddr: string | null;
   subject: string | null;
   receivedAt: string;

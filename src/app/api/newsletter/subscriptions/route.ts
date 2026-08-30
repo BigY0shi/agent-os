@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureV2 } from "@/lib/v2/boot";
 import { AddyError, aliasDescription, createAlias } from "@/lib/v2/newsletter/addy";
 import { addyConfigured, addyDomain, configPath, gmailConfigured } from "@/lib/v2/newsletter/config";
-import { createSubscription, latestEmailAt, listSubscriptions } from "@/lib/v2/newsletter/store";
+import { createSubscription, findSubscriptionByAlias, latestEmailAt, listSubscriptions } from "@/lib/v2/newsletter/store";
 import { isCadence } from "@/lib/v2/newsletter/types";
 
 export const runtime = "nodejs";
@@ -56,6 +56,10 @@ interface CreateBody {
   topic?: unknown;
   signupUrl?: unknown;
   cadence?: unknown;
+  /** Reuse an alias you already own instead of minting a new one. addy quotas
+   *  are finite, so one alias per SECTOR is the realistic pattern; source chips
+   *  come from the sender, so sharing costs no attribution (migration 062). */
+  aliasEmail?: unknown;
 }
 
 /** POST /api/newsletter/subscriptions — creates the addy alias, then the row. */
@@ -74,12 +78,28 @@ export async function POST(req: NextRequest) {
   }
   const cadence = isCadence(body?.cadence) ? body.cadence : "unknown";
 
+  const reuse =
+    typeof body?.aliasEmail === "string" ? body.aliasEmail.trim().toLowerCase() : "";
+  if (reuse && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reuse)) {
+    return NextResponse.json({ error: "aliasEmail must be an email address" }, { status: 400, ...noStore });
+  }
+
   try {
-    const domain = addyDomain();
-    const alias = await createAlias({
-      description: aliasDescription(name),
-      ...(domain ? { domain } : {}),
-    });
+    // Reuse: no addy call at all, so no quota spent and nothing can half-fail.
+    // The aliasId is inherited from a sibling on the same alias so activate /
+    // deactivate keeps working; null only if this is the first row for it.
+    let alias: { id: string | null; email: string };
+    if (reuse) {
+      const sibling = findSubscriptionByAlias(reuse);
+      alias = { id: sibling?.aliasId ?? null, email: reuse };
+    } else {
+      const domain = addyDomain();
+      const created = await createAlias({
+        description: aliasDescription(name),
+        ...(domain ? { domain } : {}),
+      });
+      alias = { id: created.id, email: created.email };
+    }
     const subscription = createSubscription({
       name,
       topic,

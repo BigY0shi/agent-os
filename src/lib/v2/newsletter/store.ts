@@ -62,6 +62,7 @@ interface EmailRow {
   thread_id: string | null;
   subscription_id: string | null;
   from_addr: string | null;
+  from_name: string | null;
   to_addr: string | null;
   subject: string | null;
   received_at: string;
@@ -112,6 +113,7 @@ function toEmail(r: EmailRow): NewsletterEmail {
     threadId: r.thread_id,
     subscriptionId: r.subscription_id,
     fromAddr: r.from_addr,
+    fromName: r.from_name,
     toAddr: r.to_addr,
     subject: r.subject,
     receivedAt: r.received_at,
@@ -213,10 +215,25 @@ export function listSubscriptions(filter: { status?: SubscriptionStatus } = {}):
   return rows.map(toSub);
 }
 
-/** Alias → subscription, the sync's to_addr match. Case-insensitive. */
+/**
+ * Alias → subscription, the sync's to_addr match. Case-insensitive.
+ *
+ * An alias may be shared by several subscriptions since migration 062 (one
+ * addy alias per SECTOR, not per publication), so this can match more than one
+ * row. Ordered by created_at so the answer is stable rather than whatever the
+ * planner happened to return first — but note the winner is only used for the
+ * email's subscription_id. The source CHIP comes from the sender, so a shared
+ * alias no longer mislabels anything.
+ */
 export function findSubscriptionByAlias(aliasEmail: string): Subscription | null {
   const row = getDb()
-    .prepare("SELECT * FROM newsletter_subscriptions WHERE lower(alias_email) = ?")
+    .prepare(
+      // Tiebreak on rowid, NOT id: created_at is millisecond ISO text and two
+      // subscriptions added in one burst collide on it, while shortId() is
+      // random — ordering by it picks a different row per run. rowid is
+      // monotonic per insert. (Same defect as anynotes listReplies, 2026-08-28.)
+      "SELECT * FROM newsletter_subscriptions WHERE lower(alias_email) = ? ORDER BY created_at, rowid LIMIT 1",
+    )
     .get(aliasEmail.trim().toLowerCase()) as SubRow | undefined;
   return row ? toSub(row) : null;
 }
@@ -264,6 +281,7 @@ export interface InsertEmailInput {
   threadId?: string | null;
   subscriptionId?: string | null;
   fromAddr?: string | null;
+  fromName?: string | null;
   toAddr?: string | null;
   subject?: string | null;
   /** ISO UTC — derived from the Gmail internalDate. */
@@ -282,9 +300,9 @@ export function insertEmail(input: InsertEmailInput): NewsletterEmail | null {
   const res = getDb()
     .prepare(
       `INSERT OR IGNORE INTO newsletter_emails
-         (id, gmail_id, thread_id, subscription_id, from_addr, to_addr, subject,
+         (id, gmail_id, thread_id, subscription_id, from_addr, from_name, to_addr, subject,
           received_at, content_md, parse_status, parse_error, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
     )
     .run(
       id,
@@ -292,6 +310,7 @@ export function insertEmail(input: InsertEmailInput): NewsletterEmail | null {
       input.threadId ?? null,
       input.subscriptionId ?? null,
       input.fromAddr ?? null,
+      input.fromName ?? null,
       input.toAddr ?? null,
       input.subject ?? null,
       input.receivedAt,
