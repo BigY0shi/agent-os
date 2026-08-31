@@ -187,6 +187,38 @@ try {
   const sched = globalThis.__agentosV2Scheduler;
   if (sched?.timer) clearInterval(sched.timer);
 } catch {}
+// ── the DEFAULT callback origin (the tests above pin it explicitly) ─────────
+// Shipped as port 3000 while every launcher runs 3737, so the redirect URI the
+// UI told you to register with Google could never receive the callback. The
+// literal had been copied into three files and drifted; it now lives once.
+{
+  const consts = await import("../../src/lib/v2/integrations/constants.ts");
+  check(
+    "Z1 the default callback origin is the port the app actually runs on",
+    consts.DEFAULT_CALLBACK_ORIGIN === "http://localhost:3737",
+    consts.DEFAULT_CALLBACK_ORIGIN,
+  );
+  check(
+    "Z2 the default redirect URI is the one to paste into a provider console",
+    consts.DEFAULT_CALLBACK_ORIGIN + consts.OAUTH_CALLBACK_PATH ===
+      "http://localhost:3737/api/v2/integrations/oauth/callback",
+  );
+  // The literal must not creep back into a component or a settings comment.
+  const roots = ["src/lib/v2/integrations", "src/components/v2/integrations", "src/lib/settings.ts"];
+  const offenders = [];
+  const walk = (rel) => {
+    const abs = path.join(process.cwd(), rel);
+    if (!fs.existsSync(abs)) return;
+    if (fs.statSync(abs).isFile()) {
+      if (fs.readFileSync(abs, "utf8").includes("localhost:3000")) offenders.push(rel);
+      return;
+    }
+    for (const e of fs.readdirSync(abs)) walk(path.posix.join(rel, e));
+  };
+  roots.forEach(walk);
+  check("Z3 no file hardcodes the old origin any more", offenders.length === 0, offenders.join(", "));
+}
+
 await new Promise((r) => mock.close(r));
 await new Promise((r) => setTimeout(r, 250));
 __closeForTests();

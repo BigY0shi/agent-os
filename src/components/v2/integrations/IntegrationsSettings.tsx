@@ -6,6 +6,7 @@
 // /api/v2/integrations/[slug]; only "configured ✓" booleans ever render).
 
 import { useCallback, useEffect, useState } from "react";
+import { DEFAULT_CALLBACK_ORIGIN } from "@/lib/v2/integrations/constants";
 import { useSettings, Field, TextInput, SaveBar } from "@/components/ConfigMenu";
 import { INTEGRATIONS_ACCENT, inputStyle, type ConnectorInfo } from "./shared";
 
@@ -28,13 +29,13 @@ export default function IntegrationsSettings({ connectors }: { connectors: Conne
 
   useEffect(() => {
     if (settings && originDraft === null) {
-      setOriginDraft(integrations.callbackOrigin ?? "http://localhost:3000");
+      setOriginDraft(integrations.callbackOrigin ?? DEFAULT_CALLBACK_ORIGIN);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
   const saveOrigin = async () => {
-    const callbackOrigin = (originDraft ?? "").trim().replace(/\/+$/, "") || "http://localhost:3000";
+    const callbackOrigin = (originDraft ?? "").trim().replace(/\/+$/, "") || DEFAULT_CALLBACK_ORIGIN;
     setOriginDraft(callbackOrigin);
     await save({ integrations: { ...integrations, callbackOrigin } });
     setSaved(true);
@@ -108,7 +109,7 @@ export default function IntegrationsSettings({ connectors }: { connectors: Conne
         <TextInput
           value={originDraft ?? ""}
           onChange={(e) => setOriginDraft(e.target.value)}
-          placeholder="http://localhost:3000"
+          placeholder={DEFAULT_CALLBACK_ORIGIN}
           spellCheck={false}
         />
       </Field>

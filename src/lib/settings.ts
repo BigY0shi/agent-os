@@ -208,7 +208,8 @@ export interface Settings {
   // SPEC-D G2 integrations runtime (gear panel lands with the G1 /integrations UI).
   integrations?: {
     callbackOrigin?: string;   // OAuth redirect origin — must match provider app registration
-                               // (default http://localhost:3000; redirectUri = <origin>/api/v2/integrations/oauth/callback)
+                               // (default http://localhost:3737 — see v2/integrations/constants.ts;
+                               //  redirectUri = <origin>/api/v2/integrations/oauth/callback)
     syncEnabled?: boolean;     // master kill switch for SCHEDULED syncs (default true; manual sync always runs)
   };
   // SPEC-D H4 attention aggregator (hero UI lands in Phase 6; store/collectors live).
