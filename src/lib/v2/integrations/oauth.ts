@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
+import { DEFAULT_CALLBACK_ORIGIN, OAUTH_CALLBACK_PATH } from "./constants";
 import { readSettings } from "../../settings";
 import { getConnector } from "./registry";
 import {
@@ -36,7 +37,7 @@ export function interpolateString(str: string, replacers: Record<string, unknown
 }
 
 export function callbackOrigin(): string {
-  return (readSettings().integrations?.callbackOrigin || "http://localhost:3000").replace(
+  return (readSettings().integrations?.callbackOrigin || DEFAULT_CALLBACK_ORIGIN).replace(
     /\/+$/,
     "",
   );
@@ -44,7 +45,7 @@ export function callbackOrigin(): string {
 
 /** Shown verbatim in the UI for pasting into the provider console (§3.3). */
 export function redirectUri(): string {
-  return `${callbackOrigin()}/api/v2/integrations/oauth/callback`;
+  return `${callbackOrigin()}${OAUTH_CALLBACK_PATH}`;
 }
 
 function requireOauthSpec(slug: string): OAuth2Params {
