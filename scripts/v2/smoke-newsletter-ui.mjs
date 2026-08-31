@@ -29,6 +29,10 @@ process.env.AGENTIC_OS_SETTINGS = settingsFile;
 process.env.AGENTIC_OS_KEY = path.join(settingsDir, "agentos.key");
 const nlDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-nl-ui-config-"));
 process.env.AGENTIC_OS_NEWSLETTER_DIR = nlDir; // NEVER Yoshi's real config
+// Isolation for the SECOND transport (migration 063). Without this,
+// agentmailConfigured() reads the REAL ~/.agentic-os/agentmail/config.json
+// and the sync route falls back to a LIVE inbox with a real key.
+process.env.AGENTIC_OS_AGENTMAIL_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-am-iso-"));
 process.env.OLLAMA_URL = "http://127.0.0.1:1"; // dead port — nothing may call out
 process.env.NEWSLETTER_STUB_PARSE = "1";
 

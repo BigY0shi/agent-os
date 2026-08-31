@@ -877,6 +877,25 @@ CREATE INDEX IF NOT EXISTS idx_nl_subs_alias
   ON newsletter_subscriptions(alias_email) WHERE alias_email IS NOT NULL;
 `;
 
+/**
+ * SPEC-F K — newsletters can arrive by a SECOND transport.
+ *
+ * The Gmail connector was the only delivery path, which made the whole module
+ * hostage to a Google OAuth setup — and to the restricted-scope refresh-token
+ * churn SPEC-F section 8 warns about. An AgentMail inbox receives mail directly,
+ * so an alias can forward there instead.
+ *
+ * `gmail_id` keeps its name and its UNIQUE constraint but widens in MEANING to
+ * "the provider's message id". Renaming it would touch the sync, the store and
+ * three smokes for no behavioural gain, and ids from two providers cannot
+ * collide. `source` records WHICH provider, defaulting to 'gmail' so every
+ * existing row stays truthful without a backfill.
+ */
+const M063_NEWSLETTER_TRANSPORT = `
+ALTER TABLE newsletter_emails ADD COLUMN source TEXT NOT NULL DEFAULT 'gmail';
+CREATE INDEX IF NOT EXISTS idx_nl_emails_source ON newsletter_emails(source, received_at DESC);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -1097,6 +1116,13 @@ export const MIGRATIONS: Migration[] = [
     name: "newsletter_sender_chips",
     up: (db) => {
       db.exec(M062_NEWSLETTER_SENDER_CHIPS);
+    },
+  },
+  {
+    version: 63,
+    name: "newsletter_transport",
+    up: (db) => {
+      db.exec(M063_NEWSLETTER_TRANSPORT);
     },
   },
 ];

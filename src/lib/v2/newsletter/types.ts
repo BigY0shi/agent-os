@@ -42,6 +42,8 @@ export interface NewsletterEmail {
   gmailId: string;
   threadId: string | null;
   subscriptionId: string | null;
+  /** Which transport delivered this — 'gmail' or 'agentmail' (migration 063). */
+  source: string;
   fromAddr: string | null;
   /** Display name off the From header ("Stratechery"), when the sender set one.
    *  This is the source chip — see dedupe.sourceNameFor. */

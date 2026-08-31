@@ -61,6 +61,7 @@ interface EmailRow {
   gmail_id: string;
   thread_id: string | null;
   subscription_id: string | null;
+  source: string;
   from_addr: string | null;
   from_name: string | null;
   to_addr: string | null;
@@ -112,6 +113,7 @@ function toEmail(r: EmailRow): NewsletterEmail {
     gmailId: r.gmail_id,
     threadId: r.thread_id,
     subscriptionId: r.subscription_id,
+    source: r.source ?? "gmail",
     fromAddr: r.from_addr,
     fromName: r.from_name,
     toAddr: r.to_addr,
@@ -280,6 +282,7 @@ export interface InsertEmailInput {
   gmailId: string;
   threadId?: string | null;
   subscriptionId?: string | null;
+  source?: string;
   fromAddr?: string | null;
   fromName?: string | null;
   toAddr?: string | null;
@@ -300,15 +303,16 @@ export function insertEmail(input: InsertEmailInput): NewsletterEmail | null {
   const res = getDb()
     .prepare(
       `INSERT OR IGNORE INTO newsletter_emails
-         (id, gmail_id, thread_id, subscription_id, from_addr, from_name, to_addr, subject,
+         (id, gmail_id, thread_id, subscription_id, source, from_addr, from_name, to_addr, subject,
           received_at, content_md, parse_status, parse_error, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
     )
     .run(
       id,
       input.gmailId,
       input.threadId ?? null,
       input.subscriptionId ?? null,
+      input.source ?? "gmail",
       input.fromAddr ?? null,
       input.fromName ?? null,
       input.toAddr ?? null,
