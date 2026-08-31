@@ -5,6 +5,7 @@
 // Backend: src/lib/marketing.ts + /api/marketing/*. Matches the Pipeline design
 // system: panel cards, right-side Drawer, busy states with rotating status lines.
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -28,6 +29,7 @@ interface ContentItem {
 interface Campaign {
   slug: string; title: string; business: Business; goal: string; angle?: string;
   channels: Channel[]; status: CampaignStatus; plan?: string; items: ContentItem[]; created: string; updated?: string;
+  color?: string; // SPEC-F J1.1 — stable palette colour, server-assigned on read
 }
 interface Persona {
   id: string; name: string; business: Business; audience: string; tone: string;
@@ -491,6 +493,14 @@ function CampaignCard({ c, planBusy, onOpen }: { c: Campaign; planBusy: boolean;
         <span className="font-mono">{c.items.length ? `${published}/${c.items.length} published` : "no calendar yet"}</span>
         <span>{ago(c.created)}</span>
       </div>
+      {/* SPEC-F J1.1 — the full campaign page. Additive: the card still opens
+          the drawer on click, so nothing about the existing flow changes.
+          stopPropagation keeps the drawer from opening behind the navigation. */}
+      <Link href={`/marketing/${c.slug}`} onClick={(e) => e.stopPropagation()}
+        className="mt-2 inline-flex items-center gap-1 text-[11px] hover:underline"
+        style={{ color: c.color ?? BUSINESS_COLOR[c.business] }}>
+        Open campaign <ArrowRight size={11} />
+      </Link>
     </motion.div>
   );
 }

@@ -37,6 +37,10 @@ process.env.AGENTIC_OS_SETTINGS = settingsFile;
 process.env.AGENTIC_OS_KEY = path.join(settingsDir, "agentos.key");
 const nlDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-nl-config-"));
 process.env.AGENTIC_OS_NEWSLETTER_DIR = nlDir; // NEVER Yoshi's real config
+// Isolation for the SECOND transport (migration 063). Without this,
+// agentmailConfigured() reads the REAL ~/.agentic-os/agentmail/config.json
+// and the sync route falls back to a LIVE inbox with a real key.
+process.env.AGENTIC_OS_AGENTMAIL_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-am-iso-"));
 process.env.OLLAMA_URL = "http://127.0.0.1:1"; // dead port
 process.env.NEWSLETTER_STUB_PARSE = "1"; // deterministic, model-independent extraction
 
@@ -1001,7 +1005,12 @@ console.log("\n── §H /api/newsletter/sync ──");
   const failRes = await syncRoute.POST(req("/api/newsletter/sync", "POST"));
   const fail = await failRes.json();
   check(
-    "H6 with Gmail disconnected the route answers 412 with a named reason (loud, not a silent 0)",
+    // Migration 063 added a second transport: gmail-off alone is no longer a
+    // config failure, because agentmail may still be able to collect. The 412
+    // now means NEITHER path is available — which is the condition the user
+    // actually has to fix. This smoke isolates agentmail to an empty temp dir,
+    // so neither is configured here.
+    "H6 with NO transport configured the route answers 412 with a named reason (loud, not a silent 0)",
     failRes.status === 412 && /gmail/i.test(fail.error),
     fail,
   );
