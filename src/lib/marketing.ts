@@ -24,6 +24,7 @@ import { readSettings } from "@/lib/settings";
 // The tolerant model-JSON parser lives in ONE place (SPEC-F K3.2) and is
 // shared with the newsletter item extractor.
 import { extractJsonObj } from "@/lib/v2/json";
+import { colorFor } from "@/lib/v2/marketing/palette";
 
 const MARKETING_DIR = path.join(os.homedir(), ".agentic-os", "marketing");
 const CAMPAIGNS_DIR = path.join(MARKETING_DIR, "campaigns");
@@ -71,6 +72,9 @@ export interface Campaign {
   items: ContentItem[];
   created: string;
   updated?: string;
+  /** Stable palette colour (SPEC-F J1.1). Assigned on first read and persisted
+   *  so the rollup calendar cannot reshuffle between deploys. */
+  color?: string;
 }
 
 // Personas are MODEL-AGNOSTIC data (AGENTS.md rule 17): plain records injected
@@ -104,7 +108,7 @@ export async function listCampaigns(): Promise<Campaign[]> {
   const out: Campaign[] = [];
   for (const n of names) {
     if (!n.endsWith(".json")) continue;
-    try { out.push(JSON.parse(await readFile(path.join(CAMPAIGNS_DIR, n), "utf8"))); } catch { /* skip corrupt */ }
+    try { out.push(backfillColor(JSON.parse(await readFile(path.join(CAMPAIGNS_DIR, n), "utf8")))); } catch { /* skip corrupt */ }
   }
   out.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
   return out;
@@ -112,7 +116,25 @@ export async function listCampaigns(): Promise<Campaign[]> {
 
 export async function readCampaign(slug: string): Promise<Campaign | null> {
   if (!/^[a-z0-9-]+$/.test(slug)) return null;
-  try { return JSON.parse(await readFile(path.join(CAMPAIGNS_DIR, `${slug}.json`), "utf8")); } catch { return null; }
+  let c: Campaign;
+  try { c = JSON.parse(await readFile(path.join(CAMPAIGNS_DIR, `${slug}.json`), "utf8")); } catch { return null; }
+  return backfillColor(c);
+}
+
+/**
+ * Give a campaign its colour the first time anyone reads it, and write it back
+ * (J1.1). Persisting matters: a colour recomputed per render would reshuffle
+ * the rollup calendar whenever the palette changes. Campaigns created before
+ * this existed pick theirs up on next read, so no migration is needed.
+ *
+ * The write is fire-and-forget on purpose — a read-only filesystem should not
+ * turn a page load into an error over a cosmetic field.
+ */
+function backfillColor(c: Campaign): Campaign {
+  if (c.color) return c;
+  c.color = colorFor(c.slug);
+  void writeCampaign(c).catch(() => {});
+  return c;
 }
 
 export async function writeCampaign(c: Campaign): Promise<void> {
