@@ -38,5 +38,19 @@ export async function POST(req: Request) {
     permissionMode: body.permissionMode,
     intelligence: body.intelligence,
   });
+  // A degraded creation is NOT a silent success. The agent exists and its files
+  // are on disk, so this is not a 4xx — but the response says plainly that it
+  // cannot browse yet and that the state is repairable, rather than leaving the
+  // caller to discover it later as a launch error.
+  if (def.provisioning) {
+    return NextResponse.json({
+      agent: def,
+      warning:
+        `Agent "${def.name}" was created, but its browser credential profile could not be ` +
+        `provisioned: ${def.provisioning.error} It cannot use browser tools until repaired ` +
+        `(POST /api/v2/identity { action: "repair", agentId: "${def.id}" }).`,
+      provisioning: def.provisioning,
+    });
+  }
   return NextResponse.json({ agent: def });
 }

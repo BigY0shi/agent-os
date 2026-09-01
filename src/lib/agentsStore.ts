@@ -108,9 +108,13 @@ this file as lessons accumulate — that's the point: instructions beat schemas.
 
   // Give the agent a PRINCIPAL at birth, so it owns a credential folder from
   // its first run rather than being auto-provisioned on first browser call.
-  // Registration failing must not lose an agent the user just built — the
-  // auto-provision path in ensureAgentPrincipal still covers it, so this is
-  // loud but not fatal.
+  //
+  // Failure here must not LOSE an agent the user just built — the files are
+  // already on disk. But it must not report success either: the earlier version
+  // caught, logged, and returned `def`, so hitting the agent-profile cap looked
+  // like a clean creation and only surfaced later as a confusing launch error.
+  // Instead the failure is recorded ON the agent, where the API and the UI can
+  // both see it and where repairAgentProvisioning() can clear it.
   try {
     const { registerAgent } = await import("@/lib/v2/identity/principals");
     const { ensureOwnProfile } = await import("@/lib/v2/browser/config");
@@ -134,7 +138,10 @@ this file as lessons accumulate — that's the point: instructions beat schemas.
       );
     }
   } catch (err) {
-    console.error(`[agents] principal registration failed for ${def.id}:`, err instanceof Error ? err.message : err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[agents] credential provisioning failed for ${def.id}:`, message);
+    def.provisioning = { ok: false, error: message, at: Date.now() };
+    await writeFile(path.join(agentDir(def.id), "agent.json"), JSON.stringify(def, null, 2), "utf8");
   }
 
   return def;
@@ -217,4 +224,33 @@ export async function readApprovals(): Promise<ApprovalReq[]> {
 export async function writeApprovals(list: ApprovalReq[]): Promise<void> {
   await ensure(ROOT);
   await writeFile(APPROVALS, JSON.stringify(list, null, 1), "utf8");
+}
+
+/**
+ * Retry credential provisioning for an agent whose creation left it degraded.
+ *
+ * Idempotent: an agent that is already provisioned returns ok with nothing
+ * changed. On success the `provisioning` marker is REMOVED rather than set to
+ * ok:true, so "absent means fine" stays the single rule and there is no second
+ * way to spell healthy.
+ */
+export async function repairAgentProvisioning(
+  agentId: string,
+): Promise<{ ok: boolean; error?: string; repaired?: boolean }> {
+  const def = await loadAgent(agentId);
+  if (!def) return { ok: false, error: `Agent "${agentId}" not found` };
+  if (!def.provisioning) return { ok: true, repaired: false };
+  try {
+    const { ensureAgentPrincipal } = await import("@/lib/v2/identity/principals");
+    const { ensureOwnProfile } = await import("@/lib/v2/browser/config");
+    const principal = ensureAgentPrincipal(def.id, def.name);
+    const provisioned = ensureOwnProfile(`agent:${principal.id}`);
+    if (!provisioned.success) return { ok: false, error: provisioned.error };
+    delete def.provisioning;
+    def.updatedAt = Date.now();
+    await saveAgent(def);
+    return { ok: true, repaired: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }

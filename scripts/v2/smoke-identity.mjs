@@ -182,5 +182,56 @@ check("K6 the create route forwards it", route.includes("persistCredentials: bod
 const idRoute = readSrc("src/app/api/v2/identity/route.ts");
 check("K7 sub-agents are refused a persistence toggle of their own", idRoute.includes('origin === "subagent"'));
 
+
+// -- §L P2 REGRESSION: a failed provisioning is not a silent success ---------
+console.log("\n-- §L degraded creation is reported, and repairable --");
+const settings = await import("../../src/lib/settings.ts");
+const cfgL = await import("../../src/lib/v2/browser/config.ts");
+
+// Fill the agent-profile budget so the next provisioning genuinely fails. Done
+// via settings rather than by creating 64 agents, so the test stays fast and
+// exercises the SAME cap the real path hits.
+const full = Array.from({ length: 64 }, (_, i) => `agent-9${i}`);
+const browserCfg = settings.readSettings().browser ?? {};
+settings.writeSettings({ browser: { ...browserCfg, profiles: [...full] } });
+
+const degraded = await store.createAgent({ name: "Cap Victim", instructions: "x" });
+check("L1 the agent is still CREATED (its files exist, nothing is lost)", !!degraded?.id);
+check("L2 the failure is recorded ON the agent, not just logged",
+  degraded.provisioning?.ok === false, JSON.stringify(degraded.provisioning));
+check("L3 the recorded error explains what happened",
+  /profile/i.test(degraded.provisioning?.error ?? ""), degraded.provisioning?.error);
+check("L4 it is stamped, so a stale marker is identifiable",
+  typeof degraded.provisioning?.at === "number");
+// It has to survive a reload, or the UI cannot show it later.
+const reloaded = await store.loadAgent(degraded.id);
+check("L5 the degraded state persists to disk", reloaded?.provisioning?.ok === false);
+
+// Repair while still at the cap must FAIL rather than pretend.
+const stillFull = await store.repairAgentProvisioning(degraded.id);
+check("L6 repairing while still over the cap fails honestly", stillFull.ok === false, JSON.stringify(stillFull));
+check("L7 ...and the agent stays marked", (await store.loadAgent(degraded.id))?.provisioning?.ok === false);
+
+// Make room, then repair for real.
+settings.writeSettings({ browser: { ...browserCfg, profiles: full.slice(0, 3) } });
+const repaired = await store.repairAgentProvisioning(degraded.id);
+check("L8 repair succeeds once there is room", repaired.ok === true && repaired.repaired === true, JSON.stringify(repaired));
+const healed = await store.loadAgent(degraded.id);
+check("L9 the marker is REMOVED, not set to ok:true (one way to spell healthy)",
+  healed?.provisioning === undefined, JSON.stringify(healed?.provisioning));
+const principalL = P.listAgents().find((a) => a.externalId === degraded.id);
+check("L10 the repaired agent really owns a profile now",
+  cfgL.profileOwner(`agent-${principalL?.id}`) === `agent:${principalL?.id}`);
+check("L11 repair is idempotent", (await store.repairAgentProvisioning(degraded.id)).repaired === false);
+check("L12 repairing an unknown agent fails cleanly",
+  (await store.repairAgentProvisioning("no-such-agent")).ok === false);
+
+// The API must say so too, or the caller still sees a clean 200.
+const routeSrc = fs.readFileSync(path.join(process.cwd(), "src/app/api/agents/route.ts"), "utf8");
+check("L13 the create route surfaces the degraded state", routeSrc.includes("def.provisioning"));
+check("L14 ...with a warning naming the repair path", /repair/i.test(routeSrc));
+const idRouteSrc = fs.readFileSync(path.join(process.cwd(), "src/app/api/v2/identity/route.ts"), "utf8");
+check("L15 a repair endpoint exists", idRouteSrc.includes("repairAgentProvisioning"));
+
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

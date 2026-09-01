@@ -71,3 +71,29 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ ok: true, agentId, persistCredentials: body?.persistCredentials === true }, noStore);
 }
+
+/**
+ * POST { action: "repair", agentId } — retry credential provisioning for an
+ * agent whose creation left it degraded (see AgentDef.provisioning).
+ *
+ * Separate from PATCH, which changes what the user WANTS. This changes nothing
+ * the user decided; it re-attempts what the system failed to do.
+ */
+export async function POST(req: NextRequest) {
+  const body = (await req.json().catch(() => null)) as
+    | { action?: unknown; agentId?: unknown }
+    | null;
+  if (body?.action !== "repair") {
+    return NextResponse.json({ error: 'action must be "repair"' }, { status: 400, ...noStore });
+  }
+  const agentId = typeof body?.agentId === "string" ? body.agentId.trim() : "";
+  if (!agentId) return NextResponse.json({ error: "agentId is required" }, { status: 400, ...noStore });
+
+  const { repairAgentProvisioning } = await import("@/lib/agentsStore");
+  const r = await repairAgentProvisioning(agentId);
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400, ...noStore });
+  return NextResponse.json(
+    { ok: true, agentId, repaired: r.repaired === true, message: r.repaired ? "Provisioning repaired." : "Nothing to repair." },
+    noStore,
+  );
+}

@@ -112,10 +112,13 @@ check("G3 a NON-persisting agent does NOT launch against the durable dir",
 check("G4 ...it launches under the OS temp root",
   cfg.resolveLaunchDir(ephemeralOwn).dir.startsWith(os.tmpdir()));
 check("G5 ...and is reported ephemeral", cfg.resolveLaunchDir(ephemeralOwn).persistent === false);
-// The restart property: the dir is process-scoped, so a new server run cannot
-// reuse the previous run's cookies. No deletion involved (rule 1).
-check("G6 the ephemeral dir is scoped to the process, so a restart starts clean",
-  cfg.ephemeralProfileDir(ephemeralOwn).includes(String(process.pid)));
+// The restart property: the dir is scoped to a per-RUN nonce, so a new server
+// run cannot reuse the previous run's cookies. No deletion involved (rule 1).
+// Keying this on process.pid was not enough — the OS recycles PIDs. §J proves
+// the cross-run property with two real processes.
+check("G6 the ephemeral dir is scoped to this run's nonce",
+  cfg.ephemeralProfileDir(ephemeralOwn).includes(cfg.ephemeralRunId()),
+  cfg.ephemeralProfileDir(ephemeralOwn));
 check("G7 an ephemeral path still cannot escape its root",
   (() => { try { cfg.ephemeralProfileDir("../../etc"); return false; } catch { return true; } })());
 // Flipping the answer must change behaviour, not just the record.
@@ -198,6 +201,56 @@ check("I6 ...and it trips at the personal-profile cap, not sooner",
   /personal profiles/.test(lastErr ?? ""), lastErr ?? "");
 check("I7 agent profiles were still provisionable past that cap",
   cfg.ensureOwnProfile(`agent:${P.registerAgent({ label: "After cap", origin: "forge", persistCredentials: false }).id}`).success === true);
+
+
+// -- §J P1 REGRESSION: a restart must not inherit the last run's cookies ------
+console.log("\n-- §J ephemeral dirs are unique per RUN, not per pid --");
+// The first fix keyed on process.pid. The OS recycles PIDs, nothing removes old
+// temp state, so a restarted server handed a recycled PID would find the
+// previous run's cookie jar and adopt it - a "non-persistent" agent silently
+// persisting. A per-run random nonce cannot collide with a past run.
+const { execFileSync } = await import("node:child_process");
+const probe = path.join(dir, "runid-probe.mjs");
+// pathToFileURL keeps this working with a Windows drive letter and the space in
+// "JulianGolde - AgenticOS"; a raw path in a dynamic import fails on both.
+const { pathToFileURL } = await import("node:url");
+const configUrl = pathToFileURL(path.resolve("src/lib/v2/browser/config.ts")).href;
+fs.writeFileSync(
+  probe,
+  [
+    `const c = await import(${JSON.stringify(configUrl)});`,
+    `console.log(JSON.stringify({ runId: c.ephemeralRunId(), dir: c.ephemeralProfileDir("agent-1") }));`,
+  ].join("\n"),
+);
+const childEnv = {
+  ...process.env,
+  AGENTIC_OS_PRINCIPALS: process.env.AGENTIC_OS_PRINCIPALS,
+  AGENTIC_OS_SETTINGS: process.env.AGENTIC_OS_SETTINGS,
+  AGENTIC_OS_BROWSER_PROFILES: process.env.AGENTIC_OS_BROWSER_PROFILES,
+};
+const runChild = () =>
+  JSON.parse(
+    execFileSync("npx", ["tsx", probe], { encoding: "utf8", shell: true, env: childEnv })
+      .trim()
+      .split("\n")
+      .pop(),
+  );
+const runA = runChild();
+const runB = runChild();
+check("J1 two separate runs get different run ids", runA.runId !== runB.runId, `${runA.runId} vs ${runB.runId}`);
+check("J2 ...and therefore different ephemeral dirs", runA.dir !== runB.dir, runA.dir);
+check("J3 the run id is not the pid", !/^\d+$/.test(runA.runId), runA.runId);
+check("J4 the id is long enough that reuse is not a practical concern", runA.runId.length >= 16, runA.runId);
+check("J5 within ONE run the dir is stable (a headed->headless handoff keeps state)",
+  cfg.ephemeralProfileDir("agent-1") === cfg.ephemeralProfileDir("agent-1"));
+check("J6 different profiles in the same run stay separate",
+  cfg.ephemeralProfileDir("agent-1") !== cfg.ephemeralProfileDir("agent-2"));
+check("J7 no pid appears in the ephemeral path at all",
+  !cfg.ephemeralProfileDir("agent-1").includes(String(process.pid)),
+  cfg.ephemeralProfileDir("agent-1"));
+const cfgSrcJ = read("src/lib/v2/browser/config.ts");
+check("J8 the nonce is minted once at module load, not per call",
+  /const RUN_NONCE = randomBytes\(/.test(cfgSrcJ) && !/randomBytes\([^)]*\)[\s\S]{0,80}ephemeralProfileDir/.test(cfgSrcJ));
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

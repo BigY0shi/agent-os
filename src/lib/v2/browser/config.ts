@@ -330,6 +330,7 @@ export async function isPlaywrightReady(): Promise<boolean> {
 // unmapped profile denies agents rather than admitting them.
 
 import { credentialOwnerOf, currentUserRef, displayFor, persistsFor } from "@/lib/v2/identity/principals";
+import { randomBytes } from "node:crypto";
 
 /** Profile name -> principal ref. Unmapped means the human owns it. */
 function ownerMap(): Record<string, string> {
@@ -419,15 +420,32 @@ export function ensureOwnProfile(principalRef: string): { success: boolean; prof
  * launch would either pile up exile folders or quietly delete user data. Temp
  * is the one place where "goes away on its own" is the documented contract.
  */
+/**
+ * A random id minted ONCE per module load, i.e. once per server run.
+ *
+ * The first version keyed ephemeral dirs on process.pid, which is wrong: the OS
+ * recycles PIDs, nothing here removes old temp state, and so a restarted server
+ * that happened to be handed a previously-used PID would find the earlier run's
+ * cookie jar sitting there and adopt it. A "non-persistent" agent would then
+ * silently persist. A random nonce cannot collide with a past run regardless of
+ * what the OS does with PIDs.
+ */
+const RUN_NONCE = randomBytes(9).toString("hex");
+
+/** Exposed so a test can prove two runs never share a directory. */
+export function ephemeralRunId(): string {
+  return RUN_NONCE;
+}
+
 export function ephemeralProfileDir(profileName: string): string {
   if (!NAME_RE.test(profileName)) throw new Error(`Invalid profile name "${profileName}"`);
-  // Scoped to the PROCESS, which is what makes this need no deletion at all.
+  // Scoped to this RUN, which is what makes this need no deletion at all.
   // Within one server run the dir is stable, so a headed login handoff followed
-  // by a headless relaunch still works. After a restart the pid differs, so the
-  // agent starts signed out - which is exactly what "keep signed in between
-  // runs: off" means. Rule 1 stays intact: nothing is ever destroyed, the state
-  // is simply never reused, and the OS temp cleaner reclaims it.
-  return path.join(os.tmpdir(), "agentos-ephemeral-profiles", `${process.pid}-${profileName}`);
+  // by a headless relaunch still works. A restart mints a new nonce, so the
+  // agent starts signed out - exactly what "keep signed in between runs: off"
+  // means. Rule 1 stays intact: nothing is destroyed, the state is simply never
+  // reachable again, and the OS temp cleaner reclaims it.
+  return path.join(os.tmpdir(), "agentos-ephemeral-profiles", `${RUN_NONCE}-${profileName}`);
 }
 
 /**
