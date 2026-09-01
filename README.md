@@ -1,195 +1,72 @@
-# 🦞 Agentic OS
+# Agent OS
 
-> A beautiful local command centre for your AI agents.
-> Built by Julian Goldie for AIPB members.
+A self-hosted operations dashboard for running work with AI agents.
 
-![local](https://img.shields.io/badge/runs-localhost-22d3ee?style=flat-square)
-![private](https://img.shields.io/badge/data-stays_local-a855f7?style=flat-square)
-![voice](https://img.shields.io/badge/voice-built_in-ec4899?style=flat-square)
+Everything runs on my own hardware against my own CLI subscriptions. There is no vendor backend, no account, and no telemetry. Nothing is sent anywhere I did not send it.
 
-A single dashboard for Claude Code, OpenClaw, Hermes, and any other CLI agent.
+## What it actually is
 
-Chat. Voice input. Goals. Journal.
-Every interaction auto-logged to your Obsidian vault.
+Two layers, live at the same time on purpose.
 
-All running on your laptop.
-None of your data leaves.
+**V1** is the module surface: 48 pages covering deal flow, outreach, content, research, agents, and infrastructure. It grew fast and works.
 
----
+**V2 ("CORE")** is a ground-up rebuild underneath it on SQLite, with an event bus, a scheduler, capability gates, and a real data layer. Modules move onto it as they get rebuilt rather than all at once, so both layers coexist and that is deliberate.
 
-## ✨ What's inside
+Current state: 360 API routes, 21 schema migrations, 68 offline smoke suites.
 
-- 💬 **Chat with multiple AI agents** from one beautiful dashboard
-- 🎤 **Voice input** in every chat box (Chrome/Safari)
-- 🧠 **Auto-saved to Obsidian** — every chat becomes a markdown note
-- 🎯 **Goals page** that writes a real task list to your vault
-- 📓 **Journal page** — daily entries, one file per day
-- 📖 **Built-in build guide** — teach others how you made yours
-- ✨ **Mission-control aesthetic** — aurora gradients, glass panels, voice-pulse animations
-- 🦞 **Real CLI bridge** — calls your local Claude / OpenClaw / Hermes binaries
+## The parts that matter
 
----
+**Agents.** Build an agent in the Forge, give it triggers, run it, and watch the transcript stream. Lifecycle gates keep an untested agent out of production. Runs orphaned by a restart are reconciled at boot rather than left hanging.
 
-## 🟢 Requirements
+**Memory.** An episodic temporal knowledge graph with an ingestion queue and vector search, so an agent can recall what happened without being handed the whole history.
 
-- **Node 22+** (`node -v` to check, `brew install node` if missing)
-- **macOS or Linux** (Windows works with WSL2)
-- **At least one AI agent CLI** installed locally:
-  - [Claude Code](https://claude.com/claude-code) — Anthropic's CLI
-  - OpenClaw — install via the openclaw.ai install guide
-  - Hermes Agent — install via `pip install nousresearch-hermes`
-- **Optional but recommended:** an [Obsidian](https://obsidian.md) vault
+**Browser agents.** Agents drive a real Chromium through a domain allowlist, with a live view. Credentials are contained by construction: each principal gets its own profile directory, and an agent can only ever reach its own, or its orchestrator's if it is a sub-agent. Sub-agents inherit their parent's identity and folder, so agent 43 spawns 43A and 43B and they share what 43 is signed into. The check sits where the browser's user-data directory is chosen, so it decides whether Chromium opens a directory at all rather than asking an agent to behave.
 
-If you only have one agent installed, that's fine — missing ones just don't show in the dashboard.
+**Jarvis.** An assistant that is present on every page, with voice input and a warm session, backed by a persona stored as editable data rather than baked into prompt code.
 
----
+**Tasks, WebMCP, integrations, newsletter, marketing.** Approval-gated task workflow; a tool-package exporter and hub; Gmail, Calendar, Notion, GitHub and Slack connectors driving an automations engine; a newsletter engine that dedupes across sources; a marketing command center with an approval gate before anything deploys.
 
-## 🚀 Quick start (5 minutes)
+## Running it
 
-There's no GitHub repo to clone — this folder you're reading right now IS the dashboard source. Copy it anywhere on your machine.
+Requires Node and a local agent CLI. It runs on Windows natively.
 
-```bash
-# 1. Copy the source somewhere permanent (rename the destination if you like)
-cp -R . ~/Agentic\ OS/agentic-os
-cd ~/Agentic\ OS/agentic-os
-
-# 2. Install dependencies
+```
 npm install
-
-# 3. Configure your paths
-mkdir -p ~/.agentic-os
-cp agentic-os.config.example.json ~/.agentic-os/config.json
-# Then edit ~/.agentic-os/config.json with your vault path + agent binary paths
-
-# 4. Run it
 npm run dev
 ```
 
-Open **http://localhost:3000** in your browser. (The Next.js dev server picks 3000 by default; set `PORT=3737` before `npm run dev` if you want a different port.)
+Then open http://localhost:3737.
 
-> If you want a private git history of your edits, run `git init` after copying. No remote needed.
+Config lives in `~/.agentic-os/`, outside the repo, so an update never touches settings or keys. Anything configurable is exposed through an in-app gear menu rather than a config file you have to hand-edit.
 
----
+For LAN access, the app binds beyond localhost behind a password gate. Useful for driving it from a phone on the same network, and not something to expose further than that.
 
-## ⚙️ Configuration
+## Working on it
 
-Agentic OS reads config from (in priority order):
+Contracts for anyone (human or agent) touching this code live in `AGENTS.md`: how work lands, what a module owes, and the rules that came out of things going wrong. Read it first.
 
-1. Environment variables
-2. `~/.agentic-os/config.json`
-3. Auto-detection (`which claude`, common Obsidian paths)
-4. Sensible defaults
+Every module ships a smoke suite under `scripts/v2/`, runnable offline with no network, no dev server, and no live credentials:
 
-### Minimal config.json
-
-```json
-{
-  "claude": "/Users/you/.local/bin/claude",
-  "openclaw": "/Users/you/local/node/bin/openclaw",
-  "hermes": "/Users/you/.local/bin/hermes",
-  "vaultRoot": "/Users/you/Documents/Obsidian Vault",
-  "goalCategories": ["Health", "Work", "Personal"]
-}
+```
+npx tsx scripts/v2/smoke-<module>.mjs
 ```
 
-Find the right paths with:
+They assert against real artifacts rather than against what a build step claimed it did. A smoke that touches a credential directory redirects it to a temp path first, and one of them greps its siblings to enforce that, because remembering was not enough the first time.
 
-```bash
-which claude     # → paste into "claude"
-which openclaw   # → paste into "openclaw"
-which hermes     # → paste into "hermes"
+Versioning is enforced rather than remembered:
+
+```
+npm run version:check     # fails if commits landed but the version did not move
+npm run version:bump      # feat -> minor, fix -> patch
+npm run version:release   # prints the tag commands and release notes
 ```
 
-For your Obsidian vault, just point it at the folder you open in Obsidian.
+Release notes live in the GitHub release body. `CHANGELOG.md` in the history is inherited from upstream and is not maintained here.
 
-### Environment variables (alternative)
+## Provenance
 
-If you'd rather not edit a JSON file, use a `.env.local`:
+This started from Julian Goldie's Agentic OS and has diverged substantially. V2 is a rebuild rather than a patch, and the modules, data layer, and security model are my own work. Upstream's original material is preserved in the git history.
 
-```bash
-cp .env.example .env.local
-# Edit .env.local with your paths
-```
+## Licence
 
----
-
-## 🧪 First-run check
-
-Once running, hit each route to confirm everything's wired:
-
-- `http://localhost:3000` — Mission Control overview
-- `http://localhost:3000/claude` — Claude chat (needs Claude Code installed)
-- `http://localhost:3000/openclaw` — OpenClaw chat + control room
-- `http://localhost:3000/hermes` — Hermes chat + control room
-- `http://localhost:3000/memory` — Search your Obsidian vault
-- `http://localhost:3000/goals` — Goals (writes to vault)
-- `http://localhost:3000/journal` — Daily journal
-- `http://localhost:3000/guide` — How-to-build-your-own guide
-
-If an agent tile says "not installed", check `which <agent>` returns a path. If it does, paste that path into your `config.json`.
-
----
-
-## 🎨 Customising
-
-Six files for the most common changes:
-
-| Want to... | Edit |
-|---|---|
-| Add a new agent | `src/lib/runner.ts` + `src/lib/config.ts` |
-| Change vault location | your `config.json` or `.env.local` |
-| Change colours | `src/app/globals.css` (CSS variables at the top) |
-| Change goal categories | your `config.json` (`goalCategories`) |
-| Add a new sidebar page | `src/components/Sidebar.tsx` + `src/app/<page>/page.tsx` |
-| Tweak the build guide | `BUILD-YOUR-OWN.md` |
-
----
-
-## 🔒 Privacy & data
-
-- **Everything runs on localhost.** No accounts, no telemetry, no servers.
-- Your chats are written **only** to your Obsidian vault as plain markdown.
-- API routes shell out to your local CLIs via `child_process.spawn` — no shell interpolation, so prompt content can't run commands.
-- `/api/run` enforces a per-agent regex allowlist for any tool-style commands.
-- Path traversal blocked on vault-read endpoints.
-
-Audit it yourself — the whole thing is about 2,500 lines.
-
----
-
-## 🛠 Troubleshooting
-
-**"agent is not installed"**
-Your CLI isn't on `PATH` or auto-detection missed it. Edit `~/.agentic-os/config.json` and paste the full path from `which <agent>`.
-
-**"no output" from chat**
-Run the agent directly in your terminal first (`claude -p "hi"`). If that works, restart `npm run dev`. If it doesn't, the agent's broken, not the dashboard.
-
-**Voice button is grey**
-Voice needs Chrome or Safari. Firefox doesn't support the Web Speech API.
-
-**Slow agents (>30s)**
-Normal for some local models (ollama/deepseek). The "thinking… 18s" counter shows it's still working. If too slow, point that agent at a faster cloud model.
-
-**Routes return 404**
-Make sure you ran `npm install` and you're on Node 22+.
-
----
-
-## 🤖 Building your own from scratch
-
-The full guide for using Claude Code to build this same system is at:
-
-- `BUILD-YOUR-OWN.md` in this repo
-- `http://localhost:3000/guide` once it's running
-
-It's 8 copy-paste prompts that mirror exactly how Julian built his.
-
----
-
-## 📜 Licence
-
-For AIPB members only. Not for redistribution.
-You can fork it for personal use. Just don't resell.
-
-— Julian Goldie · [AIPB](https://aiprofitboardroom.com)
+No licence is granted. This is a personal project, published for my own use and reference, and default copyright applies. If you want to use any of it, ask.
