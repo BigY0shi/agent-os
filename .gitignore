@@ -51,3 +51,9 @@ member-pack/.claude-flow/
 
 # Local backup/recovery dir (already the exile-not-delete safety net; not for git)
 .exile/
+
+# SPEC-F L — baked 3D assets for /hermes-3d. Regenerated from the Synty +
+# Mixamo source packs on E: via `npx tsx scripts/v2/hermes3d/bake.mjs`; see
+# _design/hermes3d/PIPELINE.md. Kept out of git because they are derived
+# artifacts measured in megabytes, not source.
+public/hermes3d/

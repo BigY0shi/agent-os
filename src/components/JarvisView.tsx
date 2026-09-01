@@ -20,10 +20,16 @@ type Phase = "idle" | "listening" | "thinking" | "speaking";
 // OpenAI gpt-4o-mini-tts voices, steered to an English butler via server instructions.
 // Fallback list used until the real ElevenLabs voices load from /api/video/voices.
 // (These were OpenAI TTS voice names; Jarvis now speaks through ElevenLabs, whose
-// ids are long alphanumerics — an unrecognised id server-side falls back to Daniel.)
-const DEFAULT_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"; // Daniel — British, suits the butler
+// ids are long alphanumerics.)
+//
+// This is only the seed shown before settings load. The REAL default lives in
+// settings.jarvis.voice.ttsVoiceId (JARVIS_TTS_VOICE_ID in lib/settings.ts) and
+// the picker below writes back to it. Previously the selected voice was plain
+// component state, so every remount — i.e. every page change — silently reset
+// the reply voice to the hardcoded id.
+const DEFAULT_VOICE_ID = "I53oUivy0XU4VvbHHiX6"; // Alfred "Bettany"sworth
 const VOICES = [
-  { id: DEFAULT_VOICE_ID, label: "Daniel (JARVIS · British butler)" },
+  { id: DEFAULT_VOICE_ID, label: 'Alfred "Bettany"sworth' },
 ];
 
 type SR = {
@@ -664,6 +670,9 @@ export default function JarvisView() {
   const [wall, setWall] = useState(false);
   const [status, setStatus] = useState("Tap the core and speak — or enable the wake word.");
   const [voice, setVoice] = useState(DEFAULT_VOICE_ID);
+  // Set once the user picks a voice, so a late settings response cannot clobber
+  // a deliberate choice made while the fetch was still in flight.
+  const voiceTouchedRef = useRef(false);
   const [voices, setVoices] = useState(VOICES);
   const [mode, setMode] = useState<"auto" | "agent">("auto");
   const [input, setInput] = useState("");
@@ -1021,9 +1030,12 @@ export default function JarvisView() {
     fetch("/api/settings", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
-        if (alive) voiceAutoSendRef.current = !!(j?.settings?.jarvis?.voice?.autoSend);
+        if (!alive) return;
+        voiceAutoSendRef.current = !!(j?.settings?.jarvis?.voice?.autoSend);
+        const saved = j?.settings?.jarvis?.voice?.ttsVoiceId;
+        if (typeof saved === "string" && saved && !voiceTouchedRef.current) setVoice(saved);
       })
-      .catch(() => { /* default stays: review-first */ });
+      .catch(() => { /* defaults stay: review-first, seed voice */ });
     return () => { alive = false; };
   }, []);
   const deliverTranscript = useCallback((raw: string) => {
@@ -1177,7 +1189,11 @@ export default function JarvisView() {
         style={{ borderColor: (briefing || briefingLoading) ? CYAN : "var(--panel-border)", color: (briefing || briefingLoading) ? CYAN : "var(--fg-dim)", background: (briefing || briefingLoading) ? "rgba(34,211,238,0.12)" : "transparent" }}>
         <Newspaper size={13} /> Briefing
       </button>
-      <select value={voice} onChange={(e) => setVoice(e.target.value)} title="Reply voice"
+      <select value={voice} onChange={(e) => { const v = e.target.value; voiceTouchedRef.current = true; setVoice(v);
+          // Persist, so the choice survives navigating away and back.
+          fetch("/api/settings", { method: "PATCH", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ jarvis: { voice: { ttsVoiceId: v } } }) }).catch(() => { /* offline: session-only */ });
+        }} title="Reply voice"
         className="bg-[rgba(0,0,0,0.3)] border border-[var(--panel-border)] rounded-lg px-2 h-9 text-[12px] text-[var(--fg-dim)] outline-none">
         {voices.map((v) => <option key={v.id} value={v.id}>🔊 {v.label}</option>)}
       </select>
