@@ -57,3 +57,17 @@ member-pack/.claude-flow/
 # _design/hermes3d/PIPELINE.md. Kept out of git because they are derived
 # artifacts measured in megabytes, not source.
 public/hermes3d/
+
+# Tool + capture artifacts that were tracked by accident. Removed 2026-09-01;
+# they are regenerated on use and were 12 MB+ of console logs and page dumps.
+.playwright-mcp/
+.dreams/
+.memsearch/
+
+# Screenshots dropped at the repo root. Keep captures out of the tree root; if
+# one needs to ship, put it under _design/ or docs/ deliberately.
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
