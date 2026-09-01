@@ -95,6 +95,9 @@ export function closeSessionRow(sessionName: string): void {
 }
 
 /** EVERY browser tool call lands here — success or failure (E1.4/E4.1c). */
+/** Process-wide audit-write health. Reset only by tests. */
+const AUDIT_HEALTH: { failures: number; lastError?: string; lastAt?: number } = { failures: 0 };
+
 export function recordToolCall(input: {
   sessionName: string;
   tool: string;
@@ -120,8 +123,46 @@ export function recordToolCall(input: {
         input.error ?? null,
       );
   } catch (err) {
-    console.error("[browser/audit] recordToolCall failed:", err);
+    // A swallowed audit failure is indistinguishable from a working audit, which
+    // is exactly how a smoke ran against the live db, wrote 14 rows, hit
+    // SQLITE_READONLY on the rest, and still reported ALL PASS. An audit trail
+    // that can silently stop recording is not an audit trail.
+    //
+    // This deliberately does NOT throw: recordToolCall is called AFTER the tool
+    // has already run, so failing here cannot un-ring that bell - it would only
+    // convert a recording gap into a lost result. Instead the degradation is
+    // made visible, and callers surface it.
+    const message = err instanceof Error ? err.message : String(err);
+    AUDIT_HEALTH.failures += 1;
+    AUDIT_HEALTH.lastError = message;
+    AUDIT_HEALTH.lastAt = Date.now();
+    console.error(
+      `[browser/audit] RECORDING FAILED (${AUDIT_HEALTH.failures} total) - tool "${input.tool}" ` +
+        `on session "${input.sessionName}" executed but was NOT recorded: ${message}`,
+    );
   }
+}
+
+/**
+ * Whether the audit trail is actually recording.
+ *
+ * Exposed so the tool layer and the /browser page can say "these calls ran but
+ * were not logged" instead of presenting an incomplete history as complete.
+ */
+export function auditHealth(): { ok: boolean; failures: number; lastError?: string; lastAt?: number } {
+  return {
+    ok: AUDIT_HEALTH.failures === 0,
+    failures: AUDIT_HEALTH.failures,
+    ...(AUDIT_HEALTH.lastError ? { lastError: AUDIT_HEALTH.lastError } : {}),
+    ...(AUDIT_HEALTH.lastAt ? { lastAt: AUDIT_HEALTH.lastAt } : {}),
+  };
+}
+
+/** Test-only: reset the counter so a smoke can assert both states. */
+export function __resetAuditHealthForTests(): void {
+  AUDIT_HEALTH.failures = 0;
+  delete AUDIT_HEALTH.lastError;
+  delete AUDIT_HEALTH.lastAt;
 }
 
 export interface BrowserAuditRow {

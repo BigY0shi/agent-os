@@ -18,7 +18,7 @@ import {
   createSessionConfig,
   deleteSessionConfig,
 } from "./config";
-import { recordToolCall, recordSessionRow, touchSession } from "./audit";
+import { recordToolCall, recordSessionRow, touchSession, auditHealth } from "./audit";
 import { checkProfileAccess, getSessionConfig as getSessionCfgForOwner } from "./config";
 import { callerRef } from "@/lib/v2/identity/principals";
 
@@ -450,6 +450,22 @@ export async function executeBrowserTool(
 
   const audit = (ok: boolean, error?: string) =>
     recordToolCall({ sessionName: sessionForAudit, tool: toolName, caller, args: params, ok, error });
+
+  /**
+   * A tool call that ran but was not recorded must SAY so. Without this the
+   * caller cannot tell a complete audit history from a silently broken one.
+   */
+  const withAuditWarning = (r: BrowserToolResult): BrowserToolResult => {
+    const health = auditHealth();
+    if (health.ok || !r.ok) return r;
+    return {
+      ...r,
+      result: {
+        ...(typeof r.result === "object" && r.result !== null ? r.result : { value: r.result }),
+        auditDegraded: `This call ran but the audit trail is not recording (${health.failures} failed write(s); last: ${health.lastError}).`,
+      },
+    };
+  };
 
   if (!isBrowserTool(toolName)) {
     // Unknown tool: audited too (E1.4 "every tool call recorded").
