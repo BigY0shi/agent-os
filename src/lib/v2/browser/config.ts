@@ -292,3 +292,91 @@ export async function isPlaywrightReady(): Promise<boolean> {
     return false;
   }
 }
+
+// ============ Profile ownership (credential containment) ============
+//
+// The profile directory IS the credential boundary: cookies live on disk per
+// profile, and getProfileDir() is the only thing that produces the
+// user-data-dir handed to launchPersistentContext. So an ownership check here
+// is not a rule an agent is asked to follow - it decides whether Chromium is
+// ever pointed at that directory. There is no instruction to disobey.
+//
+// Storage is additive: `profiles` stays a string[] for every existing reader,
+// and ownership rides alongside in `profileOwners`. A profile with no recorded
+// owner belongs to the USER. That default is deliberately the strict one - an
+// unmapped profile denies agents rather than admitting them.
+
+import { credentialOwnerOf, currentUserRef, displayFor } from "@/lib/v2/identity/principals";
+
+/** Profile name -> principal ref. Unmapped means the human owns it. */
+function ownerMap(): Record<string, string> {
+  const raw = (readSettings().browser as { profileOwners?: Record<string, string> } | undefined)?.profileOwners;
+  return raw && typeof raw === "object" ? raw : {};
+}
+
+export function profileOwner(profileName: string): string {
+  return ownerMap()[profileName] ?? currentUserRef();
+}
+
+export function setProfileOwner(profileName: string, principalRef: string): { success: boolean; error?: string } {
+  if (!NAME_RE.test(profileName)) return { success: false, error: `Invalid profile name "${profileName}"` };
+  if (!credentialOwnerOf(principalRef)) return { success: false, error: `Invalid principal "${principalRef}"` };
+  const browser = readSettings().browser ?? {};
+  writeSettings({ browser: { ...browser, profileOwners: { ...ownerMap(), [profileName]: principalRef } } });
+  return { success: true };
+}
+
+export interface AccessDecision {
+  allowed: boolean;
+  /** Populated on denial. Written to be shown verbatim - see the tools layer. */
+  reason?: string;
+  ownerRef?: string;
+}
+
+/**
+ * May `principalRef` use `profileName`?
+ *
+ * Compared by CREDENTIAL OWNER, not by exact ref, which is what makes sub-agent
+ * inheritance work: agent 43A and agent 43 both resolve to agent:43, so a
+ * sub-agent reaches its orchestrator's profile and nothing else.
+ */
+export function checkProfileAccess(profileName: string, principalRef: string): AccessDecision {
+  const ownerRef = profileOwner(profileName);
+  const mine = credentialOwnerOf(principalRef);
+  const theirs = credentialOwnerOf(ownerRef);
+  if (!mine) {
+    return { allowed: false, ownerRef, reason: `"${principalRef}" is not a valid principal.` };
+  }
+  if (mine === theirs) return { allowed: true, ownerRef };
+  return {
+    allowed: false,
+    ownerRef,
+    // Loud and specific: says who was denied, what they wanted, who holds it,
+    // and what to do. A generic "access denied" here would send someone
+    // debugging the browser stack instead of the ownership record.
+    reason:
+      `${displayFor(principalRef)} cannot use the "${profileName}" browser profile - ` +
+      `it belongs to ${displayFor(ownerRef)}. Credentials are contained per principal: ` +
+      `an agent may only use its own profile (and its orchestrator's, if it is a sub-agent). ` +
+      `Give this agent its own profile, or reassign ownership in Browser settings.`,
+  };
+}
+
+/** The profile a principal is entitled to by default: its own, auto-named. */
+export function ownProfileName(principalRef: string): string {
+  const owner = credentialOwnerOf(principalRef);
+  if (!owner) throw new Error(`Invalid principal "${principalRef}"`);
+  return owner.replace(":", "-").toLowerCase();
+}
+
+/** Create (idempotently) the profile a principal owns, and record ownership. */
+export function ensureOwnProfile(principalRef: string): { success: boolean; profile?: string; error?: string } {
+  const name = ownProfileName(principalRef);
+  if (!isProfileConfigured(name)) {
+    const r = createProfile(name);
+    if (!r.success) return { success: false, error: r.error };
+  }
+  const owned = setProfileOwner(name, principalRef);
+  if (!owned.success) return { success: false, error: owned.error };
+  return { success: true, profile: name };
+}

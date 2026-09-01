@@ -255,7 +255,11 @@ export interface Settings {
     wsPort?: number;                    // CDP WS bridge port (E2.2), default 3738
     browserType?: "default" | "chrome" | "brave" | "custom";
     browserExecutable?: string;         // only when browserType === "custom"
-    profiles?: string[];                // max 5, /^[a-zA-Z0-9_-]+$/
+    profiles?: string[];
+    // Profile name -> principal ref ("user:U1", "agent:43"). A profile with no
+    // entry belongs to the USER: the strict default, so an unmapped profile
+    // denies agents rather than admitting them. See lib/v2/browser/config.ts.
+    profileOwners?: Record<string, string>;                // max 5, /^[a-zA-Z0-9_-]+$/
     sessions?: {
       name: string;                     // /^[a-zA-Z0-9_-]+$/, max 10
       profile: string;
