@@ -233,5 +233,28 @@ check("L14 ...with a warning naming the repair path", /repair/i.test(routeSrc));
 const idRouteSrc = fs.readFileSync(path.join(process.cwd(), "src/app/api/v2/identity/route.ts"), "utf8");
 check("L15 a repair endpoint exists", idRouteSrc.includes("repairAgentProvisioning"));
 
+
+// -- §M the UI must not discard the degraded state ---------------------------
+console.log("\n-- §M the Forge surfaces degraded creation --");
+// The API returning a warning is worth nothing if the caller checks only for an
+// id and proceeds. The wizard did exactly that: created.warning and
+// created.provisioning were received and dropped, so a degraded agent looked
+// like a clean success and the repair path was unreachable from the UI.
+const wizSrc = fs.readFileSync(path.join(process.cwd(), "src/components/v2/agents/ForgeWizard.tsx"), "utf8");
+check("M1 the wizard reads the provisioning field off the response",
+  /created\.provisioning/.test(wizSrc));
+check("M2 ...and stores it rather than dropping it", /setProvisionFail\(/.test(wizSrc));
+check("M3 it renders a banner when set", /\{provisionFail && \(/.test(wizSrc));
+check("M4 the banner offers a repair action", /repairProvisioning/.test(wizSrc));
+check("M5 repair posts to the identity endpoint",
+  /"\/api\/v2\/identity"[\s\S]{0,220}action: "repair"/.test(wizSrc));
+// The subtle one: a failed retry must not clear the warning.
+check("M6 the banner clears ONLY on a successful repair",
+  /if \(r\.ok && j\.ok\) setProvisionFail\(null\);/.test(wizSrc));
+check("M7 a failed repair surfaces its own error", /setErr\(j\.error \?\?/.test(wizSrc));
+// It must not be conflated with the deploy-gate warning already in the wizard.
+check("M8 it does not reuse the deploy-gate warning state",
+  wizSrc.includes("provisionFail") && !/setWarning\(created/.test(wizSrc));
+
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -14,6 +14,12 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-own-"));
 process.env.AGENTIC_OS_PRINCIPALS = path.join(dir, "principals.json");
 process.env.AGENTIC_OS_SETTINGS = path.join(dir, "settings.json");
 process.env.AGENTIC_OS_BROWSER_PROFILES = path.join(dir, "browser-profiles");
+// §H drives the REAL tool entry point, and every tool call writes an audit row.
+// Without this the smoke wrote to the owner's live agentos.db — it happened to
+// log SQLITE_READONLY and still report ALL PASS, because recordToolCall
+// swallows write failures. On a box where that db is writable it would have
+// silently appended to real audit history.
+process.env.AGENTIC_OS_DB = path.join(dir, "agentos.db");
 
 let failures = 0;
 const check = (name, cond, extra = "") => {
@@ -94,6 +100,23 @@ check("E6 access is compared by CREDENTIAL OWNER, not exact ref",
 console.log("\n── §F isolation ──");
 check("F1 principals file is a temp file", P.principalsPath().startsWith(os.tmpdir()));
 check("F2 profile root is a temp dir", cfg.profilesRoot().startsWith(os.tmpdir()), cfg.profilesRoot());
+check("F3 the audit db is a temp db", (process.env.AGENTIC_OS_DB ?? "").startsWith(os.tmpdir()), process.env.AGENTIC_OS_DB);
+// Rule 19, generalised. A smoke that drives the real tool layer writes audit
+// rows; one that has not redirected the db writes them to the owner's. Asserted
+// across ALL smokes rather than remembered, because this one passed while
+// failing to write to a database it should never have opened.
+{
+  const dirV2 = path.join(process.cwd(), "scripts", "v2");
+  const offenders = fs
+    .readdirSync(dirV2)
+    .filter((f) => f.startsWith("smoke-") && f.endsWith(".mjs"))
+    .filter((f) => {
+      const src = fs.readFileSync(path.join(dirV2, f), "utf8");
+      const drivesTools = src.includes("executeBrowserTool") || src.includes("recordToolCall");
+      return drivesTools && !src.includes("AGENTIC_OS_DB");
+    });
+  check("F4 every smoke that drives real tools isolates AGENTIC_OS_DB", offenders.length === 0, offenders.join(", "));
+}
 
 
 // -- §G P0 REGRESSION: "keep signed in" must not be cosmetic ------------------
