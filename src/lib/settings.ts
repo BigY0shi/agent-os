@@ -14,6 +14,16 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
+/**
+ * Jarvis's default ElevenLabs reply voice: Alfred "Bettany"sworth.
+ *
+ * A named default, not a generic one. Overridden per-install by
+ * settings.jarvis.voice.ttsVoiceId, which the Jarvis voice picker now writes to
+ * (it used to be component state, so every page change reset the voice to
+ * Daniel).
+ */
+export const JARVIS_TTS_VOICE_ID = "I53oUivy0XU4VvbHHiX6";
+
 export interface SeoSite {
   label: string;
   url: string;        // the live site / repo this SEO content targets
@@ -135,6 +145,10 @@ export interface Settings {
       provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
       autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
       pushToTalk?: boolean;  // true = hold-to-record; false = click-to-toggle
+      // The ELEVENLABS reply voice. Distinct from `provider` above, which picks
+      // the live-voice BACKEND. Lives in settings rather than component state
+      // because it previously reset to the hardcoded default on every remount.
+      ttsVoiceId?: string;
     };
     hotkey?: {
       key?: string;          // in-app fallback keybind (default "F13")
@@ -241,7 +255,11 @@ export interface Settings {
     wsPort?: number;                    // CDP WS bridge port (E2.2), default 3738
     browserType?: "default" | "chrome" | "brave" | "custom";
     browserExecutable?: string;         // only when browserType === "custom"
-    profiles?: string[];                // max 5, /^[a-zA-Z0-9_-]+$/
+    profiles?: string[];
+    // Profile name -> principal ref ("user:U1", "agent:43"). A profile with no
+    // entry belongs to the USER: the strict default, so an unmapped profile
+    // denies agents rather than admitting them. See lib/v2/browser/config.ts.
+    profileOwners?: Record<string, string>;                // max 5, /^[a-zA-Z0-9_-]+$/
     sessions?: {
       name: string;                     // /^[a-zA-Z0-9_-]+$/, max 10
       profile: string;
@@ -298,10 +316,29 @@ export interface Settings {
     gmailLabel?: string;        // optional Gmail label filter for unknown-alias mail
   };
 
+  // SPEC-F L — Hermes 3D. Rule 16: every knob gets an in-app gear
+  // (Hermes3DSettings). `clips` is the state -> clip POOL map: the scene samples
+  // one clip on entry to a state so idle varies instead of looping. Slugs must
+  // match clip names baked into public/hermes3d/hermes.glb; the catalog and the
+  // defaults live in src/lib/v2/hermes3d/clips.ts. deepMerge replaces arrays
+  // wholesale, so an edited pool REPLACES the default rather than appending.
+  hermes3d?: {
+    showFps?: boolean;
+    shadows?: boolean;
+    talkingHoldMs?: number;              // how long "talking" holds after a response (default 4000)
+    quality?: "full" | "lite";           // lite: no env lighting, half pixelRatio
+    clips?: Record<string, string[]>;    // state -> eligible clip slugs
+  };
+
   [extra: string]: unknown;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  // Pools intentionally omitted here — DEFAULT_CLIP_POOLS in
+  // src/lib/v2/hermes3d/clips.ts is the single source of truth, so an untouched
+  // install picks up new clips as they are baked instead of freezing the pool
+  // into a settings file written months ago.
+  hermes3d: { showFps: false, shadows: false, talkingHoldMs: 4000, quality: "full" },
   defaultAgent: "claude",
   loop: {},
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
@@ -329,7 +366,7 @@ export const DEFAULT_SETTINGS: Settings = {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "webspeech", autoSend: false, pushToTalk: true },
+    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID },
     hotkey: { key: "F13", enabled: true },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },

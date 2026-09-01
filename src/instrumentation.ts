@@ -21,6 +21,15 @@ export async function register() {
       process.exit(1);
     }
 
+    // Identity, before anything can ask who is calling. On a fresh install this
+    // mints the human's id (U1); afterwards it is a read. Deliberately NOT
+    // wrapped in a try/catch: ensureUserId throws rather than minting a second
+    // id when the file is unreadable, and booting past that would hand every
+    // credential folder to a principal nobody owns.
+    const { ensureUserId } = await import("./lib/v2/identity/principals");
+    const userId = ensureUserId();
+    console.log(`[agentos] identity: user ${userId}`);
+
     // Runs orphaned by the previous shutdown, BEFORE any trigger can fire — a
     // scheduler-started run would otherwise be swept as stranded the moment it
     // set status:"running".

@@ -24,6 +24,7 @@ import { ModePicker, IntelPicker, TriggersEditor, RunView, ApprovalsStrip } from
 import { STATUS_BAND_COLORS } from "@/components/v2/StatusBand";
 import { AGENTS_ACCENT, type AgentCardData } from "./shared";
 import { postDecision, decisionNotice } from "@/lib/agentsApprovalsClient";
+import PersistCredentials from "@/components/v2/identity/PersistCredentials";
 
 interface HarnessCard { id: string; name: string; description: string; kind: string }
 
@@ -78,6 +79,9 @@ export default function ForgeWizard({
 
   // Step 6 — Permissions & model.
   const [permissionMode, setPermissionMode] = useState<AgentDef["permissionMode"]>("gated");
+  // Whether this agent keeps a durable credential folder. Default OFF: an agent
+  // gets a scratch identity unless the user deliberately grants otherwise.
+  const [persistCredentials, setPersistCredentials] = useState(false);
   const [intelligence, setIntelligence] = useState<AgentDef["intelligence"]>("standard");
   const [providerKind, setProviderKind] = useState<"sdk" | "cli" | "ollama">("sdk");
   const [providerArg, setProviderArg] = useState("");
@@ -90,6 +94,11 @@ export default function ForgeWizard({
   const [err, setErr] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
+  // The API returns a DEGRADED success when an agent was created but could not
+  // be given a credential profile. Discarding it (checking only for an id) made
+  // the UI report a clean creation for an agent that cannot browse.
+  const [provisionFail, setProvisionFail] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState(false);
   const [testRunId, setTestRunId] = useState<string | null>(null);
   const [testRunStatus, setTestRunStatus] = useState<string | null>(null);
   const [deployed, setDeployed] = useState(false);
@@ -208,10 +217,18 @@ export default function ForgeWizard({
     try {
       const created = await fetch("/api/agents", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, description, instructions, permissionMode, intelligence }),
+        body: JSON.stringify({ name, description, instructions, permissionMode, intelligence, persistCredentials }),
       }).then((r) => r.json());
       if (!created.agent?.id) { setErr(created.error ?? "create failed"); setBusy(false); return; }
       const id = created.agent.id as string;
+      // Degraded success: the agent exists, but it has no credential profile.
+      // Surfaced rather than swallowed — this is the state the user has to
+      // either repair or knowingly accept.
+      setProvisionFail(
+        created.provisioning?.error
+          ? (created.warning as string | undefined) ?? String(created.provisioning.error)
+          : null,
+      );
       const patchRes = await fetch(`/api/agents/${id}`, {
         method: "PATCH", headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -273,6 +290,27 @@ export default function ForgeWizard({
    *  holding a live transcript and this run's approvals. Backdrop click-to-close
    *  is DISABLED for that window (2026-08-28: a stray click threw away a running
    *  transcript). The X button is always the explicit way out. */
+  /** Retry provisioning for an agent whose creation came back degraded. */
+  async function repairProvisioning() {
+    if (!createdId) return;
+    setRepairing(true);
+    try {
+      const r = await fetch("/api/v2/identity", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "repair", agentId: createdId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      // Only clear the banner on a REAL repair. A failed retry must leave the
+      // warning standing, or the UI goes back to claiming everything is fine.
+      if (r.ok && j.ok) setProvisionFail(null);
+      else setErr(j.error ?? `Repair failed (${r.status})`);
+    } catch (e) {
+      setErr(String((e as Error)?.message ?? e));
+    } finally {
+      setRepairing(false);
+    }
+  }
+
   const runLive = !!createdId && !deployed;
 
   return (
@@ -433,6 +471,11 @@ export default function ForgeWizard({
                       <div className="text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>No browser sessions configured — add them on /browser first.</div>
                     )
                   )}
+                  {browser && (
+                    <div className="mt-2.5 pl-5">
+                      <PersistCredentials value={persistCredentials} onChange={setPersistCredentials} />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-[10px] font-mono uppercase tracking-widest mb-1.5" style={{ color: "var(--fg-dimmer)" }}>WebMCP tool packages</div>
@@ -572,6 +615,25 @@ export default function ForgeWizard({
         {warning && (
           <div className="rounded-lg border px-3 py-2 text-[12px] text-amber-300 flex items-center gap-2" style={{ borderColor: "rgba(251,191,36,0.5)", background: "rgba(251,191,36,0.06)" }}>
             <AlertTriangle size={13} /> {warning}
+          </div>
+        )}
+        {provisionFail && (
+          <div className="rounded-lg border px-3 py-2 text-[12px]"
+            style={{ borderColor: "rgba(234,179,8,0.5)", background: "rgba(234,179,8,0.07)", color: "var(--fg-dim)" }}>
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={13} className="mt-0.5 shrink-0" style={{ color: "rgb(234,179,8)" }} />
+              <div className="space-y-1.5">
+                <div>{provisionFail}</div>
+                <div className="text-[11.5px]" style={{ opacity: 0.8 }}>
+                  The agent was created and is otherwise usable. It cannot use browser tools until this is repaired.
+                </div>
+                <button onClick={repairProvisioning} disabled={repairing}
+                  className="px-2.5 h-7 rounded-md border text-[11.5px] disabled:opacity-50"
+                  style={{ borderColor: "rgba(234,179,8,0.5)", color: "rgb(234,179,8)" }}>
+                  {repairing ? "Repairing…" : "Repair provisioning"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {err && (

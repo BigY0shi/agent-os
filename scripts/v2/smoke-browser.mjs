@@ -163,9 +163,23 @@ console.log("\n── §G E4.1 isolation invariants ──");
     hits.join(", "),
   );
   const managerSrc = fs.readFileSync(path.join(srcRoot, "lib", "v2", "browser", "manager.ts"), "utf8");
+  // The invariant is UNCHANGED in substance: the launcher never accepts an
+  // arbitrary directory. What changed is that there are now two non-arbitrary
+  // candidates, because the persist-credentials answer has to actually decide
+  // something — before resolveLaunchDir, a non-persistent agent still launched
+  // against the durable dir and kept its cookies, so the setting was cosmetic.
   check(
-    "G2 its dir arg is exactly getProfileDir(profile)",
-    /const profileDir = getProfileDir\(sessionConfig\.profile\);[\s\S]*?launchPersistentContext\(profileDir,/.test(managerSrc),
+    "G2 its dir arg comes from resolveLaunchDir(profile), never a caller",
+    /const \{ dir: profileDir[^}]*\} = resolveLaunchDir\(sessionConfig\.profile\);[\s\S]*?launchPersistentContext\(profileDir,/.test(managerSrc),
+  );
+  const cfgSrc = fs.readFileSync(path.join(srcRoot, "lib", "v2", "browser", "config.ts"), "utf8");
+  check(
+    "G2b resolveLaunchDir returns ONLY getProfileDir or ephemeralProfileDir",
+    /persistent \? getProfileDir\(profileName\) : ephemeralProfileDir\(profileName\)/.test(cfgSrc),
+  );
+  check(
+    "G2c both candidates validate the profile name (no traversal either way)",
+    (cfgSrc.match(/if \(!NAME_RE\.test\(profileName\)\)/g) ?? []).length >= 2,
   );
   // No Opera PATH/type literals anywhere in the browser lib (comments
   // documenting the ban are fine — executable strings are not).

@@ -19,6 +19,8 @@ import {
   deleteSessionConfig,
 } from "./config";
 import { recordToolCall, recordSessionRow, touchSession } from "./audit";
+import { checkProfileAccess, getSessionConfig as getSessionCfgForOwner } from "./config";
+import { callerRef } from "@/lib/v2/identity/principals";
 
 /**
  * E3.1/E3.2 — the 18 browser tools (verbatim-adapt of AOC browser-tools.ts:
@@ -38,7 +40,12 @@ export type BrowserToolErrorCode =
   | "SESSION_NOT_CONFIGURED"
   | "DOMAIN_BLOCKED"
   | "TOOL_ERROR"
-  | "CAPABILITY_DISABLED";
+  | "CAPABILITY_DISABLED"
+  // Credential containment: the caller does not own the profile behind this
+  // session. Its own code because it is NOT a transient failure - retrying,
+  // relaunching, or rephrasing will never help, and a run that hits it should
+  // surface the reason to the human rather than flail.
+  | "PROFILE_ACCESS_DENIED";
 
 export type BrowserToolResult =
   | { ok: true; result: unknown }
@@ -467,10 +474,33 @@ export async function executeBrowserTool(
     agentId: opts.agentId ?? null,
   };
 
+  /** The principal behind this call. No agentId means the human is driving. */
+  const principal = callerRef(opts.agentId ?? null);
+
+  /**
+   * Credential containment. Checked on the SESSION's profile, so it catches an
+   * agent using a session it did not create just as much as one it did.
+   *
+   * A session with no config is left to the existing not-configured path rather
+   * than denied here, so the error the caller sees names the real problem.
+   */
+  const guardProfile = (sessionName: string): BrowserToolResult | null => {
+    const cfg = getSessionCfgForOwner(sessionName);
+    if (!cfg) return null;
+    const decision = checkProfileAccess(cfg.profile, principal);
+    if (decision.allowed) return null;
+    audit(false, decision.reason);
+    return fail("PROFILE_ACCESS_DENIED", decision.reason ?? "profile access denied");
+  };
+
   const resolve = async (
     sessionName: string,
     headed = false,
   ): Promise<{ page?: Page; error?: BrowserToolResult }> => {
+    // Before anything launches: every page-driving tool funnels through here,
+    // so this is the one place the boundary has to hold.
+    const denied = guardProfile(sessionName);
+    if (denied) return { error: denied };
     const { session, error } = await getOrLaunchSession(sessionName, headed, launchInfo);
     if (error || !session) {
       const code: BrowserToolErrorCode = /not configured/i.test(error ?? "")
@@ -685,6 +715,10 @@ export async function executeBrowserTool(
 
       case "browser_close_session": {
         const p = CloseSessionSchema.parse(params);
+        // Closing someone else's live session is a denial of service against
+        // them, not a read - it needs the same ownership check as driving it.
+        const closeDenied = guardProfile(p.session);
+        if (closeDenied) return closeDenied;
         const r = await closeSession(p.session);
         if (!r.success) {
           audit(false, r.error);
@@ -696,20 +730,46 @@ export async function executeBrowserTool(
 
       case "browser_close_all": {
         CloseAllSchema.parse(params);
-        await closeAllSessions();
+        // "All" means all of MINE. The unscoped version let any agent shut down
+        // every live session on the box, including the human's, with one call
+        // and no denial to notice.
+        const mine = getConfiguredSessions().filter(
+          (sc) => checkProfileAccess(sc.profile, principal).allowed,
+        );
+        const closed: string[] = [];
+        for (const sc of mine) {
+          const r = await closeSession(sc.name).catch(() => ({ success: false }));
+          if (r && r.success) closed.push(sc.name);
+        }
         audit(true);
-        return { ok: true, result: { message: "Closed all browser sessions" } };
+        return {
+          ok: true,
+          result: {
+            message: closed.length
+              ? `Closed ${closed.length} session(s): ${closed.join(", ")}`
+              : "No sessions of yours were open",
+            closed,
+          },
+        };
       }
 
       case "browser_list_sessions": {
         ListSessionsSchema.parse(params);
-        const configured = getConfiguredSessions();
+        // Enumeration is disclosure: an unfiltered list told every agent the
+        // names of the human's profiles and sessions, which is the map you
+        // would need to go looking for them.
+        const configured = getConfiguredSessions().filter(
+          (sc) => checkProfileAccess(sc.profile, principal).allowed,
+        );
+        const visibleProfiles = getConfiguredProfiles().filter(
+          (name) => checkProfileAccess(name, principal).allowed,
+        );
         const live = getLiveSessions();
         audit(true);
         return {
           ok: true,
           result: {
-            profiles: getConfiguredProfiles(),
+            profiles: visibleProfiles,
             sessions: configured.map((s) => ({ ...s, live: live.includes(s.name) })),
             maxProfiles: getMaxProfiles(),
             maxSessions: getMaxSessions(),
@@ -719,6 +779,13 @@ export async function executeBrowserTool(
 
       case "browser_create_session": {
         const p = CreateSessionSchema.parse(params);
+        // The other half of the boundary: creating the binding is how an agent
+        // would otherwise hand itself a session on someone else's profile.
+        const access = checkProfileAccess(p.profile, principal);
+        if (!access.allowed) {
+          audit(false, access.reason);
+          return fail("PROFILE_ACCESS_DENIED", access.reason ?? "profile access denied");
+        }
         const r = createSessionConfig(p.session, p.profile);
         if (!r.success) {
           audit(false, r.error);
@@ -740,6 +807,10 @@ export async function executeBrowserTool(
 
       case "browser_delete_session": {
         const p = DeleteSessionSchema.parse(params);
+        // Strictly worse than close: this removes the CONFIG, so an unguarded
+        // agent could unbind the human's sessions permanently.
+        const delDenied = guardProfile(p.session);
+        if (delDenied) return delDenied;
         await closeSession(p.session).catch(() => {});
         const r = deleteSessionConfig(p.session);
         if (!r.success) {

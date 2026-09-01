@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { minimaxToken } from "@/lib/hermesStudio";
 import { readHermesEnv } from "@/lib/hermesPhone";
+import { readSettings, JARVIS_TTS_VOICE_ID } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,7 +68,15 @@ async function elevenTts(text: string, voiceId: string): Promise<NextResponse> {
       { status: 400 },
     );
   }
-  const vid = /^[A-Za-z0-9]{16,}$/.test(voiceId) ? voiceId : "onwK4e9ZLuTAKqWW03F9"; // default: Daniel (British)
+  // Caller wins; then the user's configured voice; then Jarvis's named default.
+  // The old fallback was a hardcoded Daniel id, so any request that omitted a
+  // voice silently spoke in the wrong one.
+  const configured = readSettings().jarvis?.voice?.ttsVoiceId ?? "";
+  const vid = /^[A-Za-z0-9]{16,}$/.test(voiceId)
+    ? voiceId
+    : /^[A-Za-z0-9]{16,}$/.test(configured)
+      ? configured
+      : JARVIS_TTS_VOICE_ID;
   const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}?output_format=mp3_44100_128&optimize_streaming_latency=3`, {
     method: "POST",
     headers: { "xi-api-key": key, "Content-Type": "application/json" },

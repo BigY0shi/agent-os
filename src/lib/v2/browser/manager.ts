@@ -7,6 +7,7 @@ import {
   getBrowserExecutable,
   getSessionConfig,
   profilesRoot,
+  resolveLaunchDir,
 } from "./config";
 import { recordSessionRow, closeSessionRow } from "./audit";
 
@@ -230,8 +231,15 @@ async function doLaunch(
 
   try {
     const { chromium } = await import("playwright");
-    const profileDir = getProfileDir(sessionConfig.profile);
+    // The persist-credentials answer decides WHICH non-arbitrary directory this
+    // is. Before resolveLaunchDir existed, every profile launched against the
+    // durable one, so `persistCredentials: false` retained cookies anyway and
+    // the checkbox was cosmetic.
+    const { dir: profileDir, persistent } = resolveLaunchDir(sessionConfig.profile);
     fs.mkdirSync(profileDir, { recursive: true });
+    if (!persistent) {
+      console.log(`[browser] session "${sessionName}" is EPHEMERAL — profile "${sessionConfig.profile}" does not persist between runs`);
+    }
 
     const browserConfig = getBrowserExecutable();
     const launchOptions: Parameters<typeof chromium.launchPersistentContext>[1] = {

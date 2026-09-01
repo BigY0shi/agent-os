@@ -66,6 +66,14 @@ export interface AgentDefV2Fields {
   provider?: AgentProvider;
   /** Browser session names this agent may drive (E3∩F3). */
   browserSessions?: string[];
+  /**
+   * Set when the agent was created but its credential provisioning failed —
+   * no principal, or no browser profile. The agent EXISTS and is otherwise
+   * usable; it simply cannot browse until repaired, and this is what says so.
+   *
+   * Absent means provisioned. Cleared by repairAgentProvisioning().
+   */
+  provisioning?: { ok: false; error: string; at: number };
 }
 
 export interface AgentDef extends AgentDefV2Fields {
