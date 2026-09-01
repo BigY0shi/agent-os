@@ -715,6 +715,10 @@ export async function executeBrowserTool(
 
       case "browser_close_session": {
         const p = CloseSessionSchema.parse(params);
+        // Closing someone else's live session is a denial of service against
+        // them, not a read - it needs the same ownership check as driving it.
+        const closeDenied = guardProfile(p.session);
+        if (closeDenied) return closeDenied;
         const r = await closeSession(p.session);
         if (!r.success) {
           audit(false, r.error);
@@ -726,20 +730,46 @@ export async function executeBrowserTool(
 
       case "browser_close_all": {
         CloseAllSchema.parse(params);
-        await closeAllSessions();
+        // "All" means all of MINE. The unscoped version let any agent shut down
+        // every live session on the box, including the human's, with one call
+        // and no denial to notice.
+        const mine = getConfiguredSessions().filter(
+          (sc) => checkProfileAccess(sc.profile, principal).allowed,
+        );
+        const closed: string[] = [];
+        for (const sc of mine) {
+          const r = await closeSession(sc.name).catch(() => ({ success: false }));
+          if (r && r.success) closed.push(sc.name);
+        }
         audit(true);
-        return { ok: true, result: { message: "Closed all browser sessions" } };
+        return {
+          ok: true,
+          result: {
+            message: closed.length
+              ? `Closed ${closed.length} session(s): ${closed.join(", ")}`
+              : "No sessions of yours were open",
+            closed,
+          },
+        };
       }
 
       case "browser_list_sessions": {
         ListSessionsSchema.parse(params);
-        const configured = getConfiguredSessions();
+        // Enumeration is disclosure: an unfiltered list told every agent the
+        // names of the human's profiles and sessions, which is the map you
+        // would need to go looking for them.
+        const configured = getConfiguredSessions().filter(
+          (sc) => checkProfileAccess(sc.profile, principal).allowed,
+        );
+        const visibleProfiles = getConfiguredProfiles().filter(
+          (name) => checkProfileAccess(name, principal).allowed,
+        );
         const live = getLiveSessions();
         audit(true);
         return {
           ok: true,
           result: {
-            profiles: getConfiguredProfiles(),
+            profiles: visibleProfiles,
             sessions: configured.map((s) => ({ ...s, live: live.includes(s.name) })),
             maxProfiles: getMaxProfiles(),
             maxSessions: getMaxSessions(),
@@ -777,6 +807,10 @@ export async function executeBrowserTool(
 
       case "browser_delete_session": {
         const p = DeleteSessionSchema.parse(params);
+        // Strictly worse than close: this removes the CONFIG, so an unguarded
+        // agent could unbind the human's sessions permanently.
+        const delDenied = guardProfile(p.session);
+        if (delDenied) return delDenied;
         await closeSession(p.session).catch(() => {});
         const r = deleteSessionConfig(p.session);
         if (!r.success) {

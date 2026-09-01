@@ -21,6 +21,18 @@ import { readSettings, writeSettings } from "../../settings";
  */
 
 const MAX_PROFILES = 5;
+/** Agent profiles are provisioned one-per-agent and are not the user's to
+ *  manage, so they get their own headroom rather than eating MAX_PROFILES. */
+const MAX_AGENT_PROFILES = 64;
+
+/** `agent-1`, `agent-12`. Auto-provisioned; never a name a human types. */
+export function isAgentProfileName(name: string): boolean {
+  return /^agent-\d+$/.test(name);
+}
+
+function countUserProfiles(all: readonly string[]): number {
+  return all.filter((p) => !isAgentProfileName(p)).length;
+}
 const MAX_SESSIONS = 10;
 const DEFAULT_PROFILES = ["personal", "work", "misc"];
 const NAME_RE = /^[a-zA-Z0-9_-]+$/;
@@ -98,10 +110,21 @@ export function createProfile(name: string): { success: boolean; error?: string 
   if (current.includes(name)) {
     return { success: false, error: `Profile "${name}" already exists` };
   }
-  if (current.length >= MAX_PROFILES) {
+  // MAX_PROFILES is a budget on the HUMAN's profiles. Agent profiles are
+  // auto-provisioned infrastructure, one per agent, and counting them here made
+  // the third agent unprovisionable: 3 defaults + a cap of 5 left exactly two
+  // agent slots. An agent that cannot get a profile cannot browse at all, so
+  // this cap must not be the thing that decides how many agents may exist.
+  if (!isAgentProfileName(name) && countUserProfiles(current) >= MAX_PROFILES) {
     return {
       success: false,
-      error: `Maximum ${MAX_PROFILES} profiles allowed. Current: ${current.join(", ")}`,
+      error: `Maximum ${MAX_PROFILES} personal profiles allowed. Current: ${current.filter((p) => !isAgentProfileName(p)).join(", ")}`,
+    };
+  }
+  if (isAgentProfileName(name) && current.filter(isAgentProfileName).length >= MAX_AGENT_PROFILES) {
+    return {
+      success: false,
+      error: `Maximum ${MAX_AGENT_PROFILES} agent profiles allowed — remove an agent before creating another.`,
     };
   }
   const browser = readSettings().browser ?? {};
@@ -306,7 +329,7 @@ export async function isPlaywrightReady(): Promise<boolean> {
 // owner belongs to the USER. That default is deliberately the strict one - an
 // unmapped profile denies agents rather than admitting them.
 
-import { credentialOwnerOf, currentUserRef, displayFor } from "@/lib/v2/identity/principals";
+import { credentialOwnerOf, currentUserRef, displayFor, persistsFor } from "@/lib/v2/identity/principals";
 
 /** Profile name -> principal ref. Unmapped means the human owns it. */
 function ownerMap(): Record<string, string> {
@@ -379,4 +402,42 @@ export function ensureOwnProfile(principalRef: string): { success: boolean; prof
   const owned = setProfileOwner(name, principalRef);
   if (!owned.success) return { success: false, error: owned.error };
   return { success: true, profile: name };
+}
+
+// ============ Ephemeral profiles (the persist-credentials answer) ============
+
+/**
+ * Where a NON-persistent principal's Chromium actually runs.
+ *
+ * Until this existed, `persistCredentials: false` was cosmetic: every profile
+ * went through launchPersistentContext against a durable directory, so an agent
+ * the user had explicitly declined to keep signed in kept its cookies anyway.
+ * The checkbox asserted something the runtime did not do.
+ *
+ * Ephemeral state lives under the OS temp root rather than being deleted from
+ * the profile root, because rule 1 forbids destroying files and a wipe-per-
+ * launch would either pile up exile folders or quietly delete user data. Temp
+ * is the one place where "goes away on its own" is the documented contract.
+ */
+export function ephemeralProfileDir(profileName: string): string {
+  if (!NAME_RE.test(profileName)) throw new Error(`Invalid profile name "${profileName}"`);
+  // Scoped to the PROCESS, which is what makes this need no deletion at all.
+  // Within one server run the dir is stable, so a headed login handoff followed
+  // by a headless relaunch still works. After a restart the pid differs, so the
+  // agent starts signed out - which is exactly what "keep signed in between
+  // runs: off" means. Rule 1 stays intact: nothing is ever destroyed, the state
+  // is simply never reused, and the OS temp cleaner reclaims it.
+  return path.join(os.tmpdir(), "agentos-ephemeral-profiles", `${process.pid}-${profileName}`);
+}
+
+/**
+ * THE user-data-dir for a launch. Preserves the E4.1 invariant: the launcher
+ * still never accepts an arbitrary directory, it picks between exactly two
+ * non-arbitrary ones, and which one is decided by the persistence answer rather
+ * than by anything a caller passes in.
+ */
+export function resolveLaunchDir(profileName: string): { dir: string; persistent: boolean } {
+  const owner = profileOwner(profileName);
+  const persistent = persistsFor(owner);
+  return { dir: persistent ? getProfileDir(profileName) : ephemeralProfileDir(profileName), persistent };
 }

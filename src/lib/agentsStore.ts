@@ -113,7 +113,7 @@ this file as lessons accumulate — that's the point: instructions beat schemas.
   // loud but not fatal.
   try {
     const { registerAgent } = await import("@/lib/v2/identity/principals");
-    const { setProfileOwner, createProfile, isProfileConfigured } = await import("@/lib/v2/browser/config");
+    const { ensureOwnProfile } = await import("@/lib/v2/browser/config");
     const principal = registerAgent({
       label: def.name,
       origin: input.origin ?? "forge",
@@ -122,9 +122,17 @@ this file as lessons accumulate — that's the point: instructions beat schemas.
     // Link it to the AgentOS id so callerRef() resolves without re-provisioning.
     const { linkExternalId } = await import("@/lib/v2/identity/principals");
     linkExternalId(principal.id, def.id);
-    const profile = `agent-${principal.id}`;
-    if (!isProfileConfigured(profile)) createProfile(profile);
-    setProfileOwner(profile, `agent:${principal.id}`);
+    // ensureOwnProfile creates AND records ownership, and reports failure. The
+    // earlier version ignored the create result and wrote the ownership record
+    // regardless, so a profile that hit the cap left an owner entry pointing at
+    // a profile that did not exist - the agent then failed at launch with a
+    // confusing error instead of here with a clear one.
+    const provisioned = ensureOwnProfile(`agent:${principal.id}`);
+    if (!provisioned.success) {
+      throw new Error(
+        `Agent "${def.name}" was created but could not be given a browser profile: ${provisioned.error}`,
+      );
+    }
   } catch (err) {
     console.error(`[agents] principal registration failed for ${def.id}:`, err instanceof Error ? err.message : err);
   }
