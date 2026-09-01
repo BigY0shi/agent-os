@@ -35,6 +35,46 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-01 - Four modules were writing to a vault that does not exist
+
+**Symptom.** A Loop run finished, its modal closed, and there was nowhere to
+read what happened.
+
+**Cause.** `loop/run/route.ts` hardcoded its log directory to
+`~/Documents/Obsidian Vault/Agentic OS/Loops`. That path does not exist on this
+machine - the configured `vaultRoot` is `C:\Users\Yoshi\.agentic-os\agentos` and
+was ignored. `mkdir -p` cheerfully created the phantom folder, and the write sat
+inside `catch { /* vault optional */ }`, so it failed silently every time.
+
+Sweeping for the pattern found three more, all in notebooklm (ask, library,
+artifact/download). All four now resolve through `AGENTIC_DIR`, with a
+`~/.agentic-os/` fallback rather than the RELATIVE path that `path.join("")`
+yields when no vault is set. `config.ts:180` still names the Obsidian path and
+is left alone: it is the legitimate default when nothing is configured.
+
+**Two Loop fixes that had been conflated.** The run log now writes on EVERY run,
+pass or fail - a run the judge rejected is exactly the one worth reading. The
+gallery keeps its `if (passed)` guard. Both had been decided by the same
+condition, and they are different questions: one is a showcase, the other is the
+only record. A failed log write is now emitted on the stream (`logfail`) instead
+of swallowed, because a run whose log did not write looks identical to one that
+did until you go looking.
+
+**A correction.** I first reported that vault writes "stopped on 2026-08-28".
+Wrong. The distribution is Jun 30, Jul 24-30, Aug 8, Aug 28 - 29 files over
+three months. It has always been sparse, because those writers fire per Pipeline
+item or per explicit save. Aug 28 was the last occasional write, not a cliff.
+There was no regression to chase, and chasing one would have wasted the time.
+
+**The finding that actually matters, not yet fixed.** Memory V2 is not broken:
+`ingestFromModule` has 11 call sites, boot starts the queue, `ingestEnabled` is
+true. Every table reads 0 rows because nothing has been ingested. All seven
+files that feed memory are V2 modules (tasks chat, anynotes, integrations,
+jarvis brain + tools, pages butler, tasks engine). **Zero V1 modules write
+episodes** - so Deal Desk's triaged opportunities and the Hire Engine's leads,
+which carry more judgment than anything else here, have never entered memory.
+A wiring gap rather than a bug, and the next thing to close.
+
 ## 2026-09-01 - Docs stop drifting: a commit-msg gate, and a narrowed ASCII hook
 
 **The failure this answers.** PROGRESS.md was last touched 2026-08-28 and still

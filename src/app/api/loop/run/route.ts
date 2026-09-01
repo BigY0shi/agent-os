@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
+import { AGENTIC_DIR } from "@/lib/vaultWriter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -177,12 +178,29 @@ export async function POST(req: Request) {
       else if (!done) reason = `Reached the ${maxIters}-round cap without a clean pass.`;
 
       const slug = (goal.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 46)) || "loop";
-      // VAULT — always log the run (the loop's memory), pass or fail.
+      // RUN LOG — every run, pass or fail. This is the loop's only durable
+      // record: the modal is transient, and a run the judge FAILED is exactly
+      // the one worth reading afterwards.
+      //
+      // Two bugs lived here. The path was hardcoded to ~/Documents/Obsidian
+      // Vault, which does not exist on this machine, so mkdir -p created a
+      // phantom folder and every log landed somewhere nobody opens. And the
+      // failure was swallowed by `catch { /* vault optional */ }` — defensible
+      // for a nice-to-have artifact, wrong for the only copy of the run.
+      const logDir = AGENTIC_DIR
+        ? path.join(AGENTIC_DIR, "Loops")
+        : path.join(os.homedir(), ".agentic-os", "loop-runs");
       try {
-        const dir = path.join(os.homedir(), "Documents", "Obsidian Vault", "Agentic OS", "Loops");
+        const dir = logDir;
         await mkdir(dir, { recursive: true });
         await writeFile(path.join(dir, `${slug}.md`), `# Loop · ${goal}\n\n**Result:** ${reason}\n**Passed:** ${passed}\n**Builder:** ${worker} · **Judge:** ${jName}\n\n---\n\n${cur}\n`, "utf8");
-      } catch { /* vault optional */ }
+        send({ t: "logged", dir: logDir });
+      } catch (err) {
+        // Loud. A run whose log failed to write looks identical to one that
+        // saved fine, and you only discover the difference when you go looking
+        // for the log and there is nothing there.
+        send({ t: "logfail", error: err instanceof Error ? err.message : String(err), dir: logDir });
+      }
       // BUILDS WORKSPACE — ONLY save builds that actually passed (ran clean + met the goal).
       // No more half-broken junk in the gallery.
       if (passed) {
