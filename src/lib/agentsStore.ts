@@ -65,6 +65,11 @@ export async function createAgent(input: {
   instructions: string;
   permissionMode?: AgentDef["permissionMode"];
   intelligence?: AgentDef["intelligence"];
+  /** The persist-credentials answer. Defaults to FALSE: an agent that was
+   *  never asked does not get a durable credential folder. */
+  persistCredentials?: boolean;
+  /** Where this agent came from, for the principal registry. */
+  origin?: "forge" | "frontier-model" | "harness";
 }): Promise<AgentDef> {
   const id = randomUUID();
   const now = Date.now();
@@ -100,6 +105,30 @@ this file as lessons accumulate — that's the point: instructions beat schemas.
 - Gotchas learned the hard way:
   - (add as discovered)
 `, "utf8");
+
+  // Give the agent a PRINCIPAL at birth, so it owns a credential folder from
+  // its first run rather than being auto-provisioned on first browser call.
+  // Registration failing must not lose an agent the user just built — the
+  // auto-provision path in ensureAgentPrincipal still covers it, so this is
+  // loud but not fatal.
+  try {
+    const { registerAgent } = await import("@/lib/v2/identity/principals");
+    const { setProfileOwner, createProfile, isProfileConfigured } = await import("@/lib/v2/browser/config");
+    const principal = registerAgent({
+      label: def.name,
+      origin: input.origin ?? "forge",
+      persistCredentials: input.persistCredentials === true,
+    });
+    // Link it to the AgentOS id so callerRef() resolves without re-provisioning.
+    const { linkExternalId } = await import("@/lib/v2/identity/principals");
+    linkExternalId(principal.id, def.id);
+    const profile = `agent-${principal.id}`;
+    if (!isProfileConfigured(profile)) createProfile(profile);
+    setProfileOwner(profile, `agent:${principal.id}`);
+  } catch (err) {
+    console.error(`[agents] principal registration failed for ${def.id}:`, err instanceof Error ? err.message : err);
+  }
+
   return def;
 }
 

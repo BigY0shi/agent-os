@@ -22,6 +22,9 @@ export async function POST(req: Request) {
     name?: string; instructions?: string; description?: string;
     permissionMode?: "bypass" | "gated" | "ask";
     intelligence?: "fast" | "standard" | "deep";
+    // The persist-credentials checkbox. Absent === false: an agent nobody was
+    // asked about does not get a durable credential folder.
+    persistCredentials?: boolean;
   } | null;
   if (!body?.name?.trim() || !body?.instructions?.trim()) {
     return NextResponse.json({ error: "name and instructions are required" }, { status: 400 });
@@ -30,6 +33,8 @@ export async function POST(req: Request) {
     name: body.name,
     description: body.description,
     instructions: body.instructions,
+    persistCredentials: body.persistCredentials === true,
+    origin: "forge",
     permissionMode: body.permissionMode,
     intelligence: body.intelligence,
   });

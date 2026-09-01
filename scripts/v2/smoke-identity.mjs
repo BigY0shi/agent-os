@@ -10,6 +10,9 @@ import path from "node:path";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-identity-"));
 process.env.AGENTIC_OS_PRINCIPALS = path.join(dir, "principals.json");
+process.env.AGENTIC_OS_SETTINGS = path.join(dir, "settings.json");
+process.env.AGENTIC_OS_BROWSER_PROFILES = path.join(dir, "browser-profiles");
+process.env.AGENTIC_OS_AGENTS_DIR = path.join(dir, "agents");
 
 let failures = 0;
 const check = (name, cond, extra = "") => {
@@ -131,6 +134,53 @@ check("H3 it states the consequence, not just the mechanism", /every sub-agent/i
 console.log("\n── §I isolation ──");
 check("I1 this smoke never touched the real identity file",
   P.principalsPath().startsWith(os.tmpdir()), P.principalsPath());
+
+
+// -- §J creation wiring ------------------------------------------------------
+console.log("\n-- §J an agent gets its principal at birth --");
+const store = await import("../../src/lib/agentsStore.ts");
+const cfg = await import("../../src/lib/v2/browser/config.ts");
+const readSrc = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+
+const built = await store.createAgent({
+  name: "Scraper", instructions: "scrape things", persistCredentials: true, origin: "forge",
+});
+const linked = P.listAgents().find((a) => a.externalId === built.id);
+check("J1 creating an agent registers a principal", !!linked, built.id);
+check("J2 the label is the agent name, not its uuid", linked?.label === "Scraper", linked?.label);
+check("J3 the persist answer is recorded", linked?.persistCredentials === true);
+check("J4 origin is carried through", linked?.origin === "forge", linked?.origin);
+// Without the external-id link the browser layer would provision a SECOND
+// principal on first call, silently losing the persist answer.
+check("J5 callerRef resolves to the SAME principal, not a new one",
+  P.callerRef(built.id) === "agent:" + linked?.id, P.callerRef(built.id));
+const before = P.listAgents().length;
+P.callerRef(built.id);
+check("J6 repeat calls do not mint duplicates", P.listAgents().length === before);
+check("J7 the agent owns a browser profile from birth",
+  cfg.profileOwner("agent-" + linked?.id) === "agent:" + linked?.id, cfg.profileOwner("agent-" + linked?.id));
+check("J8 it cannot reach a profile it does not own",
+  cfg.checkProfileAccess("someone-elses", "agent:" + linked?.id).allowed === false);
+const noPersist = await store.createAgent({ name: "Throwaway", instructions: "x" });
+const np = P.listAgents().find((a) => a.externalId === noPersist.id);
+check("J9 persistence defaults to OFF when nobody was asked", np?.persistCredentials === false);
+check("J10 a sub-agent of a persisting root inherits rather than re-asking",
+  P.persistsFor("agent:" + P.registerSubAgent(linked.id).id) === true);
+
+// -- §K the choice is actually offered ---------------------------------------
+console.log("\n-- §K the checkbox is wired, not just written --");
+const copy = readSrc("src/lib/v2/identity/copy.ts");
+check("K1 the copy module imports nothing (client-safe)", !/^import /m.test(copy));
+const comp = readSrc("src/components/v2/identity/PersistCredentials.tsx");
+check("K2 the component takes its copy from the shared module", comp.includes('@/lib/v2/identity/copy'));
+check("K3 it shows the warning when TICKED", comp.includes("PERSIST_CREDENTIALS_WARNING"));
+const wiz = readSrc("src/components/v2/agents/ForgeWizard.tsx");
+check("K4 the Forge renders it", wiz.includes("<PersistCredentials"));
+check("K5 the Forge SENDS the answer", /JSON\.stringify\(\{ name[^}]*persistCredentials/.test(wiz));
+const route = readSrc("src/app/api/agents/route.ts");
+check("K6 the create route forwards it", route.includes("persistCredentials: body.persistCredentials === true"));
+const idRoute = readSrc("src/app/api/v2/identity/route.ts");
+check("K7 sub-agents are refused a persistence toggle of their own", idRoute.includes('origin === "subagent"'));
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

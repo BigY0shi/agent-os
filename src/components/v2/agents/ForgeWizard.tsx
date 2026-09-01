@@ -24,6 +24,7 @@ import { ModePicker, IntelPicker, TriggersEditor, RunView, ApprovalsStrip } from
 import { STATUS_BAND_COLORS } from "@/components/v2/StatusBand";
 import { AGENTS_ACCENT, type AgentCardData } from "./shared";
 import { postDecision, decisionNotice } from "@/lib/agentsApprovalsClient";
+import PersistCredentials from "@/components/v2/identity/PersistCredentials";
 
 interface HarnessCard { id: string; name: string; description: string; kind: string }
 
@@ -78,6 +79,9 @@ export default function ForgeWizard({
 
   // Step 6 — Permissions & model.
   const [permissionMode, setPermissionMode] = useState<AgentDef["permissionMode"]>("gated");
+  // Whether this agent keeps a durable credential folder. Default OFF: an agent
+  // gets a scratch identity unless the user deliberately grants otherwise.
+  const [persistCredentials, setPersistCredentials] = useState(false);
   const [intelligence, setIntelligence] = useState<AgentDef["intelligence"]>("standard");
   const [providerKind, setProviderKind] = useState<"sdk" | "cli" | "ollama">("sdk");
   const [providerArg, setProviderArg] = useState("");
@@ -208,7 +212,7 @@ export default function ForgeWizard({
     try {
       const created = await fetch("/api/agents", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, description, instructions, permissionMode, intelligence }),
+        body: JSON.stringify({ name, description, instructions, permissionMode, intelligence, persistCredentials }),
       }).then((r) => r.json());
       if (!created.agent?.id) { setErr(created.error ?? "create failed"); setBusy(false); return; }
       const id = created.agent.id as string;
@@ -432,6 +436,11 @@ export default function ForgeWizard({
                     ) : (
                       <div className="text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>No browser sessions configured — add them on /browser first.</div>
                     )
+                  )}
+                  {browser && (
+                    <div className="mt-2.5 pl-5">
+                      <PersistCredentials value={persistCredentials} onChange={setPersistCredentials} />
+                    </div>
                   )}
                 </div>
                 <div>

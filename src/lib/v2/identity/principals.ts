@@ -288,15 +288,24 @@ export function agentDirectory(): { ref: string; id: string; label: string; disp
   }));
 }
 
+// Re-exported from ./copy so server callers have one import, while client
+// components can take the string without dragging node:fs into the bundle.
+export { PERSIST_CREDENTIALS_WARNING } from "./copy";
+
 /**
- * The copy the persist-credentials checkbox must carry.
+ * Attach an AgentOS agent slug to an already-registered principal.
  *
- * Kept here rather than in the component so every surface that offers the
- * choice - Forge, model import, harness install - says the same thing, and so
- * the warning cannot drift away from the inheritance rule it describes.
+ * Registration happens when the agent is BUILT (so the persist answer is
+ * recorded against the label the user typed), but the AgentOS id only exists
+ * once the agent def is written. This closes that gap so callerRef() finds the
+ * existing principal instead of auto-provisioning a second one.
  */
-export const PERSIST_CREDENTIALS_WARNING =
-  "Keep this agent signed in between runs. Its logins are stored in a folder only " +
-  "this agent can reach. Note that any sub-agent it spawns (Agent 43 spawns 43A, " +
-  "43B, 43C) inherits that folder and those logins - so anything you sign this " +
-  "agent into, every sub-agent it ever creates can use.";
+export function linkExternalId(principalId: string, externalId: string): void {
+  const file = read();
+  const agents = file.agents ?? [];
+  const idx = agents.findIndex((a) => a.id === principalId);
+  if (idx < 0) throw new Error(`Agent principal "${principalId}" is not registered`);
+  const next = agents.slice();
+  next[idx] = { ...next[idx], externalId: externalId.trim() };
+  write({ ...file, agents: next });
+}
