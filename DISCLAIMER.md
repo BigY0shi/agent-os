@@ -13,7 +13,9 @@ Most disclaimers are vague because the software is ordinary. This one is specifi
 - **Send email.** Configured mail integrations send real messages to real people from an address you control.
 - **Spend money.** Agents consume paid API credits, metered CLI subscriptions, and any third-party service you connect. An agent in a loop can spend more than you expected before you notice.
 - **Listen on your network.** The production launcher binds every interface, not just localhost. A password gate stands in front of it and refuses all requests when no password is set, but anything reachable on your network can reach the login.
-- **Store credentials on disk.** API keys, OAuth tokens, and browser session cookies live under `~/.agentic-os/`, unencrypted, protected by your operating system's file permissions and nothing else.
+- **Store credentials on disk.** Two different ways, and the distinction matters. Integration secrets (OAuth tokens and connector configs) are sealed with AES-256-GCM in the database. Everything else, including the AgentMail, newsletter, and outreach API keys, sits in plaintext under `~/.agentic-os/`. Browser session cookies live in Chromium profile directories, protected by your operating system's file permissions.
+
+  The encryption is real but narrow: the key that unseals it (`~/.agentic-os/agentos.key`, 32 bytes) is stored beside the data it protects. That defends against someone who obtains the database file alone. It does not defend against anyone with read access to your home directory, and it is not designed to.
 
 Agent OS contains a credential containment model that stops one agent from using another principal's browser profile. That containment governs **tool calls**. It does not sandbox arbitrary code. Anything able to run code in the server process can read those directories directly.
 
