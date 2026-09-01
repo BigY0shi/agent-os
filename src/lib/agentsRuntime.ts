@@ -35,6 +35,7 @@ import {
 import { cliComplete } from "./loopEngine";
 import { getHarness, renderHarness, type HarnessDef, type HarnessRow } from "./v2/agents/harnesses";
 import { notifyStatus } from "./v2/agents/statusFeed";
+import { evaluateSpend, limitsFrom, tokensFrom } from "@/lib/v2/agents/spendCap";
 
 // Intelligence dial → model id. User-tunable from the Agents settings menu
 // (settings.agentsModels); the fallbacks are the ids verified live on the CLI
@@ -443,6 +444,11 @@ export async function consumeRunStream(
   onTurnResult?: (resultText: string) => Promise<boolean>,
 ): Promise<void> {
   const r = live(runId)!;
+  // Running spend for THIS run. The SDK reports CUMULATIVE totals on every
+  // result message, so these are assignments rather than additions — summing
+  // would double-count across a multi-iteration harness session.
+  let spentUsd = 0;
+  let spentTokens = 0;
   for await (const msg of stream) {
     if (msg.type === "system" && msg.subtype === "init") {
       const servers = (msg as { mcp_servers?: { name: string; status: string }[] }).mcp_servers ?? [];
@@ -464,9 +470,30 @@ export async function consumeRunStream(
         }
       }
     } else if (msg.type === "result") {
-      const res = msg as { subtype: string; result?: string; total_cost_usd?: number; num_turns?: number };
+      const res = msg as {
+        subtype: string; result?: string; total_cost_usd?: number; num_turns?: number;
+        // Previously discarded. The ceiling needs it, and so does anyone asking
+        // where a run's money went.
+        usage?: unknown;
+      };
+      if (typeof res.total_cost_usd === "number") spentUsd = res.total_cost_usd;
+      const turnTokens = tokensFrom(res.usage);
+      if (turnTokens > 0) spentTokens = turnTokens;
+
       if (onTurnResult && res.subtype === "success") {
-        const continueSession = await onTurnResult(res.result ?? "");
+        // Checked BEFORE control goes back to the harness, so a loop that has
+        // spent its budget stops holding the work it already produced rather
+        // than starting an iteration it cannot pay for. Same shape as the
+        // iteration cap: stop honestly instead of throwing the result away.
+        const verdict = evaluateSpend(
+          { usd: spentUsd, tokens: spentTokens },
+          limitsFrom(readSettings().agents?.spendCap),
+        );
+        if (verdict.over) {
+          push(runId, { kind: "status", detail: verdict.reason ?? "spend ceiling reached" });
+          r.meta.stoppedBy = "spend-cap";
+        }
+        const continueSession = verdict.over ? false : await onTurnResult(res.result ?? "");
         if (continueSession) {
           // Harness queued another iteration/phase — the same query() session
           // continues (assistant text already landed via the assistant branch;
@@ -481,6 +508,7 @@ export async function consumeRunStream(
       r.meta.result = res.result ?? "";
       r.meta.costUsd = res.total_cost_usd;
       r.meta.numTurns = res.num_turns;
+      if (spentTokens > 0) r.meta.tokens = spentTokens;
       r.meta.endedAt = Date.now();
       if (stranded) r.meta.error = `unanswered question — the run ended waiting on: ${stranded}`;
       else if (res.subtype !== "success") r.meta.error = res.subtype;

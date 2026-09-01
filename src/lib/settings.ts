@@ -279,6 +279,12 @@ export interface Settings {
   // the Agents gear.
   agents?: {
     requireTestRun?: boolean;
+    /** Per-run ceiling in dollars and tokens. `enabled: false` lifts both, which
+     *  is a real setting for a long-horizon run rather than a loophole; a limit
+     *  <= 0 leaves that one dimension unbounded. Enforced at the harness loop
+     *  boundary so a run that trips it KEEPS its work and says why it stopped.
+     *  See lib/v2/agents/spendCap.ts. */
+    spendCap?: { enabled?: boolean; maxUsd?: number; maxTokens?: number };
     // A background run has no chat window; when an agent needs a decision only
     // the user can make it emits the ASK-USER marker and the run parks on the
     // approvals queue until you reply.
@@ -426,6 +432,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agentsPage: { heroPollMs: 4000 },
   agents: {
     requireTestRun: true,
+    spendCap: { enabled: true, maxUsd: 5, maxTokens: 2_000_000 },
     // heuristic defaults OFF: a rhetorical closing question is common in agent
     // reports, and a false positive parks a finished run instead of completing
     // it. The marker is the reliable signal; the heuristic is the opt-in net.

@@ -103,6 +103,12 @@ export interface RunMeta {
   /** Final result text (from the SDK result message). */
   result?: string;
   costUsd?: number;
+  /** Total tokens (input + output + both cache buckets) for the run. The SDK
+   *  reports this on every result message; it used to be discarded. */
+  tokens?: number;
+  /** Set when a guard ended the run rather than the agent finishing. Absent
+   *  means the run ended on its own terms. */
+  stoppedBy?: "spend-cap";
   numTurns?: number;
   error?: string;
 }
