@@ -106,18 +106,15 @@ check("F3 the audit db is a temp db", (process.env.AGENTIC_OS_DB ?? "").startsWi
 // across ALL smokes rather than remembered, because this one passed while
 // failing to write to a database it should never have opened.
 {
-  const dirV2 = path.join(process.cwd(), "scripts", "v2");
-  const offenders = fs
-    .readdirSync(dirV2)
-    .filter((f) => f.startsWith("smoke-") && f.endsWith(".mjs"))
-    .filter((f) => {
-      const src = fs.readFileSync(path.join(dirV2, f), "utf8");
-      const drivesTools = src.includes("executeBrowserTool") || src.includes("recordToolCall");
-      return drivesTools && !src.includes("AGENTIC_OS_DB");
-    });
-  check("F4 every smoke that drives real tools isolates AGENTIC_OS_DB", offenders.length === 0, offenders.join(", "));
+  // Rule 19, computed rather than remembered. See scripts/v2/lib/isolationGuard.mjs
+  // for why this follows imports transitively instead of matching call names.
+  const { offenders, SENSITIVE_STORES } = await import("./lib/isolationGuard.mjs");
+  for (const store of SENSITIVE_STORES) {
+    const bad = offenders({ repoRoot: process.cwd(), writers: store.writers, env: store.env });
+    check(`F4 every executing smoke that ${store.label} isolates ${store.env}`,
+      bad.length === 0, bad.join(", "));
+  }
 }
-
 
 // -- §G P0 REGRESSION: "keep signed in" must not be cosmetic ------------------
 console.log("\n-- §G non-persistent agents do not retain state --");
@@ -274,6 +271,46 @@ check("J7 no pid appears in the ephemeral path at all",
 const cfgSrcJ = read("src/lib/v2/browser/config.ts");
 check("J8 the nonce is minted once at module load, not per call",
   /const RUN_NONCE = randomBytes\(/.test(cfgSrcJ) && !/randomBytes\([^)]*\)[\s\S]{0,80}ephemeralProfileDir/.test(cfgSrcJ));
+
+
+// -- §K a broken audit trail must not look like a working one ----------------
+console.log("\n-- §K audit write failures are visible --");
+const audit = await import("../../src/lib/v2/browser/audit.ts");
+audit.__resetAuditHealthForTests();
+check("K1 a healthy audit reports ok", audit.auditHealth().ok === true);
+check("K2 ...with no failures", audit.auditHealth().failures === 0);
+// Force a write failure the way a readonly/missing db would.
+const dbMod = await import("../../src/lib/v2/db.ts");
+const realDb = dbMod.getDb();
+const broken = { prepare() { throw new Error("SQLITE_READONLY: attempt to write a readonly database"); } };
+dbMod.__setDbForTests?.(broken);
+let forced = false;
+try {
+  audit.recordToolCall({ sessionName: "s", tool: "browser_navigate", ok: true });
+  forced = true;
+} catch { /* must NOT throw - see the comment in audit.ts */ }
+dbMod.__setDbForTests?.(realDb);
+if (!forced) {
+  console.log("SKIP  db has no test seam; asserting the source contract instead");
+}
+const auditSrc = read("src/lib/v2/browser/audit.ts");
+check("K3 the failure path counts rather than only logging", /AUDIT_HEALTH\.failures \+= 1/.test(auditSrc));
+check("K4 the message names the tool and session that went unrecorded",
+  /executed but was NOT recorded/.test(auditSrc));
+// Match a throw STATEMENT, not the word inside the comment explaining why there
+// isn't one. The first version of this check failed on its own documentation.
+check("K5 recordToolCall still does NOT throw (the tool already ran)",
+  !/^\s*throw\s/m.test(
+    auditSrc
+      .slice(auditSrc.indexOf("} catch (err) {"), auditSrc.indexOf("export function auditHealth"))
+      .replace(/^\s*\/\/.*$/gm, ""),
+  ));
+check("K6 health is readable", typeof audit.auditHealth === "function");
+const toolsSrc = read("src/lib/v2/browser/tools.ts");
+check("K7 a degraded audit is surfaced on the tool result", /auditDegraded/.test(toolsSrc));
+const auditRoute = read("src/app/api/v2/browser/audit/route.ts");
+check("K8 the audit route reports health alongside rows", /audit: auditHealth\(\)/.test(auditRoute));
+audit.__resetAuditHealthForTests();
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -23,6 +23,11 @@ const settingsDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-e-settings-")
 process.env.AGENTIC_OS_SETTINGS = path.join(settingsDir, "settings.json");
 const profilesRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-e-profiles-"));
 process.env.AGENTIC_OS_BROWSER_PROFILES = profilesRootTmp;
+// The browser tool layer resolves a CALLER PRINCIPAL (callerRef -> 
+// ensureAgentPrincipal), which registers an agent on first sight. Without
+// this line a tool-driving smoke mints principals in the owner's real
+// ~/.agentic-os/principals.json.
+process.env.AGENTIC_OS_PRINCIPALS = path.join(profilesRootTmp, "principals.json");
 
 const config = await import("../../src/lib/v2/browser/config.ts");
 const manager = await import("../../src/lib/v2/browser/manager.ts");

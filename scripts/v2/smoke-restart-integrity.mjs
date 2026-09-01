@@ -26,6 +26,11 @@ const settingsFile = path.join(settingsDir, "settings.json");
 process.env.AGENTIC_OS_SETTINGS = settingsFile;
 const agentsDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-restart-agents-"));
 process.env.AGENTIC_OS_AGENTS_DIR = agentsDir;
+// createAgent registers a PRINCIPAL (identity + a browser profile it owns),
+// so an un-redirected run writes fake agents into the owner's real
+// ~/.agentic-os/principals.json. That is what happened before this line
+// existed. Rule 19: redirect every store the code under test writes to.
+process.env.AGENTIC_OS_PRINCIPALS = path.join(agentsDir, "principals.json");
 const lockDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-restart-lock-"));
 const lockFile = path.join(lockDir, "agentos.lock");
 process.env.AGENTIC_OS_LOCK = lockFile;
