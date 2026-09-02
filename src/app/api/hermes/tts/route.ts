@@ -138,14 +138,32 @@ async function localTts(text: string, voiceId: string): Promise<NextResponse> {
 }
 
 // Voicebox: voiceId is a profile id or name; blank = settings.voicebox.profile,
-// then the studio's first profile. A down or slow studio is reported as such.
+// then the studio's first profile. When the studio fails, the owner's chosen
+// backup (settings.jarvis.voice.ttsFallback, default ElevenLabs) speaks instead
+// and the response SAYS so: provider is the one that actually produced audio,
+// fellBackFrom/fallbackReason carry what went wrong. Never a quiet substitution.
 async function voiceboxTts(text: string, profileRef: string): Promise<NextResponse> {
+  let reason: string;
   try {
     const out = await voiceboxSynthesize(text, { profile: profileRef || null });
     return NextResponse.json({ audio: out.audio, provider: "voicebox", generationId: out.generationId, durationSec: out.durationSec });
   } catch (e) {
-    return NextResponse.json({ error: String((e as Error)?.message ?? e), provider: "voicebox" }, { status: 502 });
+    reason = String((e as Error)?.message ?? e);
   }
+  const fallback = readSettings().jarvis?.voice?.ttsFallback ?? "elevenlabs";
+  if (fallback !== "elevenlabs") {
+    return NextResponse.json({ error: reason, provider: "voicebox" }, { status: 502 });
+  }
+  console.warn(`[tts] Voicebox failed (${reason}); falling back to ElevenLabs as configured`);
+  const r = await elevenTts(text, "");
+  const j = (await r.json().catch(() => ({}))) as { audio?: string; error?: string; detail?: string };
+  if (r.ok && j.audio) {
+    return NextResponse.json({ audio: j.audio, provider: "elevenlabs", fellBackFrom: "voicebox", fallbackReason: reason });
+  }
+  return NextResponse.json(
+    { error: `Voicebox failed (${reason}); ElevenLabs backup also failed (${j.error ?? r.status})`, provider: "voicebox", fallbackTried: "elevenlabs" },
+    { status: 502 },
+  );
 }
 
 export async function POST(req: Request) {

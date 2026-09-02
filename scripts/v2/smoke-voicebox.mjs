@@ -11,6 +11,12 @@ import path from "node:path";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-voicebox-"));
 process.env.AGENTIC_OS_SETTINGS = path.join(dir, "settings.json");
+// The ElevenLabs backup path reads the key from ~/.hermes/profiles/<active>/.env
+// FIRST and the environment second. Point "home" at the temp dir before any
+// import so the real profile is never opened, then supply a smoke key via env.
+process.env.USERPROFILE = dir;
+process.env.HOME = dir;
+process.env.ELEVENLABS_API_KEY = "smoke-eleven-key";
 fs.writeFileSync(process.env.AGENTIC_OS_SETTINGS, JSON.stringify({ memory: { ingestEnabled: false } }), "utf8");
 
 let failures = 0;
@@ -43,8 +49,15 @@ function sse(events, { hang = false, signal } = {}) {
 }
 
 const headersSeen = [];
+let elevenMode = "ok";   // ok | fail
+const elevenCalls = [];  // { key } for every request that reached the fake ElevenLabs
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(String(url));
+  if (u.hostname === "api.elevenlabs.io") {
+    elevenCalls.push({ key: init.headers?.["xi-api-key"] ?? null, voice: u.pathname.split("/").at(-1) });
+    if (elevenMode === "fail") return new Response(JSON.stringify({ detail: "invalid api key" }), { status: 401 });
+    return new Response(new Uint8Array([0x49, 0x44, 0x33, 9, 9]), { status: 200, headers: { "content-type": "audio/mpeg" } });
+  }
   seen.push(u.toString());
   headersSeen.push(init.headers ?? {});
   const p = u.pathname;
@@ -140,6 +153,7 @@ check("empty recording rejected", !!threw && /empty recording/.test(threw));
 
 // ---- F. the TTS route's voicebox branch + isolation --------------------------
 console.log("-- F: route + isolation --");
+S.writeSettings({ jarvis: { voice: { ttsFallback: "none" } } });
 const route = await import("../../src/app/api/hermes/tts/route.ts");
 const res = await route.POST(new Request("http://local/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", provider: "voicebox", voiceId: "Yoshi" }) }));
 const rj = await res.json();
@@ -147,10 +161,30 @@ check("route returns a data URI for provider voicebox", res.ok && typeof rj.audi
 scenario = "fail";
 const bad = await route.POST(new Request("http://local/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", provider: "voicebox" }) }));
 const bj = await bad.json();
-check("route fails loudly with the studio's reason (no fallback)", bad.status === 502 && /CUDA/.test(bj.error ?? ""), JSON.stringify(bj));
+check("route: with the backup off, the studio's reason comes back", bad.status === 502 && /CUDA/.test(bj.error ?? "") && elevenCalls.length === 0, JSON.stringify(bj));
 scenario = "ok";
 check("every request went to loopback", seen.length > 0 && seen.every((u) => /^http:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(u)), seen.find((u) => !/127\.0\.0\.1|localhost/.test(u)) ?? "");
 check("nothing hosted was contacted", !seen.some((u) => /elevenlabs|openai|minimax|api\./.test(u)));
+
+// ---- G. the chosen backup: ElevenLabs, labelled ----------------------------
+console.log("-- G: ElevenLabs backup (owner's choice, labelled) --");
+S.writeSettings({ jarvis: { voice: { ttsFallback: "elevenlabs", ttsVoiceId: "VOICE0000000000000001" } } });
+scenario = "fail";
+const fb = await route.POST(new Request("http://local/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", provider: "voicebox" }) }));
+const fj = await fb.json();
+check("backup speaks when the studio fails", fb.ok && typeof fj.audio === "string" && fj.audio.startsWith("data:audio/mp3"), JSON.stringify(fj).slice(0, 160));
+check("response names the provider that actually spoke", fj.provider === "elevenlabs" && fj.fellBackFrom === "voicebox" && /CUDA/.test(fj.fallbackReason ?? ""), JSON.stringify({ p: fj.provider, f: fj.fellBackFrom, r: fj.fallbackReason }));
+check("backup used the smoke key, not a real one", elevenCalls.length === 1 && elevenCalls[0].key === "smoke-eleven-key", JSON.stringify(elevenCalls));
+check("backup used the configured reply voice", elevenCalls[0]?.voice === "VOICE0000000000000001", elevenCalls[0]?.voice);
+elevenMode = "fail";
+const both = await route.POST(new Request("http://local/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", provider: "voicebox" }) }));
+const bothj = await both.json();
+check("both failing -> 502 naming both reasons", both.status === 502 && /Voicebox failed/.test(bothj.error) && /ElevenLabs backup also failed/.test(bothj.error), JSON.stringify(bothj));
+scenario = "ok"; elevenMode = "ok";
+const okAgain = await route.POST(new Request("http://local/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hello", provider: "voicebox" }) }));
+const okj = await okAgain.json();
+check("studio healthy -> the backup is not consulted", okAgain.ok && okj.provider === "voicebox" && !okj.fellBackFrom && elevenCalls.length === 2, `eleven calls: ${elevenCalls.length}`);
+check("the real Hermes profile was never opened", !fs.existsSync(path.join(dir, ".hermes")) && process.env.USERPROFILE === dir);
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 process.exit(failures ? 1 : 0);

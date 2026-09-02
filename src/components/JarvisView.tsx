@@ -837,6 +837,7 @@ export default function JarvisView() {
         body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: ttsProviderRef.current }),
       });
       const j = await r.json();
+      if (j.fellBackFrom) console.warn(`[jarvis] ${j.provider} spoke because ${j.fellBackFrom} failed: ${j.fallbackReason}`);
       if (j.audio && audioRef.current) {
         ensureAnalyser(); audioCtxRef.current?.resume().catch(() => {});
         audioRef.current.src = j.audio;

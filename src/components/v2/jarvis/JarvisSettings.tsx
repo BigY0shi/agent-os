@@ -15,6 +15,7 @@ const ACCENT = "#22d3ee";
 interface JarvisVoiceSettings {
   provider?: string;
   ttsProvider?: string;
+  ttsFallback?: string;
   autoSend?: boolean;
   pushToTalk?: boolean;
 }
@@ -235,6 +236,16 @@ export default function JarvisSettings({
               disabled={saving}
               title="Voicebox studio URL. Loopback only; a remote host is refused."
             />
+            <select
+              className={field}
+              value={voice.ttsFallback ?? "elevenlabs"}
+              onChange={(e) => patchVoice({ ttsFallback: e.target.value })}
+              disabled={saving}
+              title="What speaks if Voicebox fails. The reply is labelled with the provider that actually spoke."
+            >
+              <option value="elevenlabs">If Voicebox fails: use ElevenLabs (labelled)</option>
+              <option value="none">If Voicebox fails: report the error, stay silent</option>
+            </select>
           </div>
         )}
       </div>

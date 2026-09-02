@@ -153,6 +153,10 @@ export interface Settings {
       // voice engine since 2026-09-02); "auto" is the old cascade in
       // /api/hermes/tts. Never silently substituted: a down provider errors.
       ttsProvider?: "voicebox" | "auto" | "local" | "elevenlabs" | "openai";
+      // What happens when Voicebox fails. Yoshi's call (2026-09-02): keep
+      // ElevenLabs as the backup. It is a CHOSEN fallback, and the TTS response
+      // labels it (provider + fellBackFrom + fallbackReason); "none" = report.
+      ttsFallback?: "elevenlabs" | "none";
     };
     hotkey?: {
       key?: string;          // in-app fallback keybind (default "F13")
@@ -381,7 +385,7 @@ export const DEFAULT_SETTINGS: Settings = {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "voicebox" },
+    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "voicebox", ttsFallback: "elevenlabs" },
     hotkey: { key: "F13", enabled: true },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
