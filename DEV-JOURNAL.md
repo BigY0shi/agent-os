@@ -91,6 +91,38 @@ contacted). `tsc --noEmit` clean. `smoke-agentmail.mjs` section F still passes
 over the new sibling. Not verified: audio actually playing in the browser, and
 the MediaRecorder lane end to end - both need the rebuilt app and a mic.
 
+**Follow-up the same morning: ElevenLabs stays, as a labelled backup
+(`94942fb`, v2.13.0).** Yoshi's correction on reading the above: "don't
+completely remove ElevenLabs, make it a backup if Voicebox fails." That is
+not the silent cascade AGENTS.md bans; it is a fallback he chose. The
+difference is now written down as rule 20: a fallback is allowed only when
+the owner picked it in the module's settings and the reply labels it.
+`jarvis.voice.ttsFallback` (default `elevenlabs`, or `none`) sits under the
+Voicebox block in the gear; when the studio fails the route tries ElevenLabs
+with the configured reply voice and returns `provider: "elevenlabs",
+fellBackFrom: "voicebox", fallbackReason: <the studio's error>`. Both failing
+returns one 502 naming both reasons. JarvisView logs a console warning when
+the backup spoke.
+
+The smoke had to grow a wall for this. `elevenTts()` reads the key from
+`~/.hermes/profiles/<active>/.env` before the environment, via
+`hermesPhone.ts`, which is one of Yoshi's dirty in-progress files and so was
+not touched. Instead the smoke points `USERPROFILE`/`HOME` at its temp dir
+before any import and supplies a smoke key by env; section G asserts the
+fake ElevenLabs received exactly that key and that no `.hermes` directory
+was ever created under the redirected home. 35 checks now.
+
+Two other things from the same message: the "Yoshi" profile is his own
+cloned voice, not Jarvis's, and he is making Jarvis one, so the gear's
+"studio default (first profile)" is a placeholder until he picks it. And
+the CPU backend was a missing CUDA download, on his side.
+
+**A process slip, recorded so it is not repeated.** The docs edit for this
+commit failed on a stale anchor, and the shell chain used a newline instead
+of `&&`, so the bump and commit ran without the journal or roadmap change.
+The commit-msg gate passed because AGENTS.md was staged. This entry is the
+docs-only follow-up commit.
+
 **Left for S8.** The Oracle still speaks ElevenLabs with its own hardcoded
 "Hermes" voice id; Video's voiceover is untouched. Same client, next slice.
 
