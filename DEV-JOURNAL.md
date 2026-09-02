@@ -35,6 +35,46 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - Sidebar: two owner-named groups, and sections that fold
+
+Tasklist item 7. The owner named the groups: "Artist's Corner" and "Agent
+Toolbox".
+
+**Membership is not array order.** A subagent mapped the existing structure and
+the load-bearing detail is one the file already warns about: `sectionOf()` plus
+three `Set`s decide the group, and a route missing from every set silently lands
+in "Self" wherever it sits in `NAV`. So the regroup is two new Sets, not a
+reordering.
+
+Agent Toolbox sits directly under Agent Orchestration, which is what "up at the
+top with Deal Desk" means in practice. Artist's Corner collects the make-things
+modules. CLI Agents drops below both and starts collapsed, because the owner uses
+one of its thirteen entries.
+
+**A judgment call worth flagging:** removing the two new groups from "Self" left
+Skills and Terminal as a two-item orphan. Both went into Agent Toolbox rather
+than leaving a stub group. "Self" now renders empty and stays as the fallback, so
+a route added to `NAV` and to no Set still appears rather than vanishing.
+
+**The collapse had one trap.** A section's header is rendered inside its FIRST
+item's wrapper, so filtering a collapsed section's items out would take the
+header with them and the section would disappear entirely rather than fold. The
+first item therefore renders header-only and the rest return null. Collapse is
+disabled while customizing so drag-to-reorder still sees every row. State
+persists to `agentos.sidebar.collapsed`, alongside the existing order and hidden
+keys.
+
+**Evidence.** `tsc --noEmit` clean, and a parser over the committed file (not
+over my intent) reports all 48 NAV entries placed: Workspace 5, Agents 1, Agent
+Orchestration 12, Agent Toolbox 11, Artist's Corner 6, CLI Agents 13, Self empty,
+and zero routes listed in the new Sets that do not exist in NAV.
+
+**Not verified in a browser.** The dev server was not answering while this was
+written - see the note in the session; the check above is static.
+
+**Rollback.** Revert this commit; the two Sets and the collapse state go with it,
+and stale `agentos.sidebar.collapsed` in localStorage is ignored by the old code.
+
 ## 2026-09-01 - Jarvis could not see the browser module
 
 Tasklist item 3, part C: "it seems like Jarvis can only see Mission Control".

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -108,6 +108,7 @@ const BY_HREF: Record<string, NavItem> = Object.fromEntries(NAV.map((n) => [n.hr
 const AGENT_ROUTES = new Set(["/claude", "/openclaw", "/hermes", "/antigravity", "/codex", "/cursor", "/pi", "/ollama", "/freeclaude", "/fusion", "/sakana", "/local", "/engine"]);
 const LS_ORDER = "agentos.sidebar.order";
 const LS_HIDDEN = "agentos.sidebar.hidden";
+const LS_COLLAPSED = "agentos.sidebar.collapsed";
 
 // Sidebar grouping. Mission Control sits under the top "Workspace" header;
 // Paperclip + AI Agent Mastermind + Pipeline + Deal Desk + Hire Engine + Agent Kanban get
@@ -120,8 +121,17 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban", "/browser"]);
 // SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
 const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynotes", "/newsletter"]);
+// The two owner-named groups (2026-09-02). Everything the owner reaches for daily
+// sits in Agent Toolbox, directly under Agent Orchestration so Deal Desk and its
+// neighbours are all above the fold; the make-things modules collect in Artist's
+// Corner. Skills and Terminal went to the Toolbox rather than being left as a
+// two-item orphan group - move them if that reads wrong.
+const TOOLBOX_ROUTES = new Set(["/loop", "/seo", "/leads", "/memory", "/content-engine", "/kanban", "/tasks", "/today", "/webmcp", "/skills", "/terminal"]);
+const ARTIST_ROUTES = new Set(["/opendesign", "/video", "/music", "/games", "/thumbnails", "/notebook"]);
 function sectionOf(href: string): string {
   if (WORKSPACE_ROUTES.has(href)) return "Workspace";
+  if (TOOLBOX_ROUTES.has(href)) return "Agent Toolbox";
+  if (ARTIST_ROUTES.has(href)) return "Artist's Corner";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
   // model CLI routes were renamed to "CLI Agents" to make room (2026-07-28).
   if (href === "/agents") return "Agents";
@@ -130,12 +140,28 @@ function sectionOf(href: string): string {
   return "Self";
 }
 
+function SectionHeader({ label, collapsed, onToggle }: { label: string; collapsed: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      className="sidebar-section-label mt-5 mb-1.5 px-5 w-full flex items-center justify-between gap-2 text-left hover:opacity-80 transition"
+    >
+      <span>{label}</span>
+      {collapsed ? <ChevronRight size={11} className="opacity-60" /> : <ChevronDown size={11} className="opacity-60" />}
+    </button>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [order, setOrder] = useState<string[]>(DEFAULT_ORDER);
   const [hidden, setHidden] = useState<string[]>([]);
   const [customize, setCustomize] = useState(false);
+  // CLI Agents starts collapsed: the owner uses one of its thirteen entries.
+  const [collapsed, setCollapsed] = useState<string[]>(["CLI Agents"]);
   const [dragHref, setDragHref] = useState<string | null>(null);
   const [overHref, setOverHref] = useState<string | null>(null);
   const [version, setVersion] = useState("");
@@ -149,10 +175,15 @@ export default function Sidebar() {
       const h = JSON.parse(localStorage.getItem(LS_HIDDEN) || "null");
       if (Array.isArray(o)) setOrder(o.filter((x) => typeof x === "string"));
       if (Array.isArray(h)) setHidden(h.filter((x) => typeof x === "string"));
+      const c = JSON.parse(localStorage.getItem(LS_COLLAPSED) || "null");
+      if (Array.isArray(c)) setCollapsed(c.filter((x) => typeof x === "string"));
     } catch { /* ignore */ }
   }, []);
   useEffect(() => { if (mounted) try { localStorage.setItem(LS_ORDER, JSON.stringify(order)); } catch {} }, [order, mounted]);
   useEffect(() => { if (mounted) try { localStorage.setItem(LS_HIDDEN, JSON.stringify(hidden)); } catch {} }, [hidden, mounted]);
+  useEffect(() => { if (mounted) try { localStorage.setItem(LS_COLLAPSED, JSON.stringify(collapsed)); } catch {} }, [collapsed, mounted]);
+  const toggleSection = (sec: string) =>
+    setCollapsed((c) => (c.includes(sec) ? c.filter((x) => x !== sec) : [...c, sec]));
 
   // saved order + any NAV items not yet in it (e.g. new pages added later) appended in default position
   const fullOrder = [
@@ -162,7 +193,9 @@ export default function Sidebar() {
   const visible = customize ? fullOrder : fullOrder.filter((h) => !hidden.includes(h));
   // group by section so each header shows ONCE and all its items sit together,
   // no matter how the saved drag-order interleaves them (fixes duplicate section labels)
-  const SECTION_ORDER = ["Workspace", "Agents", "Agent Orchestration", "CLI Agents", "Self"];
+  // "Self" stays last as the silent fallback for any route not claimed above. It
+  // renders nothing while empty, which is the point: a new page still appears.
+  const SECTION_ORDER = ["Workspace", "Agents", "Agent Orchestration", "Agent Toolbox", "Artist's Corner", "CLI Agents", "Self"];
   const list = SECTION_ORDER.flatMap((sec) => visible.filter((h) => sectionOf(h) === sec));
 
   function move(from: string, to: string) {
@@ -257,17 +290,28 @@ export default function Sidebar() {
           let sectionLabel: string | undefined = sec !== prevSec ? sec : undefined;
           // The top "Workspace" header already labels the first group — don't repeat it.
           if (i === 0 && sectionLabel === "Workspace") sectionLabel = undefined;
+          // A section header lives on that section's FIRST item, so collapsing cannot
+          // just filter the items out - the header would go with them. The first item
+          // renders header-only and the rest drop. Off while customizing so drag works.
+          const sectionCollapsed = !customize && collapsed.includes(sec);
+          if (sectionCollapsed && !sectionLabel) return null;
 
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const isHidden = hidden.includes(href);
           const isOver = overHref === href && dragHref !== href;
 
+          if (sectionCollapsed && sectionLabel) {
+            return (
+              <div key={href}>
+                <SectionHeader label={sectionLabel} collapsed onToggle={() => toggleSection(sec)} />
+              </div>
+            );
+          }
+
           return (
             <div key={href}>
               {sectionLabel && (
-                <div className="sidebar-section-label mt-5 mb-1.5 px-5">
-                  {sectionLabel}
-                </div>
+                <SectionHeader label={sectionLabel} collapsed={false} onToggle={() => toggleSection(sec)} />
               )}
 
               {customize ? (
