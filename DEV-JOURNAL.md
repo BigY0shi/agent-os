@@ -35,6 +35,72 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-01 - Deal Desk state is now rotated, not overwritten
+
+**How this started.** Yoshi asked whether wiring Deal Desk into memory would
+erase the proposals he had drafted but not sent. The answer was no, and checking
+it properly is what found the actual hazard: `upwork-desk.json` had exactly one
+writer, `patch()`, which read the whole store, replaced one key, and called
+`writeFile` straight over the canonical path. 121 KB rewritten in place on every
+status change, every note, every saved proposal - 145 deals and 5 drafted
+proposals at the time of writing. A crash or a power cut mid-write left the file
+truncated, and `readJson`'s `catch { return fallback }` turned that into `{}`.
+The board would have rendered empty rather than broken, and the next write would
+have persisted the empty version over the wreckage.
+
+**The design is Yoshi's.** Write the new state to a new file, rename the current
+live file aside, then rename the new one into the live name. The live body is
+never edited in place; it only ever changes by rename.
+
+I diverged in one place. He described reusing the retired file as next round's
+staging target. I give staging a fresh nonce instead, so every body is written
+exactly once, and retire to a fixed `_prev` name. Same two files at rest, same
+three steps, but nothing is ever overwritten - retiring is a rename, which swaps
+the directory entry and unlinks the old inode.
+
+**What I got wrong on the way.** The first version retired the current live file
+unconditionally. So when live was corrupt, the recovery write moved the damaged
+file over `_prev` - destroying the only good copy at the exact moment it was the
+only good copy. The smoke caught it by crashing in section D while trying to read
+a `_prev` full of truncated JSON. Review had not caught it; I had read that code
+three times. A damaged live file is now parked as `upwork-desk_corrupt_<stamp>.json`,
+never deleted, and `_prev` is left alone.
+
+Second thing I got wrong: preferring the newest orphaned staging file
+unconditionally. An orphan is normally the newest state, an interrupted write
+that never got promoted, which is why it wins. But a staging file left by a crash
+months ago is older data, and preferring it on existence alone would quietly roll
+the board back. It now has to be newer than `_prev` by mtime.
+
+**Also fixed, separately.** `patch()` had no mutex, so approving one card while
+another saved a proposal had both reads see the same store and the slower write
+drop the other's change. Rotation does nothing for that - it makes a single write
+crash-safe, not two concurrent read-modify-writes safe. Same `withLock` shape as
+`hermesGoals.ts`.
+
+**The guarantee, and its limit.** Recovery costs at most one generation. `_prev`
+deliberately stops advancing while live keeps arriving damaged, so back-to-back
+corruptions lose the writes in between - section F of the smoke stages exactly
+that and asserts the honest outcome rather than papering over it. A single
+corruption followed by any healthy write costs one generation, because that
+healthy live then becomes `_prev`.
+
+**Rule 19.** `AGENTIC_OS_DESK` added, because there was no way to redirect this
+store and a smoke would otherwise have read and rewritten the owner's live board.
+`UPWORK_LEADS_DIR` already existed and is redirected too.
+
+**Evidence.** `scripts/v2/smoke-deal-desk.mjs`, 24 checks, all passing: rotation
+and promotion, `_prev` holding the previous body byte for byte, rename over an
+existing `_prev` working on Windows, recovery from a corrupt live file, from a
+missing one, from an interrupted write, an ancient orphan being ignored, and
+three concurrent writes all surviving. Separately, against a copy of the real
+board: 145 deals and 5 drafts in, 146 deals and 5 drafts out, `_prev` written,
+zero stray staging files. The real file was never opened for writing.
+
+**Rollback.** Revert this commit. The previous writer is also at
+`.exile/2026-09-01_190049/src/lib/upworkDesk.ts`. Existing `upwork-desk.json`
+files need no migration: the first rotated write simply creates `_prev`.
+
 ## 2026-09-01 - Four modules were writing to a vault that does not exist
 
 **Symptom.** A Loop run finished, its modal closed, and there was nowhere to

@@ -9,8 +9,9 @@
 // lives in ~/.agentic-os/upwork-desk.json, keyed by the stable job UID — so it
 // survives re-scrapes and persists across runs.
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 
@@ -21,8 +22,16 @@ const BOARD_FILE = path.join(LEADS_DIR, "board.json");
 const PITCHES_FILE = path.join(LEADS_DIR, "pitches.json");
 const FEEDS_FILE = path.join(LEADS_DIR, "feeds.json");
 
-const AOS = path.join(os.homedir(), ".agentic-os");
-const STATE_FILE = path.join(AOS, "upwork-desk.json");
+// Per-deal state. Override with AGENTIC_OS_DESK - a smoke MUST redirect this to a
+// temp dir before importing this module (project rule 19), or it reads and then
+// rewrites the operator's live board.
+const STATE_FILE =
+  process.env.AGENTIC_OS_DESK || path.join(os.homedir(), ".agentic-os", "upwork-desk.json");
+const AOS = path.dirname(STATE_FILE);
+// The retired generation, and the prefix for a not-yet-promoted one. The rotation
+// itself is documented at writeState.
+const PREV_FILE = path.join(AOS, `${path.parse(STATE_FILE).name}_prev.json`);
+const GEN_PREFIX = `${path.parse(STATE_FILE).name}_gen_`;
 
 // ── Columns (pipeline stages, left → right) ────────────────────────────────────
 export type DealStatus = "new" | "reviewing" | "approved" | "ready" | "sent" | "parked" | "denied" | "dismissed";
@@ -151,10 +160,114 @@ export function formatDescription(raw: string | null): string | null {
 async function readJson<T>(file: string, fallback: T): Promise<T> {
   try { return JSON.parse(await readFile(file, "utf8")) as T; } catch { return fallback; }
 }
-async function readState(): Promise<StateStore> { return readJson<StateStore>(STATE_FILE, {}); }
+// -- State store: generation rotation ------------------------------------------
+//
+// The live file's body is never written in place. A write creates a brand-new
+// file, renames the current live file aside as the previous generation, then
+// renames the new file into the live name:
+//
+//   1. write   upwork-desk_gen_<nonce>.json          a fresh body, written once
+//   2. rename  upwork-desk.json  ->  upwork-desk_prev.json
+//   3. rename  upwork-desk_gen_<nonce>.json  ->  upwork-desk.json
+//
+// Every body is therefore write-once, _prev's included: retiring a generation is
+// a rename, which swaps the directory entry and unlinks the old inode rather
+// than editing bytes. Two files sit at rest, the live one and the last good one.
+//
+// What this replaces: a plain writeFile over the canonical path, which rewrote
+// all 121 KB of a 145-deal board on every status change and every saved
+// proposal. A crash or a power cut mid-write left the file truncated, and the
+// reader swallowed the parse error and returned {} - the whole board, every note
+// and every drafted proposal, reported as empty rather than as broken.
+function stagingFile(): string {
+  return path.join(AOS, `${GEN_PREFIX}${Date.now().toString(36)}${randomBytes(4).toString("hex")}.json`);
+}
+
+async function parseStore(file: string): Promise<StateStore | null> {
+  try {
+    const v = JSON.parse(await readFile(file, "utf8"));
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as StateStore) : null;
+  } catch { return null; }
+}
+
+// The newest staging file that never got promoted. A crash between steps 2 and 3
+// leaves one, and it holds the NEWEST state, not a stale copy - it is the write
+// that was interrupted after the rotation but before the promotion.
+async function newestOrphan(): Promise<{ store: StateStore; mtime: number } | null> {
+  try {
+    const names = (await readdir(AOS)).filter((n) => n.startsWith(GEN_PREFIX) && n.endsWith(".json"));
+    const stamped = (await Promise.all(names.map(async (n) => {
+      const f = path.join(AOS, n);
+      try { return { f, mtime: (await stat(f)).mtimeMs }; } catch { return null; }
+    }))).filter((x): x is { f: string; mtime: number } => !!x);
+    const newest = stamped.sort((a, b) => b.mtime - a.mtime)[0];
+    if (!newest) return null;
+    const store = await parseStore(newest.f);
+    return store ? { store, mtime: newest.mtime } : null;
+  } catch { return null; }
+}
+
+// Fall back through the surviving generations rather than reporting an unreadable
+// board as an empty one. A missing live file on a first run is not a fault and
+// stays quiet; a live file that exists but will not parse is always logged.
+async function readState(): Promise<StateStore> {
+  const live = await parseStore(STATE_FILE);
+  if (live) return live;
+
+  const liveExists = existsSync(STATE_FILE);
+  if (!liveExists && !existsSync(PREV_FILE)) return {}; // first run, genuinely empty
+
+  console.error(`[deal-desk] live state ${liveExists ? "did not parse" : "is missing"} at ${STATE_FILE} - trying an earlier generation`);
+  // An orphan wins only if it is genuinely newer than _prev. A staging file left
+  // by a crash months ago is older data, not an interrupted write, and preferring
+  // it on age alone would quietly roll the board back.
+  const orphan = await newestOrphan();
+  const prevMtime = existsSync(PREV_FILE) ? await stat(PREV_FILE).then((s) => s.mtimeMs, () => -1) : -1;
+  const useOrphan = !!orphan && orphan.mtime > prevMtime;
+  const recovered = useOrphan ? orphan.store : await parseStore(PREV_FILE);
+  if (recovered) {
+    console.error(`[deal-desk] recovered ${Object.keys(recovered).length} deals from ${useOrphan ? "an interrupted write" : PREV_FILE}`);
+    return recovered;
+  }
+  console.error("[deal-desk] no readable generation - the board will render empty");
+  return {};
+}
+
+// In-process write mutex, same shape as hermesGoals.ts. Rotation makes a single
+// write crash-safe; it does not make two concurrent read-modify-writes safe.
+// Without this, approving one card while another saves a proposal has both reads
+// see the same store and the slower write drop the other's change.
+let writeLock: Promise<void> = Promise.resolve();
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeLock.then(() => fn(), () => fn());
+  writeLock = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 async function writeState(s: StateStore): Promise<void> {
   if (!existsSync(AOS)) await mkdir(AOS, { recursive: true });
-  await writeFile(STATE_FILE, JSON.stringify(s, null, 2), "utf8");
+  const staged = stagingFile();
+  await writeFile(staged, JSON.stringify(s, null, 2), "utf8");
+  // Retire the current generation. Absent on a first run, which is not a fault.
+  //
+  // A live file that does not parse must NOT be retired into _prev: this write is
+  // very likely the recovery write that just restored the board FROM _prev, and
+  // moving the damaged file over it would destroy the only good copy at the exact
+  // moment it is the only good copy. Park it beside them instead, never deleted,
+  // so the damage can be inspected. Re-parsing costs one read of a file readState
+  // just read, which is not worth threading a flag through the call for.
+  if (existsSync(STATE_FILE)) {
+    const healthy = (await parseStore(STATE_FILE)) !== null;
+    if (healthy) {
+      await rename(STATE_FILE, PREV_FILE);
+    } else {
+      const parked = path.join(AOS, `${path.parse(STATE_FILE).name}_corrupt_${Date.now().toString(36)}.json`);
+      await rename(STATE_FILE, parked);
+      console.error(`[deal-desk] the damaged live file was parked at ${parked}; ${PREV_FILE} was left intact`);
+    }
+  }
+  // Promote. If this throws, the staged file survives and readState finds it.
+  await rename(staged, STATE_FILE);
 }
 
 // ── Merge board + pitches + state → Deal[] ──────────────────────────────────────
@@ -281,12 +394,14 @@ export async function getDeal(id: string): Promise<Deal | null> {
 
 // ── Mutations (all merge into the state store) ──────────────────────────────────
 async function patch(id: string, fn: (s: DealState) => DealState): Promise<DealState> {
-  const store = await readState();
-  const next = fn(store[id] || {});
-  next.updatedAt = Date.now();
-  store[id] = next;
-  await writeState(store);
-  return next;
+  return withLock(async () => {
+    const store = await readState();
+    const next = fn(store[id] || {});
+    next.updatedAt = Date.now();
+    store[id] = next;
+    await writeState(store);
+    return next;
+  });
 }
 
 export async function setStatus(id: string, status: DealStatus): Promise<DealState> {

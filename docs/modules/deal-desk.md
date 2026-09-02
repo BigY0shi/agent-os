@@ -18,7 +18,9 @@ Deal Desk merges those with your own per-deal state and renders the board.
 
 **Where state lives:** `~/.agentic-os/upwork-desk.json`, keyed by the stable job UID. That key choice is the important part: status, notes, the need-info flag, your edited pitch, Q&A answers, and enrichment all survive a re-scrape. Re-running the scraper does not reset your board.
 
-**Where leads live:** `~/Documents/Upwork-Leads` by default, overridable with `UPWORK_LEADS_DIR`.
+**Where leads live:** `~/Documents/Upwork-Leads` by default, overridable with `UPWORK_LEADS_DIR`. The state file is overridable with `AGENTIC_OS_DESK`.
+
+**The state file is rotated, never overwritten.** A write creates a new file, renames the current one aside as `upwork-desk_prev.json`, then renames the new one into place. So there are always two files: the live board and the last good one. If the live file is ever unreadable, Deal Desk falls back to the previous generation and says so on the server console, rather than reporting an unreadable board as an empty one. A damaged file is parked as `upwork-desk_corrupt_<stamp>.json` and never deleted.
 
 ## The brief
 
@@ -91,6 +93,8 @@ tells me they have already tried something and it broke.
 - **Briefs are not free.** `brief-batch` runs one CLI call per un-briefed deal. On a fresh 248-card board that is 248 calls. The per-run spend ceiling (Agents settings) does not apply here, because this is not an agent run.
 - **The `why` field is allowed to say no.** It is prompted to state honestly when you are not a fit. That is deliberate: a board where every lead looks winnable is a board you stop trusting.
 - **State is keyed by job UID**, so a listing that changes its title keeps your notes. A listing that changes its UID does not.
+- **Recovery costs at most one generation.** `upwork-desk_prev.json` deliberately stops advancing while the live file keeps arriving damaged, on the grounds that a known-good older copy beats a newer broken one. One corruption followed by any healthy write costs one generation. Repeated back-to-back corruption loses the writes in between.
+- **An empty board and a broken board now look different.** Empty is silent. Broken logs `[deal-desk]` lines to the server console naming the file it fell back to and how many deals it recovered. If you ever see an empty board with no such line, the leads directory is the place to look, not the state file.
 
 ## Related
 
