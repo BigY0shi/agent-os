@@ -476,6 +476,7 @@ try {
     const ping = await fetch(`${REAL_OLLAMA}/api/tags`, { signal: AbortSignal.timeout(1500) });
     ollamaUp = ping.ok;
   } catch {}
+  if (process.env.AGENTIC_SMOKE_OFFLINE) { ollamaUp = false; console.log("SKIP  online leg: AGENTIC_SMOKE_OFFLINE=1"); }
   if (!ollamaUp || !process.env.OLLAMA_API_KEY) {
     console.log(`SKIP  online memory_search (ollama up: ${ollamaUp}, cloud key: ${!!process.env.OLLAMA_API_KEY}) — offline half fully covers the routes`);
   } else {

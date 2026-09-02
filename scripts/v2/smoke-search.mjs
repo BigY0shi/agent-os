@@ -389,7 +389,9 @@ const r12 = await search.executeSearch(
   ro({
     queryType: "temporal_facets",
     facets: ["topics", "entities", "aspects"],
-    temporal: { type: "range", days: null, startDate: "2026-08-01", endDate: "2026-08-31" },
+    // A relative window: the literal "2026-08-01".."2026-08-31" this used to carry
+    // went stale on 2026-09-01 and failed the topics/stats facets for every run after.
+    temporal: { type: "range", days: null, startDate: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10), endDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) },
   }),
   {},
 );
@@ -424,7 +426,11 @@ stubServer.close();
 delete process.env.OLLAMA_URL;
 
 let ollamaUp = false;
-try {
+// Harness/CI gate: AGENTIC_SMOKE_OFFLINE=1 skips the model legs even with Ollama up.
+// Decided BEFORE the probe: an in-flight probe socket at process.exit trips a
+// libuv assertion on Windows (seen 2026-09-02 on smoke-ingest).
+if (process.env.AGENTIC_SMOKE_OFFLINE) { console.log("SKIP  online leg: AGENTIC_SMOKE_OFFLINE=1"); }
+else try {
   const probe = await fetch("http://127.0.0.1:11434/api/version", { signal: AbortSignal.timeout(3000) });
   ollamaUp = probe.ok;
 } catch {}

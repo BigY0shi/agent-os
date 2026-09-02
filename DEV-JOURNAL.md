@@ -35,6 +35,32 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - The gate had to be made honest before the loop could trust it
+
+Installing the Ralph harness meant running every smoke as one gate, and the
+first full run showed three things a per-smoke habit had hidden.
+
+1. **Five smokes go online when Ollama is up.** compaction, ingest,
+   jarvis-brain, memory-api and search grow a model leg (cloud when a key is
+   in the env, else local models); on this box Ollama is always up, so
+   "offline" meant 331 s of model calls in one smoke. CI never sees it
+   because CI has no Ollama. `AGENTIC_SMOKE_OFFLINE=1` now skips the leg,
+   decided BEFORE the probe: with the probe socket still closing,
+   `process.exit` tripped a libuv assertion on Windows (`UV_HANDLE_CLOSING`,
+   smoke-ingest). `test.sh` sets the flag and unsets provider keys.
+2. **smoke-search carried a time bomb.** Its temporal_facets check queried a
+   literal 2026-08-01..08-31 window; from September 1 the freshly seeded
+   episodes fell outside it and two facet checks failed on every run. The
+   window is relative now.
+3. **smoke-jarvis-ui caught S1 breaking a contract.** The capture hook is
+   "capture only, no sends", and the Voicebox lane had put a fetch to
+   /api/voicebox/transcribe inside it. The call moved to
+   `transcribeClient.ts`; the smoke now also asserts that helper reaches only
+   the transcribe route and never the brain. The contract's intent (the
+   transcript is never auto-dispatched) was never violated; the letter was.
+
+Gate cost, offline: about 6 minutes for tsc + 73 smokes.
+
 ## 2026-09-02 - Voice verified live; the tailnet needs https for the mic
 
 16:12: Yoshi confirms Jarvis voice works at http://localhost:3737 after the

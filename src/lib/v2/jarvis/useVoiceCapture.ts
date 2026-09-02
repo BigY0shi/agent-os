@@ -17,6 +17,7 @@
 // disabled, see availability check).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { transcribeRecording } from "./transcribeClient";
 
 export type VoiceCaptureStatus = "idle" | "recording" | "error";
 export type VoiceProviderId = "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox";
@@ -241,14 +242,13 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
       if (wasCancelled || !blob.size) { setPartial(""); setStatus("idle"); return; }
       setPartial("(transcribing…)");
       try {
-        const fd = new FormData();
-        fd.append("audio", blob, "recording." + (blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm"));
-        const r = await fetch("/api/voicebox/transcribe", { method: "POST", body: fd });
-        const j = (await r.json()) as { ok?: boolean; text?: string; error?: string };
-        if (!r.ok || !j.ok) throw new Error(j.error || `transcribe ${r.status}`);
+        // Transcription lives in transcribeClient.ts: this hook stays capture-only
+        // (its smoke asserts no fetch here). The text is a FINAL chunk for the
+        // caller; nothing is dispatched to the brain from this file.
+        const text = await transcribeRecording(blob);
         setPartial("");
         setStatus("idle");
-        if (j.text) onFinalChunkRef.current?.(j.text);
+        if (text) onFinalChunkRef.current?.(text);
       } catch (e) {
         setPartial("");
         setError("Voicebox transcription failed: " + ((e as Error)?.message ?? e));
