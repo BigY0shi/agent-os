@@ -17,6 +17,19 @@ import Link from "next/link";
 import { Mic, Send, Settings2, RotateCcw, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 
+// Which backend speaks (settings.jarvis.voice.ttsProvider, default the local
+// Voicebox studio). Read once per page life; the gear writes the setting.
+let replyProviderCache: Promise<string> | null = null;
+function replyProvider(): Promise<string> {
+  if (!replyProviderCache) {
+    replyProviderCache = fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => (typeof j?.settings?.jarvis?.voice?.ttsProvider === "string" && j.settings.jarvis.voice.ttsProvider) || "voicebox")
+      .catch(() => "voicebox");
+  }
+  return replyProviderCache;
+}
+
 type Phase = "idle" | "listening" | "thinking" | "speaking";
 type Msg = { role: "you" | "jarvis"; text: string; tool?: boolean };
 type Persona = { name: string; userAddress: string; voiceRules: string; spokenStyle: string; bannedPhrases: string[] };
@@ -77,7 +90,7 @@ export function JarvisModule() {
     try {
       const r = await fetch("/api/hermes/tts", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: next.slice(0, 600), provider: "auto" }),
+        body: JSON.stringify({ text: next.slice(0, 600), provider: await replyProvider() }),
       });
       const j = await r.json();
       if (j.audio && audioRef.current) {

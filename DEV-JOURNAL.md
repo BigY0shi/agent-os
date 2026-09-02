@@ -35,6 +35,68 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - S1: Voicebox is the voice engine
+
+Yoshi retired Jarvis's Web Speech avenue and named the replacement: Voicebox,
+the local AI vocal studio at 127.0.0.1:17493 (REST + HTTP MCP + STDIO MCP,
+cloned profiles; one profile, "Yoshi", already exists). The brief was wider
+than Jarvis - "drive the vocals of anything we make" - so the client is a
+shared library, not a Jarvis feature.
+
+**What landed.** `src/lib/voicebox.ts` (profiles, synthesize, transcribe,
+health), a `provider: "voicebox"` branch in `/api/hermes/tts`, proxy routes
+`/api/voicebox/profiles` and `/api/voicebox/transcribe`, a `voicebox` capture
+provider in `useVoiceCapture` (MediaRecorder -> local Whisper, so the mic works
+in Opera), settings `jarvis.voice.ttsProvider` + `voicebox.{url,profile,engine,
+timeoutMs}` surfaced in the Jarvis gear (rule 16), and both Jarvis speakers
+(`JarvisView`, dashboard `JarvisModule`) reading the provider from settings
+instead of hardcoding `"auto"`. Default reply voice is now Voicebox.
+
+**Three things the live server taught me before a line was written.**
+`/generate` returns in 129 ms with `status: "generating"`; the work is
+asynchronous. `/generate/{id}/status` is a Server-Sent Events stream, not a
+JSON poll - a plain GET never returns, which is why my first probe hung for
+two minutes. And `/audio/{id}` answers 500 until the clip exists. The client
+therefore posts, follows the stream to a terminal state, then fetches audio
+and takes the MIME type from Voicebox's own header rather than assuming wav.
+
+**What I could not observe.** The terminal status names. The box reports
+`gpu_available: false, backend pytorch/cpu`, and my one real generation was
+still `loading_model` after four and a half minutes. So the client treats any
+status outside the in-flight set (queued/pending/loading_model/generating/
+processing/running) as terminal and lets `/audio` decide, and a timeout reads
+"still loading_model after 120s" rather than "broken". That is a guess about
+names, stated as one; the first completed generation will confirm or correct
+it. Yoshi should check why Voicebox sees no GPU - this machine has one.
+
+**Loopback is asserted in code.** The URL is a setting, but `voiceboxBase()`
+refuses anything but 127.0.0.1/localhost/::1. Dictation and every spoken reply
+pass through here; a pasted LAN address would otherwise ship both off-box
+silently. Smoke section A proves a remote URL throws before any request.
+
+**No fallback.** A down studio returns 502 with the studio's reason. The old
+`"auto"` cascade (Kokoro -> ElevenLabs -> OpenAI) still exists and is still
+selectable in the gear; it is no longer what Jarvis does unasked.
+
+**A bug the smoke found in the client, not the studio.** The stall test hung
+the process with "unsettled top-level await": `AbortSignal.timeout` uses an
+unref'd timer in Node, so with nothing else pending the loop drained before
+the deadline fired. In the server a live socket hides that. Replaced with an
+`AbortController` on a referenced timer. The smoke asserts the stream was
+actually aborted, not just that an error came back.
+
+**Evidence.** `scripts/v2/smoke-voicebox.mjs`, 27 checks, offline (fetch is a
+fake studio; section F asserts every URL was loopback and nothing hosted was
+contacted). `tsc --noEmit` clean. `smoke-agentmail.mjs` section F still passes
+over the new sibling. Not verified: audio actually playing in the browser, and
+the MediaRecorder lane end to end - both need the rebuilt app and a mic.
+
+**Left for S8.** The Oracle still speaks ElevenLabs with its own hardcoded
+"Hermes" voice id; Video's voiceover is untouched. Same client, next slice.
+
+**Rollback.** Revert the commit. `settings.json` may carry `voicebox` and
+`ttsProvider` keys the old code ignores. No migration, no data.
+
 ## 2026-09-02 - S0: the restart launcher stops lying about aborts
 
 `agentos-restart.ps1` was already right: it verifies the kill and exits 1

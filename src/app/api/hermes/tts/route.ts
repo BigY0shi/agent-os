@@ -5,12 +5,16 @@ import os from "node:os";
 import { minimaxToken } from "@/lib/hermesStudio";
 import { readHermesEnv } from "@/lib/hermesPhone";
 import { readSettings, JARVIS_TTS_VOICE_ID } from "@/lib/settings";
+import { voiceboxSynthesize } from "@/lib/voicebox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // POST /api/hermes/tts  { text, voiceId?, provider? }  → { audio: dataURI } | { error }
 // Speaks arbitrary text. provider:
+//   "voicebox"                    — the local Voicebox studio (lib/voicebox.ts), cloned
+//                                   profiles; voiceId is a profile id or name. The voice
+//                                   engine since 2026-09-02. Never falls back.
 //   "local"                       — Kokoro-82M on this machine (~/.agentic-os/kokoro-tts,
 //                                   port 8880, British bm_george). Free, offline, GPU-fast.
 //   "auto"                        — local first, then ElevenLabs, then OpenAI — the first
@@ -133,6 +137,17 @@ async function localTts(text: string, voiceId: string): Promise<NextResponse> {
   return NextResponse.json({ audio: j.audio });
 }
 
+// Voicebox: voiceId is a profile id or name; blank = settings.voicebox.profile,
+// then the studio's first profile. A down or slow studio is reported as such.
+async function voiceboxTts(text: string, profileRef: string): Promise<NextResponse> {
+  try {
+    const out = await voiceboxSynthesize(text, { profile: profileRef || null });
+    return NextResponse.json({ audio: out.audio, provider: "voicebox", generationId: out.generationId, durationSec: out.durationSec });
+  } catch (e) {
+    return NextResponse.json({ error: String((e as Error)?.message ?? e), provider: "voicebox" }, { status: 502 });
+  }
+}
+
 export async function POST(req: Request) {
   const { text, voiceId, provider } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
@@ -140,6 +155,7 @@ export async function POST(req: Request) {
   }
   try {
     const v = typeof voiceId === "string" ? voiceId : "";
+    if (provider === "voicebox") return await voiceboxTts(text, v);
     if (provider === "local") return await localTts(text, v);
     if (provider === "auto") {
       // First backend that actually yields audio wins: free local Kokoro, then

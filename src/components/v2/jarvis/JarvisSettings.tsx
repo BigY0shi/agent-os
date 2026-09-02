@@ -14,6 +14,7 @@ const ACCENT = "#22d3ee";
 
 interface JarvisVoiceSettings {
   provider?: string;
+  ttsProvider?: string;
   autoSend?: boolean;
   pushToTalk?: boolean;
 }
@@ -49,6 +50,28 @@ export default function JarvisSettings({
 
   const [keyDraft, setKeyDraft] = useState(hotkeyKey);
   useEffect(() => setKeyDraft(hotkeyKey), [hotkeyKey]);
+
+  // Reply voice (TTS) + Voicebox studio. The profile list comes from the studio
+  // itself; when it is down the select is empty and the reason is shown.
+  const vb = ((settings as unknown as { voicebox?: { url?: string; profile?: string } })?.voicebox) ?? {};
+  const ttsProvider = voice.ttsProvider ?? "voicebox";
+  const [vbProfiles, setVbProfiles] = useState<{ id: string; name: string; engine: string | null }[]>([]);
+  const [vbError, setVbError] = useState<string | null>(null);
+  const [vbHealth, setVbHealth] = useState<{ modelLoaded: boolean; gpu: boolean; backend: string | null } | null>(null);
+  const [vbUrlDraft, setVbUrlDraft] = useState(vb.url ?? "http://127.0.0.1:17493");
+  useEffect(() => setVbUrlDraft(vb.url ?? "http://127.0.0.1:17493"), [vb.url]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/voicebox/profiles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j?.ok) { setVbProfiles(j.profiles ?? []); setVbHealth(j.health ?? null); setVbError(null); }
+        else { setVbProfiles([]); setVbError(j?.error || "Voicebox not answering"); }
+      })
+      .catch((e) => { if (alive) { setVbProfiles([]); setVbError(String(e)); } });
+    return () => { alive = false; };
+  }, [vb.url]);
 
   // Helper secret status ("configured ✓" only — the secret itself is never rendered).
   const [helper, setHelper] = useState<{ configured: boolean; lastFireAt: string | null } | null>(null);
@@ -165,6 +188,56 @@ export default function JarvisSettings({
           </span>
         </span>
       </label>
+
+      {/* ── Reply voice (what SPEAKS the answer) ── */}
+      <div className="pt-2 border-t" style={{ borderColor: "var(--panel-border, #2a2436)" }}>
+        <span className={label} style={{ color: ACCENT }}>Reply voice</span>
+        <select
+          className={field}
+          value={ttsProvider}
+          onChange={(e) => patchVoice({ ttsProvider: e.target.value })}
+          disabled={saving}
+        >
+          <option value="voicebox">Voicebox (local studio, cloned voices)</option>
+          <option value="local">Kokoro (local, port 8880)</option>
+          <option value="elevenlabs">ElevenLabs</option>
+          <option value="openai">OpenAI</option>
+          <option value="auto">Auto: Kokoro, then ElevenLabs, then OpenAI</option>
+        </select>
+        {ttsProvider === "voicebox" && (
+          <div className="mt-2 space-y-2">
+            <select
+              className={field}
+              value={vb.profile ?? ""}
+              onChange={(e) => save({ voicebox: { profile: e.target.value } } as unknown as Partial<Settings>)}
+              disabled={saving || !vbProfiles.length}
+            >
+              <option value="">{vbProfiles.length ? `Studio default (${vbProfiles[0].name})` : "No profiles"}</option>
+              {vbProfiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{p.engine ? ` · ${p.engine}` : ""}</option>
+              ))}
+            </select>
+            {vbError ? (
+              <div className="text-[11.5px]" style={{ color: "#fbbf24" }}>{vbError}</div>
+            ) : vbHealth ? (
+              <div className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                Studio {vbHealth.modelLoaded ? "model loaded" : "model not loaded yet (first speech loads it)"}
+                {vbHealth.backend ? ` · ${vbHealth.backend}` : ""}{vbHealth.gpu ? " · GPU" : " · CPU"}
+              </div>
+            ) : null}
+            <input
+              className={field}
+              value={vbUrlDraft}
+              onChange={(e) => setVbUrlDraft(e.target.value)}
+              onBlur={() => { if (vbUrlDraft !== (vb.url ?? "")) save({ voicebox: { url: vbUrlDraft } } as unknown as Partial<Settings>); }}
+              placeholder="http://127.0.0.1:17493"
+              spellCheck={false}
+              disabled={saving}
+              title="Voicebox studio URL. Loopback only; a remote host is refused."
+            />
+          </div>
+        )}
+      </div>
 
       {/* ── Hotkey ── */}
       <div className="pt-2 border-t" style={{ borderColor: "var(--panel-border, #2a2436)" }}>

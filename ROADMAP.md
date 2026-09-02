@@ -13,16 +13,6 @@ is one line; the journal carries the rest.
 
 ## Now
 
-- [ ] **S1. Voicebox becomes the voice engine.** Voicebox (localhost:17493, REST +
-  HTTP MCP + STDIO MCP, cloned profiles) replaces the dead Jarvis voice avenue and
-  becomes the shared vocal source for anything that speaks. Deliverables: a
-  `src/lib/voicebox.ts` client (host asserted in code, no key material), a
-  `provider: "voicebox"` branch in `/api/hermes/tts`, a `/profiles` proxy, settings
-  `voice.provider` + `voice.voiceboxProfile` exposed in the Jarvis and Oracle gears,
-  and a smoke that mocks `fetch` so it never needs the server. Fail loudly when
-  Voicebox is down; never fall back to another provider the user did not pick.
-  Part B: speech-to-text through Voicebox `/transcribe` (whisper-turbo), which
-  gives Jarvis a mic path that does not depend on Opera's disabled Web Speech.
 - [ ] **S2. Runs survive navigation.** Content Engine bypasses the agents registry,
   so leaving the page mid-run loses the run with nothing on the Agents page. Route
   every long run through the registry first, then add a corner tray stacking one
@@ -84,6 +74,7 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-09-02 · v2.12.0 · S1 Voicebox is the voice engine: `lib/voicebox.ts`, `provider: "voicebox"` in the TTS route, `/api/voicebox/{profiles,transcribe}`, local-Whisper mic provider, Jarvis gear controls, 27-check offline smoke. Live audio not yet heard: the studio was still loading its model on CPU.
 - 2026-09-02 · v2.11.2 · S0 Launchers tell the truth: Restart .bat now pauses on an aborted restart; AGENTS.md Kokoro claim corrected.
 - 2026-09-02 · v2.8.0 `eccdbf9` · Mac wording and Cmd glyphs replaced for a Windows owner.
 - 2026-09-02 · v2.9.0 `ded6823` · Jarvis: browser action set registered.

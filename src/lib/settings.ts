@@ -142,13 +142,17 @@ export interface Settings {
     engine?: "sdk" | "cli";
     cliAgent?: string;     // cli-lane agent id (claude/codex/cursor/… per cliComplete matrix)
     voice?: {
-      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
+      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox";
       autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
       pushToTalk?: boolean;  // true = hold-to-record; false = click-to-toggle
       // The ELEVENLABS reply voice. Distinct from `provider` above, which picks
       // the live-voice BACKEND. Lives in settings rather than component state
       // because it previously reset to the hardcoded default on every remount.
       ttsVoiceId?: string;
+      // Which backend SPEAKS the reply. "voicebox" is the local studio (the
+      // voice engine since 2026-09-02); "auto" is the old cascade in
+      // /api/hermes/tts. Never silently substituted: a down provider errors.
+      ttsProvider?: "voicebox" | "auto" | "local" | "elevenlabs" | "openai";
     };
     hotkey?: {
       key?: string;          // in-app fallback keybind (default "F13")
@@ -156,6 +160,11 @@ export interface Settings {
     };
   };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
+  // Voicebox, the local AI vocal studio (lib/voicebox.ts). url is asserted
+  // loopback in code; profile is an id or a name (blank = first profile);
+  // engine blank = the profile's own default; timeoutMs bounds one synthesis
+  // (CPU boxes load a model on first use, which can take minutes).
+  voicebox: { url?: string; profile?: string; engine?: string; timeoutMs?: number };
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
   // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer
@@ -372,10 +381,11 @@ export const DEFAULT_SETTINGS: Settings = {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID },
+    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "voicebox" },
     hotkey: { key: "F13", enabled: true },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
+  voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
   ideaEngine: {

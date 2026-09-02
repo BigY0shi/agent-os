@@ -674,6 +674,10 @@ export default function JarvisView() {
   // a deliberate choice made while the fetch was still in flight.
   const voiceTouchedRef = useRef(false);
   const [voices, setVoices] = useState(VOICES);
+  // Which backend speaks the reply (settings.jarvis.voice.ttsProvider). Default
+  // is the local Voicebox studio; the ref is what speak() reads.
+  const [ttsProvider, setTtsProvider] = useState<string>("voicebox");
+  const ttsProviderRef = useRef<string>("voicebox");
   const [mode, setMode] = useState<"auto" | "agent">("auto");
   const [input, setInput] = useState("");
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -718,6 +722,7 @@ export default function JarvisView() {
   // Real ElevenLabs voices (same source the Oracle uses). Falls back to the
   // built-in default if ElevenLabs isn't reachable.
   useEffect(() => {
+    if (ttsProvider === "voicebox") return; // the studio's profiles fill the picker instead
     let alive = true;
     fetch("/api/video/voices", { cache: "no-store" })
       .then((r) => r.json())
@@ -727,7 +732,28 @@ export default function JarvisView() {
       })
       .catch(() => { /* keep the fallback list */ });
     return () => { alive = false; };
-  }, []);
+  }, [ttsProvider]);
+
+  // Voicebox: the picker lists the studio's profiles; the saved choice is
+  // settings.voicebox.profile. Down studio = empty picker with the reason.
+  useEffect(() => {
+    if (ttsProvider !== "voicebox") return;
+    let alive = true;
+    fetch("/api/voicebox/profiles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; error?: string; profiles?: { id: string; name: string }[]; defaultProfileId?: string | null }) => {
+        if (!alive) return;
+        if (!j?.ok || !Array.isArray(j.profiles) || !j.profiles.length) {
+          setVoices([{ id: "", label: j?.error ? `Voicebox: ${j.error.slice(0, 60)}` : "Voicebox: no profiles" }]);
+          setVoice("");
+          return;
+        }
+        setVoices(j.profiles.map((p) => ({ id: p.id, label: p.name })));
+        if (!voiceTouchedRef.current) setVoice(j.defaultProfileId || j.profiles[0].id);
+      })
+      .catch((e) => { if (alive) { setVoices([{ id: "", label: `Voicebox: ${String(e).slice(0, 60)}` }]); setVoice(""); } });
+    return () => { alive = false; };
+  }, [ttsProvider]);
 
   // Log every turn to disk + the Obsidian vault (fire-and-forget — never block).
   function logTurn(you: string, jarvis: string, kind: string) {
@@ -808,7 +834,7 @@ export default function JarvisView() {
         method: "POST", headers: { "Content-Type": "application/json" },
         // "auto": local Kokoro first (free, offline, ~/.agentic-os/kokoro-tts),
         // then ElevenLabs (the keyed hosted provider here), then OpenAI.
-        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: "auto" }),
+        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: ttsProviderRef.current }),
       });
       const j = await r.json();
       if (j.audio && audioRef.current) {
@@ -1032,6 +1058,8 @@ export default function JarvisView() {
       .then((j) => {
         if (!alive) return;
         voiceAutoSendRef.current = !!(j?.settings?.jarvis?.voice?.autoSend);
+        const tp = j?.settings?.jarvis?.voice?.ttsProvider;
+        if (typeof tp === "string" && tp) { ttsProviderRef.current = tp; setTtsProvider(tp); }
         const saved = j?.settings?.jarvis?.voice?.ttsVoiceId;
         if (typeof saved === "string" && saved && !voiceTouchedRef.current) setVoice(saved);
       })
@@ -1192,7 +1220,7 @@ export default function JarvisView() {
       <select value={voice} onChange={(e) => { const v = e.target.value; voiceTouchedRef.current = true; setVoice(v);
           // Persist, so the choice survives navigating away and back.
           fetch("/api/settings", { method: "PATCH", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ jarvis: { voice: { ttsVoiceId: v } } }) }).catch(() => { /* offline: session-only */ });
+            body: JSON.stringify(ttsProviderRef.current === "voicebox" ? { voicebox: { profile: v } } : { jarvis: { voice: { ttsVoiceId: v } } }) }).catch(() => { /* offline: session-only */ });
         }} title="Reply voice"
         className="bg-[rgba(0,0,0,0.3)] border border-[var(--panel-border)] rounded-lg px-2 h-9 text-[12px] text-[var(--fg-dim)] outline-none">
         {voices.map((v) => <option key={v.id} value={v.id}>🔊 {v.label}</option>)}
