@@ -1,5 +1,5 @@
 import { setStatus, setNotes, setNeedsInfo, setEditedPitch, getDeal, type DealStatus } from "@/lib/upworkDesk";
-import { isJudgmentStatus, recordDeskDecision, dealSubject } from "@/lib/deskMemory";
+import { isJudgmentStatus, recordDeskDecision, recordDeskBrief, dealSubject } from "@/lib/deskMemory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,12 @@ export async function POST(req: Request) {
         // read that getDeal costs.
         if (isJudgmentStatus("deal-desk", String(value))) {
           const deal = await getDeal(id);
-          if (deal) void recordDeskDecision("deal-desk", dealSubject(deal), String(value), deal.notes);
+          if (deal) {
+            const subject = dealSubject(deal);
+            void recordDeskDecision("deal-desk", subject, String(value), deal.notes);
+            // The assessment is kept for a lead we committed to, and only then.
+            if (value === "approved") void recordDeskBrief("deal-desk", subject, deal);
+          }
         }
         break;
       }

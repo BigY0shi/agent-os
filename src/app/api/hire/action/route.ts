@@ -1,5 +1,5 @@
 import { setHireStatus, setHireNotes, setHirePitch, getHireLead, HIRE_STATUSES, type HireStatus } from "@/lib/hireDesk";
-import { isJudgmentStatus, recordDeskDecision, hireSubject } from "@/lib/deskMemory";
+import { isJudgmentStatus, recordDeskDecision, recordDeskBrief, hireSubject } from "@/lib/deskMemory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,11 @@ export async function POST(req: Request) {
       // Gating first also means only a real decision pays for the getHireLead read.
       if (isJudgmentStatus("hire-engine", String(value))) {
         const lead = await getHireLead(id);
-        if (lead) void recordDeskDecision("hire-engine", hireSubject(lead), String(value), lead.notes);
+        if (lead) {
+          const subject = hireSubject(lead);
+          void recordDeskDecision("hire-engine", subject, String(value), lead.notes);
+          if (value === "approved") void recordDeskBrief("hire-engine", subject, lead);
+        }
       }
       return Response.json({ ok: true, state });
     }

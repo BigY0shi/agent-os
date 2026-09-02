@@ -90,7 +90,17 @@ routine triage does not pay for a board read.
    lead has no card, so it cannot be decided on or remembered. Documented in
    `docs/modules/deal-desk.md`.
 
-**Evidence.** `scripts/v2/smoke-desk-memory.mjs`, 35 checks. Section G drives the
+**Follow-up the same day: briefs, but only on approval.** Yoshi reversed the
+brief exclusion with a sharper rule than either of the two I had weighed - not
+every brief, and not none, but the ones attached to a lead we actually committed
+to. That keeps the whole reason for the exclusion intact, since brief-batch never
+triggers it, while keeping the assessment for the leads where it matters. Added
+`recordDeskBrief`, called from both action routes when the status is approved.
+Smoke section H covers it: the four brief fields present, denying records the
+decision without the brief, and an approved-but-never-briefed lead records
+nothing. 43 checks now.
+
+**Evidence.** `scripts/v2/smoke-desk-memory.mjs`, 43 checks. Section G drives the
 real `/api/deals/action` handler against a fixture board and asserts that
 `reviewing` records nothing while `approved` records an episode carrying the
 listing title and the operator's existing note as the reason - tsc proves the

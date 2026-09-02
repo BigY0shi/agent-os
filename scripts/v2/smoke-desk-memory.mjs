@@ -141,7 +141,14 @@ fs.writeFileSync(
 // Upwork lead cannot be recorded, because the desk cannot see the lead either.
 fs.writeFileSync(
   path.join(process.env.UPWORK_LEADS_DIR, "pitches.json"),
-  JSON.stringify([{ url: "https://x/route-1", summary: "pipeline audit", pitch: "opener" }]),
+  JSON.stringify([{
+    url: "https://x/route-1",
+    summary: "They want the ingestion audited before a Series B data room.",
+    why: "Strong fit, this is the same shape as the Fivetran migration.",
+    approach: "Map the DAG, find the silent failures, then re-key the incremental loads.",
+    crashCourse: "dbt incremental models; the gotcha is a changed unique_key silently full-refreshing.",
+    pitch: "opener",
+  }]),
   "utf8",
 );
 const post = (mod, payload) => mod.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify(payload) }));
@@ -154,12 +161,34 @@ check("G1 the route does NOT record triage motion", queued().length === beforeRo
 
 const res = await post(action, { id: "route-1", action: "status", value: "approved" });
 check("G2 the route still returns ok", (await res.json()).ok === true);
-// The hook is fire-and-forget, so let the microtask queue drain before asserting.
+// The hooks are fire-and-forget, so let the microtask queue drain before asserting.
+// Two of them fire on an approval and their order is not guaranteed, so find each
+// episode by content rather than assuming which one landed last.
 await new Promise((r) => setTimeout(r, 250));
-const g = bodies().at(-1) ?? "";
-check("G3 approving through the route recorded an episode", queued().length === beforeRoute + 1, `${queued().length - beforeRoute}`);
-check("G4 it carries the listing title", g.includes("Snowflake and dbt"));
-check("G5 it carries the note the operator had already written as the reason", g.includes("already tried Fivetran"));
+const fresh = bodies().slice(beforeRoute);
+const decision = fresh.find((b) => b.includes("APPROVED")) ?? "";
+check("G3 approving recorded exactly two episodes, the decision and the brief", fresh.length === 2, `${fresh.length}`);
+check("G4 the decision carries the listing title", decision.includes("Snowflake and dbt"));
+check("G5 and the note the operator had already written, as the reason", decision.includes("already tried Fivetran"));
+
+// -- H the brief, kept only for a lead we committed to ------------------------
+console.log("\n-- H the brief, kept only for a lead we committed to --");
+const brief = fresh.find((b) => b.includes("assessment of")) ?? "";
+check("H1 approving also kept the assessment", brief.length > 0);
+check("H2 it says why it was kept", brief.includes("because it was approved"));
+check("H3 it carries what they want", brief.includes("Series B data room"));
+check("H4 ...why we fit", brief.includes("same shape as the Fivetran migration"));
+check("H5 ...the approach", brief.includes("re-key the incremental loads"));
+check("H6 ...and the crash course, the part worth carrying forward", brief.includes("unique_key silently full-refreshing"));
+
+const beforeDeny = queued().length;
+await post(action, { id: "route-1", action: "status", value: "denied" });
+await new Promise((r) => setTimeout(r, 250));
+check("H7 denying records the decision but NOT the brief", queued().length === beforeDeny + 1, `${queued().length - beforeDeny}`);
+
+const beforeBare = queued().length;
+await M.recordDeskBrief("deal-desk", DEAL, { summary: null, why: "", approach: null, crashCourse: undefined });
+check("H8 an approved lead that was never briefed records nothing", queued().length === beforeBare);
 
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s), ${queued().length} episodes queued`);
 console.log(`fixture: ${dir}`);

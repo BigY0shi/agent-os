@@ -20,10 +20,14 @@
 //   skipped   `ready`, which is a staging step between approved and sent. Both
 //             ends of that move are already recorded; the middle would treble
 //             one deal's episodes without adding a fact.
-//   skipped   briefs. brief-batch runs one pass per un-briefed card, so a fresh
-//             248-card board would enqueue 248 near-identical episodes on one
-//             click, and a brief is regenerable from the listing in a way that a
-//             decision and a pitch are not. One line here if that changes.
+//   recorded  the brief, but ONLY for a lead that gets approved. Gating on the
+//             approval is the whole point: brief-batch runs one pass per
+//             un-briefed card, so recording every brief would enqueue 248
+//             near-identical episodes off a single click on a fresh board. An
+//             approved lead is one we committed to, and its assessment - what
+//             they want, why we fit, the crash course on their stack - is worth
+//             carrying forward. The other 240-odd stay unrecorded and are
+//             regenerable from the listing anyway.
 //
 // Failure never breaks the desk. By the time any of this runs the card is
 // already saved, so an ingest failure is logged loudly and swallowed - the same
@@ -72,7 +76,7 @@ const MIN_EPISODE_CHARS = 20;
 
 async function record(
   desk: Desk,
-  kind: "decision" | "pitch" | "qa",
+  kind: "decision" | "pitch" | "qa" | "brief",
   subject: DeskSubject,
   body: string,
   extraLabels: string[] = [],
@@ -139,6 +143,33 @@ export async function recordDeskQA(
     (subject.context ? ` (${subject.context})` : "") +
     `.\nQ: ${q}\nA: ${a}`;
   await record(desk, "qa", subject, body);
+}
+
+/** The four fields a brief carries, on either desk. */
+export interface DeskBrief {
+  summary?: string | null;
+  why?: string | null;
+  approach?: string | null;
+  crashCourse?: string | null;
+}
+
+/**
+ * The agent's assessment of a lead. Called only on approval - see the note at
+ * the top of this file for why that gate is load-bearing rather than cautious.
+ */
+export async function recordDeskBrief(desk: Desk, subject: DeskSubject, brief: DeskBrief): Promise<void> {
+  const parts = [
+    brief.summary?.trim() ? `What they want: ${brief.summary.trim()}` : null,
+    brief.why?.trim() ? `Why we fit, or do not: ${brief.why.trim()}` : null,
+    brief.approach?.trim() ? `How we would approach it: ${brief.approach.trim()}` : null,
+    brief.crashCourse?.trim() ? `Crash course on their stack: ${brief.crashCourse.trim()}` : null,
+  ].filter(Boolean);
+  if (parts.length === 0) return; // an approved lead that was never briefed
+  const body =
+    `${DESK_LABEL[desk]}: assessment of "${subject.title}"` +
+    (subject.context ? ` (${subject.context})` : "") +
+    `, kept because it was approved.\n\n${parts.join("\n\n")}`;
+  await record(desk, "brief", subject, body);
 }
 
 // ---------------------------------------------------------------------------
