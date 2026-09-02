@@ -35,6 +35,51 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - A roadmap that is regenerated, not retyped
+
+Yoshi asked for a roadmap/checklist artifact updated alongside this journal
+after every vertical slice. `ROADMAP.md` at the root is the source of truth
+(the commit-msg hook already accepts that name as an engineering doc, so a
+slice commit that touches it and this file passes the gate in one go), and
+`scripts/roadmap-page.mjs` renders it to `~/.agentic-os/roadmap.html`, which
+is the published Artifact. Two copies of a checklist drift; a generator does
+not. The page stamps HEAD, `package.json`, and whether `.next/BUILD_ID` is
+older than HEAD, because "is the running build current?" is the first
+question every bug report here has to answer.
+
+**Ordering is mine, and it is written down as a judgment.** S0 is the
+launcher fix because it is the thing Yoshi runs most; S1 is Voicebox because
+it is the "new avenue" that retires Jarvis voice; S2 is the vanishing-runs
+registry gap. The Deal Desk logged-out gate from the bug list was missing
+from the earlier handoff tasklist and is now S4.
+
+**Two findings from finally reading the `.bat` launchers** (permission given
+this session):
+
+1. `Restart Agent OS.bat` never checks `%errorlevel%` after
+   `agentos-restart.ps1`. The script aborts with `exit 1` when a process
+   survives on 3737 (correctly - launching would recreate the 2026-08-29 split
+   brain), but the batch file then prints "Done", opens the browser, and
+   closes after `timeout /t 5`. That is the "exits silently" report: the red
+   ABORTED block is on screen for five seconds. S0.
+2. AGENTS.md says the restart script brings Kokoro up and the start script
+   does not. Both call `kokoro-start.ps1`. Corrected in S0.
+
+**Voicebox is live** at 127.0.0.1:17493 with one cloned profile ("Yoshi"),
+verified with a GET on `/profiles` this session. It also exposes
+`/transcribe` (whisper-turbo), which is a speech-to-text path that does not
+depend on Opera's disabled Web Speech API - so the Jarvis mic loop can be
+Voicebox end to end. That changes the S1 scope from "another TTS provider"
+to "the voice engine".
+
+**Cost.** The generator understands exactly the markdown ROADMAP.md uses
+(checkbox slices with a bold `S<n>. Name.` prefix, numbered status lines,
+plain bullets). Write a new construct and it renders as a paragraph. That is
+deliberate: it is a 150-line script, not a markdown engine.
+
+**Rollback.** Revert the commit. The previous four-line roadmap is at
+`.exile/2026-09-02_041500/ROADMAP.md`.
+
 ## 2026-09-02 - Sidebar: two owner-named groups, and sections that fold
 
 Tasklist item 7. The owner named the groups: "Artist's Corner" and "Agent
