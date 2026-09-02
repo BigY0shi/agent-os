@@ -35,6 +35,22 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - Voice verified live; the tailnet needs https for the mic
+
+16:12: Yoshi confirms Jarvis voice works at http://localhost:3737 after the
+rebuild - Voicebox reply voice and the local-Whisper mic both. The S1 entry's
+"not verified: the MediaRecorder lane end to end" is now verified by the
+owner, in Opera, on the host.
+
+What did not work first: the same app at his Tailscale address
+(100.88.224.75) showed every mic provider as "unavailable". Plain http on a
+non-localhost origin is not a secure context, so the browser hides
+`navigator.mediaDevices`; nothing in Voicebox or the app was wrong. The
+availability message now names the origin and the fix (`d2ce6f9`), AGENTS.md
+records the access path (`ccd6469`), and the durable fix on his side is
+`tailscale serve --bg 3737` -> https://desktop.hair-halfmoon.ts.net (MagicDNS
+and certs already enabled on the tailnet, no serve config yet).
+
 ## 2026-09-02 - "It says the server started, but I can't connect"
 
 Reported at 15:06, right after the S2 rebuild. Shell first: nothing listening
