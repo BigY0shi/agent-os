@@ -13,13 +13,13 @@ is one line; the journal carries the rest.
 
 ## Now
 
-## Next
-
 - [ ] **S3. Pre-launch settings drawer + STOP.** Decided by Yoshi 2026-09-02:
   configuration happens before launch in a drawer (skills applied, guardrails
   added/removed); the only mid-run control is STOP. Deal Desk is the reference
   implementation to copy. Start with Content Engine and Kanban, the two he has
   run most.
+## Next
+
 - [ ] **S4. Deal Desk: more control from the chair.** Asked by Yoshi 2026-09-02.
   (a) Manual intake: paste one or more job-listing URLs and have the desk scrape,
   evaluate, and pitch them like any feed item. (b) Deny without opening: a deny
