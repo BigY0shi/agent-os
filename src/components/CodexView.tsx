@@ -8,6 +8,7 @@ import {
   Copy, Download, X, Eye, ExternalLink, FilePlus,
 } from "lucide-react";
 import GoalLogStream from "./GoalLogStream";
+import { MOD } from "@/lib/modKey";
 
 // Codex agent surface — four tabs (same shape as Antigravity):
 //   Chat       — one-shot streaming via /api/codex/chat
@@ -490,7 +491,7 @@ export default function CodexView() {
                   if (e.key === "Escape" && streaming) stopChat();
                 }}
                 rows={2}
-                placeholder="Ask Codex…  (⌘+Enter to send)"
+                placeholder={`Ask Codex…  (${MOD}+Enter to send)`}
                 className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm text-[var(--cream)] placeholder:text-[var(--cream-mute)]" />
               {streaming ? (
                 <button onClick={stopChat}

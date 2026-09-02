@@ -6,6 +6,7 @@ import {
   FileText, Image as ImageIcon, Boxes, Trash2,
 } from "lucide-react";
 import VoiceButton from "./VoiceButton";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#38bdf8"; // engine sky-blue
 const HKEY = "agentic-os/local-hermes/transcript/v1";
@@ -98,7 +99,7 @@ export default function LocalHermesEngine() {
             The Local Hermes Engine
             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: `${ACCENT}1e`, color: ACCENT, border: `1px solid ${ACCENT}40` }}><WifiOff size={9} /> offline</span>
           </div>
-          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A real agent on your Mac · Gemma-4 12B Coder · runs commands + builds files · free, private</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A real agent on your machine · Gemma-4 12B Coder · runs commands + builds files · free, private</div>
         </div>
       </div>
 
@@ -111,7 +112,7 @@ export default function LocalHermesEngine() {
                 <div>
                   <Cpu size={24} style={{ color: ACCENT }} className="mx-auto mb-2 opacity-70" />
                   <div className="text-[13.5px] text-[var(--cream)]">Give the offline agent a real job.</div>
-                  <div className="text-[11.5px] text-[var(--cream-mute)] mt-1 max-w-[380px]">It uses tools — writes files, runs commands, builds things — entirely on your Mac. Try &ldquo;build a neon clock and save it as clock.html&rdquo; or &ldquo;list the files here and summarise them.&rdquo;</div>
+                  <div className="text-[11.5px] text-[var(--cream-mute)] mt-1 max-w-[380px]">It uses tools — writes files, runs commands, builds things — entirely on your machine. Try &ldquo;build a neon clock and save it as clock.html&rdquo; or &ldquo;list the files here and summarise them.&rdquo;</div>
                 </div>
               </div>
             )}
@@ -147,7 +148,7 @@ export default function LocalHermesEngine() {
             <VoiceButton onTranscript={onTranscript} size={40} className="shrink-0" />
             <textarea value={task} onChange={(e) => setTask(e.target.value)} rows={2}
               onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run(); }}
-              placeholder="Give it a task — build a file, run a command, summarise a folder…  (⌘+Enter)"
+              placeholder={`Give it a task — build a file, run a command, summarise a folder…  (${MOD}+Enter)`}
               className="flex-1 resize-none bg-[var(--bg-mid)] border border-[var(--line-soft)] rounded-xl px-3 py-2 text-[13.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] focus:outline-none" />
             <button onClick={() => run()} disabled={!task.trim() || running} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: ACCENT, color: "#04121f" }}>
               {running ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Run

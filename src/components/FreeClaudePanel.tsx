@@ -7,6 +7,7 @@ import {
   RefreshCw, FolderOpen, FileText, Copy, Download, X, Eye, FilePlus,
 } from "lucide-react";
 import Panel from "./Panel";
+import { MOD } from "@/lib/modKey";
 
 type Tab = "chat" | "workspace";
 
@@ -389,7 +390,7 @@ export default function FreeClaudePanel() {
                   if (e.key === "Escape" && streaming) stop();
                 }}
                 rows={2}
-                placeholder={reachable ? `Ask via ${modelShort}…  (⌘+Enter to send)` : "fcc-server offline — start it with `fcc-server` first"}
+                placeholder={reachable ? `Ask via ${modelShort}…  (${MOD}+Enter to send)` : "fcc-server offline — start it with `fcc-server` first"}
                 className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-dimmer)]"
               />
               {streaming ? (

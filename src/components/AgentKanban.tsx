@@ -119,7 +119,7 @@ export default function AgentKanban() {
             Agent Kanban
             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "#38bdf81e", color: "#38bdf8", border: "1px solid #38bdf840" }}><WifiOff size={9} /> offline team</span>
           </div>
-          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A team of local agents plans, builds + reviews — live, on your Mac{model ? ` · ${model}` : ""}</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A team of local agents plans, builds + reviews — live, on your machine{model ? ` · ${model}` : ""}</div>
         </div>
         {/* tabs */}
         <div className="ml-auto flex items-center gap-1 p-1 rounded-xl bg-[var(--bg-mid)] border border-[var(--line-soft)]">
@@ -224,7 +224,7 @@ export default function AgentKanban() {
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--line-soft)] shrink-0">
             <FolderOpen size={14} style={{ color: "#7dd3fc" }} />
             <span className="text-[12.5px] text-[var(--cream)] font-medium">Workspace</span>
-            <span className="text-[10.5px] text-[var(--cream-mute)]">{ws.length} build{ws.length === 1 ? "" : "s"} · saved on your Mac</span>
+            <span className="text-[10.5px] text-[var(--cream-mute)]">{ws.length} build{ws.length === 1 ? "" : "s"} · saved on your machine</span>
             <div className="ml-auto flex items-center gap-1.5">
               {ws.length > 0 && <button onClick={clearAllBuilds} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-[var(--line-soft)] text-[var(--cream-mute)] hover:text-[var(--plum)] hover:border-[rgba(196,96,126,0.4)]"><Trash2 size={11} /> Clear all</button>}
               <button onClick={loadWorkspace} title="Refresh" className="p-1.5 rounded-lg border border-[var(--line-soft)] text-[var(--cream-mute)] hover:text-[var(--cream)]"><RotateCw size={12} /></button>
@@ -232,7 +232,7 @@ export default function AgentKanban() {
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto scroll p-3">
             {ws.length === 0 ? (
-              <div className="h-full grid place-items-center text-center"><div className="text-[11.5px] text-[var(--cream-mute)] max-w-[320px]">Nothing saved yet. Build a board and every card the team finishes lands here — kept on your Mac, ready to show off.</div></div>
+              <div className="h-full grid place-items-center text-center"><div className="text-[11.5px] text-[var(--cream-mute)] max-w-[320px]">Nothing saved yet. Build a board and every card the team finishes lands here — kept on your machine, ready to show off.</div></div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {ws.map((b) => (

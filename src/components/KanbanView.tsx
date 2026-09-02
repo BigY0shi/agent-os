@@ -11,6 +11,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { COLUMNS, STATUS_COLOUR, type KanbanStatus, type KanbanTask, type KanbanTaskDetail, type KanbanAssignee, type KanbanStats } from "@/lib/kanban";
 import KanbanSettings from "./KanbanSettings";
+import { MOD } from "@/lib/modKey";
 
 // Inline markdown renderer for Kanban task outputs (content already in memory —
 // unlike MarkdownView which fetches a URL). Aubergine-themed, compact.
@@ -339,7 +340,7 @@ export default function KanbanView() {
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) createTask(); }}
-              placeholder="New task title… (⌘+Enter to create)"
+              placeholder={`New task title… (${MOD}+Enter to create)`}
               className="w-full bg-[rgba(0,0,0,0.25)] border border-[var(--panel-border)] rounded-lg px-3 h-[36px] text-[13.5px] text-[var(--fg)] outline-none focus:border-[var(--panel-border-hot)]"
             />
             {newTitle.trim() && (
@@ -995,7 +996,7 @@ function TaskDrawer({ taskId, boardSlug, detail, assignees, busy, onClose, onAct
               onChange={(e) => setComment(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) sendComment(); }}
               rows={2}
-              placeholder="Add a comment… (⌘+Enter to send)"
+              placeholder={`Add a comment… (${MOD}+Enter to send)`}
               className="flex-1 bg-[rgba(0,0,0,0.25)] border border-[var(--panel-border)] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[var(--fg)] outline-none focus:border-[var(--panel-border-hot)] resize-y"
             />
             <button

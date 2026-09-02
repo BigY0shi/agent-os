@@ -35,6 +35,55 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-01 - The app told a Windows owner to press a key he does not have
+
+Tasklist item 1. Reported as three spots: a Command glyph on the palette, two
+"100% on your mac" lines in Agent Kanban, one more in Local.
+
+**It was 38.** A haiku subagent swept for it and found 25 glyph labels across 22
+components; a follow-up grep found "your Mac" in 13 places across 6 files, three
+of which the subagent had missed. Then a second grep, widened past
+`src/components` and `src/app`, found three more in `src/lib/pageMeta.ts` - the
+TopBar subtitles, which is where he would have seen them most often. Worth
+remembering: the first sweep's scope was the thing that was wrong, not its
+diligence, and verifying a subagent's counts against the tree is cheap.
+
+**The shortcut was never broken.** `CommandPalette.tsx` already tested
+`(e.metaKey || e.ctrlKey)`, so Ctrl+K always worked. Only the label lied. That
+distinction decided the fix: this was a text bug, not a behaviour bug.
+
+**MOD, not a hook.** `src/lib/modKey.ts` resolves the modifier once at module
+load. A hook would be strictly more correct for someone opening the LAN address
+from a Mac, but it would mean a hook call in 22 components, several of which use
+these labels inside nested render helpers where a hook cannot legally go. On the
+Windows host the constant is "Ctrl" on both the server and the client, so
+hydration always matches and the value never changes; a Mac viewer gets the glyph
+plus one hydration warning. Wrong modifier on the machine that actually runs this
+beat a rules-of-hooks hazard across 22 files.
+
+**What the preview caught.** The transform was run once in preview mode before
+writing, and it was wrong twice. It turned `placeholder="..."` into
+`placeholder=\`...\``, which is not legal JSX - an attribute value must be a
+string or a braced expression. And a general "insert a plus if one is missing"
+regex turned `CMD/Ctrl + Enter` into `{MOD}+ + Enter`. Both were replaced with
+explicit rules: brace only when the literal is an attribute value (`out[open-1]
+=== "="`), and name the two irregular sites rather than inferring them.
+
+A third bug survived into the write pass and was caught by the script's own
+residue assertion: `HermesStudio.tsx:170` carries TWO labels on one line, in a
+ternary, and the single-span transform silently handled only the first. The
+guard refused the file rather than half-writing it, and it was done by hand.
+That assertion is the reason this is a footnote instead of a bug report.
+
+**Evidence.** `tsc --noEmit` clean. Zero glyphs and zero "your Mac" left in
+`src/`. All 22 importers verified to actually use `MOD` (2 of them twice).
+
+**Not done here.** The four other investigations landed and are written up for
+the owner, not yet built: Jarvis voice providers, the vanishing-run tray, legacy
+memory backfill, sidebar regrouping.
+
+**Rollback.** Revert this commit. Nothing else depends on `src/lib/modKey.ts`.
+
 ## 2026-09-01 - Deal Desk and Hire Engine finally write to memory
 
 **The gap.** Memory V2 was never broken. `ingestFromModule` had 11 call sites

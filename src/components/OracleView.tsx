@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles, Loader2, Clock, X, Moon, ScrollText, Volume2, Square } from "lucide-react";
 import AgentPicker from "@/components/AgentPicker";
+import { MOD } from "@/lib/modKey";
 
 // THE ORACLE — ask the wise old sage a question of judgment, direction or foresight
 // (advice + predictions, not hard facts). It researches quietly with your CLI agent's
@@ -223,7 +224,7 @@ export default function OracleView() {
             />
             <div className="orc-row">
               <AgentPicker value={agent} onChange={setAgent} kinds={["cli"]} label="Voice" accent="#e6b866" />
-              <span className="orc-hint">⌘/Ctrl + Enter</span>
+              <span className="orc-hint">{MOD} + Enter</span>
               <button className="orc-ask-btn" onClick={consult} disabled={busy || !question.trim()}>
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                 {busy ? "Consulting…" : "Consult the Oracle"}

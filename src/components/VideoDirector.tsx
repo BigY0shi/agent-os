@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import VoiceButton from "./VoiceButton";
 import VideoSettings from "./VideoSettings";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#ef4444";
 const RUN_KEY = "agentic-os/video/director/run/v1";
@@ -326,7 +327,7 @@ function BriefStage({ run, update, busy, onWrite, avatars, elevenVoices, hasExam
           <div className="absolute right-2 bottom-2"><VoiceButton size={32} onTranscript={(t, o) => { if (o.final) update({ topic: (run.topic ? run.topic + " " : "") + t }); }} /></div>
         </div>
         <div className="flex items-center justify-between">
-          <div className="text-[10.5px] text-[var(--cream-mute)]">⌘+Enter · the agent researches the topic, then writes a script you can edit</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)]">{MOD}+Enter · the agent researches the topic, then writes a script you can edit</div>
           <button onClick={onWrite} disabled={!!busy || !run.topic.trim()}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12.5px] font-medium transition"
             style={{ background: busy ? "rgba(239,68,68,0.15)" : ACCENT, color: busy ? ACCENT : "#1a0f20", border: `1px solid ${ACCENT}`, opacity: busy || !run.topic.trim() ? 0.6 : 1, boxShadow: busy ? undefined : `0 6px 22px -8px ${ACCENT}` }}>

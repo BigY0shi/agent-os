@@ -8,6 +8,7 @@ import {
   Eye, Clapperboard,
 } from "lucide-react";
 import VideoDirector from "./VideoDirector";
+import { MOD } from "@/lib/modKey";
 
 // ─── VideoStudio — three sub-tabs ──────────────────────────────────────────
 //   Create    : HyperFrames CLI render workflow
@@ -212,7 +213,7 @@ function CreateTab() {
           className="w-full p-2.5 rounded-md text-[12.5px] resize-none mt-1"
           style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--panel-border)", color: "var(--cream)" }} />
         <div className="flex items-center justify-between mt-2">
-          <div className="text-[10px] text-[var(--cream-mute)]">⌘+Enter to launch · scaffolds + renders</div>
+          <div className="text-[10px] text-[var(--cream-mute)]">{MOD}+Enter to launch · scaffolds + renders</div>
           <button onClick={createAndRender} disabled={busy || !prompt.trim()}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition"
             style={{

@@ -836,7 +836,7 @@ export default function JarvisView() {
     try { wakeRef.current?.stop(); } catch {}
     const youId = ++idRef.current; const hermesId = ++idRef.current;
     setTurns((t) => [{ id: hermesId, who: "hermes", text: "Building it now, sir…", working: true }, { id: youId, who: "you", text: prompt }, ...t]);
-    setStatus("Building it on your Mac, sir…");
+    setStatus("Building it on your machine, sir…");
     let file: string | null = null, err: string | null = null;
     try {
       const r = await fetch("/api/freeclaude/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, project: BUILD_PROJECT }) });

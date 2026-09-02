@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Send, Square, Trash2, Loader2, Sparkles } from "lucide-react";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#fbbf24"; // Pi amber
 const HISTORY_KEY = "agentic-os/pi/history/v1";
@@ -103,7 +104,7 @@ export default function PiView() {
         <div className="border-t border-[var(--line-soft)] p-3 flex items-end gap-2 shrink-0">
           <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2}
             onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); }}
-            placeholder="Ask Pi anything…  (⌘/Ctrl+Enter to send)"
+            placeholder={`Ask Pi anything…  (${MOD}+Enter to send)`}
             className="flex-1 resize-none bg-[var(--bg-mid)] border border-[var(--line-soft)] rounded-xl px-3 py-2 text-[13.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] focus:outline-none" />
           {streaming
             ? <button onClick={stop} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-300"><Square size={14} /> Stop</button>

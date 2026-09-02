@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import VoiceButton from "./VoiceButton";
 import NotebookSettings from "./NotebookSettings";
+import { MOD } from "@/lib/modKey";
 
 type Tab = "library" | "research" | "chat" | "studio" | "assets";
 type ResearchSource = { title?: string; url?: string; source?: string; link?: string; type?: string; snippet?: string; description?: string; summary?: string; [k: string]: unknown };
@@ -577,7 +578,7 @@ export default function NotebookView() {
                   <VoiceButton onTranscript={(t, o) => { if (o.final) setQuestion((v) => (v ? v + " " : "") + t); }} size={38} />
                   <textarea value={question} onChange={(e) => setQuestion(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); ask(); } }}
-                    rows={2} placeholder="Ask anything about this notebook… (⌘+Enter)"
+                    rows={2} placeholder={`Ask anything about this notebook… (${MOD}+Enter)`}
                     className="flex-1 bg-transparent outline-none resize-none px-2 py-2 text-[14px] text-[var(--fg)] placeholder:text-[var(--fg-dimmer)]" />
                   <button onClick={ask} disabled={!question.trim() || thinking}
                     className="px-3 h-[38px] rounded-lg flex items-center gap-1.5 text-sm transition disabled:opacity-40"

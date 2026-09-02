@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Square, Sparkles, Zap, AlertTriangle } from "lucide-react";
 import Panel from "./Panel";
+import { MOD } from "@/lib/modKey";
 
 interface Msg { role: "user" | "assistant" | "system"; text: string; }
 
@@ -203,7 +204,7 @@ export default function ClaudePanel() {
               if (e.key === "Escape" && streaming) stop();
             }}
             rows={2}
-            placeholder="Ask Claude anything…  (⌘+Enter to send)"
+            placeholder={`Ask Claude anything…  (${MOD}+Enter to send)`}
             className="flex-1 bg-transparent outline-none resize-none px-3 py-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-dimmer)]"
           />
           {streaming ? (

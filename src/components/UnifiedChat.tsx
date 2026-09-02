@@ -8,6 +8,7 @@ import AgentAvatar, { agentColor, agentLabel, type AgentKey } from "./AgentAvata
 import VoiceButton from "./VoiceButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MOD } from "@/lib/modKey";
 
 // Render an agent reply as formatted markdown (bold, lists, code, links) instead
 // of raw text with visible ** asterisks. User messages stay plain.
@@ -430,7 +431,7 @@ export default function UnifiedChat({
                   Type or use the mic. Every exchange auto-saves to <code>Agentic OS/Memories/</code> in your Obsidian vault.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-[var(--fg-dimmer)]">
-                  <kbd className="px-1.5 py-0.5 rounded border border-[var(--panel-border)]">⌘+Enter</kbd>
+                  <kbd className="px-1.5 py-0.5 rounded border border-[var(--panel-border)]">{MOD}+Enter</kbd>
                   <span>send</span>
                   <span>·</span>
                   <kbd className="px-1.5 py-0.5 rounded border border-[var(--panel-border)]">Esc</kbd>
@@ -550,7 +551,7 @@ export default function UnifiedChat({
               if (e.key === "Escape" && streaming) stop();
             }}
             rows={2}
-            placeholder={`Message ${agentLabel(agent)}… (⌘+Enter)`}
+            placeholder={`Message ${agentLabel(agent)}… (${MOD}+Enter)`}
             className="flex-1 bg-transparent outline-none resize-none px-2 py-2 text-[14px] text-[var(--fg)] placeholder:text-[var(--fg-dimmer)]"
           />
           {streaming ? (

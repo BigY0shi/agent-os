@@ -15,6 +15,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { Zap, RefreshCw, Trash2, DollarSign, Clock, Users, Loader2, CheckCircle2, AlertCircle, Sparkles, ShieldCheck, Scissors, Rocket, Brain, Send, Square, Ban } from "lucide-react";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
+import { MOD } from "@/lib/modKey";
 
 // One-click Ultracode missions — preset prompts that fire scoped dynamic
 // workflows. Each runs through /api/claude/chat with ultracode:true; the server
@@ -411,7 +412,7 @@ function RunDetail({ run, launching, onReply, onStop }: { run: UltracodeRun; lau
             }}
             rows={2}
             disabled={busy}
-            placeholder={busy ? "Workflow running — wait for it to finish…" : "Reply to this run (resumes the session — full context kept). ⌘+Enter to send."}
+            placeholder={busy ? "Workflow running — wait for it to finish…" : `Reply to this run (resumes the session — full context kept). ${MOD}+Enter to send.`}
             className="flex-1 bg-transparent outline-none resize-none px-2 py-1.5 text-[12.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] disabled:opacity-50"
           />
           <button

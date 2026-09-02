@@ -6,6 +6,7 @@ import {
   Music2, Wand2, Loader2, Star, Download, Trash2, Disc3, Sparkles, Mic, MicOff, X, Pencil, Check,
 } from "lucide-react";
 import MusicSettings from "./MusicSettings";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#c084fc"; // violet — sits next to Video's red in the sidebar
 
@@ -165,7 +166,7 @@ export default function MusicStudio() {
           onChange={(e) => setDesc(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) generate(); }}
           rows={3}
-          placeholder='Describe the style… e.g. "Futuristic progressive trance, relentless driving bassline, shimmering arps, weightless, endless forward motion, instrumental, 130 BPM"  (⌘↵ to generate)'
+          placeholder={`Describe the style… e.g. "Futuristic progressive trance, relentless driving bassline, shimmering arps, weightless, endless forward motion, instrumental, 130 BPM"  (${MOD}+↵ to generate)`}
           className="w-full rounded-lg px-4 py-3 text-[13.5px] outline-none resize-none leading-relaxed"
           style={{ background: "var(--bg-deep, rgba(0,0,0,0.35))", border: "1px solid var(--panel-border)", color: "var(--fg)" }}
         />
