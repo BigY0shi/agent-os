@@ -41,8 +41,11 @@ the wrong diagnosis got made. The port comes from the launcher, not from a `-p` 
 Launchers are `.bat` files in the repo root, run by the owner and never by you:
 `Start Agent OS.bat`, `Restart Agent OS.bat`, `Stop Agent OS.bat`, `Check My Setup.bat`,
 `Update Agent OS.bat`, plus the two Paperclip scripts. Per the owner on 2026-09-02, the
-restart script brings Kokoro up and the start script does not, and the restart script
-has been seen exiting silently. Neither has been read or instrumented yet.
+restart script has been seen exiting silently. Read on 2026-09-02: BOTH the start and
+restart scripts call `kokoro-start.ps1`. The silent exit was `Restart Agent OS.bat`
+ignoring the exit code of `agentos-restart.ps1`, which aborts (correctly) when a process
+survives on 3737; the batch file printed "Done" and closed after five seconds anyway.
+Fixed the same day: it now pauses on a non-zero exit and says the old server is still up.
 
 **You cannot see the running app.** Routes behind the gate answer 307 with an
 Unauthorized JSON body. Signing in is the owner's job, and his credentials are never

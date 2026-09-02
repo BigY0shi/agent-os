@@ -13,11 +13,6 @@ is one line; the journal carries the rest.
 
 ## Now
 
-- [ ] **S0. Launchers tell the truth.** `Restart Agent OS.bat` ignores the exit code
-  of `agentos-restart.ps1`, so an aborted restart (a survivor on 3737) still prints
-  "Done", opens the browser, and closes the window after 5 s. Check `%errorlevel%`,
-  pause on failure. Also correct AGENTS.md: BOTH start and restart call
-  `kokoro-start.ps1`. Small, and it is the thing the owner runs most.
 - [ ] **S1. Voicebox becomes the voice engine.** Voicebox (localhost:17493, REST +
   HTTP MCP + STDIO MCP, cloned profiles) replaces the dead Jarvis voice avenue and
   becomes the shared vocal source for anything that speaks. Deliverables: a
@@ -89,6 +84,7 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-09-02 · v2.11.2 · S0 Launchers tell the truth: Restart .bat now pauses on an aborted restart; AGENTS.md Kokoro claim corrected.
 - 2026-09-02 · v2.8.0 `eccdbf9` · Mac wording and Cmd glyphs replaced for a Windows owner.
 - 2026-09-02 · v2.9.0 `ded6823` · Jarvis: browser action set registered.
 - 2026-09-02 · v2.10.0 `4c1c06b` · Sidebar: Artist's Corner and Agent Toolbox, foldable.

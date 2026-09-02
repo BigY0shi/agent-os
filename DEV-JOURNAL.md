@@ -35,6 +35,33 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - S0: the restart launcher stops lying about aborts
+
+`agentos-restart.ps1` was already right: it verifies the kill and exits 1
+rather than launching a second server next to a survivor (the 2026-08-29 split
+brain). `Restart Agent OS.bat` threw that away - no `%errorlevel%` check, so
+it printed "Done. The server runs in the background", opened the browser, and
+closed the window after `timeout /t 5`. From the chair, an aborted restart and
+a successful one looked identical for five seconds and then vanished. That is
+the "exits silently" report.
+
+**Fix.** Seven lines: on a non-zero exit, say the OLD server is still running
+and nothing new was started, `pause`, `exit /b 1`. The abort message from the
+ps1 stays on screen because the window no longer closes.
+
+**Verified.** A throwaway `abort.ps1` with `exit 1` run via
+`powershell -NoProfile -ExecutionPolicy Bypass -File` from a batch file:
+`CAUGHT rc=1`. The propagation the fix relies on is real, not assumed. Not
+verified: the actual abort path with a live survivor on 3737, because that
+means holding the owner's port with a stray process.
+
+**Also corrected.** AGENTS.md said the restart script starts Kokoro and the
+start script does not. Both call `kokoro-start.ps1`; the claim was recorded
+from the owner's description before either file had been read.
+
+**Rollback.** Revert the commit; the previous launcher is at
+`.exile/2026-09-02_042500/Restart Agent OS.bat`.
+
 ## 2026-09-02 - A roadmap that is regenerated, not retyped
 
 Yoshi asked for a roadmap/checklist artifact updated alongside this journal
