@@ -35,6 +35,36 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-01 - Jarvis could not see the browser module
+
+Tasklist item 3, part C: "it seems like Jarvis can only see Mission Control".
+
+A sonnet subagent traced it and I confirmed the diff firsthand. `mcp/server.ts`
+registers five action sets before dispatching; `jarvis/tools.ts` registered three,
+in both `get_actions` and `execute_action`. `ensureBrowserActions()` was the
+missing one that matters: it is the only thing that re-syncs the browser module
+to `settings.capability.browserEnabled`, so flipping that setting on without a
+restart left Jarvis permanently blind to eighteen browser actions that every
+other MCP caller could see. `ensureMemoryActions()` is also absent, but Jarvis
+has its own `memory_search`/`memory_ingest` tools, so that one is left alone
+pending a decision rather than assumed to be a bug.
+
+Adding the call cannot widen a capability: the registration syncs to the setting,
+and the handlers independently refuse with CAPABILITY_DISABLED.
+
+**Honest limit.** This explains why the BROWSER module specifically was missing.
+It does not, on its own, explain "only Mission Control" - `ensureCoreActions()`
+registers plenty besides. Treat this as one confirmed gap closed, not as a
+diagnosis of the whole symptom, until the owner reports what he sees now.
+
+**My own bug, caught by a guard.** The first patch attempt anchored on the
+call line at two different indents; the 8-space anchor is a substring of the
+10-space one, so the uniqueness check counted two matches and refused to write.
+Replaced with a line-based insert that matches on a regex and splices bottom-up.
+The refusal is the reason this cost a minute instead of a corrupted file.
+
+**Rollback.** Revert this commit; Jarvis returns to three action sets.
+
 ## 2026-09-01 - The app told a Windows owner to press a key he does not have
 
 Tasklist item 1. Reported as three spots: a Command glyph on the palette, two

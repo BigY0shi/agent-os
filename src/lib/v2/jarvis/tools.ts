@@ -10,6 +10,12 @@ import { getAction, listActions, searchActions, actionJsonSchema } from "../mcp/
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
 import { ensureIntegrationMetaActions } from "../integrations/metaTools";
+// Jarvis registered three of the five action sets the MCP server registers, so
+// the browser module was invisible to it. ensureBrowserActions re-syncs to
+// settings.capability.browserEnabled on every call and the handlers refuse with
+// CAPABILITY_DISABLED regardless, so calling it cannot widen the capability - it
+// only stops Jarvis from missing actions the rest of the app can already see.
+import { ensureBrowserActions } from "../mcp/browserActions";
 import { listPublishedPackages, listPublishedToolSchemas, executeAction as hubExecuteAction } from "../webmcp/hub";
 import { selectActionNames } from "../webmcp/actionSelection";
 import { createApproval } from "../webmcp/approvals";
@@ -352,6 +358,7 @@ export function buildJarvisToolHandlers(opts: {
           ensureCoreActions();
           ensureTaskActions();
           ensureIntegrationMetaActions();
+          ensureBrowserActions();
           const intent = typeof args.intent === "string" ? args.intent.trim() : "";
           let actions = listActions();
           if (intent) {
@@ -424,6 +431,7 @@ export function buildJarvisToolHandlers(opts: {
         ensureCoreActions();
         ensureTaskActions();
         ensureIntegrationMetaActions();
+        ensureBrowserActions();
         const action = getAction(key);
         if (!action) {
           record(`execute_action:${key}`, false, "unknown key");
