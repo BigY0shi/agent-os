@@ -25,6 +25,34 @@ Counts verified 2026-08-31; treat them as orientation, not as a spec.
 
 Migrations are **contributed to the `MIGRATIONS` array**, never edited in place once shipped. Pick the next free number in the right phase band.
 
+## Running it
+
+The app listens on **port 3737**. Not 3000, not 3001: two other projects on this
+machine hold those, so a listener there belongs to something else and says nothing
+about whether Agent OS is up. Confirmed by the owner on 2026-09-02, after a session
+spent diagnosing a port that was never his.
+
+Production only. `npm start` is `next start -H 0.0.0.0`, which serves the prebuilt
+`.next` output and does not compile on demand. There is no dev build here and never
+has been. `npm run dev` does exist in package.json and binds 127.0.0.1, and that is
+the trap: finding that bind and concluding the dev server is running is exactly how
+the wrong diagnosis got made. The port comes from the launcher, not from a `-p` flag.
+
+Launchers are `.bat` files in the repo root, run by the owner and never by you:
+`Start Agent OS.bat`, `Restart Agent OS.bat`, `Stop Agent OS.bat`, `Check My Setup.bat`,
+`Update Agent OS.bat`, plus the two Paperclip scripts. Per the owner on 2026-09-02, the
+restart script brings Kokoro up and the start script does not, and the restart script
+has been seen exiting silently. Neither has been read or instrumented yet.
+
+**You cannot see the running app.** Routes behind the gate answer 307 with an
+Unauthorized JSON body. Signing in is the owner's job, and his credentials are never
+yours to type into a form. When something needs confirming in the live UI, ask him to
+look and report back.
+
+The mtime on `.next/BUILD_ID` is the honest answer to "is the running build current?".
+Compare it against the newest commit before claiming a change is live. Do not turn that
+into a nag to rebuild (rule 15), and never restart the server yourself (rule 12).
+
 ## How work lands here
 
 **Every module gets a smoke.** `scripts/v2/smoke-<module>.mjs`, run with `npx tsx`. They must pass offline: no network, no dev server, no live credentials. A smoke that touches a config directory MUST redirect it to a temp dir first (`AGENTIC_OS_DB`, `AGENTIC_OS_SETTINGS`, `AGENTIC_OS_NEWSLETTER_DIR`, `AGENTIC_OS_AGENTMAIL_DIR`). This is not hypothetical: on 2026-08-31 a smoke read the real AgentMail config and listed the owner's actual inbox with his actual key.

@@ -165,7 +165,8 @@ export default function Sidebar() {
   const [dragHref, setDragHref] = useState<string | null>(null);
   const [overHref, setOverHref] = useState<string | null>(null);
   const [version, setVersion] = useState("");
-  useEffect(() => { fetch("/api/version").then((r) => r.json()).then((j) => setVersion(j.version || "")).catch(() => {}); }, []);
+  const [pack, setPack] = useState("");
+  useEffect(() => { fetch("/api/version").then((r) => r.json()).then((j) => { setVersion(j.version || ""); setPack(j.pack || ""); }).catch(() => {}); }, []);
 
   // load saved prefs (client only)
   useEffect(() => {
@@ -245,11 +246,11 @@ export default function Sidebar() {
             Command Center
           </span>
           <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-faint)]">
-            Agentic OS · v0.2
+            Agentic OS{version && version !== "unknown" ? ` · v${version}` : ""}
           </span>
-          {version && version !== "unknown" && (
-            <span className="font-mono text-[9px] tracking-[0.18em] text-[var(--color-ink-faint)]" title="Pack build — compare against the newest in the AI Profit Boardroom">
-              build {version}
+          {pack && (
+            <span className="font-mono text-[9px] tracking-[0.18em] text-[var(--color-ink-faint)]" title="Upstream pack stamp, not this build. Compare against the newest in the AI Profit Boardroom.">
+              pack {pack}
             </span>
           )}
         </div>
