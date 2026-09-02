@@ -13,6 +13,12 @@ cd "$(dirname "$0")" || exit 1
 
 if [ "${1:-}" = "--list" ]; then ls scripts/v2/smoke-*.mjs; exit 0; fi
 
+# Offline by construction: five smokes grow an online leg (Ollama Cloud, model
+# calls that cost money and minutes) when a provider key is in the environment.
+# CI has no keys; the gate must behave the same on the owner's box.
+unset OLLAMA_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY ELEVENLABS_API_KEY MINIMAX_API_KEY OPENROUTER_API_KEY GEMINI_API_KEY
+export AGENTIC_SMOKE_OFFLINE=1
+
 echo "== gate: tsc --noEmit"
 if ! npx tsc --noEmit; then echo "GATE FAIL: type errors" >&2; exit 1; fi
 
