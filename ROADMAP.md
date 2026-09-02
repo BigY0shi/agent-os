@@ -25,10 +25,18 @@ is one line; the journal carries the rest.
   added/removed); the only mid-run control is STOP. Deal Desk is the reference
   implementation to copy. Start with Content Engine and Kanban, the two he has
   run most.
-- [ ] **S4. Deal Desk: gate enrichment on a live Upwork session.** The browser got
-  logged out and the enrich workflow ran as if nothing was wrong. Detect the
-  logged-out page, stop, and ask, instead of enriching against a login wall.
-  From the bug list; not in the earlier handoff tasklist.
+- [ ] **S4. Deal Desk: more control from the chair.** Asked by Yoshi 2026-09-02.
+  (a) Manual intake: paste one or more job-listing URLs and have the desk scrape,
+  evaluate, and pitch them like any feed item. (b) Deny without opening: a deny
+  control on the card face, multi-select with bulk deny, and the Parked/Denied
+  lane reachable without scrolling off-screen (today: open card, dropdown, deny,
+  close; the deny lane sits off the right edge). (c) Fit at a glance: the
+  evaluator's fitment take goes at the top of the yellow summary box and a color
+  band on the card edge encodes it. (d) Gate enrichment on a live Upwork session:
+  the browser was logged out and enrich ran as if fine; detect the login wall,
+  stop, and ask. Ride-alongs from an earlier session: a visible Reload spinner,
+  and a one-line elevator "how we'd do it" in the summary box. Deal Desk is also
+  the reference for S3, so (b) and (c) shape the drawer pattern.
 - [ ] **S5. Legacy memory backfill, 20-episode sample.** Imported episodes carry no
   aspect (Identity/Event/Relationship). Re-import cannot fix it (content-hash
   dedup). New routine reads existing rows and runs derivation over them using the
