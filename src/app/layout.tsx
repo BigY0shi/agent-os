@@ -4,6 +4,7 @@ import "./globals.css";
 import Shell from "@/components/Shell";
 import { HydrateFleet } from "@/components/layout/HydrateFleet";
 import JarvisOmnipresence from "@/components/v2/jarvis/JarvisOmnipresence";
+import RunsTray from "@/components/RunsTray";
 import { AuroraBackground } from "@/components/layout/AuroraBackground";
 import { ParticleField } from "@/components/layout/ParticleField";
 
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </div>
         {/* SPEC-C C1: Jarvis on every route — orb + hotkey SSE + C2b overlay */}
         <JarvisOmnipresence />
+        <RunsTray />
       </body>
     </html>
   );

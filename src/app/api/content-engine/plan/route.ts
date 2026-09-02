@@ -1,5 +1,6 @@
 import { readEngine, writeEngine, planPrompt, CHANNELS, type Channel, type ContentItem } from "@/lib/contentEngine";
 import { cliComplete } from "@/lib/loopEngine";
+import { startModuleRun } from "@/lib/moduleRuns";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,12 +20,17 @@ export async function POST(req: Request) {
   if (!channels.length) return Response.json({ ok: false, error: "pick at least one channel" }, { status: 400 });
 
   const startISO = new Date().toISOString().slice(0, 10);
-  try {
+  // Registered as a module run (roadmap S2) so a plan keeps building after the
+  // owner navigates away; the tray shows it and the calendar fills in.
+  const run = startModuleRun(
+    { module: "content-engine", label: `Plan calendar: ${weeks}w x ${perWeek}/wk, ${channels.join(", ")}`, href: "/content-engine" },
+    async (ctx) => {
+    ctx.log("asking claude for the calendar");
     const out = await cliComplete("claude", planPrompt(goals, channels, perWeek, weeks, startISO), { timeoutMs: 300_000 });
     const m = out.match(/\[[\s\S]*\]/);
-    if (!m) return Response.json({ ok: false, error: "planner did not return JSON" }, { status: 502 });
+    if (!m) throw new Error("planner did not return JSON");
     let rows: { date?: string; channel?: string; format?: string; topic?: string; hook?: string }[];
-    try { rows = JSON.parse(m[0]); } catch { return Response.json({ ok: false, error: "malformed JSON from planner" }, { status: 502 }); }
+    try { rows = JSON.parse(m[0]); } catch { throw new Error("malformed JSON from planner"); }
 
     const items: ContentItem[] = rows
       .filter((r) => r.date && r.topic && (CHANNELS as readonly string[]).includes(r.channel || ""))
@@ -39,15 +45,24 @@ export async function POST(req: Request) {
         materials: null, postedUrl: null, metrics: null, notes: "",
         updatedAt: Date.now(),
       }));
-    if (!items.length) return Response.json({ ok: false, error: "planner returned no usable slots" }, { status: 502 });
+    if (!items.length) throw new Error("planner returned no usable slots");
 
     const state = await readEngine();
     const kept = state.items.filter((it) => it.status !== "planned");
     state.items = [...kept, ...items].sort((a, b) => a.date.localeCompare(b.date));
     state.plan = { goals, channels, perWeek, weeks, at: Date.now() };
     await writeEngine(state);
-    return Response.json({ ok: true, added: items.length, kept: kept.length });
+    ctx.log(`${items.length} slots added, ${kept.length} kept`);
+    return { added: items.length, kept: kept.length };
+    },
+    { summarize: (r) => r },
+  );
+  try {
+    const r = await run.promise;
+    return Response.json({ ok: true, ...r, runId: run.id });
   } catch (e) {
-    return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
+    const msg = (e as Error).message;
+    const status = /did not return JSON|malformed JSON|no usable slots/.test(msg) ? 502 : 500;
+    return Response.json({ ok: false, error: msg, runId: run.id }, { status });
   }
 }

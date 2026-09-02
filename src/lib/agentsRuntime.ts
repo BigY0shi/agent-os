@@ -157,6 +157,15 @@ export function runningCount(): number {
   return n;
 }
 
+/** Live V2 agent runs, for the cross-module RunsTray (/api/runs). Meta only. */
+export function listLiveAgentRuns(): RunMeta[] {
+  const out: RunMeta[] = [];
+  for (const r of RUNS.values()) {
+    if (r.meta.status === "running" || r.meta.status === "waiting") out.push(r.meta);
+  }
+  return out;
+}
+
 export function agentHasActiveRun(agentId: string): boolean {
   for (const r of RUNS.values()) {
     if (r.meta.agentId === agentId && (r.meta.status === "running" || r.meta.status === "waiting")) return true;

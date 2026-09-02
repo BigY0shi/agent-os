@@ -169,6 +169,10 @@ export interface Settings {
   // engine blank = the profile's own default; timeoutMs bounds one synthesis
   // (CPU boxes load a model on first use, which can take minutes).
   voicebox: { url?: string; profile?: string; engine?: string; timeoutMs?: number };
+  // The corner tray that keeps module runs visible after their page is gone
+  // (components/RunsTray.tsx). autoDismissSec 0 = keep finished runs until
+  // dismissed by hand. Gear lives in the tray itself.
+  runsTray: { enabled?: boolean; autoDismissSec?: number };
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
   // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer
@@ -390,6 +394,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
   voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
+  runsTray: { enabled: true, autoDismissSec: 45 },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
   ideaEngine: {

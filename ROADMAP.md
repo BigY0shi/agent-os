@@ -13,11 +13,6 @@ is one line; the journal carries the rest.
 
 ## Now
 
-- [ ] **S2. Runs survive navigation.** Content Engine bypasses the agents registry,
-  so leaving the page mid-run loses the run with nothing on the Agents page. Route
-  every long run through the registry first, then add a corner tray stacking one
-  entry per live run. The tray is the visible half; the registry is the fix.
-
 ## Next
 
 - [ ] **S3. Pre-launch settings drawer + STOP.** Decided by Yoshi 2026-09-02:
@@ -46,7 +41,7 @@ is one line; the journal carries the rest.
 - [ ] **S5. Legacy memory backfill, 20-episode sample.** Imported episodes carry no
   aspect (Identity/Event/Relationship). Re-import cannot fix it (content-hash
   dedup). New routine reads existing rows and runs derivation over them using the
-  local models Yoshi already has (`bonsai 8b`, `nomic-embed-text`). Show him real
+  local models Yoshi already has (`bonsai 27b`, downloading 2026-09-02, and `nomic-embed-text`). Show him real
   rows from ~20 episodes, then decide on the full set (6-8 LLM calls per episode).
 - [ ] **S6. Hermes 3D is "nowhere".** Confirm whether it is a stale build or an
   unmounted route before doing anything else. Cheap check, large confusion if
@@ -83,11 +78,13 @@ is one line; the journal carries the rest.
 - SPEC-F carries a stale Hermes 3D claim.
 - Licence decision (MIT) deferred.
 - Legacy memory: full backfill size, after S5.
+- Wrap the remaining 34 long request-scoped routes (`grep -l maxDuration src/app/api`) in `startModuleRun()` as their modules get touched; Deal Desk brief/proposal and Hire Engine first (S4).
 
 ## Done
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-09-02 · v2.14.0 · S2 Runs survive navigation: module-run registry (`lib/moduleRuns.ts`), `/api/runs` + SSE stream, corner RunsTray in the layout, Content Engine generate + plan wired, 29-check smoke. 34 more long routes are one `startModuleRun()` call each; wire them as each module is touched.
 - 2026-09-02 · v2.12.0 · S1 Voicebox is the voice engine: `lib/voicebox.ts`, `provider: "voicebox"` in the TTS route, `/api/voicebox/{profiles,transcribe}`, local-Whisper mic provider, Jarvis gear controls, 35-check offline smoke; ElevenLabs stays as the owner-chosen, labelled backup (v2.13.0 `94942fb`). Live audio HEARD 2026-09-02 (Alfred profile, CUDA, `completed` status confirmed); profile-name trailing-space fix v2.13.1.
 - 2026-09-02 · v2.11.2 · S0 Launchers tell the truth: Restart .bat now pauses on an aborted restart; AGENTS.md Kokoro claim corrected.
 - 2026-09-02 · v2.8.0 `eccdbf9` · Mac wording and Cmd glyphs replaced for a Windows owner.

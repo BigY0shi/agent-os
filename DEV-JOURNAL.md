@@ -35,6 +35,67 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - S2: a run outlives the page that started it
+
+Tasklist item 5, from Yoshi's bug list: "If I leave a module's page in the
+middle of an agent run, it disappears. I don't know if it kills it."
+
+**What was actually happening.** It did not kill it. Content Engine's
+generate and plan are plain awaited POSTs with a 600 s ceiling; the browser
+drops the fetch on navigation, the Node handler keeps going, and
+`patchItem` writes the drafted materials anyway. The owner just never hears
+about it: no spinner, no record, no way back. Thirty-six routes share that
+shape (`grep -l maxDuration src/app/api`). The V2 agents module has a
+registry (`agentsRuntime` RUNS + the status feed); V1 had nothing.
+
+**Built.** `src/lib/moduleRuns.ts`: `startModuleRun(spec, work)` registers a
+run the moment it starts, returns `{ id, promise }`, and finishes on its own.
+The route still awaits the same promise, so the drawer gets its answer as
+before; the difference is that the run now exists outside the request.
+`/api/runs` (list, with live V2 agent runs merged in from a new
+`listLiveAgentRuns()`), `/api/runs/stream` (SSE, snapshot then one frame per
+change, same shape as `/api/v2/agents/status`), `/api/runs/:id` (detail,
+dismiss). `RunsTray.tsx` sits bottom-left in the root layout - Jarvis's orb
+owns bottom-right - one card per run, elapsed time while running, done/error
+with the last event, an Open link, auto-dismiss after `runsTray.autoDismissSec`
+with the knob in the tray's own gear (rule 16). Empty tray renders nothing.
+
+**Honesty rules baked in.** A run that was "running" when the server died is
+marked `lost` with "server restarted while this run was in flight" on the
+next boot, never left spinning. A live run cannot be dismissed (409); STOP
+is S3's verb and a different thing. The result stored on a run is a
+summary, never the payload.
+
+**Two things the smoke caught before anyone else could.** `patchItem` can
+return null and the summarizer would have read `.status` off it - a tsc
+error, fixed by failing the run with "item vanished while its materials were
+being written". And an ordering bug of the exact class the newsletter
+replies had last week: two runs finishing in the same millisecond sorted by
+Map insertion, oldest first. The comparator now tiebreaks on `startedAt`.
+Section B fails without it.
+
+**Scope, stated plainly.** Content Engine generate and plan are wired. The
+other 34 routes are one call each and are listed in the backlog; Deal Desk
+and Hire Engine go first when S4 opens them anyway. Wiring all 34 blind
+would have been a large untested diff across modules I have not read.
+
+**Design-hook note.** The tray cards carry a 3 px left accent whose colour
+IS the state (cyan running, green done, red error/lost). The impeccable hook
+flags that pattern generically; here it is the same device ContentEngineView
+already uses for its hook panel, and the colour encodes data, so it stays.
+
+**Evidence.** `scripts/v2/smoke-module-runs.mjs`, 29 checks: lifecycle,
+failure without unhandled rejection, dismiss, the 40-event cap, persistence
+and boot reconciliation, the three routes, and a grep that the two Content
+Engine routes, the layout mount and the agentsRuntime export are really
+there. `tsc --noEmit` clean; agentmail section F still passes.
+
+**Not verified.** The tray in a browser: SSE reconnect, the poll fallback,
+auto-dismiss timing. Needs the rebuilt app and one real generate.
+
+**Rollback.** Revert the commit. `module-runs.json` under `~/.agentic-os`
+is ignored by the old code.
+
 ## 2026-09-02 - S1: Voicebox is the voice engine
 
 Yoshi retired Jarvis's Web Speech avenue and named the replacement: Voicebox,
