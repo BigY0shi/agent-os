@@ -78,4 +78,17 @@ for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Seconds 1
 }
 if ($ok) { Write-Host "        online at http://localhost:3737" -ForegroundColor Green }
-else     { Write-Host "        still starting - see $logDir\agentos-server.err.log" -ForegroundColor Red }
+else {
+  # 2026-09-02: this used to print "still starting" and exit 0, so the batch
+  # file said "Done" while nothing listened. The usual reason is the new
+  # server refusing to start; its own words are in the err log, so show them.
+  Write-Host ""
+  Write-Host "  NOT ONLINE after 40 s. The server's last words:" -ForegroundColor Red
+  $errLog = Join-Path $logDir 'agentos-server.err.log'
+  if (Test-Path $errLog) { Get-Content $errLog -Tail 6 | ForEach-Object { Write-Host "        $_" -ForegroundColor Red } }
+  Write-Host ""
+  Write-Host "  If it says an old PID still holds the lock and that PID is gone, wait a" -ForegroundColor Yellow
+  Write-Host "  minute for the lock to go stale (or rebuild: the guard now checks the PID)" -ForegroundColor Yellow
+  Write-Host "  and run this again." -ForegroundColor Yellow
+  exit 1
+}

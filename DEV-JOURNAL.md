@@ -35,6 +35,49 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - "It says the server started, but I can't connect"
+
+Reported at 15:06, right after the S2 rebuild. Shell first: nothing listening
+on 3737, `.next/BUILD_ID` fresh (14:29), and the server's own err log:
+
+    REFUSING TO START - Agent OS is already running as PID 33256, up since
+    9/2/2026, 2:37:09 AM.
+
+PID 33256 did not exist. The lock file still carried it, with a heartbeat
+that was fresh when the refusal happened.
+
+**The race.** `agentos-restart.ps1` kills the old server, waits 1.2 s,
+and launches the new one. `singleInstance.ts` judges liveness by heartbeat
+alone - stale after 60 s - by design, because a PID can be recycled and a
+recycled PID would make a healthy boot refuse. So every restart within a
+minute of a healthy server saw a warm heartbeat from a dead process,
+refused, and exited. The launcher then printed "still starting - see the
+err log" and, because that branch exited 0, the batch file said "Done".
+This morning's S0 fix only covered the abort-on-survivor path; this was the
+other lie.
+
+**Fix, both halves.** `liveHolder()` keeps the heartbeat rule and adds one
+one-directional check: a fresh heartbeat from a PID that does not exist at
+all (`process.kill(pid, 0)` -> ESRCH) frees the lock. Absence is certain;
+a recycled PID still looks alive and still refuses, which is the failure the
+original design chose to accept. `agentos-restart.ps1` now exits 1 when the
+port is not up after 40 s and prints the last six lines of the err log, so
+the reason is on screen instead of in a file nobody opens.
+
+**The smoke had the same blind spot.** `smoke-restart-integrity.mjs` built
+its "live foreign holder" fixture with `process.pid + 1`, a PID that
+usually does not exist - exactly the case now treated as dead, so A8 would
+have failed. The fixture is `process.ppid` now (a real process), and A11b/
+A11c pin the new rule: fresh heartbeat + missing PID = ignored. 54 checks.
+
+**Not verified live.** The guard change needs a rebuild to be in the running
+server; until then the fix for a stuck restart is to wait a minute for the
+heartbeat to go stale and run the launcher again, which is what unblocked
+Yoshi today.
+
+**Rollback.** Revert the commit; previous launcher at
+`.exile/2026-09-02_150800/agentos-restart.ps1`.
+
 ## 2026-09-02 - S2: a run outlives the page that started it
 
 Tasklist item 5, from Yoshi's bug list: "If I leave a module's page in the

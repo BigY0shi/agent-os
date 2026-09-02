@@ -84,6 +84,7 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-09-02 · v2.14.1 · S0 follow-up: restart-within-60s race fixed. The single-instance guard now treats a fresh heartbeat from a PID that no longer exists as dead; the restart launcher exits 1 and prints the server's last words when nothing comes online.
 - 2026-09-02 · v2.14.0 · S2 Runs survive navigation: module-run registry (`lib/moduleRuns.ts`), `/api/runs` + SSE stream, corner RunsTray in the layout, Content Engine generate + plan wired, 29-check smoke. 34 more long routes are one `startModuleRun()` call each; wire them as each module is touched.
 - 2026-09-02 · v2.12.0 · S1 Voicebox is the voice engine: `lib/voicebox.ts`, `provider: "voicebox"` in the TTS route, `/api/voicebox/{profiles,transcribe}`, local-Whisper mic provider, Jarvis gear controls, 35-check offline smoke; ElevenLabs stays as the owner-chosen, labelled backup (v2.13.0 `94942fb`). Live audio HEARD 2026-09-02 (Alfred profile, CUDA, `completed` status confirmed); profile-name trailing-space fix v2.13.1.
 - 2026-09-02 · v2.11.2 · S0 Launchers tell the truth: Restart .bat now pauses on an aborted restart; AGENTS.md Kokoro claim corrected.

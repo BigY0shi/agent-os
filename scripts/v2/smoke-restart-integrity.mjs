@@ -77,7 +77,10 @@ check("A6 our own lock is not a foreign holder", lock.liveHolder() === null);
 check("A7 checkSingleInstance() is idempotent for us", lock.checkSingleInstance() === null);
 
 // A DIFFERENT pid, beating right now = a live second server. Must be refused.
-const foreign = { pid: process.pid + 1, startedAt: Date.now() - 60_000, heartbeat: Date.now() };
+// The foreign holder must be a PID that really exists (the parent process):
+// since 2026-09-02 a fresh heartbeat from a NON-existent PID is treated as
+// dead, because that is exactly what a just-killed server looks like.
+const foreign = { pid: process.ppid, startedAt: Date.now() - 60_000, heartbeat: Date.now() };
 fs.writeFileSync(lockFile, JSON.stringify(foreign));
 const holder = lock.liveHolder();
 check("A8 a live foreign holder is detected", holder?.pid === foreign.pid);
@@ -91,6 +94,11 @@ check("A10 a refused boot does NOT steal the lock",
 // refuse to start forever after any hard crash, or on a recycled PID).
 fs.writeFileSync(lockFile, JSON.stringify({ ...foreign, heartbeat: Date.now() - 5 * 60_000 }));
 check("A11 a stale holder is ignored", lock.liveHolder() === null);
+// A fresh heartbeat whose PID is gone = the launcher killed it seconds ago.
+fs.writeFileSync(lockFile, JSON.stringify({ ...foreign, pid: 4_000_000, heartbeat: Date.now() }));
+check("A11b a fresh heartbeat from a PID that does not exist is ignored", lock.liveHolder() === null);
+check("A11c pidExists: ourselves yes, 4000000 no", lock.pidExists(process.pid) === true && lock.pidExists(4_000_000) === false);
+fs.writeFileSync(lockFile, JSON.stringify({ ...foreign, heartbeat: Date.now() - 5 * 60_000 }));
 check("A12 boot takes over a stale lock", lock.checkSingleInstance() === null);
 check("A13 the lock is now ours", lock.readLock()?.pid === process.pid);
 
