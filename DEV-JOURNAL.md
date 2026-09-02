@@ -123,6 +123,31 @@ of `&&`, so the bump and commit ran without the journal or roadmap change.
 The commit-msg gate passed because AGENTS.md was staged. This entry is the
 docs-only follow-up commit.
 
+**Heard, 12:00 the same day (v2.13.1).** Yoshi installed the CUDA backend
+(RTX 4070 Ti SUPER, 8.8 GB VRAM in use) and made two more profiles: "The
+Sage" for the Oracle and "Alfred" for Jarvis. One real generation through
+`voiceboxSynthesize` with Alfred produced a 4.16 s WAV (RIFF header, 199 KB),
+sent to him. So the guesses in the entry above are now facts:
+
+- The terminal status IS `completed`, carrying `duration`; `generating`
+  repeats about once a second until then. Captured from the raw stream on the
+  third clip, at the moment `/audio` flipped from 500 to 200. The in-flight
+  set and the "anything else is terminal" rule were right; nothing to change.
+- The first clip took 234 s and the next two about 120 s and 150 s. Not the
+  client: Alfred has no default engine, so the studio used qwen 1.7B, which
+  ran at roughly a minute per second of audio even on the GPU. The same
+  profile on `chatterbox_turbo` produced 2.18 s of audio in 38 s. Set the
+  engine on the profile in the studio (or `voicebox.engine` in the gear) and
+  Jarvis stops taking two minutes to answer.
+- A bug the studio handed me for free: the profile is stored as "Alfred "
+  with a trailing space, and name matching was exact, so the first live call
+  failed with `profile "Alfred" not found. Available: The Sage, Alfred ,
+  Yoshi` - the space visible in the list. Matching now trims both sides; the
+  smoke's second fixture carries a trailing space to pin it, 36 checks.
+
+Pushed after this, at Yoshi's word: "commit and push everything after we
+test the voice."
+
 **Left for S8.** The Oracle still speaks ElevenLabs with its own hardcoded
 "Hermes" voice id; Video's voiceover is untouched. Same client, next slice.
 

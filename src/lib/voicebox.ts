@@ -131,8 +131,11 @@ export async function resolveVoiceboxProfile(ref?: string | null): Promise<Voice
   const profiles = await listVoiceboxProfiles();
   if (!profiles.length) throw new Error("Voicebox has no voice profiles yet. Clone or design one in the studio first.");
   if (!want) return profiles[0];
-  const hit = profiles.find((p) => p.id === want) ?? profiles.find((p) => p.name.toLowerCase() === want.toLowerCase());
-  if (!hit) throw new Error(`Voicebox profile "${want}" not found. Available: ${profiles.map((p) => p.name).join(", ")}`);
+  // Names are matched trimmed and case-folded: the studio keeps whatever was
+  // typed, and the first real profile arrived as "Alfred " with a trailing space.
+  const key = want.toLowerCase();
+  const hit = profiles.find((p) => p.id === want) ?? profiles.find((p) => p.name.trim().toLowerCase() === key);
+  if (!hit) throw new Error(`Voicebox profile "${want}" not found. Available: ${profiles.map((p) => p.name.trim()).join(", ")}`);
   return hit;
 }
 

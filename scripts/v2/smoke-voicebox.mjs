@@ -28,7 +28,8 @@ const check = (name, cond, extra = "") => {
 // ---- fake studio ------------------------------------------------------------
 const PROFILES = [
   { id: "p-yoshi", name: "Yoshi", description: "clone", language: "en", default_engine: "chatterbox_turbo", voice_type: "cloned" },
-  { id: "p-morgan", name: "Morgan", description: null, language: "en", default_engine: null, voice_type: "designed" },
+  // Trailing space on purpose: the studio keeps names as typed (the real "Alfred " had one).
+  { id: "p-morgan", name: "Morgan ", description: null, language: "en", default_engine: null, voice_type: "designed" },
 ];
 const WAV = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]); // "RIFF" + junk
 const seen = [];          // every URL the client requested
@@ -104,8 +105,9 @@ check("localhost accepted", V.voiceboxBase() === "http://localhost:17493");
 console.log("-- B: profiles --");
 const profiles = await V.listVoiceboxProfiles();
 check("two profiles mapped", profiles.length === 2 && profiles[0].engine === "chatterbox_turbo" && profiles[1].engine === null);
-check("resolve by id", (await V.resolveVoiceboxProfile("p-morgan")).name === "Morgan");
+check("resolve by id", (await V.resolveVoiceboxProfile("p-morgan")).id === "p-morgan");
 check("resolve by name, case-insensitive", (await V.resolveVoiceboxProfile("yoshi")).id === "p-yoshi");
+check("resolve by name ignores the studio's trailing whitespace", (await V.resolveVoiceboxProfile("morgan")).id === "p-morgan");
 check("resolve empty -> first profile", (await V.resolveVoiceboxProfile("")).id === "p-yoshi");
 S.writeSettings({ voicebox: { profile: "Morgan" } });
 check("resolve empty -> settings default", (await V.resolveVoiceboxProfile(undefined)).id === "p-morgan");
