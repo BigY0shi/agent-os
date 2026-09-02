@@ -47,6 +47,15 @@ ignoring the exit code of `agentos-restart.ps1`, which aborts (correctly) when a
 survives on 3737; the batch file printed "Done" and closed after five seconds anyway.
 Fixed the same day: it now pauses on a non-zero exit and says the old server is still up.
 
+**Remote access is Tailscale, and the microphone needs HTTPS.** The owner reaches the
+app from other devices at his tailnet address (100.88.224.75, MagicDNS
+`desktop.hair-halfmoon.ts.net`). Over plain http that is not a secure context, so
+browsers hide `navigator.mediaDevices` and every mic provider in the Jarvis gear reads
+"unavailable" while typed chat and spoken replies still work (owner report 2026-09-02).
+The fix is `tailscale serve --bg 3737` on the host, which fronts the app at
+`https://desktop.hair-halfmoon.ts.net` with a valid cert; it is a Tailscale config
+change and the owner runs it. Do not tell him to open a browser flag before that.
+
 **You cannot see the running app.** Routes behind the gate answer 307 with an
 Unauthorized JSON body. Signing in is the owner's job, and his credentials are never
 yours to type into a form. When something needs confirming in the live UI, ask him to
