@@ -84,7 +84,17 @@ function webSpeechAvailability(): true | string {
  */
 function mediaRecorderAvailability(): true | string {
   if (typeof window === "undefined") return "server render";
-  if (!navigator.mediaDevices?.getUserMedia) return "This browser exposes no microphone API (needs a secure context: https or localhost).";
+  if (!navigator.mediaDevices?.getUserMedia) {
+    // The usual reason on this LAN: the app is open at http://<ip>:3737.
+    // Browsers only expose the microphone on https or on localhost. Say so,
+    // with the two ways out, instead of a generic "no microphone API".
+    const origin = window.location.origin;
+    const secure = window.isSecureContext;
+    if (!secure) {
+      return `Mic blocked on ${origin}: browsers only allow the microphone on https or localhost. On this PC open http://localhost:3737; from another device, in Opera/Chrome open opera://flags/#unsafely-treat-insecure-origin-as-secure (chrome://flags in Chrome), add ${origin}, enable, relaunch.`;
+    }
+    return "This browser exposes no microphone API.";
+  }
   if (typeof (window as unknown as { MediaRecorder?: unknown }).MediaRecorder === "undefined") return "MediaRecorder is not available in this browser.";
   return true;
 }
