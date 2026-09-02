@@ -6,15 +6,19 @@ especially the new "Running it" section, then this.
 
 ## Tree state
 
-Three commits are local and **unpushed**:
+Recent work on this branch, oldest first:
 
 | commit | version | what |
 |---|---|---|
 | `eccdbf9` | v2.8.0 | Mac wording and Cmd glyphs replaced for a Windows owner |
 | `ded6823` | v2.9.0 | Jarvis: register the browser action set it was missing |
 | `4c1c06b` | v2.10.0 | Sidebar: Artist's Corner and Agent Toolbox, foldable sections |
+| `d46a79e` | v2.11.0 | Version display, AGENTS.md "Running it", this handoff |
 
-Everything above `fa10f64` on the branch is pushed. All three are `tsc --noEmit` clean.
+Do not trust a hardcoded pushed/unpushed count in a file like this one; it goes stale the
+moment someone pushes. Ask git instead:
+`git log --oneline origin/feat/v2-hermes3d-and-versioning..HEAD`. Everything above is
+`tsc --noEmit` clean.
 
 The running app is **older than all of them**: `.next/BUILD_ID` is stamped
 2026-09-01 06:28. Anything reported as "not working" in the live UI may simply predate
