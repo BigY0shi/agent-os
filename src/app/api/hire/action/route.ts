@@ -1,4 +1,5 @@
-import { setHireStatus, setHireNotes, setHirePitch, HIRE_STATUSES, type HireStatus } from "@/lib/hireDesk";
+import { setHireStatus, setHireNotes, setHirePitch, getHireLead, HIRE_STATUSES, type HireStatus } from "@/lib/hireDesk";
+import { isJudgmentStatus, recordDeskDecision, hireSubject } from "@/lib/deskMemory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,14 @@ export async function POST(req: Request) {
       if (!HIRE_STATUSES.includes(value as HireStatus)) {
         return Response.json({ ok: false, error: `unknown status "${value}"` }, { status: 400 });
       }
-      return Response.json({ ok: true, state: await setHireStatus(id, value as HireStatus) });
+      const state = await setHireStatus(id, value as HireStatus);
+      // A judgment call earns a memory episode; routine triage motion does not.
+      // Gating first also means only a real decision pays for the getHireLead read.
+      if (isJudgmentStatus("hire-engine", String(value))) {
+        const lead = await getHireLead(id);
+        if (lead) void recordDeskDecision("hire-engine", hireSubject(lead), String(value), lead.notes);
+      }
+      return Response.json({ ok: true, state });
     }
     if (action === "notes") return Response.json({ ok: true, state: await setHireNotes(id, value ?? "") });
     // Manual edits to the outreach box — without this the drawer textarea silently

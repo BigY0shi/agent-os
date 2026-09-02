@@ -1,7 +1,9 @@
 import { getDeal, addAnswer, LEADS_DIR } from "@/lib/upworkDesk";
+import { recordDeskQA, dealSubject } from "@/lib/deskMemory";
 import { run } from "@/lib/runner";
 import { CLAUDE_MODEL } from "@/lib/config";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
+import { withSkills } from "@/lib/platformSkills";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,12 +33,13 @@ export async function POST(req: Request) {
     // is being asked about (board.json, contacts, prior pitches) instead of
     // answering from the 1500 chars we paste in. No orchestrate: this is a single
     // question, not a build.
-    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: prompt, cwd: LEADS_DIR });
+    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: withSkills(prompt, "deals"), cwd: LEADS_DIR });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }
     const answer = r.stdout.trim();
     await addAnswer(id, question.trim(), answer);
+    void recordDeskQA("deal-desk", dealSubject(deal), question.trim(), answer);
     return Response.json({ ok: true, answer });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });

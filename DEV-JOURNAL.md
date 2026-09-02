@@ -35,6 +35,77 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-01 - Deal Desk and Hire Engine finally write to memory
+
+**The gap.** Memory V2 was never broken. `ingestFromModule` had 11 call sites
+across 7 files and the queue drained fine; every table read zero because every
+writer was a V2 module. The two surfaces carrying the most human judgment, Deal
+Desk and Hire Engine, are V1 and predate the seam entirely, so nothing either of
+them knew was ever recallable. Yoshi's read of it was right and the diagnosis was
+a wiring gap, not a bug.
+
+**What earns an episode.** A judgment status (approved, denied, sent, parked)
+with the note attached, a generated proposal or outreach pitch, and a Q&A answer.
+The shared seam is `src/lib/deskMemory.ts`; both desks are structurally identical
+so they share it.
+
+**What deliberately does not, and why.** Triage motion - new, reviewing,
+researching, dismissed - because refill auto-dismisses in bulk and recording that
+buries the signal under the noise it exists to filter. `ready`, because it is a
+staging step between approved and sent and both ends are already recorded.
+Briefs, because `brief-batch` runs one pass per un-briefed card and a fresh
+248-card board would enqueue 248 near-identical episodes on one click; a brief is
+also regenerable from the listing, which a decision is not. That last one is a
+judgment call rather than an obvious truth, and it is one line to reverse.
+
+**Hooked in the routes, not the store.** `setEditedPitch` is called by the drawer
+on every hand edit as well as by the generator, so hooking the store would have
+recorded a keystroke save as a fresh pitch. The routes are also where the deal is
+already in hand. `getDeal` is called only after the judgment check passes, so
+routine triage does not pay for a board read.
+
+**Three things this shook out.**
+
+1. *The smoke went to the network.* Enqueuing woke the queue's drain loop, which
+   runs `while (ingestEnabled())` against settings that default to true, and it
+   made live calls to ollama.com with whatever credentials were on the box. That
+   breaks the offline rule in AGENTS.md outright. I only saw it because a failing
+   run printed more than the `grep -E "^(PASS|FAIL)"` I had been filtering
+   through - the earlier green runs had been doing it silently. The smoke now
+   writes `memory.ingestEnabled: false` before importing anything. Lesson worth
+   keeping: filtering smoke output to the assertion lines hides everything the
+   smoke does on the way.
+
+2. *The 20-char episode floor is unreachable.* Every body is wrapped in
+   `Deal Desk: ... "title"`, which clears 20 characters on its own, so
+   `MIN_EPISODE_CHARS` cannot fire from any entry point. The real gates are the
+   empty-content checks. Left in place as a backstop, but annotated at the
+   constant and pinned by smoke section E, because a guard that looks like a
+   safety net and is not is worse than no guard.
+
+3. *A board record with no pitch is invisible.* `listDeals` matches board records
+   against `pitches.json` by URL and skips the unmatched, so my first route
+   fixture yielded `listDeals -> 0` and `getDeal -> NULL`, and section G failed
+   with the wiring perfectly correct. Not a test artifact: an unpitched Upwork
+   lead has no card, so it cannot be decided on or remembered. Documented in
+   `docs/modules/deal-desk.md`.
+
+**Evidence.** `scripts/v2/smoke-desk-memory.mjs`, 35 checks. Section G drives the
+real `/api/deals/action` handler against a fixture board and asserts that
+`reviewing` records nothing while `approved` records an episode carrying the
+listing title and the operator's existing note as the reason - tsc proves the
+imports resolve, only this proves the hook is reached. `smoke-deal-desk.mjs` and
+`smoke-agentmail.mjs` (whose section F greps every sibling smoke for isolation)
+both still pass.
+
+**What is not proven.** The end-to-end path from a click in the running app
+through to a settled episode. That needs the dev server and a live model, and it
+will confirm itself the first time a card is approved.
+
+**Rollback.** Revert this commit. Nothing migrates and nothing is destructive:
+the desks write into the ingestion queue and ignore failures, so removing the
+hooks leaves both stores exactly as they were.
+
 ## 2026-09-01 - Deal Desk state is now rotated, not overwritten
 
 **How this started.** Yoshi asked whether wiring Deal Desk into memory would

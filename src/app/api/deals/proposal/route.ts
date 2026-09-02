@@ -1,7 +1,9 @@
 import { getDeal, setEditedPitch, LEADS_DIR } from "@/lib/upworkDesk";
+import { recordDeskPitch, dealSubject } from "@/lib/deskMemory";
 import { run } from "@/lib/runner";
 import { CLAUDE_MODEL } from "@/lib/config";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
+import { withSkills } from "@/lib/platformSkills";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,12 +45,15 @@ export async function POST(req: Request) {
     // real corpus — prior winning pitches, the portfolio, contacts. orchestrate is on:
     // a proposal is research + positioning + copy, which is worth splitting across
     // agents rather than one model doing all three passes alone.
-    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs({ orchestrate: true })], { timeoutMs: 300_000, input: prompt, cwd: LEADS_DIR });
+    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs({ orchestrate: true })], { timeoutMs: 300_000, input: withSkills(prompt, "deals"), cwd: LEADS_DIR });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }
     const proposal = r.stdout.trim();
     await setEditedPitch(id, proposal);
+    // Hooked here rather than in setEditedPitch, which the drawer also calls on
+    // every hand edit - one episode per generation, not per keystroke save.
+    void recordDeskPitch("deal-desk", dealSubject(deal), proposal);
     return Response.json({ ok: true, proposal, usedNotes: !!notes });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });

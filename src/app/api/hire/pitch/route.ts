@@ -1,4 +1,5 @@
 import { getHireLead, setHirePitch } from "@/lib/hireDesk";
+import { recordDeskPitch, hireSubject } from "@/lib/deskMemory";
 import { generateHirePitch } from "@/lib/hireBrief";
 
 export const runtime = "nodejs";
@@ -20,6 +21,9 @@ export async function POST(req: Request) {
     const res = await generateHirePitch(lead);
     if ("error" in res) return Response.json({ ok: false, error: res.error }, { status: 502 });
     await setHirePitch(id, res.pitch, res.read);
+    // Hooked here rather than in setHirePitch, which the "pitch" action also calls
+    // on every hand edit - one episode per generation, not per manual save.
+    void recordDeskPitch("hire-engine", hireSubject(lead), res.pitch);
     return Response.json({ ok: true, pitch: res.pitch, read: res.read ?? null });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });

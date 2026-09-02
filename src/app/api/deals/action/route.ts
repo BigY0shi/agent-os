@@ -1,4 +1,5 @@
-import { setStatus, setNotes, setNeedsInfo, setEditedPitch, type DealStatus } from "@/lib/upworkDesk";
+import { setStatus, setNotes, setNeedsInfo, setEditedPitch, getDeal, type DealStatus } from "@/lib/upworkDesk";
+import { isJudgmentStatus, recordDeskDecision, dealSubject } from "@/lib/deskMemory";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,17 @@ export async function POST(req: Request) {
   try {
     let state;
     switch (action) {
-      case "status": state = await setStatus(id, value as DealStatus); break;
+      case "status": {
+        state = await setStatus(id, value as DealStatus);
+        // A judgment call earns a memory episode; routine triage motion does not.
+        // Gating on that first also means only a real decision pays for the board
+        // read that getDeal costs.
+        if (isJudgmentStatus("deal-desk", String(value))) {
+          const deal = await getDeal(id);
+          if (deal) void recordDeskDecision("deal-desk", dealSubject(deal), String(value), deal.notes);
+        }
+        break;
+      }
       case "notes": state = await setNotes(id, String(value ?? "")); break;
       case "needsInfo": state = await setNeedsInfo(id, !!value); break;
       case "editPitch": state = await setEditedPitch(id, String(value ?? "")); break;
