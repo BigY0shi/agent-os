@@ -71,3 +71,6 @@ public/hermes3d/
 /*.jpeg
 /*.gif
 /*.webp
+
+# ralph harness cycle logs
+.harness-logs/

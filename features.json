@@ -1,0 +1,206 @@
+{
+  "$schema_note": "Ralph harness contract: a session may change ONLY a feature's 'status', 'notes' and 'model'. Every other field is operator-owned. Order = value/risk; the loop works top-down. status is 'failing' or 'passing'. These rows are the roadmap slices in ROADMAP.md; the slice id is in each title.",
+  "project": "Agent OS - self-hosted operations dashboard (Next.js 16, V1 modules + V2 CORE on SQLite). Roadmap slices S3..S9 run as harness features. Read AGENTS.md first, especially 'Running it' and 'Harness'.",
+  "features": [
+    {
+      "id": "feat-s8-voicebox-everywhere",
+      "title": "S8: Voicebox speaks for the Oracle and Video too",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/voicebox.ts",
+        "src/app/api/hermes/tts/route.ts",
+        "src/components/OracleView.tsx",
+        "src/app/api/voicebox/profiles/route.ts",
+        "src/components/v2/jarvis/JarvisSettings.tsx",
+        "DEV-JOURNAL.md (entries 'S1: Voicebox is the voice engine' and 'Heard, 12:00')"
+      ],
+      "description": "S1 made Voicebox (local studio at 127.0.0.1:17493, lib/voicebox.ts, provider 'voicebox' in /api/hermes/tts, profiles from /api/voicebox/profiles) the voice engine for Jarvis. The Oracle (OracleView.tsx) still speaks ElevenLabs with a hardcoded voice id 'Bu13R3bywbVy3lQswSJo' and its own ElevenLabs picker; the owner has already made a Voicebox profile named 'The Sage' for it. Make the Oracle's voice provider a setting (oracle.voice.provider: 'voicebox' | 'elevenlabs', oracle.voice.voiceboxProfile, default voicebox + 'The Sage' when that profile exists) exposed in the Oracle's own gear (rule 16 - add a small gear if it has none), and make OracleView speak through /api/hermes/tts with provider from settings and voiceId = the Voicebox profile id/name. Keep ElevenLabs selectable. Do NOT touch Video/voiceover in this feature; note it in agent-progress.md as a follow-up if you see the seam.",
+      "acceptance_criteria": [
+        "OracleView reads oracle.voice from /api/settings and sends provider + voiceId accordingly; no hardcoded ElevenLabs id remains as the default path.",
+        "The Oracle gear lists Voicebox profiles from /api/voicebox/profiles and persists the choice via PATCH /api/settings.",
+        "When Voicebox fails and the owner's fallback setting allows it, the reply is labelled (provider/fellBackFrom) exactly as the Jarvis path does; no silent substitution.",
+        "A new or extended offline smoke asserts the settings defaults and greps that OracleView no longer hardcodes provider 'elevenlabs'; ./test.sh exits 0.",
+        "Version bumped (npm run version:bump -- minor), DEV-JOURNAL.md entry written, ROADMAP.md S8 ticked into Done with commit + version, node scripts/roadmap-page.mjs re-run."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s6-hermes3d-missing",
+      "title": "S6: Hermes 3D is nowhere - find out why and mount it or say why not",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/v2/hermes3d/clips.ts",
+        "_design/hermes3d/PIPELINE.md",
+        "public/hermes3d/ (gitignored baked assets: office.glb, hermes-clips.glb, characters/, office-seats.json)",
+        "src/components/Sidebar.tsx (NAV + route Sets; a route in NAV but in no Set lands in 'Self')",
+        "src/lib/pageMeta.ts",
+        "_design/agentos-v2/ultraplan/ (SPEC-F, the Hermes 3D spec)"
+      ],
+      "description": "The owner reports 'Hermes 3D is nowhere'. Evidence so far (2026-09-02): the baked assets exist under public/hermes3d (15 MB), src/lib/v2/hermes3d/ holds only clips.ts, and there is NO page route, NO NAV entry and NO component referencing hermes3d in src/app or src/components. So it is not a stale build: the module was never mounted after the asset pipeline landed. Read SPEC-F to learn what the page was meant to be (a 3D office scene with agents in seats, driven by office-seats.json and the clip GLB). Deliver the smallest honest mount: a /hermes3d page in Artist's Corner (add to ARTIST_ROUTES in Sidebar.tsx, pageMeta entry) that loads office.glb + characters + clips with three.js (already a dependency; check package.json) and renders the office with idle clips on a few seats, fails loudly with a visible message when an asset is missing (the directory is gitignored), and a gear stub. If the full scene is out of reach in one session, mount the page with the office mesh alone and write the rest as a follow-up in agent-progress.md; do not fake agent activity (AGENTS.md 'Never fabricate state').",
+      "acceptance_criteria": [
+        "A /hermes3d route exists, appears in the sidebar under Artist's Corner, and has a TopBar title via pageMeta.",
+        "The page renders office.glb from public/hermes3d when present and shows an explicit 'assets not baked, see _design/hermes3d/PIPELINE.md' message when absent; never a blank canvas.",
+        "An offline smoke asserts the NAV/Set placement, the pageMeta entry, and that office-seats.json parses to >= 100 anchors when present (skip with a printed reason when the gitignored dir is absent); ./test.sh exits 0.",
+        "DEV-JOURNAL.md records what was actually missing and what was mounted; ROADMAP.md S6 ticked; version bumped; roadmap page re-rendered."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s3-prelaunch-drawer-stop",
+      "title": "S3: pre-launch settings drawer + STOP for Content Engine and Kanban",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/moduleRuns.ts (the S2 registry: startModuleRun, ctx.log/progress)",
+        "src/components/RunsTray.tsx",
+        "src/app/api/content-engine/generate/route.ts",
+        "src/app/api/content-engine/plan/route.ts",
+        "src/components/ContentEngineView.tsx",
+        "src/app/api/agent-kanban/ (build, plan, preview, workspace)",
+        "src/components/AgentKanban*.tsx",
+        "src/components/DealDesk.tsx (the reference implementation the owner called 'done pretty well and tight')",
+        "src/lib/loopEngine.ts (cliComplete accepts opts.signal and kills the child on abort)",
+        "src/lib/settings.ts + src/components/ConfigMenu.tsx (runtime settings store; rule 16)"
+      ],
+      "description": "Owner decision 2026-09-02: configuration happens BEFORE a run launches, in a settings drawer, and the ONLY mid-run control is STOP. No live editing of constraints. The drawer is where skills get applied and guardrails added/removed. Build it for Content Engine (generate + plan) and Agent Kanban (plan + build), the two modules he runs most. Two halves. (1) STOP: extend moduleRuns with an AbortController per run (ctx.signal) and a stopModuleRun(id) that aborts it and marks status 'stopped' with who/when; expose POST /api/runs/:id {action:'stop'}; pass ctx.signal into cliComplete / multiModelComplete so the child CLI actually dies (loopEngine already supports signal; check contentEngine.multiModelComplete and the kanban routes and thread the signal through); RunsTray shows a STOP button on running runs. (2) Drawer: a reusable <RunLaunchDrawer> component: opened by the module's Run/Generate/Plan button, shows the run's settings (provider/model seat, skills to apply from /api/skills, guardrail toggles such as max steps / no network / require test run, extra instructions), a Launch button, and persists the last-used values per module in settings (settings.launch.<module>) so the drawer opens pre-filled. The route receives the chosen values in the POST body and honors them; unknown fields are rejected, not ignored. Wire Content Engine first, then Kanban; keep Deal Desk untouched (S4 owns it). Smokes: extend smoke-module-runs.mjs for stop (signal fires, status 'stopped', a stopped run's promise rejects with an AbortError-like message, dismiss allowed after stop), and add smoke-launch-drawer.mjs asserting the settings shape/defaults and that both routes read and validate the launch options.",
+      "acceptance_criteria": [
+        "POST /api/runs/:id {action:'stop'} aborts a running module run: ctx.signal fires, the child CLI is killed via the existing signal support, status becomes 'stopped', and the tray shows it as stopped (never 'done').",
+        "Content Engine generate/plan and Kanban plan/build open a pre-launch drawer with settings, skills and guardrails; Launch sends them in the body; the routes validate and honor them; last-used values persist in settings.launch.<module> (rule 16: everything visible in-app).",
+        "No mid-run control other than STOP exists; the drawer is not editable while that module's run is in flight.",
+        "smoke-module-runs.mjs covers stop; smoke-launch-drawer.mjs covers the settings shape and route validation; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry, ROADMAP.md S3 ticked into Done, version bumped (minor), roadmap page re-rendered."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-backlog-wrap-long-routes",
+      "title": "Backlog: Deal Desk and Hire Engine long routes register module runs",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/moduleRuns.ts",
+        "src/app/api/content-engine/generate/route.ts (the pattern: wrap, await run.promise, return runId)",
+        "src/app/api/deals/brief/route.ts",
+        "src/app/api/deals/brief-batch/route.ts",
+        "src/app/api/deals/proposal/route.ts",
+        "src/app/api/deals/enrich/route.ts (NOTE: this file is in the owner's uncommitted working set - do not stage or reformat it; skip it if it is dirty per git status)",
+        "src/app/api/hire/brief/route.ts",
+        "src/app/api/hire/draft/route.ts",
+        "src/app/api/hire/pitch/route.ts",
+        "src/app/api/hire/scrape/route.ts",
+        "src/app/api/hire/enrich/route.ts"
+      ],
+      "description": "S2 built the module-run registry and wired Content Engine only. Wrap the Deal Desk and Hire Engine long routes listed in sources with startModuleRun() the same way: module slug 'deals' or 'hire', a human label naming the listing/lead, href '/deals' or '/hire', ctx.log at the meaningful steps, await run.promise, add runId to the response, keep the existing response shapes and status codes. Check `git status --short` first and SKIP any listed file that is already modified in the working tree (the owner's in-progress work); record which were skipped in notes. Stage only the files you changed.",
+      "acceptance_criteria": [
+        "Every clean route in the list calls startModuleRun and returns runId; response shapes and status codes are unchanged.",
+        "smoke-module-runs.mjs section F greps each wired route for startModuleRun; ./test.sh exits 0.",
+        "DEV-JOURNAL.md notes which routes were wired and which were skipped as dirty; version bumped (patch); ROADMAP.md backlog line updated."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s4-deal-desk-control",
+      "title": "S4: Deal Desk - more control from the chair (a-f)",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "ROADMAP.md (the S4 bullet is the spec: parts a-f)",
+        "src/components/DealDesk.tsx",
+        "src/lib/upworkDesk.ts (rotated store, withLock; listDeals skips board rows with no pitches.json entry)",
+        "src/lib/dealBrief.ts (NOTE: dirty in the owner's tree - read, do not stage)",
+        "src/app/api/deals/* (action, ask, brief, brief-batch, cookie, enrich (dirty), feeds, list, proposal, refill, scrape)",
+        "src/lib/deskMemory.ts",
+        "docs/modules/deal-desk.md",
+        "scripts/v2/smoke-deal-desk.mjs, scripts/v2/smoke-desk-memory.mjs",
+        "src/lib/settings.ts (add deals.* knobs; rule 16: expose them in the Deal Desk gear)"
+      ],
+      "description": "Owner asks, 2026-09-02, in his words. (a) Manual intake: paste one or more job-listing URLs and have the desk scrape, evaluate and pitch them like feed items (new POST /api/deals/intake taking urls[]; reuse the scrape + brief + proposal path; a paste box in the Deal Desk header). (b) Deny without opening: a deny control on the card face, multi-select with bulk deny (one action call per card or a new bulk action in /api/deals/action), and the Parked/Denied lane reachable without horizontal scroll (a 'Denied' drop target or a sticky lane). (c) Verdict first: the evaluator already scores and says pass or pursue; move that one-sentence verdict to the TOP of the yellow summary box and add a colour band on the card edge that encodes it (pursue / maybe / pass). (d) Gate enrichment on a live Upwork session: detect the login wall in the scraped HTML (title/URL/redirect to login, or the known 'Log in' markers), stop the enrich run, mark the card 'needs login' and surface a banner with a re-login link instead of enriching against the wall. (e) 'More info needed' must fire work: today it only paints a yellow cone; make it kick off a research pass (enrich + brief + the open questions via the ask route) as a module run (startModuleRun, module 'deals') and report back on the card; add a 'Get more info' button in the drawer. (f) Gate scrapes by posted date: a deals.maxAgeDays setting (default 5) in the gear, drop older listings at scrape time, show the age on the card. Ride-along: a visible spinner on Reload. Deal Desk is the reference for S3, so keep the drawer pattern consistent with RunLaunchDrawer if it exists by then. Do this in the order (c), (b), (f), (d), (a), (e); each part is a separate commit; if you run out of session, leave the remaining parts as the next session's work in agent-progress.md (this row stays failing until all six land).",
+      "acceptance_criteria": [
+        "(c) The verdict sentence is the first line of the summary box and the card edge colour matches it; (b) a card can be denied from its face and several at once; the denied lane is reachable without horizontal scrolling.",
+        "(f) Listings older than deals.maxAgeDays are dropped at scrape time and the age shows on the card; the knob is in the gear.",
+        "(d) A logged-out Upwork session stops enrichment with a visible 'needs login' state instead of enriching the login page; (a) pasted URLs become cards through the normal pipeline; (e) 'More info needed' starts a module run and its result lands on the card.",
+        "smoke-deal-desk.mjs (or a new smoke) covers: verdict extraction, bulk deny, max-age filter, login-wall detection on fixture HTML, intake URL validation; all redirect AGENTIC_OS_DESK / UPWORK_LEADS_DIR / AGENTIC_OS_SETTINGS first; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry per part, ROADMAP.md S4 ticked, version bumped (minor), docs/modules/deal-desk.md updated, roadmap page re-rendered."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s5-legacy-memory-backfill",
+      "title": "S5: legacy memory backfill routine (20-episode sample)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/v2/memory/ (episodes, derivation, ingest queue; find the aspect/derivation code and the content-hash dedup)",
+        "src/lib/v2/dbSchema.ts (memory migrations in the 20s)",
+        "scripts/v2/smoke-memory*.mjs",
+        "HANDOFF.md item 2 (the plan agreed with the owner)",
+        "src/lib/settings.ts (memory.* knobs; the model policy memory: local models via Ollama)"
+      ],
+      "description": "Imported legacy episodes sit with no aspect (Identity / Event / Relationship). Re-running import in full mode cannot fix them because content-hash dedup rejects the rows. Build a backfill routine that reads EXISTING episode rows lacking derivation and runs the same derivation over them, using the owner's LOCAL models through Ollama (chat model 'bonsai' 27B - he is downloading it 2026-09-02; embeddings 'nomic-embed-text'). Deliverables: src/lib/v2/memory/backfill.ts with listUndrivedEpisodes(limit) and backfillEpisodes({limit, model, dryRun}) that records per-episode results; a CLI entry scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--dry-run]; a gear entry in the Memory module (limit, model, run button) that runs it as a module run (startModuleRun, module 'memory') so the tray shows progress via ctx.progress. It must fail loudly if Ollama or the model is absent (never fall back to a hosted model). Smoke: mock the model call, insert 5 legacy rows in a temp DB (AGENTIC_OS_DB, AGENTIC_OS_SETTINGS redirected; memory.ingestEnabled false), run backfill, assert aspects land and dedup is untouched. Do NOT run the real 20-episode sample yourself: the owner wants to see it; write the exact command in agent-progress.md under AWAITING USER VERIFY and stop there.",
+      "acceptance_criteria": [
+        "backfill.ts + memory-backfill.mjs exist; a dry run lists candidate episodes without writing; a real run derives aspects for existing rows without re-importing or touching the content-hash dedup.",
+        "Ollama/model absence produces a clear error and no fallback.",
+        "The Memory gear exposes limit + model + a Run button that starts a module run with progress.",
+        "smoke-memory-backfill.mjs passes offline with a mocked model; ./test.sh exits 0.",
+        "agent-progress.md carries an AWAITING USER VERIFY checklist with the exact 20-episode command for the owner; DEV-JOURNAL.md entry; version bumped (minor); ROADMAP.md S5 marked 'built, sample pending owner'."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s7-webmcp-wizard",
+      "title": "S7: WebMCP wizard - describe, clarify, propose tools, approve, then emit JSON",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/v2/webmcp/ (engine, exporter, spec_json)",
+        "src/app/api/v2/webmcp/*",
+        "src/components/v2/webmcp/* (the /webmcp builder page)",
+        "_design/agentos-v2/ultraplan/ (SPEC-D, WebMCP)",
+        "scripts/v2/smoke-webmcp*.mjs",
+        "src/lib/loopEngine.ts (cliComplete) / src/lib/v2/jarvis (how the brain is called)"
+      ],
+      "description": "Owner spec (bug list): the WebMCP builder should be a wizard, not an input page. Step 1: the user gives an exact description of what the tool should do (vague or granular). Step 2: an AI digests it, asks clarifying questions, and reasons in a scratchpad WITHOUT writing code: a proposed tool list (name, one-job purpose, inputs, persona/category). Step 3: the user approves or edits the list. Step 4: only then the agent emits the JSON spec following the existing exporter's schema and best practices: 5-10 tools per server, one tool one job, unused tools cut, tools split by persona or category. Escape hatch: a 'write your own JSON' mode where the agent only proofreads and reports problems. Build it as a stepper inside the existing /webmcp builder with server-side routes for digest (questions + proposal), and emit; the model call goes through the existing cliComplete/provider seam and honours the selected provider (never a silent fallback). Persist wizard drafts so a refresh does not lose the conversation. Smokes: the proposal->JSON transform with a mocked model, schema validation of emitted specs, the proofread path flagging a bad spec.",
+      "acceptance_criteria": [
+        "The /webmcp builder offers Wizard and Write-my-own modes; the wizard has description -> clarify/propose -> approve -> emit steps and never emits JSON before approval.",
+        "Emitted specs validate against the existing WebMCP schema and respect 5-10 tools, one job per tool, persona/category split.",
+        "The proofread mode returns concrete problems for an invalid spec and says 'looks good' only when the schema passes.",
+        "smoke-webmcp-wizard.mjs passes offline with a mocked model; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry, ROADMAP.md S7 ticked, version bumped (minor), roadmap page re-rendered."
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s9-openmontage-module",
+      "title": "S9: OpenMontage module in Artist's Corner",
+      "priority": "LOW",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "C:/Users/Yoshi/Documents/OpenMontage/AGENT_GUIDE.md",
+        "C:/Users/Yoshi/Documents/OpenMontage/docs/ARCHITECTURE.md",
+        "C:/Users/Yoshi/Documents/OpenMontage/README.md (quick start, pipelines)",
+        "src/components/Sidebar.tsx (ARTIST_ROUTES), src/lib/pageMeta.ts",
+        "src/lib/runner.ts (NOTE dirty; read only) and src/lib/loopEngine.ts (how CLIs are spawned on Windows; python is 'python' not 'python3')",
+        "src/lib/settings.ts (add openmontage.* knobs: repo path, python bin, output dir; rule 16 gear)"
+      ],
+      "description": "OpenMontage (calesthio/OpenMontage, AGPLv3) is a Python agentic video production system checked out at C:/Users/Yoshi/Documents/OpenMontage. Read its AGENT_GUIDE.md and docs/ARCHITECTURE.md FIRST to learn its CLI/entry points and pipeline definitions; do not guess them. Then wrap it as a sidebar module '/openmontage' in Artist's Corner the way other Artist's Corner tools wrap external programs: a gear with the repo path (default the path above), the python executable, and an output directory, all in settings; a page that lists available pipelines from pipeline_defs, lets the owner pick one and give a brief, and runs it as a module run (startModuleRun, module 'openmontage', ctx.log streaming the process output) with the rendered output listed when done. Fail loudly when the repo, python or a dependency is missing. Do not install Python packages; if requirements are unmet, show the exact command for the owner. Smoke: mock the spawn and assert the pipeline discovery, settings defaults, and the missing-repo error.",
+      "acceptance_criteria": [
+        "/openmontage exists in Artist's Corner with a TopBar title; the gear exposes repo path, python bin and output dir.",
+        "Pipelines are discovered from the checkout's pipeline_defs and a run starts as a module run with live log lines in the tray.",
+        "A missing repo / python / dependency is a visible error with the fix, never a silent no-op.",
+        "smoke-openmontage.mjs passes offline; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry, ROADMAP.md S9 ticked, version bumped (minor), roadmap page re-rendered."
+      ],
+      "status": "failing",
+      "notes": ""
+    }
+  ]
+}

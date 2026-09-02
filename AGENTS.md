@@ -86,6 +86,43 @@ into a nag to rebuild (rule 15), and never restart the server yourself (rule 12)
 - **Stage explicit file lists.** This repo habitually carries 50+ dirty files of his in-progress work. `git add -A <dir>` has already swept ~30 unrelated files into a commit once. (Rule 22 in the global contract)
 - **Nothing critical is committed without his review.**
 
+## Harness (autonomous sessions)
+
+`scripts/harness/ralph-loop.sh` spawns fresh headless `claude -p` sessions, one
+`"failing"` feature from `features.json` each, gated on `./test.sh` (a clean `tsc` plus every
+offline smoke). State lives in files: `features.json` (a session may change ONLY its own
+feature's `status`, `notes`, `model`), `agent-progress.md` (read first, update last),
+`DEV-JOURNAL.md` and `ROADMAP.md`. Cycle logs land in `.harness-logs/` (gitignored).
+
+**Session Initialization Ritual.** Read `agent-progress.md`; `git log --oneline -5`;
+`git status --short` (know which files are the owner's uncommitted work, and never stage or
+reformat them); read the feature's `description`, `acceptance_criteria` and every `sources`
+path; run `./init.sh`; read the real code before changing it.
+
+**Working it.** The minimum that meets the acceptance criteria, additive and reversible,
+with a smoke that proves it (offline, credential dirs redirected, rule 19). Feat-loop
+discipline applies: recon with exit codes captured, evidence before diagnosis, 0 errors and
+0 warnings, then the commit.
+
+**Close-Out Ritual, all of it.** `./test.sh` exits 0. `npm run version:bump -- minor` (feat)
+or `patch` (fix). Stage an explicit file list plus `features.json`, `DEV-JOURNAL.md`,
+`ROADMAP.md`, `package.json`, `package-lock.json`; commit as `feat(<feature_id>): <desc>`
+with the trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`; `git push`.
+Flip `status` to `"passing"` only when every criterion is met and the gate is green, with
+concrete evidence in `notes`. Update `agent-progress.md`. Tick the slice in `ROADMAP.md` and
+run `node scripts/roadmap-page.mjs`.
+
+**Stopping early.** `BLOCKED: <reason>` or `AWAITING USER VERIFY` + a numbered checklist in
+`agent-progress.md` pauses the loop (exit 2). Use `AWAITING USER VERIFY` only for things
+that genuinely need the owner (a live-app check, a decision); retire the marker by retitling
+it when resolved, because the grep is whole-file. A feature you cannot finish is left
+`failing` with `SKIP <date>: <reason>` appended to `notes` so the operator can reorder; do
+not stop the loop for it.
+
+**Never in a harness session:** start, stop or restart the server on 3737; `git add -A`;
+edit another feature's row or any `acceptance_criteria`; publish Artifacts; delete anything
+(exile to `.exile/<timestamp>/`).
+
 ## Assets
 
 Before using any asset pack, ASK which folder and which subfolders are usable versus reference-only, and confirm the exact path against the filesystem before building. Do not guess. The cost is concrete: the first draft of this rule cited `downloads/sci-fi-elements/{greebles,panels,stickers}`, which was wrong in three ways at once — wrong parent, wrong spelling, wrong subfolder names. Verified 2026-08-31, the sci-fi pack is `C:/Users/Yoshi/my-agent/ai-visualizer/faces/board/scifi-elements/` with `Consoles/`, `Greebles/`, `Stickers/`, `decals/`, `wall_panels/` (568 files, mixed casing).
