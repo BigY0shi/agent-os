@@ -30,16 +30,18 @@ is one line; the journal carries the rest.
   evaluate, and pitch them like any feed item. (b) Deny without opening: a deny
   control on the card face, multi-select with bulk deny, and the Parked/Denied
   lane reachable without scrolling off-screen (today: open card, dropdown, deny,
-  close; the deny lane sits off the right edge). (c) Fit at a glance: the
-  evaluator's fitment take goes at the top of the yellow summary box and a color
-  band on the card edge encodes it. (d) Gate enrichment on a live Upwork session:
+  close; the deny lane sits off the right edge). (c) Verdict first: the
+  evaluator already scores the listing and then says pass or pursue; that
+  "hit or stand" sentence moves to the TOP of the yellow summary box so cards can
+  be cleared at reading speed, and a color band on the card edge encodes it. (d) Gate enrichment on a live Upwork session:
   the browser was logged out and enrich ran as if fine; detect the login wall,
   stop, and ask. (e) "More info needed" must do something: today it paints a
   yellow cone on the card and fires no task. It should kick off a research pass
   (enrich + brief + the open questions) and report back on the card, with a
-  button inside the drawer to ask for more on demand. Ride-alongs from an earlier
-  session: a visible Reload spinner,
-  and a one-line elevator "how we'd do it" in the summary box. Deal Desk is also
+  button inside the drawer to ask for more on demand. (f) Gate scrapes by posted date: the feed is pulling listings 3-4 weeks old;
+  add a max-age setting in the gear (default a few days), drop older listings at
+  scrape time, and show the age on the card. Ride-along from an earlier session:
+  a visible Reload spinner. (The "how we'd do it" line already exists.) Deal Desk is also
   the reference for S3, so (b) and (c) shape the drawer pattern.
 - [ ] **S5. Legacy memory backfill, 20-episode sample.** Imported episodes carry no
   aspect (Identity/Event/Relationship). Re-import cannot fix it (content-hash
