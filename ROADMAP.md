@@ -34,7 +34,11 @@ is one line; the journal carries the rest.
   evaluator's fitment take goes at the top of the yellow summary box and a color
   band on the card edge encodes it. (d) Gate enrichment on a live Upwork session:
   the browser was logged out and enrich ran as if fine; detect the login wall,
-  stop, and ask. Ride-alongs from an earlier session: a visible Reload spinner,
+  stop, and ask. (e) "More info needed" must do something: today it paints a
+  yellow cone on the card and fires no task. It should kick off a research pass
+  (enrich + brief + the open questions) and report back on the card, with a
+  button inside the drawer to ask for more on demand. Ride-alongs from an earlier
+  session: a visible Reload spinner,
   and a one-line elevator "how we'd do it" in the summary box. Deal Desk is also
   the reference for S3, so (b) and (c) shape the drawer pattern.
 - [ ] **S5. Legacy memory backfill, 20-episode sample.** Imported episodes carry no
