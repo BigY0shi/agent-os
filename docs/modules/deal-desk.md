@@ -37,6 +37,10 @@ Upwork leads already get these in bulk from the offline pitch pass. RemoteOK and
 
 Every card leads with the evaluator's own pass-or-pursue sentence, banded **pursue / maybe / pass** (`src/lib/dealDeskControl.ts`, `deriveVerdict`). The sentence is taken, in order, from a `Skip -` pitch opener, the first sentence of `why`, then the first sentence of `summary`; the band comes from the wording and falls back to the refined fit only when the text carries no readable call. The card edge colour and the first line of the drawer's summary box are that verdict. A lead nothing has assessed yet says `No written verdict yet (fit N/10)` rather than inventing one.
 
+## Deny without opening (S4)
+
+Every pipeline card carries a tick box and a deny cross on its face. Ticking several shows a red bar above the board with **Deny N selected**, which is one `bulkStatus` write and one memory episode per card. Parked and Denied are a full-width lane under the board, each half a drop target, so nothing sits off the right edge.
+
 ## Setup
 
 Nothing to install inside Agent OS. It needs two things to be useful:
@@ -60,7 +64,7 @@ Open `/deals`. An empty board means the leads directory has no `board.json`, not
 | `POST /api/deals/brief-batch` | brief every deal missing one — the one you actually use |
 | `POST /api/deals/proposal` | draft a proposal for a deal |
 | `POST /api/deals/ask` | ask a question about a specific listing |
-| `POST /api/deals/action` | move a card, set status, save notes |
+| `POST /api/deals/action` | move a card, set status, save notes; `action: "bulkStatus"` with `ids[]` moves many in one write (bulk deny) |
 | `POST /api/deals/enrich` | pull more context onto a deal |
 | `POST /api/deals/scrape` | trigger a scrape |
 | `POST /api/deals/refill` | top the board back up |

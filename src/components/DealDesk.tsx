@@ -79,7 +79,17 @@ function SourceTab({ label, count, active, color, onClick }: { label: string; co
   );
 }
 
-function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
+interface CardProps {
+  deal: Deal;
+  onOpen: (d: Deal) => void;
+  /** S4 (b): multi-select for bulk deny. Undefined = the lane has no selection. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  /** S4 (b): deny from the face, no drawer. Undefined on cards already denied. */
+  onDeny?: (id: string) => void;
+}
+
+function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
   return (
     <div
       draggable
@@ -87,11 +97,23 @@ function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
       onClick={() => onOpen(deal)}
       className="panel p-3 cursor-pointer transition hover:brightness-110 mb-2"
       // S4 (c): the edge encodes the evaluator's verdict (owner's spec), not the composite.
-      style={{ borderLeft: `3px solid ${VERDICT_COLOR[deal.verdict.band]}` }}
+      style={{ borderLeft: `3px solid ${VERDICT_COLOR[deal.verdict.band]}`, outline: selected ? "1px solid rgba(248,113,113,0.7)" : undefined }}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[13px] font-medium leading-snug line-clamp-2">{deal.title}</div>
+        {onToggleSelect && (
+          <input type="checkbox" checked={!!selected} aria-label="Select for bulk deny"
+            onClick={(e) => e.stopPropagation()} onChange={() => onToggleSelect(deal.id)}
+            className="mt-0.5 shrink-0 accent-red-400" />
+        )}
+        <div className="text-[13px] font-medium leading-snug line-clamp-2 flex-1">{deal.title}</div>
         {deal.needsInfo && <AlertTriangle size={13} style={{ color: "#fbbf24", flexShrink: 0 }} />}
+        {onDeny && (
+          <button type="button" title="Deny this lead" aria-label="Deny"
+            onClick={(e) => { e.stopPropagation(); onDeny(deal.id); }}
+            className="shrink-0 rounded p-0.5 text-white/35 hover:text-red-300 hover:bg-white/10 transition">
+            <X size={13} />
+          </button>
+        )}
       </div>
       <div className="mt-1.5 text-[11px] leading-snug line-clamp-2" title={deal.verdict.line}>
         <span className="font-semibold uppercase tracking-wide text-[9.5px] mr-1.5" style={{ color: VERDICT_COLOR[deal.verdict.band] }}>{VERDICT_LABEL[deal.verdict.band]}</span>
@@ -338,7 +360,7 @@ function CookieModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function DealDesk() {
-  const { deals, columns, loading, error, fetchDeals, move, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs } = useDesk();
+  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
@@ -355,14 +377,31 @@ export default function DealDesk() {
 
   const selected = open ? deals.find((d) => d.id === open.id) || open : null;
 
-  // Main pipeline columns + a trailing Parked/Denied bucket.
-  const allColumns = useMemo(() => {
-    const extra = [{ key: "parked" as DealStatus, label: "Parked / Denied", accent: "#5a5d80" }];
-    return [...columns, ...extra];
-  }, [columns]);
+  // S4 (b): multi-select for bulk deny. Ids only; a card that leaves the board
+  // (reload, deny) drops out of the set on the next render via `picked`.
+  const [sel, setSel] = useState<Set<string>>(() => new Set());
+  const [denying, setDenying] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const toggleSel = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const picked = deals.filter((d) => sel.has(d.id) && d.status !== "denied");
+  const denyOne = (id: string) => { setSel((s) => { const n = new Set(s); n.delete(id); return n; }); void move(id, "denied"); };
+  const denyPicked = async () => {
+    if (!picked.length) return;
+    setDenying(true);
+    await moveMany(picked.map((d) => d.id), "denied");
+    setSel(new Set());
+    setDenying(false);
+  };
+
+  // Main pipeline columns only. Parked/Denied used to trail them as a sixth
+  // column that sat off the right edge of every laptop; it is now a full-width
+  // lane BELOW the board (S4 b), always on screen without a horizontal scroll.
+  const allColumns = useMemo(() => columns, [columns]);
 
   const byCol = (key: DealStatus) =>
     deals.filter((d) => (key === "parked" ? d.status === "parked" || d.status === "denied" : d.status === key));
+  const parkedItems = deals.filter((d) => d.status === "parked");
+  const deniedItems = deals.filter((d) => d.status === "denied");
 
   // Source tabs live on the first (New) column, where Upwork + remote feeds all land together.
   const firstKey = allColumns[0]?.key as DealStatus | undefined;
@@ -412,8 +451,10 @@ export default function DealDesk() {
             title="Re-scrape Upwork and rebuild the board (opens a browser, takes 10–20 minutes)">
             {scraping ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Re-scrape Upwork
           </button>
-          <button onClick={fetchDeals} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Reload
+          <button onClick={fetchDeals} disabled={loading} aria-busy={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110 disabled:opacity-60"
+            style={loading ? { color: "#fbbf24" } : undefined}>
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} {loading ? "Reloading…" : "Reload"}
           </button>
         </div>
       </div>
@@ -430,7 +471,20 @@ export default function DealDesk() {
         <div className="panel p-6 text-center text-white/50 text-[13px]">No scored leads yet. Run the scraper pipeline to populate the board.</div>
       )}
 
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      {/* S4 (b): bulk deny bar. Appears only while something is ticked. */}
+      {picked.length > 0 && (
+        <div className="panel p-2.5 mb-3 flex flex-wrap items-center gap-2 text-[12.5px]" style={{ borderColor: "rgba(248,113,113,0.5)" }}>
+          <span className="text-white/70">{picked.length} selected</span>
+          <button onClick={denyPicked} disabled={denying}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(248,113,113,0.18)", color: "#f87171" }}>
+            {denying ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />} Deny {picked.length} selected
+          </button>
+          <button onClick={() => setSel(new Set())} className="px-2.5 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">Clear selection</button>
+        </div>
+      )}
+
+      <div className="flex gap-3 overflow-x-auto pb-4" onDragEnd={() => setDragging(false)} onDragStart={() => setDragging(true)}>
         {allColumns.map((col) => {
           const isFirst = col.key === firstKey;
           const colItems = byCol(col.key);
@@ -438,7 +492,7 @@ export default function DealDesk() {
           return (
             <div key={col.key}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { const id = e.dataTransfer.getData("text/plain"); if (id) move(id, col.key === "parked" ? "parked" : col.key); }}
+              onDrop={(e) => { setDragging(false); const id = e.dataTransfer.getData("text/plain"); if (id) move(id, col.key); }}
               className="flex-shrink-0 w-[260px]">
               <div className="flex items-center gap-2 mb-2 px-1">
                 <span className="h-2 w-2 rounded-full" style={{ background: col.accent }} />
@@ -455,11 +509,45 @@ export default function DealDesk() {
                 </div>
               )}
               <div className="min-h-[120px] rounded-xl p-1.5" style={{ background: "rgba(255,255,255,0.02)" }}>
-                {items.map((d) => <Card key={d.id} deal={d} onOpen={setOpen} />)}
+                {items.map((d) => <Card key={d.id} deal={d} onOpen={setOpen} selected={sel.has(d.id)} onToggleSelect={toggleSel} onDeny={denyOne} />)}
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* S4 (b): Parked / Denied as a full-width lane under the board. It used to
+          be a sixth column off the right edge; now it is always reachable, and
+          each half is a drop target, so "drag to deny" needs no scrolling. */}
+      <div className="grid gap-3 md:grid-cols-2 mb-4">
+        {([
+          { key: "parked" as DealStatus, label: "Parked", accent: "#5a5d80", items: parkedItems, hint: "Drop here to park" },
+          { key: "denied" as DealStatus, label: "Denied", accent: "#f87171", items: deniedItems, hint: "Drop here to deny" },
+        ]).map((lane) => (
+          <div key={lane.key}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { setDragging(false); const id = e.dataTransfer.getData("text/plain"); if (id) move(id, lane.key); }}
+            className="rounded-xl p-2 transition"
+            style={{ background: "rgba(255,255,255,0.02)", outline: dragging ? `1px dashed ${lane.accent}` : "1px solid transparent" }}>
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: lane.accent }} />
+              <span className="text-[12px] font-semibold">{lane.label}</span>
+              <span className="text-[11px] text-white/35">{lane.items.length}</span>
+              {dragging && <span className="ml-auto text-[11px]" style={{ color: lane.accent }}>{lane.hint}</span>}
+            </div>
+            {lane.items.length === 0 && !dragging && (
+              <div className="text-[11.5px] text-white/30 px-1 pb-1">Nothing {lane.label.toLowerCase()}.</div>
+            )}
+            <div className="grid gap-x-3 gap-y-0 sm:grid-cols-2 xl:grid-cols-3">
+              {lane.items.map((d) => (
+                <Card key={d.id} deal={d} onOpen={setOpen}
+                  selected={lane.key === "parked" ? sel.has(d.id) : undefined}
+                  onToggleSelect={lane.key === "parked" ? toggleSel : undefined}
+                  onDeny={lane.key === "parked" ? denyOne : undefined} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {selected && <Drawer deal={selected} onClose={() => setOpen(null)} />}

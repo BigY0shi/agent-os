@@ -416,6 +416,25 @@ export async function setStatus(id: string, status: DealStatus): Promise<DealSta
   if (!VALID_STATUS.includes(status)) throw new Error(`Invalid status: ${status}`);
   return patch(id, (s) => ({ ...s, status }));
 }
+
+/**
+ * S4 (b): one status for many cards in ONE generation. Bulk deny from the board
+ * face is the caller; looping setStatus would rotate the store once per card
+ * (twenty renames for twenty cards) and let a crash land between two of them.
+ * Returns the ids actually written (duplicates and blanks dropped).
+ */
+export async function setStatusBulk(ids: string[], status: DealStatus): Promise<string[]> {
+  if (!VALID_STATUS.includes(status)) throw new Error(`Invalid status: ${status}`);
+  const unique = [...new Set(ids.map((x) => String(x ?? "").trim()).filter(Boolean))];
+  if (!unique.length) return [];
+  return withLock(async () => {
+    const store = await readState();
+    const now = Date.now();
+    for (const id of unique) store[id] = { ...(store[id] || {}), status, updatedAt: now };
+    await writeState(store);
+    return unique;
+  });
+}
 export async function setNotes(id: string, notes: string): Promise<DealState> {
   return patch(id, (s) => ({ ...s, notes: String(notes).slice(0, 5000) }));
 }

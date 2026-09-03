@@ -12,6 +12,8 @@ interface DeskStore {
   error: string | null;
   fetchDeals: () => Promise<void>;
   move: (id: string, status: DealStatus) => Promise<void>;
+  /** S4 (b): one status for many cards in one write (bulk deny from the board face). */
+  moveMany: (ids: string[], status: DealStatus) => Promise<boolean>;
   saveNotes: (id: string, notes: string) => Promise<void>;
   toggleNeedsInfo: (id: string) => Promise<void>;
   savePitch: (id: string, pitch: string) => Promise<void>;
@@ -83,6 +85,24 @@ export const useDesk = create<DeskStore>((set, get) => ({
   move: async (id, status) => {
     set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, status } : d)) }));
     await post("status", id, status);
+  },
+
+  moveMany: async (ids, status) => {
+    const want = new Set(ids);
+    set((s) => ({ deals: s.deals.map((d) => (want.has(d.id) ? { ...d, status } : d)) }));
+    try {
+      const r = await fetch("/api/deals/action", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkStatus", ids, value: status }),
+      });
+      const j = await r.json();
+      if (!j.ok) { set({ error: j.error || "Bulk move failed" }); await get().fetchDeals(); return false; }
+      return true;
+    } catch (e) {
+      set({ error: (e as Error).message });
+      await get().fetchDeals();
+      return false;
+    }
   },
 
   saveNotes: async (id, notes) => {

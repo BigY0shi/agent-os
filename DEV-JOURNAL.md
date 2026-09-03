@@ -34,6 +34,35 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S4 (b): deny from the card face, deny many, and a lane you can reach
+
+Harness session (feat-s4-deal-desk-control), part two. The owner's words: to deny a
+lead today you open the card, find the dropdown, pick denied, close; and the Parked /
+Denied column sits off the right edge of the board.
+
+**One write for many cards.** `setStatusBulk(ids, status)` in `upworkDesk.ts` takes the
+write lock once, patches every id, and rotates the store one generation. Looping
+`setStatus` would have rotated twenty times for twenty cards and left a crash window
+between each pair (smoke B4 pins "one generation"). `/api/deals/action` gained
+`action: "bulkStatus"` with `ids[]`; it is handled before the `id` check so the existing
+single-card contract is untouched. A bulk deny records one memory episode per card,
+because each is a call the owner made by hand; refill's bulk *dismiss* stays silent, as
+before, because that is triage.
+
+**The lane moved, it did not get a scrollbar.** Parked and Denied are now a two-column
+lane UNDER the pipeline, full width, each half its own drop target with a dashed outline
+while a drag is in flight. Rejected: a sticky right-edge strip, because it would cover
+the Sent column on a laptop and still put the denied cards out of sight. Cards in
+Parked keep their tick box and deny cross; cards already in Denied have neither.
+
+**Face controls.** A tick box (multi-select) and a deny cross on every pipeline card,
+both stopping propagation so the drawer does not open. A red bar appears above the
+board only while something is ticked: "Deny N selected" and "Clear selection".
+Ride-along: Reload now disables itself, turns amber, and says "Reloading…" while the
+fetch runs (the roadmap's "visible Reload spinner"). Evidence:
+`smoke-deal-desk-control` section B, 7 checks; `tsc` clean.
+
+---
 ## 2026-09-02 - S4 (c): the verdict is the first thing a card says
 
 Harness session (feat-s4-deal-desk-control), part one of six. The owner's words: the

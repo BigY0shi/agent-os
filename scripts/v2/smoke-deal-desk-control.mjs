@@ -64,6 +64,31 @@ console.log("\n-- A (c) verdict first --");
 }
 check("A15 every band has a colour and a label", ["pursue", "maybe", "pass"].every((b) => C.VERDICT_COLOR[b] && C.VERDICT_LABEL[b]));
 
+// -- B (b) bulk deny is one write ----------------------------------------------
+console.log("\n-- B (b) bulk deny --");
+const D = await import("../../src/lib/upworkDesk.ts");
+const LIVE = process.env.AGENTIC_OS_DESK;
+const PREV = path.join(dir, "upwork-desk_prev.json");
+const readLive = () => JSON.parse(fs.readFileSync(LIVE, "utf8"));
+{
+  await D.setStatus("d-1", "new");
+  await D.setStatus("d-2", "reviewing");
+  await D.setNotes("d-3", "keep this note");
+  const prevBefore = fs.readFileSync(PREV, "utf8");
+  const written = await D.setStatusBulk(["d-1", "d-2", "d-3", "d-3", " ", "d-4"], "denied");
+  const live = readLive();
+  check("B1 every id is denied", ["d-1", "d-2", "d-3", "d-4"].every((id) => live[id]?.status === "denied"));
+  check("B2 duplicates and blanks are dropped from the written list", written.length === 4 && !written.includes(" "), written.join(","));
+  check("B3 the note on d-3 survived the status change", live["d-3"].notes === "keep this note");
+  check("B4 ONE generation was rotated, not one per card", fs.readFileSync(PREV, "utf8") !== prevBefore && Object.keys(JSON.parse(fs.readFileSync(PREV, "utf8"))).length === 3, `prev has ${Object.keys(JSON.parse(fs.readFileSync(PREV, "utf8"))).length} keys`);
+  check("B5 every written card carries an updatedAt", written.every((id) => typeof live[id].updatedAt === "number"));
+  const none = await D.setStatusBulk([], "denied");
+  check("B6 an empty list writes nothing", none.length === 0 && JSON.stringify(readLive()) === JSON.stringify(live));
+  let threw = false;
+  try { await D.setStatusBulk(["d-1"], "bogus"); } catch { threw = true; }
+  check("B7 an invalid status throws rather than writing", threw);
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);
