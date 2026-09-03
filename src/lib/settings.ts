@@ -114,6 +114,11 @@ export interface Settings {
   notebook: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban: { agent?: string; board?: string };
 
+  // Deal Desk (S4). maxAgeDays: listings posted longer ago than this are dropped
+  // when a scrape or a feed pull lands (the feed was pulling 3-4 week old jobs);
+  // the age shows on every card. Rule 16: edited in the Deal Desk gear.
+  deals: { maxAgeDays?: number };
+
   // Operating skills (~/.agentic-os/skills/<name>/SKILL.md) injected into agent prompts.
   // "global" = every agent call platform-wide; "modules" = extra skills per module key
   // (deals, hire, marketing, …). Toggled from the in-app Config menu (Skills section).
@@ -413,6 +418,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
+  deals: { maxAgeDays: 5 },
   skills: {
     global: ["better-agent"],
     modules: {

@@ -34,6 +34,36 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S4 (f): a max-age gate on what lands on the board
+
+Harness session (feat-s4-deal-desk-control), part three. The owner's words: the feed is
+pulling listings 3-4 weeks old; add a max-age setting in the gear, drop older listings at
+scrape time, show the age on the card.
+
+**Where the gate sits.** `settings.deals.maxAgeDays` (default 5, clamped 1..365, edited
+in the new Deal Desk gear `DealDeskSettings.tsx`, rule 16). `pruneLeadsFileByAge()` in
+`upworkDesk.ts` runs in `/api/deals/scrape` between scoring and pitching, on board.json
+AND shortlist.json, so an old listing is neither pitched (one claude call each) nor
+shown; and in `/api/deals/feeds` after `feeds.mjs`, before the brief pass, because the
+feed was the source of the old rows. Rejected: filtering in `listDeals()` as well,
+because that would hide cards the owner has already moved to Reviewing or Approved the
+day the gate is lowered. The gate is on arrival, and a card that is on the board stays.
+
+**Nothing is discarded.** A prune writes the dropped rows to
+`<name>.dropped-<date>.json` beside the file (appending on the same day) before it
+rewrites the file. `board.json` is a pipeline output, but it is the owner's data too,
+and a gate that quietly deletes 40 listings is the kind of thing that gets discovered a
+month later. An undated record is kept, never dropped: an unknown date is not an old one
+(smoke C5).
+
+**The age on the card.** `PostedAgo` already re-derived "12d ago" from `postedAt`; it
+now judges "old" against the gate from the store (`/api/deals/list` returns
+`maxAgeDays`) instead of a fixed 21 days, turns amber, and appends OLD. Undated shows
+"undated" instead of an empty span. Evidence: `smoke-deal-desk-control` section C, 10
+checks (partition, clamp, file prune, sidecar, idempotence, missing file); `tsc` clean.
+Cost: the sidecar files accumulate in the leads dir, one per day with drops.
+
+---
 ## 2026-09-02 - S4 (b): deny from the card face, deny many, and a lane you can reach
 
 Harness session (feat-s4-deal-desk-control), part two. The owner's words: to deny a

@@ -6,7 +6,8 @@ import {
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
-import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/dealDeskControl";
+import { VERDICT_COLOR, VERDICT_LABEL, ageDays } from "@/lib/dealDeskControl";
+import DealDeskSettings from "@/components/DealDeskSettings";
 
 const fmtMoney = (n: number | null) => (n == null ? "?" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
 const scoreColor = (n: number) =>
@@ -38,6 +39,7 @@ function agoLabel(ms: number): string {
  * This re-derives from deal.postedAt and re-renders on a timer so it stays honest.
  */
 function PostedAgo({ deal }: { deal: Deal }) {
+  const maxAgeDays = useDesk((s) => s.maxAgeDays);
   const [, tick] = useState(0);
   useEffect(() => {
     if (deal.postedAt == null) return;
@@ -48,12 +50,15 @@ function PostedAgo({ deal }: { deal: Deal }) {
 
   if (deal.postedAt == null) {
     // Unparseable — show the raw string rather than inventing a time.
-    return <span className="opacity-70">{deal.posted || ""}</span>;
+    return <span className="opacity-70" title="Post date unknown">{deal.posted || "undated"}</span>;
   }
-  const days = (Date.now() - deal.postedAt) / 86_400_000;
+  // S4 (f): the age is judged against the gate in the gear, not a fixed 21 days.
+  const days = ageDays(deal.postedAt) ?? 0;
+  const stale = days > maxAgeDays;
   return (
-    <span title={new Date(deal.postedAt).toLocaleString()} style={days > 21 ? { color: "#fb923c" } : undefined}>
-      {agoLabel(deal.postedAt)}
+    <span title={`${new Date(deal.postedAt).toLocaleString()}${stale ? ` · older than the ${maxAgeDays}-day gate` : ""}`}
+      style={stale ? { color: "#fb923c" } : undefined}>
+      {agoLabel(deal.postedAt)}{stale && <span className="ml-1 text-[9px] uppercase tracking-wide">old</span>}
     </span>
   );
 }
@@ -430,9 +435,12 @@ export default function DealDesk() {
           </button>
           <button onClick={() => setShowCookie(true)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] panel hover:brightness-110"
-            title="Upwork cookie settings">
-            <Settings size={13} />{!cookie.set && <span className="text-[11px]" style={{ color: "#fbbf24" }}>set cookie</span>}
+            title="Upwork session cookie (a secret; kept out of settings.json)">
+            <Settings size={13} />{cookie.set ? <span className="text-[11px] text-white/50">cookie</span> : <span className="text-[11px]" style={{ color: "#fbbf24" }}>set cookie</span>}
           </button>
+          {/* S4 (f), rule 16: every deals.* knob lives in this gear. Saving re-reads the
+              board so the age labels judge against the new gate at once. */}
+          <DealDeskSettings onSaved={fetchDeals} />
           <button onClick={refill} disabled={refilling}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
             style={{ background: "rgba(168,85,247,0.16)", color: "#c084fc" }}

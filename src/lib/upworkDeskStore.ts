@@ -8,6 +8,8 @@ interface Column { key: DealStatus; label: string; accent: string }
 interface DeskStore {
   deals: Deal[];
   columns: Column[];
+  /** S4 (f): the age gate (settings.deals.maxAgeDays) the cards are shown against. */
+  maxAgeDays: number;
   loading: boolean;
   error: string | null;
   fetchDeals: () => Promise<void>;
@@ -54,6 +56,7 @@ async function post(action: string, id: string, value?: unknown): Promise<void> 
 export const useDesk = create<DeskStore>((set, get) => ({
   deals: [],
   columns: [],
+  maxAgeDays: 5,
   loading: false,
   error: null,
   cookie: { set: false, hint: "" },
@@ -73,7 +76,7 @@ export const useDesk = create<DeskStore>((set, get) => ({
     try {
       const r = await fetch("/api/deals/list", { cache: "no-store" });
       const j = await r.json();
-      if (j.ok) set({ deals: j.deals, columns: j.columns });
+      if (j.ok) set({ deals: j.deals, columns: j.columns, maxAgeDays: typeof j.maxAgeDays === "number" ? j.maxAgeDays : get().maxAgeDays });
       else set({ error: j.error || "Failed to load deals" });
     } catch (e) {
       set({ error: (e as Error).message });
@@ -324,7 +327,8 @@ export const useDesk = create<DeskStore>((set, get) => ({
       const j = await r.json();
       if (j.ok) {
         const bs = j.bySource || {};
-        set({ feedsResult: `Pulled ${j.relevant} remote leads (RemoteOK ${bs.remoteok || 0} · WWR ${bs.wwr || 0} · Reddit ${bs.reddit || 0})` });
+        const gate = j.ageGate?.dropped ? ` · dropped ${j.ageGate.dropped} older than ${j.ageGate.maxAgeDays}d` : "";
+        set({ feedsResult: `Pulled ${j.relevant} remote leads (RemoteOK ${bs.remoteok || 0} · WWR ${bs.wwr || 0} · Reddit ${bs.reddit || 0})${gate}` });
         await get().fetchDeals();
         // The pull now kicks off a brief pass server-side; follow it so the cards
         // visibly fill in rather than appearing blank and silently changing later.

@@ -1,5 +1,7 @@
-import { LEADS_DIR } from "@/lib/upworkDesk";
+import { LEADS_DIR, pruneLeadsFileByAge } from "@/lib/upworkDesk";
 import { startBriefBatch } from "@/lib/briefBatch";
+import { clampMaxAgeDays } from "@/lib/dealDeskControl";
+import { readSettings } from "@/lib/settings";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -23,6 +25,11 @@ export async function POST() {
     return Response.json({ ok: false, error: res.err.slice(-300) || "feed pull failed" }, { status: 502 });
   }
 
+  // S4 (f): the feed was the source of the 3-4 week old listings. Gate it as it
+  // lands, before the brief pass spends a claude call on each old row.
+  const maxAgeDays = clampMaxAgeDays(readSettings().deals?.maxAgeDays);
+  const aged = await pruneLeadsFileByAge("feeds", maxAgeDays);
+
   // Analyse before review, not after. Upwork leads arrive pre-pitched (scrape → score →
   // shortlist → pitch), so every Upwork card is already reviewable. Feed leads had no
   // equivalent and landed in New with empty summary/why/approach. Kick off a brief pass
@@ -35,5 +42,6 @@ export async function POST() {
     relevant: stats.relevant ?? 0,
     bySource: stats.bySource ?? {},
     briefing: brief.started ? brief.total : 0,
+    ageGate: { maxAgeDays, dropped: aged.dropped, kept: aged.kept, undated: aged.unknown },
   });
 }

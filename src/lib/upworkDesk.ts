@@ -14,7 +14,7 @@ import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
-import { deriveVerdict, type Verdict } from "./dealDeskControl";
+import { deriveVerdict, partitionByAge, type Verdict } from "./dealDeskControl";
 
 // Where the scraper pipeline writes its artifacts. Override with UPWORK_LEADS_DIR.
 export const LEADS_DIR =
@@ -319,6 +319,26 @@ export function resolvePostedAt(rec: Partial<BoardRecord>): number | null {
   const anchor = rec._scrapedAt ? Date.parse(rec._scrapedAt) : NaN;
   if (Number.isNaN(anchor)) return null;
   return anchor - off;
+}
+
+// -- (f) Age gate at landing time ----------------------------------------------
+// board.json / shortlist.json (after a scrape) and feeds.json (after a pull) are
+// pipeline outputs, but they are the owner's data too, so a prune never discards:
+// the dropped records are written beside the file as <name>.dropped-<stamp>.json.
+export type LeadsFile = "board" | "shortlist" | "feeds";
+const LEADS_FILES: Record<LeadsFile, string> = { board: BOARD_FILE, shortlist: path.join(LEADS_DIR, "shortlist.json"), feeds: FEEDS_FILE };
+
+export async function pruneLeadsFileByAge(which: LeadsFile, maxAgeDays: number, now = Date.now()): Promise<{ kept: number; dropped: number; unknown: number; droppedFile: string | null }> {
+  const file = LEADS_FILES[which];
+  const rows = await readJson<Partial<BoardRecord>[]>(file, []);
+  if (!Array.isArray(rows) || !rows.length) return { kept: 0, dropped: 0, unknown: 0, droppedFile: null };
+  const part = partitionByAge(rows, (r) => resolvePostedAt(r), maxAgeDays, now);
+  if (!part.dropped.length) return { kept: part.kept.length, dropped: 0, unknown: part.unknown.length, droppedFile: null };
+  const droppedFile = path.join(LEADS_DIR, `${which}.dropped-${new Date(now).toISOString().slice(0, 10)}.json`);
+  const prior = await readJson<Partial<BoardRecord>[]>(droppedFile, []);
+  await writeFile(droppedFile, JSON.stringify([...prior, ...part.dropped], null, 2), "utf8");
+  await writeFile(file, JSON.stringify(part.kept, null, 2), "utf8");
+  return { kept: part.kept.length, dropped: part.dropped.length, unknown: part.unknown.length, droppedFile };
 }
 
 export async function listDeals(): Promise<Deal[]> {

@@ -89,6 +89,43 @@ const readLive = () => JSON.parse(fs.readFileSync(LIVE, "utf8"));
   check("B7 an invalid status throws rather than writing", threw);
 }
 
+// -- C (f) the age gate ---------------------------------------------------------
+console.log("\n-- C (f) max-age gate --");
+{
+  const NOW = Date.parse("2026-09-02T20:00:00Z");
+  const iso = (daysAgo) => new Date(NOW - daysAgo * 86_400_000).toISOString();
+  check("C1 default gate is 5 days", C.DEFAULT_MAX_AGE_DAYS === 5 && C.clampMaxAgeDays(undefined) === 5);
+  check("C2 the knob is clamped to 1..365 and rounded", C.clampMaxAgeDays(0) === 5 && C.clampMaxAgeDays(-3) === 5 && C.clampMaxAgeDays(900) === 365 && C.clampMaxAgeDays("7.4") === 7 && C.clampMaxAgeDays("abc") === 5);
+  check("C3 ageDays: whole days, never negative, null for unknown", C.ageDays(NOW - 2.9 * 86_400_000, NOW) === 2 && C.ageDays(NOW + 5000, NOW) === 0 && C.ageDays(null, NOW) === null && C.ageDays(NaN, NOW) === null);
+  const items = [
+    { id: "fresh", datePosted: iso(1) },
+    { id: "edge", datePosted: iso(5) },
+    { id: "old", datePosted: iso(6) },
+    { id: "ancient", posted: "3 weeks ago", _scrapedAt: iso(0) },
+    { id: "undated", posted: null },
+    { id: "rfc", posted: new Date(NOW - 20 * 86_400_000).toUTCString() },
+  ];
+  const part = C.partitionByAge(items, (r) => D.resolvePostedAt(r), 5, NOW);
+  const ids = (a) => a.map((x) => x.id).sort().join(",");
+  check("C4 5-day gate keeps day 1 and day 5, drops day 6, the 3-week Upwork phrase and the RFC date", ids(part.kept) === "edge,fresh,undated" && ids(part.dropped) === "ancient,old,rfc", `kept=${ids(part.kept)} dropped=${ids(part.dropped)}`);
+  check("C5 an undated record is KEPT and listed as unknown, never dropped", ids(part.unknown) === "undated");
+
+  // The file-level prune: board.json in the redirected leads dir.
+  const leads = process.env.UPWORK_LEADS_DIR;
+  const boardFile = path.join(leads, "board.json");
+  fs.writeFileSync(boardFile, JSON.stringify(items), "utf8");
+  const r1 = await D.pruneLeadsFileByAge("board", 5, NOW);
+  const after = JSON.parse(fs.readFileSync(boardFile, "utf8"));
+  check("C6 pruneLeadsFileByAge rewrote board.json with the kept rows only", ids(after) === "edge,fresh,undated" && r1.kept === 3 && r1.dropped === 3 && r1.unknown === 1, JSON.stringify(r1));
+  check("C7 the dropped rows were written beside the file, not discarded", r1.droppedFile && fs.existsSync(r1.droppedFile) && ids(JSON.parse(fs.readFileSync(r1.droppedFile, "utf8"))) === "ancient,old,rfc", r1.droppedFile || "no file");
+  const r2 = await D.pruneLeadsFileByAge("board", 5, NOW);
+  check("C8 a second prune with nothing to drop writes nothing", r2.dropped === 0 && r2.droppedFile === null && ids(JSON.parse(fs.readFileSync(boardFile, "utf8"))) === "edge,fresh,undated");
+  const r3 = await D.pruneLeadsFileByAge("feeds", 5, NOW);
+  check("C9 a missing feeds.json is an empty prune, not an error", r3.kept === 0 && r3.dropped === 0 && !fs.existsSync(path.join(leads, "feeds.json")));
+  const S = await import("../../src/lib/settings.ts");
+  check("C10 settings.deals.maxAgeDays defaults to 5 (gear-editable, rule 16)", S.DEFAULT_SETTINGS.deals?.maxAgeDays === 5 && S.readSettings().deals?.maxAgeDays === 5);
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);

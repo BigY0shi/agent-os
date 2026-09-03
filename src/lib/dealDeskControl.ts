@@ -87,3 +87,48 @@ export const VERDICT_LABEL: Record<VerdictBand, string> = {
   maybe: "Maybe",
   pass: "Pass",
 };
+
+// -- (f) Age gate ---------------------------------------------------------------
+//
+// The feed was pulling listings three to four weeks old and the board showed them
+// beside fresh ones. `deals.maxAgeDays` (gear, default 5) drops older listings when
+// a scrape or a feed pull LANDS, and the age shows on the card. A record whose post
+// time cannot be resolved is KEPT, never dropped: an unknown date is not an old one.
+
+export const DEFAULT_MAX_AGE_DAYS = 5;
+const DAY_MS = 86_400_000;
+
+/** Whole days since `postedAt`; null when the instant is unknown. */
+export function ageDays(postedAt: number | null | undefined, now = Date.now()): number | null {
+  if (typeof postedAt !== "number" || !Number.isFinite(postedAt)) return null;
+  return Math.max(0, Math.floor((now - postedAt) / DAY_MS));
+}
+
+/** A usable gate from whatever the settings file holds: 1..365, default 5. */
+export function clampMaxAgeDays(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_MAX_AGE_DAYS;
+  return Math.min(365, Math.round(n));
+}
+
+export interface AgePartition<T> {
+  kept: T[];
+  dropped: T[];
+  /** Kept too, listed so a caller can say how many had no date. */
+  unknown: T[];
+}
+
+/**
+ * Split records into kept / dropped by `maxAgeDays`. `postedAtOf` resolves the
+ * absolute post time (lib/upworkDesk resolvePostedAt); null keeps the record.
+ */
+export function partitionByAge<T>(items: T[], postedAtOf: (t: T) => number | null, maxAgeDays: number, now = Date.now()): AgePartition<T> {
+  const limit = clampMaxAgeDays(maxAgeDays);
+  const out: AgePartition<T> = { kept: [], dropped: [], unknown: [] };
+  for (const it of items) {
+    const age = ageDays(postedAtOf(it), now);
+    if (age === null) { out.kept.push(it); out.unknown.push(it); continue; }
+    if (age > limit) out.dropped.push(it); else out.kept.push(it);
+  }
+  return out;
+}
