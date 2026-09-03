@@ -14,7 +14,7 @@ import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
-import { deriveVerdict, partitionByAge, type Verdict } from "./dealDeskControl";
+import { deriveVerdict, partitionByAge, type Verdict, type ScreenResult } from "./dealDeskControl";
 
 // Where the scraper pipeline writes its artifacts. Override with UPWORK_LEADS_DIR.
 export const LEADS_DIR =
@@ -76,6 +76,12 @@ export interface DealState {
    */
   brief?: Brief;
   /**
+   * The quick pass/not check. Cheaper than a brief and run over EVERY lead, so a
+   * card that no brief reached still leads with a real call instead of a band
+   * invented from the feed's keyword fit.
+   */
+  screen?: ScreenResult;
+  /**
    * S4 (d): enrichment (or intake) hit Upwork's login wall on this card. Set by
    * the gated runner, cleared by a fresh cookie or a later successful visit.
    */
@@ -116,6 +122,8 @@ export interface Deal extends BoardRecord {
   loginWallAt: number | null;
   /** S4 (e): the last research pass on this card, or null if none ran. */
   research: Research | null;
+  /** The quick pass/not check's result, or null if it has not run or did not stick. */
+  screen: ScreenResult | null;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -394,7 +402,8 @@ export async function listDeals(): Promise<Deal[]> {
       summary,
       why,
       // The verdict reads the evaluator's OWN opener, never the operator's edit.
-      verdict: deriveVerdict({ why, summary, pitch: p.pitch ?? null, effectiveFit }),
+      verdict: deriveVerdict({ why, summary, pitch: p.pitch ?? null, screen: st.screen ?? null, effectiveFit }),
+      screen: st.screen ?? null,
       pitch: st.editedPitch ?? p.pitch ?? null,
       approach: st.brief?.approach ?? p.approach ?? null,
       crashCourse: st.brief?.crashCourse ?? p.crashCourse ?? null,
@@ -428,7 +437,8 @@ export async function listDeals(): Promise<Deal[]> {
       // on-demand brief if one has been generated — previously hardcoded to null,
       // which is why RemoteOK/WWR cards never showed the analysis Upwork cards did.
       summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
-      verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, effectiveFit }),
+      verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, screen: st.screen ?? null, effectiveFit }),
+      screen: st.screen ?? null,
       pitch: st.editedPitch ?? null,
       approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
@@ -499,6 +509,15 @@ export async function setEnrichment(id: string, e: Enrichment): Promise<DealStat
 
 export async function setBrief(id: string, b: Brief): Promise<DealState> {
   return patch(id, (s) => ({ ...s, brief: { ...b, at: Date.now() } }));
+}
+
+/**
+ * Persist a quick pass/not check. A failed check writes NOTHING: the lead stays
+ * unscreened and reads NA, which is the honest state. Never store a band the
+ * checker did not actually return.
+ */
+export async function setScreen(id: string, r: Omit<ScreenResult, "at">): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, screen: { ...r, at: Date.now() } }));
 }
 
 /** S4 (e): the research pass writes its state as it goes; the card reads it. */

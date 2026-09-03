@@ -51,9 +51,14 @@ console.log("\n-- A (c) verdict first --");
   check("A9 same sentence, low fit -> pass", w.band === "pass", w.band);
 }
 {
+  // A10/A11 used to assert the opposite: that a lead with nothing written banded off
+  // its score. That score is the feed's keyword heuristic, and banding it put a
+  // confident green Pursue on leads nothing had evaluated - 53 of 131 WeWorkRemotely
+  // rows carry exactly fit 8. The honest answer is unknown, and the quick screen
+  // (smoke-deal-screen.mjs) is what turns it into a real call.
   const v = C.deriveVerdict({ why: null, summary: null, pitch: null, effectiveFit: 5 });
-  check("A10 nothing written -> an honest 'no verdict' line, never an invented one", v.source === "score" && /No written verdict/.test(v.line), v.line);
-  check("A11 and the band comes from the score (5 -> maybe)", v.band === "maybe", v.band);
+  check("A10 nothing written -> an honest 'not screened' line, never an invented one", v.source === "none" && /Not screened yet/.test(v.line), v.line);
+  check("A11 and the band is unknown, NOT banded off the feed's heuristic score", v.band === "unknown", v.band);
 }
 {
   const v = C.deriveVerdict({ why: "Verdict: pass, the posting asks for a full-time employee.", summary: null, pitch: null, effectiveFit: 7 });

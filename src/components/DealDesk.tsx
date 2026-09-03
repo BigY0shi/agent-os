@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste,
+  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste, ScanLine,
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
@@ -63,11 +63,15 @@ function PostedAgo({ deal }: { deal: Deal }) {
   );
 }
 
-function Chip({ label, value }: { label: string; value: number }) {
+// `na` renders NA in the unknown band's purple. The fit a lead arrives with is the
+// feed's keyword heuristic, so showing it as a number on a lead nothing has judged
+// reads as a verdict that was never reached.
+function Chip({ label, value, na }: { label: string; value: number; na?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono"
-      style={{ background: "rgba(255,255,255,0.06)", color: scoreColor(value) }}>
-      {label}{value}
+      style={{ background: "rgba(255,255,255,0.06)", color: na ? VERDICT_COLOR.unknown : scoreColor(value) }}
+      title={na ? "Not screened yet - no pass/pursue call has been made on this lead" : undefined}>
+      {label}{na ? "NA" : value}
     </span>
   );
 }
@@ -134,7 +138,7 @@ function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
       <div className="flex flex-wrap gap-1 mt-2 items-center">
         {deal.source && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(96,165,250,0.18)", color: "#60a5fa" }}>{deal.source}</span>}
         {deal.automatable && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(52,211,153,0.18)", color: "#34d399" }} title="Repetitive role — take-and-automate or pitch Launchworks">auto</span>}
-        <Chip label="F" value={deal.effectiveFit} />
+        <Chip label="F" value={deal.effectiveFit} na={deal.verdict.band === "unknown"} />
         <Chip label="E" value={deal.easiness} />
         <Chip label="W" value={deal.winnability} />
         <span className="text-[10px] text-white/40 font-mono ml-auto self-center">{deal.composite}</span>
@@ -210,7 +214,7 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">
-          <Chip label="Fit " value={deal.effectiveFit} />
+          <Chip label="Fit " value={deal.effectiveFit} na={deal.verdict.band === "unknown"} />
           <Chip label="Easy " value={deal.easiness} />
           <Chip label="Win " value={deal.winnability} />
           <span className="text-[11px] text-white/45 font-mono self-center">composite {deal.composite}</span>
@@ -408,7 +412,7 @@ export default function DealDesk() {
     const ok = await intake(pasteText);
     if (ok) { setPasteText(""); setShowPaste(false); }
   };
-  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs } = useDesk();
+  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs, screenAll, screening, screenResult } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
@@ -485,6 +489,12 @@ export default function DealDesk() {
           {/* S4 (f), rule 16: every deals.* knob lives in this gear. Saving re-reads the
               board so the age labels judge against the new gate at once. */}
           <DealDeskSettings onSaved={fetchDeals} />
+          <button onClick={screenAll} disabled={screening}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(192,132,252,0.16)", color: VERDICT_COLOR.unknown }}
+            title="Run the quick pass/pursue check on every lead showing NA. Leads it cannot judge stay NA.">
+            {screening ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />} Screen NA leads
+          </button>
           <button onClick={refill} disabled={refilling}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
             style={{ background: "rgba(168,85,247,0.16)", color: "#c084fc" }}
@@ -555,6 +565,7 @@ export default function DealDesk() {
       )}
       {enrichResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#22d3ee" }}>{enrichResult}</div>}
       {refillResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#c084fc" }}>{refillResult}</div>}
+      {screenResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: VERDICT_COLOR.unknown }}>{screenResult}</div>}
       {feedsResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#60a5fa" }}>{feedsResult}</div>}
       {scrapeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#d97757" }}>{scrapeResult}</div>}
       {briefBatchResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#f59e0b" }}>{briefBatchResult}</div>}

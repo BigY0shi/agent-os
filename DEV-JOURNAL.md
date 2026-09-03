@@ -34,6 +34,56 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-03 - an unjudged lead now says NA instead of inventing a Pursue
+
+The owner noticed the verdict-first card (S4 c) had taken something with it: the
+non-Upwork listings lost their pass/not check, and "everything without a check done is
+defaulting to pass 8/10".
+
+He was right, and the number came from further away than the UI. `briefBatch` caps a
+pass at the top 20 by composite on purpose - a full brief is ~15s a lead, and briefing
+248 of them analyses a queue nobody can review. Everything under that cap reached the
+board with `summary` and `why` null, and `deriveVerdict` fell through to
+`bandFromScore(effectiveFit)`. That fit is not a judgement: it is the keyword score
+`feeds.mjs` writes outside this repo. Reading his live corpus, `feeds.json` holds 131
+WeWorkRemotely rows scoring {6:51, 7:27, 8:53} - 53 at exactly 8, and 80 at or above the
+`>= 7` pursue threshold. One of them is "Cribl: Customer Support Manager", a staff
+support role, presented as a green **Pursue** with "No written verdict yet (fit 8/10)"
+as the first line on the card.
+
+So the card was not merely defaulting optimistically. It was asserting a verdict that
+nothing had reached, which is the failure "Never fabricate state" exists to catch, and
+the same class as the fabricated BUILD tag stripped out of `MissionStripe.tsx`.
+
+Two changes. `VerdictBand` gains `unknown`, rendered NA in purple (`#c084fc`), and the
+score fall-through returns it. The two branches above it still band off the fit and
+deliberately so: there an evaluator wrote prose and just phrased no explicit call, and
+banding real prose is interpretation. Banding a lead nobody read is invention. Only the
+last branch was the bug.
+
+Then the missing check itself. `dealScreen.ts` is one short call per lead returning
+`{band, line}`, cheap enough to run over the whole board where a brief is not. It
+targets exactly the leads whose verdict is already `unknown`, so it fills gaps and
+leaves briefed or pitched cards alone, and it runs automatically after a feed pull
+(`deals.screenOnPull`, on by default) with a "Screen NA leads" button for the tail.
+
+The failure path is the point. `parseScreen` returns null for anything it does not
+recognise - a refusal, a fence with no JSON, a band the model invented, an empty line -
+and `runScreenBatch` only calls `setScreen` on a real result. A lead the check could not
+judge has no `screen` key at all and keeps reading NA. The pass reports its failures
+(`N left NA`) rather than hiding them, because a partially judged board is something the
+operator needs to know about.
+
+`smoke-deal-screen.mjs` covers it in 33 offline checks, including the exact shape that
+caused this (fit 8, no brief, no pitch -> unknown) and the twelve unparseable responses
+that must all leave a card untouched. Two assertions in `smoke-deal-desk-control.mjs`
+had pinned the old behaviour - A11 read "the band comes from the score (5 -> maybe)" -
+and now pin the honest one. Gate: 75 passed, 1 failed (`smoke-webmcp-ui`, the owner's
+in-flight S7 wizard work, untouched here).
+
+`settings.ts` carried his uncommitted S7 changes alongside mine, so only the two `deals`
+hunks were staged and his `webmcp` wizard fields were left in the working tree (rule 22).
+
 ## 2026-09-03 - a zero-fact 'derived' row no longer retires itself
 
 Yoshi flagged this while reviewing the first live sample: episode 0f7dea7e came

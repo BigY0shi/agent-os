@@ -40,6 +40,11 @@ interface DeskStore {
   briefBatchResult: string | null;
   briefTop: () => Promise<void>;
   pollBriefs: () => Promise<void>;
+  /** The quick pass/not screen over every lead nothing has judged yet. */
+  screening: boolean;
+  screenResult: string | null;
+  screenAll: () => Promise<void>;
+  pollScreen: () => Promise<void>;
   pullingFeeds: boolean;
   feedsResult: string | null;
   pullFeeds: () => Promise<void>;
@@ -71,6 +76,8 @@ export const useDesk = create<DeskStore>((set, get) => ({
   enrichResult: null,
   refilling: false,
   refillResult: null,
+  screening: false,
+  screenResult: null,
   scraping: false,
   scrapeResult: null,
   briefingBatch: false,
@@ -405,6 +412,49 @@ export const useDesk = create<DeskStore>((set, get) => ({
     tick();
   },
 
+  screenAll: async () => {
+    set({ screening: true, screenResult: null });
+    try {
+      const r = await fetch("/api/deals/screen", { method: "POST" });
+      const j = await r.json();
+      if (j.ok && j.started) {
+        set({ screenResult: `Screening ${j.total} unjudged leads…` });
+        get().pollScreen();
+      } else if (j.ok) {
+        // "nothing to screen" is the good outcome, not a failure.
+        set({ screening: false, screenResult: j.reason === "nothing to screen" ? "Every lead already has a call." : j.reason || "Nothing to screen." });
+      } else {
+        set({ screening: false, screenResult: j.error || "Screen pass failed" });
+      }
+    } catch (e) {
+      set({ screening: false, screenResult: (e as Error).message });
+    }
+  },
+
+  pollScreen: async () => {
+    const tick = async () => {
+      try {
+        const j = await (await fetch("/api/deals/screen", { cache: "no-store" })).json();
+        if (j.running) {
+          set({ screening: true, screenResult: `Screening leads… ${j.done}/${j.total}` });
+          setTimeout(tick, 4000);
+          return;
+        }
+        if (!j.total) { set({ screening: false }); return; }
+        // The failed count is not noise to hide: those cards are still NA, and the
+        // operator needs to know the board is not fully judged.
+        set({
+          screening: false,
+          screenResult: `Screened ${j.succeeded} of ${j.total} leads${j.failed ? ` · ${j.failed} left NA` : ""}.`,
+        });
+        await get().fetchDeals();
+      } catch {
+        set({ screening: false });
+      }
+    };
+    tick();
+  },
+
   pullFeeds: async () => {
     set({ pullingFeeds: true, feedsResult: null });
     try {
@@ -418,6 +468,9 @@ export const useDesk = create<DeskStore>((set, get) => ({
         // The pull now kicks off a brief pass server-side; follow it so the cards
         // visibly fill in rather than appearing blank and silently changing later.
         if (j.briefing) { set({ briefingBatch: true, briefBatchResult: `Analysing ${j.briefing} new leads…` }); get().pollBriefs(); }
+        // The screen is what stops the leads under the brief cap from rendering a
+        // band nobody produced, so follow it the same way.
+        if (j.screening) { set({ screening: true, screenResult: `Screening ${j.screening} leads…` }); get().pollScreen(); }
       } else {
         set({ feedsResult: j.error || "Feed pull failed" });
       }

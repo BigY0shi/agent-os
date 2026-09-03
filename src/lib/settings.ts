@@ -117,7 +117,13 @@ export interface Settings {
   // Deal Desk (S4). maxAgeDays: listings posted longer ago than this are dropped
   // when a scrape or a feed pull lands (the feed was pulling 3-4 week old jobs);
   // the age shows on every card. Rule 16: edited in the Deal Desk gear.
-  deals: { maxAgeDays?: number };
+  deals: {
+    maxAgeDays?: number;
+    /** Model for the quick pass/not screen; falls back to CLAUDE_MODEL when unset. */
+    screenModel?: string;
+    /** Screen the unjudged leads automatically after a feed pull. */
+    screenOnPull?: boolean;
+  };
 
   // Operating skills (~/.agentic-os/skills/<name>/SKILL.md) injected into agent prompts.
   // "global" = every agent call platform-wide; "modules" = extra skills per module key
@@ -438,7 +444,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
-  deals: { maxAgeDays: 5 },
+  deals: { maxAgeDays: 5, screenOnPull: true },
   skills: {
     global: ["better-agent"],
     modules: {

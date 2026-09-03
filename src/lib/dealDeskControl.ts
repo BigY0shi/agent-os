@@ -13,21 +13,35 @@
 // owner opened every card to find it. This pulls it out and bands it so a card
 // can be cleared at reading speed.
 
-export type VerdictBand = "pursue" | "maybe" | "pass";
+export type VerdictBand = "pursue" | "maybe" | "pass" | "unknown";
 
 export interface Verdict {
   band: VerdictBand;
-  /** The evaluator's own sentence, or an honest "no verdict written" line. */
+  /** The evaluator's own sentence, or an honest "not screened yet" line. */
   line: string;
-  /** Where the sentence came from; "score" means nothing was written. */
-  source: "why" | "summary" | "pitch" | "score";
+  /**
+   * Where the sentence came from. "screen" is the cheap pass/not check;
+   * "score" means an evaluator wrote prose without a readable call, so the
+   * band came off the fit; "none" means nothing has looked at this lead.
+   */
+  source: "why" | "summary" | "pitch" | "screen" | "score" | "none";
+}
+
+/** The quick pass/not check's stored result, when one has run on a lead. */
+export interface ScreenResult {
+  band: VerdictBand;
+  line: string;
+  at: number;
+  model?: string;
 }
 
 export interface VerdictInput {
   why?: string | null;
   summary?: string | null;
   pitch?: string | null;
-  /** The refined fit (1-10); decides the band when no text does. */
+  /** The quick pass/not check's result, if one has run. */
+  screen?: ScreenResult | null;
+  /** The refined fit (1-10); bands a prose evaluation that made no explicit call. */
   effectiveFit: number;
 }
 
@@ -69,24 +83,41 @@ export function deriveVerdict(d: VerdictInput): Verdict {
   if (why && whyBand) return { band: whyBand, line: why, source: "why" };
   const sumBand = bandFromText(summary);
   if (summary && sumBand) return { band: sumBand, line: summary, source: "summary" };
-  // Text without a readable call: keep the evaluator's sentence, band on the score.
+  // The quick pass/not check ran even though no brief did. It is a real look at
+  // the listing, so it outranks banding the fit.
+  if (d.screen && d.screen.band) {
+    return { band: d.screen.band, line: d.screen.line || "Screened.", source: "screen" };
+  }
+  // Prose without a readable call: keep the evaluator's sentence, band on the score.
+  // Banding real prose is interpretation; banding a lead nobody read is invention,
+  // which is what the fall-through below used to do.
   if (why) return { band: bandFromScore(d.effectiveFit), line: why, source: "why" };
   if (summary) return { band: bandFromScore(d.effectiveFit), line: summary, source: "summary" };
-  const fit = Number.isFinite(d.effectiveFit) ? d.effectiveFit : 0;
-  return { band: bandFromScore(fit), line: `No written verdict yet (fit ${fit}/10).`, source: "score" };
+  // Nothing has evaluated this lead. The fit it carries is the feed's keyword
+  // heuristic, not a judgement: feeds.json scores 53 of 131 WeWorkRemotely rows at
+  // exactly 8, including "Cribl: Customer Support Manager". Banding that produced a
+  // confident green Pursue on leads nobody had looked at. Unknown is the honest answer.
+  return { band: "unknown", line: "Not screened yet.", source: "none" };
 }
 
 export const VERDICT_COLOR: Record<VerdictBand, string> = {
   pursue: "#86efac",
   maybe: "#fbbf24",
   pass: "#f87171",
+  unknown: "#c084fc",
 };
 
 export const VERDICT_LABEL: Record<VerdictBand, string> = {
   pursue: "Pursue",
   maybe: "Maybe",
   pass: "Pass",
+  unknown: "NA",
 };
+
+/** An unscreened lead shows NA rather than the number it never earned. */
+export function fitLabel(band: VerdictBand, fit: number): string {
+  return band === "unknown" ? "NA" : String(fit);
+}
 
 // -- (f) Age gate ---------------------------------------------------------------
 //

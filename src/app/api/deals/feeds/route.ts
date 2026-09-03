@@ -1,5 +1,6 @@
 import { LEADS_DIR, pruneLeadsFileByAge } from "@/lib/upworkDesk";
 import { startBriefBatch } from "@/lib/briefBatch";
+import { startScreenBatch } from "@/lib/dealScreen";
 import { clampMaxAgeDays } from "@/lib/dealDeskControl";
 import { readSettings } from "@/lib/settings";
 import { spawn } from "node:child_process";
@@ -37,11 +38,20 @@ export async function POST() {
   // minutes and this response should return as soon as the pull is done.
   const brief = await startBriefBatch();
 
+  // The brief pass covers the top 20 by composite. Everything under that cap used to
+  // land unevaluated and get banded off the feed's keyword fit. The screen is the
+  // cheap call that gives the rest a real call; leads it cannot judge stay NA.
+  const settings = readSettings();
+  const screen = settings.deals?.screenOnPull === false
+    ? { started: false, total: 0 }
+    : await startScreenBatch();
+
   return Response.json({
     ok: true,
     relevant: stats.relevant ?? 0,
     bySource: stats.bySource ?? {},
     briefing: brief.started ? brief.total : 0,
+    screening: screen.started ? screen.total : 0,
     ageGate: { maxAgeDays, dropped: aged.dropped, kept: aged.kept, undated: aged.unknown },
   });
 }
