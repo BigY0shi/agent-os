@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
-import { VERDICT_COLOR, VERDICT_LABEL, ageDays } from "@/lib/dealDeskControl";
+import { VERDICT_COLOR, VERDICT_LABEL, ageDays, UPWORK_LOGIN_URL } from "@/lib/dealDeskControl";
 import DealDeskSettings from "@/components/DealDeskSettings";
 
 const fmtMoney = (n: number | null) => (n == null ? "?" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
@@ -111,6 +111,13 @@ function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
             className="mt-0.5 shrink-0 accent-red-400" />
         )}
         <div className="text-[13px] font-medium leading-snug line-clamp-2 flex-1">{deal.title}</div>
+        {deal.needsLogin && (
+          <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold shrink-0"
+            style={{ background: "rgba(248,113,113,0.18)", color: "#f87171" }}
+            title={`Upwork was logged out when this listing was visited${deal.loginWallAt ? ` (${agoLabel(deal.loginWallAt)})` : ""}. Log in again and update the cookie.`}>
+            needs login
+          </span>
+        )}
         {deal.needsInfo && <AlertTriangle size={13} style={{ color: "#fbbf24", flexShrink: 0 }} />}
         {onDeny && (
           <button type="button" title="Deny this lead" aria-label="Deny"
@@ -379,6 +386,7 @@ export default function DealDesk() {
   useEffect(() => { pollBriefs(); }, [pollBriefs]);
 
   const approvedCount = deals.filter((d) => d.status === "approved").length;
+  const needsLoginCount = deals.filter((d) => d.needsLogin).length;
 
   const selected = open ? deals.find((d) => d.id === open.id) || open : null;
 
@@ -468,6 +476,22 @@ export default function DealDesk() {
       </div>
       <p className="text-sm text-white/45 mb-5">Upwork fast-wins — drag to move stages, open a card to review the pitch, approach, crash course, and notes before you bid.</p>
 
+      {/* S4 (d): the login wall, said once at the top with the way out. */}
+      {needsLoginCount > 0 && (
+        <div className="panel p-3 mb-4 text-[12.5px] flex flex-wrap items-center gap-x-3 gap-y-2" style={{ borderColor: "rgba(248,113,113,0.5)", color: "#fca5a5" }}>
+          <AlertTriangle size={14} style={{ color: "#f87171", flexShrink: 0 }} />
+          <span>
+            Upwork is logged out: enrichment stopped at the login wall and {needsLoginCount} card{needsLoginCount === 1 ? "" : "s"} {needsLoginCount === 1 ? "needs" : "need"} login.
+            Log in on upwork.com, then paste a fresh cookie; that clears the flags.
+          </span>
+          <a href={UPWORK_LOGIN_URL} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium"
+            style={{ background: "rgba(248,113,113,0.16)", color: "#f87171" }}>
+            Open Upwork login <ExternalLink size={12} />
+          </a>
+          <button onClick={() => setShowCookie(true)} className="px-2.5 py-1 rounded-lg text-[12px] panel hover:brightness-110">Update cookie</button>
+        </div>
+      )}
       {enrichResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#22d3ee" }}>{enrichResult}</div>}
       {refillResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#c084fc" }}>{refillResult}</div>}
       {feedsResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#60a5fa" }}>{feedsResult}</div>}

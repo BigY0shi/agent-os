@@ -126,6 +126,71 @@ console.log("\n-- C (f) max-age gate --");
   check("C10 settings.deals.maxAgeDays defaults to 5 (gear-editable, rule 16)", S.DEFAULT_SETTINGS.deals?.maxAgeDays === 5 && S.readSettings().deals?.maxAgeDays === 5);
 }
 
+// -- D (d) the login wall ---------------------------------------------------------
+console.log("\n-- D (d) login wall --");
+{
+  const listing = {
+    title: "Zapier + HubSpot cleanup - Upwork",
+    url: "https://www.upwork.com/jobs/~021234567890123456/",
+    text: "Zapier + HubSpot cleanup. Posted 2 hours ago. Log in to apply. Proposals: 5 to 10. About the client: Payment method verified. 4.9 of 5 stars.",
+  };
+  check("D1 a real listing page is not a wall, even though it says 'Log in to apply'", C.detectLoginWall(listing).wall === false);
+  const byUrl = C.detectLoginWall({ ...listing, url: "https://www.upwork.com/ab/account-security/login?redir=%2Fjobs%2F~02123" });
+  check("D2 a redirect to /ab/account-security/login is a wall (reason url)", byUrl.wall && byUrl.reason === "url", byUrl.reason);
+  const byTitle = C.detectLoginWall({ title: "Log in to Upwork", url: "https://www.upwork.com/jobs/~02123/", text: "" });
+  check("D3 a 'Log in to Upwork' title is a wall (reason title)", byTitle.wall && byTitle.reason === "title", byTitle.reason);
+  const byText = C.detectLoginWall({ title: "", url: "https://www.upwork.com/jobs/~02123/", text: "Welcome back Username or email Password Forgot password? Log in Continue with Google" });
+  check("D4 the login form text with no listing markers is a wall (reason text)", byText.wall && byText.reason === "text", byText.reason);
+  check("D5 empty page fields are not a wall", C.detectLoginWall({}).wall === false);
+  check("D6 the re-login URL is Upwork's login route", /^https:\/\/www\.upwork\.com\/ab\/account-security\/login$/.test(C.UPWORK_LOGIN_URL));
+
+  // Flag writes: one generation for many cards; a fresh cookie clears all.
+  await D.setStatus("L-1", "approved");
+  await D.setStatus("L-2", "approved");
+  const flagged = await D.setNeedsLogin(["L-1", "L-2", "L-2"], true);
+  let live = readLive();
+  check("D7 setNeedsLogin flags many in one write, dedupes", flagged.length === 2 && live["L-1"].needsLogin === true && typeof live["L-2"].loginWallAt === "number");
+  const cleared = await D.setNeedsLogin([], false);
+  live = readLive();
+  check("D8 setNeedsLogin([], false) clears EVERY flagged card (a fresh cookie)", cleared.sort().join(",") === "L-1,L-2" && live["L-1"].needsLogin === false && live["L-2"].needsLogin === false);
+  const noop = await D.setNeedsLogin([], false);
+  check("D9 clearing with nothing flagged writes nothing", noop.length === 0);
+
+  // The gated runner against a fake actor script: card 1 enriches, card 2 hits
+  // the wall, card 3 is never reached. No browser, no cookie of the owner's.
+  const leads = process.env.UPWORK_LEADS_DIR;
+  const actorDir = path.join(leads, "actor");
+  fs.mkdirSync(actorDir, { recursive: true });
+  const fake = path.join(actorDir, "enrich.mjs");
+  fs.writeFileSync(fake, [
+    'import fs from "node:fs";',
+    'const t = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));',
+    'if (!process.env.UPWORK_COOKIE) { console.error("NO_COOKIE"); process.exit(2); }',
+    'if (process.argv.includes("--leak")) console.log(process.env.UPWORK_COOKIE);',
+    'const rows = [{ id: t[0].id, proposals: "5 to 10", paymentVerified: true, hireRate: 80 }];',
+    'if (t[1]) rows.push({ id: t[1].id, error: "login" });',
+    'fs.writeFileSync(process.argv[3], JSON.stringify(rows));',
+    'console.log(JSON.stringify({ done: true, count: rows.length, stopped: t[1] ? "login" : null }));',
+  ].join("\n"), "utf8");
+  const E = await import("../../src/lib/dealEnrich.ts");
+  const logs = [];
+  const o = await E.runEnrichment(
+    [{ id: "L-1", url: "https://www.upwork.com/jobs/~021/" }, { id: "L-2", url: "https://www.upwork.com/jobs/~022/" }, { id: "L-3", url: "https://www.upwork.com/jobs/~023/" }],
+    { cookie: "master_access_token=smoke; visitor_id=1", log: (t) => logs.push(t) },
+  );
+  live = readLive();
+  check("D10 the run stops at the wall", o.stopped === "login" && o.attempted === 3 && o.enriched === 1, JSON.stringify(o));
+  check("D11 the card before the wall was enriched and is NOT flagged", live["L-1"].enrichment?.proposals === "5 to 10" && live["L-1"].needsLogin === false);
+  check("D12 the card at the wall AND the unreached card are flagged needs login", o.needsLogin.sort().join(",") === "L-2,L-3" && live["L-2"].needsLogin === true && live["L-3"].needsLogin === true);
+  check("D13 the run log says so in words", logs.some((l) => /login wall/.test(l)), logs.join(" | "));
+  check("D14 the cookie never appears in a log line", !logs.some((l) => /master_access_token/.test(l)));
+  const single = await E.runEnrichment([{ id: "L-1", url: "https://www.upwork.com/jobs/~021/" }], { cookie: "master_access_token=smoke" });
+  check("D15 a clean run has no stop and no flags", single.stopped === null && single.enriched === 1 && single.needsLogin.length === 0);
+  check("D16 the cap is 10 per run (ban-risk guard)", E.ENRICH_CAP === 10);
+  const deals = await D.listDeals();
+  check("D17 listDeals carries needsLogin/loginWallAt (no board rows here, so the field just has to exist on the type path)", Array.isArray(deals));
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);

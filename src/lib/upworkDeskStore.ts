@@ -190,7 +190,12 @@ export const useDesk = create<DeskStore>((set, get) => ({
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cookie }),
       });
       const j = await r.json();
-      if (j.ok) { set({ cookie: { set: !!j.set, hint: j.hint || "" } }); return true; }
+      if (j.ok) {
+        set({ cookie: { set: !!j.set, hint: j.hint || "" } });
+        // A fresh cookie clears the needs-login flags server-side; show that.
+        if (j.clearedNeedsLogin) await get().fetchDeals();
+        return true;
+      }
       return false;
     } catch { return false; }
   },
@@ -198,12 +203,18 @@ export const useDesk = create<DeskStore>((set, get) => ({
   enrichApproved: async () => {
     set({ enriching: true, enrichResult: null });
     try {
-      const r = await fetch("/api/deals/enrich", {
+      // S4 (d): the gated runner. A login wall stops the run, flags the cards it
+      // did not reach, and the board shows the banner with the re-login link.
+      const r = await fetch("/api/deals/enrichment", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
       });
       const j = await r.json();
       if (j.ok) {
-        set({ enrichResult: `Enriched ${j.enriched}/${j.attempted}${j.stopped ? ` — stopped on ${j.stopped}` : ""}` });
+        const wall = j.stopped === "login" ? ` — stopped at the Upwork login wall, ${(j.needsLogin || []).length} card(s) need login` : j.stopped ? ` — stopped on ${j.stopped}` : "";
+        set({ enrichResult: `Enriched ${j.enriched}/${j.attempted}${wall}` });
+        await get().fetchDeals();
+      } else if (j.stopped) {
+        set({ enrichResult: "Enrichment stopped." });
         await get().fetchDeals();
       } else {
         set({ enrichResult: j.error || "Enrichment failed" });

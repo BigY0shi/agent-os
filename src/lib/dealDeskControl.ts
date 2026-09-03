@@ -111,6 +111,47 @@ export function clampMaxAgeDays(v: unknown): number {
   return Math.min(365, Math.round(n));
 }
 
+// -- (d) Login wall -------------------------------------------------------------
+//
+// The browser was logged out and enrichment ran against the login page as if it
+// were the listing. Any scraped page (enrichment, manual intake) passes its
+// title, final URL and body text through here BEFORE its fields are trusted.
+// Markers were taken from Upwork-Leads/actor/enrich.mjs (the "log in to
+// continue" family) and from Upwork's login route (/ab/account-security/login).
+
+export interface ScrapedPage {
+  title?: string | null;
+  url?: string | null;
+  /** Body text, whitespace-collapsed; the first few thousand chars are enough. */
+  text?: string | null;
+}
+
+export interface LoginWallCheck {
+  wall: boolean;
+  /** Which marker fired, for the log line and the card. Null when no wall. */
+  reason: "url" | "title" | "text" | null;
+}
+
+const LOGIN_URL_RE = /upwork\.com\/(ab\/account-security\/login|login|nx\/signup|signup)\b/i;
+const LOGIN_TITLE_RE = /^\s*(log ?in|sign ?in|sign ?up)\b|\blog ?in to upwork\b|\bupwork login\b/i;
+const LOGIN_TEXT_RE = /\b(log ?in|sign ?up|sign ?in) to (continue|apply|see|view|proceed)\b|\blog ?in to upwork\b|\bwelcome back\b[\s\S]{0,120}\bpassword\b|\bforgot password\b[\s\S]{0,200}\b(log ?in|continue with (google|apple))\b/i;
+// A listing page carries these; the login page does not. Their presence vetoes a
+// text-only match, because listings quote "log in to apply" in their own copy.
+const LISTING_TEXT_RE = /\bproposals\b|\babout the client\b|\bjob details\b|\bactivity on this job\b/i;
+
+export function detectLoginWall(page: ScrapedPage): LoginWallCheck {
+  const url = String(page.url ?? "");
+  const title = String(page.title ?? "");
+  const text = String(page.text ?? "").replace(/\s+/g, " ");
+  if (LOGIN_URL_RE.test(url)) return { wall: true, reason: "url" };
+  if (LOGIN_TITLE_RE.test(title)) return { wall: true, reason: "title" };
+  if (LOGIN_TEXT_RE.test(text.slice(0, 6000)) && !LISTING_TEXT_RE.test(text)) return { wall: true, reason: "text" };
+  return { wall: false, reason: null };
+}
+
+/** The page to send the owner to when a wall is hit. */
+export const UPWORK_LOGIN_URL = "https://www.upwork.com/ab/account-security/login";
+
 export interface AgePartition<T> {
   kept: T[];
   dropped: T[];

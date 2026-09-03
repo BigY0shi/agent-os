@@ -75,6 +75,12 @@ export interface DealState {
    * looked second-class. Generating a brief fills them for ANY source.
    */
   brief?: Brief;
+  /**
+   * S4 (d): enrichment (or intake) hit Upwork's login wall on this card. Set by
+   * the gated runner, cleared by a fresh cookie or a later successful visit.
+   */
+  needsLogin?: boolean;
+  loginWallAt?: number;
 }
 export interface Brief {
   summary?: string; why?: string; approach?: string; crashCourse?: string; at?: number;
@@ -95,6 +101,9 @@ export interface Deal extends BoardRecord {
   effectiveFit: number;
   /** S4 (c): the evaluator's pass/pursue call, pulled to the front of the card. */
   verdict: Verdict;
+  /** S4 (d): the last visit to this listing hit the login wall. */
+  needsLogin: boolean;
+  loginWallAt: number | null;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -383,6 +392,8 @@ export async function listDeals(): Promise<Deal[]> {
       answers: st.answers ?? [],
       enrichment: st.enrichment ?? null,
       updatedAt: st.updatedAt ?? null,
+      needsLogin: st.needsLogin ?? false,
+      loginWallAt: st.loginWallAt ?? null,
     });
   }
 
@@ -409,6 +420,7 @@ export async function listDeals(): Promise<Deal[]> {
       approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
       answers: st.answers ?? [], enrichment: st.enrichment ?? null, updatedAt: st.updatedAt ?? null,
+      needsLogin: st.needsLogin ?? false, loginWallAt: st.loginWallAt ?? null,
     });
   }
 
@@ -473,6 +485,26 @@ export async function setEnrichment(id: string, e: Enrichment): Promise<DealStat
 
 export async function setBrief(id: string, b: Brief): Promise<DealState> {
   return patch(id, (s) => ({ ...s, brief: { ...b, at: Date.now() } }));
+}
+
+/**
+ * S4 (d): flag (or clear) the login wall on many cards in one write. `on: false`
+ * with an empty list clears EVERY flagged card - that is what a fresh cookie means.
+ */
+export async function setNeedsLogin(ids: string[], on: boolean): Promise<string[]> {
+  return withLock(async () => {
+    const store = await readState();
+    const now = Date.now();
+    const targets = ids.length ? [...new Set(ids.filter(Boolean))] : (on ? [] : Object.keys(store).filter((id) => store[id]?.needsLogin));
+    for (const id of targets) {
+      const s = store[id] || {};
+      store[id] = on
+        ? { ...s, needsLogin: true, loginWallAt: now, updatedAt: now }
+        : { ...s, needsLogin: false, updatedAt: now };
+    }
+    if (targets.length) await writeState(store);
+    return targets;
+  });
 }
 
 // Plan a "clear passed & refill" pass. Goal: keep the NEW column topped up to `target`.

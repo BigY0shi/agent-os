@@ -34,6 +34,39 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S4 (d): enrichment stops at the login wall and says so on the card
+
+Harness session (feat-s4-deal-desk-control), part four. The owner's words: the browser
+was logged out and enrich ran as if fine; detect the login wall, stop, and ask.
+
+**What was there.** `actor/enrich.mjs` already detects the wall in the browser and
+returns `error: "login"`; `/api/deals/enrich` turned that into "stopped on login" in a
+banner and left every card untouched, so the next click did the same thing. The route
+was also in the owner's uncommitted working set (`sanitizeSpawnEnv` on the spawn), so it
+was not edited or staged. Rejected: stashing his hunk to edit around it; a conflict on
+pop could mangle work that is not mine.
+
+**What landed instead.** `lib/dealEnrich.ts` is the same spawn with the gate:
+`runEnrichment()` reads the actor's rows, and on a wall (the actor's own error, or
+`detectLoginWall()` over any title/finalUrl/text a row carries) it stops, flags the card
+at the wall AND every card the run never reached with `needsLogin` + `loginWallAt` in one
+write (`setNeedsLogin`), and clears the flag on any card that enriched cleanly. A new
+`POST /api/deals/enrichment` runs it as a module run ("Enrich: N approved cards", STOP
+kills the browser child) and the store's "Enrich approved" button calls it; the old
+route stays and works, minus the gate. `detectLoginWall()` in `dealDeskControl.ts` checks
+URL (Upwork's `/ab/account-security/login`), then title, then the login-form text; a
+text match is vetoed by listing markers ("Proposals", "About the client"), because
+listings quote "Log in to apply" in their own copy (smoke D1).
+
+**The way out.** A red banner above the board names the count and offers "Open Upwork
+login" plus "Update cookie"; each flagged card wears a `needs login` badge. Saving a
+cookie clears every flag (`/api/deals/cookie` POST), on the reading that a fresh cookie
+is the owner saying he logged back in; if the session is still dead, the next run flags
+them again. Evidence: `smoke-deal-desk-control` section D, 17 checks, including the
+runner against a fake actor script that returns ok / login / (unreached), and a check
+that the cookie never appears in a log line. `tsc` clean.
+
+---
 ## 2026-09-02 - S4 (f): a max-age gate on what lands on the board
 
 Harness session (feat-s4-deal-desk-control), part three. The owner's words: the feed is
