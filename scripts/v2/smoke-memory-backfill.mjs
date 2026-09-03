@@ -54,6 +54,7 @@ let tagsMode = "ok"; // ok | down | nomodel | noembed
 let lmMode = "ok";   // ok | down | nomodel
 const calls = { tags: 0, chat: [], embed: 0, lmModels: 0, lmChat: [] };
 const NOTHING_MARKER = "nothing-worth-keeping";
+const EMPTY_MARKER = "empty-extraction-nothing-usable";
 const DIM = 768;
 const vec = (seed) => Array.from({ length: DIM }, (_, i) => Math.sin(seed * 7 + i));
 
@@ -124,11 +125,27 @@ function lmStudio(u, init) {
 function modelContent(messages, keys) {
     const text = messages.map((m) => m.content).join("\n");
     let content;
-    if (keys.length === 0) {
-      // normalize (text call)
-      content = text.includes(NOTHING_MARKER)
-        ? "NOTHING_TO_REMEMBER"
-        : `<output>NORMALIZED: ${/Yoshi [^\n]*/.exec(text)?.[0] ?? "Yoshi did something."}</output>`;
+    if (keys.length === 0 && text.includes(NOTHING_MARKER)) {
+      // normalize (text call): the model's own NOTHING_TO_REMEMBER signal
+      content = "NOTHING_TO_REMEMBER";
+    } else if (keys.length === 0 && text.includes(EMPTY_MARKER)) {
+      // normalize (text call): succeeds, but keep EMPTY_MARKER in the
+      // normalized text VERBATIM (not the crude "Yoshi ..." regex below, which
+      // grabs the first "Yoshi " on any line of the FULL prompt and can miss
+      // the actual note) so every later extraction call still sees it.
+      content = `<output>NORMALIZED: Yoshi's note (${EMPTY_MARKER}) is present but the model extracted nothing.</output>`;
+    } else if (keys.length === 0) {
+      // normalize (text call), the ordinary case
+      content = `<output>NORMALIZED: ${/Yoshi [^\n]*/.exec(text)?.[0] ?? "Yoshi did something."}</output>`;
+    } else if (text.includes(EMPTY_MARKER)) {
+      // Normalize succeeds (an episodeUuid comes back), but every extraction
+      // phase yields nothing - a model coming up short, not an empty episode.
+      if (keys.includes("entities")) content = JSON.stringify({ entities: [], graph_facts: [] });
+      else if (keys.includes("graph_facts")) content = JSON.stringify({ graph_facts: [] });
+      else if (keys.includes("voice_facts")) content = JSON.stringify({ voice_facts: [] });
+      else if (keys.includes("facts")) content = JSON.stringify({ facts: [] });
+      else if (keys.includes("aspects")) content = JSON.stringify({ aspects: [] });
+      else throw new Error(`smoke: unrecognised structured call with keys ${keys.join(",")}`);
     } else if (keys.includes("entities")) {
       content = JSON.stringify({
         entities: [{ name: "Yoshi", type: "Person", attributes: null }, { name: "Proxmox cluster", type: "Product", attributes: null }],
@@ -503,5 +520,126 @@ const cliSrc = fs.readFileSync(path.join(root, "scripts", "v2", "memory-backfill
 check("L5 the CLI takes --reasoning-effort and writes nothing to disk", /--reasoning-effort/.test(cliSrc) && /process\.env\.OPENAI_COMPAT_REASONING_EFFORT = args\.effort/.test(cliSrc));
 const badEff = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--reasoning-effort", "hard"], { cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 60_000 });
 check("L5 CLI rejects an unknown --reasoning-effort with exit 2", badEff.status === 2 && /--reasoning-effort must be one of/.test(badEff.stderr), `status=${badEff.status}`);
+
+// ---- M. a zero-yield 'derived' row stays eligible, unlike a real one -----------
+console.log("-- M: zero-yield derived stays eligible --");
+const mText = `2026-08-24 Yoshi ${EMPTY_MARKER} left a note the model came up empty on.`;
+const mUuid = graph.saveEpisode({
+  content: mText, originalContent: mText, source: "migration:remember",
+  sessionId: "empty-1", contentHash: contentHash(mText), validAt: "2026-08-24T00:00:00.000Z",
+});
+const beforeM = B.countUndrivedEpisodes();
+
+// M1 - first pass: normalize succeeds, every extraction phase returns empty
+const run1 = await B.backfillEpisodes({ limit: 1, model: "bonsai:27b", provider: "ollama-local", runId: "run-empty-1" });
+const r1 = run1.results.find((r) => r.uuid === mUuid);
+check("M1 normalize succeeded (episodeUuid came back) but nothing was extracted", r1?.outcome === "derived" && r1.statements === 0 && r1.voiceAspects === 0, JSON.stringify(r1));
+check("M1 the run's own count still calls it derived (matches BackfillResult.derived elsewhere)", run1.derived === 1 && run1.nothing === 0 && run1.failed === 0);
+check("M1 the run says the same reasoning_effort discipline applies (undefined on Ollama)", run1.reasoningEffort === undefined);
+
+// M2 - it is NOT retired: still a candidate, count unchanged
+check("M2 countUndrivedEpisodes is unchanged (the zero-yield row was not removed)", B.countUndrivedEpisodes() === beforeM, `before=${beforeM} after=${B.countUndrivedEpisodes()}`);
+check("M2 listUndrivedEpisodes still lists it", B.listUndrivedEpisodes(500).some((c) => c.uuid === mUuid));
+check("M2 the log recorded the attempt anyway (audit trail, not silently dropped)", B.listBackfillLog(50).some((r) => r.runId === "run-empty-1" && r.episodeUuid === mUuid && r.outcome === "derived" && r.statements === 0));
+
+// M3 - offered again on a second run, still empty: two log rows now, still eligible.
+// It won't necessarily be picked this time (older leftovers from earlier sections
+// may still be oldest-first ahead of it) - keep processing limit:1 runs targeted
+// at it isn't possible generically, so instead assert the INVARIANT: however many
+// runs it takes, it is never removed by an empty outcome. Force it directly to
+// prove the log accumulates rather than dedups.
+const before3 = B.countUndrivedEpisodes();
+await B.backfillEpisodes({ limit: 500, model: "bonsai:27b", provider: "ollama-local", runId: "run-empty-2" });
+check("M3 a second sweep leaves the zero-yield row still eligible (never removed by an empty outcome)", B.listUndrivedEpisodes(500).some((c) => c.uuid === mUuid));
+check("M3 at least two log rows exist for it now (append-only, no dedup)", B.listBackfillLog(50).filter((r) => r.episodeUuid === mUuid).length >= 2);
+check("M3 nothing net-changed in the undrived count except possibly OTHER episodes retiring (this one did not)", B.countUndrivedEpisodes() <= before3);
+
+// M4 - a stronger pass lands real facts on THIS episode: now it retires like any other
+// classifyWorldPrompt (the "facts" call) does NOT re-send episode.content -
+// its prompt is built purely from the graph_facts array's own `fact` text
+// (src/lib/v2/memory/prompts/classify-world.ts). So isThisEpisode must be
+// carried in the FACT TEXT at extract+reflect, not just in the normalized
+// episode body, or the marker is invisible by the time "facts" is called.
+const RETRY_FACT = `Yoshi's note (${EMPTY_MARKER}) was eventually derived on a stronger pass`;
+const origFetchM = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  // Only /api/chat POSTs carry a JSON body worth inspecting - /api/tags is a
+  // bare GET (init.body undefined) and must fall straight through.
+  if (!String(url).endsWith("/api/chat") || !init?.body) return origFetchM(url, init);
+  const body = JSON.parse(init.body);
+  const isThisEpisode = body.messages.some((m) => m.content.includes(EMPTY_MARKER));
+  if (isThisEpisode) {
+    const keys = body.format ? Object.keys(body.format.properties ?? {}) : [];
+    if (keys.length === 0) {
+      // normalize: keep the marker in the normalized text so extractWorld and
+      // reflectWorld (which both re-send episode.content) still recognise it.
+      return Response.json({ message: { role: "assistant", content: `<output>NORMALIZED: Yoshi's note (${EMPTY_MARKER}) is now getting a real answer.</output>` } });
+    }
+    if (keys.includes("entities")) {
+      // extractWorld
+      return Response.json({ message: { role: "assistant", content: JSON.stringify({
+        entities: [{ name: "Yoshi", type: "Person", attributes: null }],
+        graph_facts: [{ source: "Yoshi", predicate: "noted", target: "note", fact: RETRY_FACT, event_date: null }],
+      }) } });
+    }
+    if (keys.includes("graph_facts")) {
+      // reflectWorld (graph_facts alone, no "entities" key)
+      return Response.json({ message: { role: "assistant", content: JSON.stringify({
+        graph_facts: [{ source: "Yoshi", predicate: "noted", target: "note", fact: RETRY_FACT, event_date: null }],
+      }) } });
+    }
+    if (keys.includes("facts")) {
+      // classifyWorld: this is what actually produces a statement (rule 20's
+      // "the answer names what it did" analog for a smoke - the fact carries
+      // the marker forward so this branch is provably reached, not skipped).
+      return Response.json({ message: { role: "assistant", content: JSON.stringify({
+        facts: [{ source: "Yoshi", predicate: "noted", target: "note", fact: RETRY_FACT, aspect: "Event", event_date: null }],
+      }) } });
+    }
+    // voice_facts (extract or reflect) and aspects (classify-voice): empty,
+    // so the voice half of the pipeline stays short-circuited - M4 only
+    // needs statements > 0, not voice aspects.
+    return Response.json({ message: { role: "assistant", content: JSON.stringify({ voice_facts: [], aspects: [] }) } });
+  }
+  return origFetchM(url, init);
+};
+const beforeM4 = B.countUndrivedEpisodes();
+const run4target = await B.backfillEpisodes({ limit: 500, model: "bonsai:27b", provider: "ollama-local", runId: "run-empty-3" });
+globalThis.fetch = origFetchM;
+const r4 = run4target.results.find((r) => r.uuid === mUuid);
+check("M4 a stronger pass lands a real fact on the same episode", r4?.outcome === "derived" && r4.statements === 1, JSON.stringify(r4));
+check("M4 NOW it is retired: no longer in the candidate list", !B.listUndrivedEpisodes(500).some((c) => c.uuid === mUuid));
+check("M4 the undrived count dropped by at least one (this episode, possibly others in the sweep too)", B.countUndrivedEpisodes() < beforeM4);
+
+// M5 - the log line naming, checked against the run's own numbers rather than
+// a hardcoded count (this file's earlier sections leave state that varies).
+const mText2 = `2026-08-25 Yoshi ${EMPTY_MARKER} another empty one, checked structurally.`;
+graph.saveEpisode({ content: mText2, originalContent: mText2, source: "migration:remember", sessionId: "empty-2", contentHash: contentHash(mText2), validAt: "2026-08-25T00:00:00.000Z" });
+const remainingBefore5 = B.countUndrivedEpisodes();
+const emptyLog = [];
+const run5 = await B.backfillEpisodes({ limit: 1, model: "bonsai:27b", provider: "ollama-local", runId: "run-empty-4", log: (t) => emptyLog.push(t) });
+const derivedEmpty5 = run5.results.filter((r) => r.outcome === "derived" && r.statements === 0 && r.voiceAspects === 0).length;
+const expectedStill5 = remainingBefore5 - (run5.derived - derivedEmpty5) - run5.nothing;
+check("M5 the per-episode line says a zero-yield row stays eligible", emptyLog.some((t) => /derived: 0 facts, 0 voice — stays eligible, will be offered again/.test(t)), emptyLog.join(" | "));
+check(
+  "M5 the done line's 'still undrived' count matches remaining - (derived - zero-yield) - nothing, not remaining - derived - nothing",
+  emptyLog.some((t) => new RegExp(`^done: ${run5.derived} derived, ${run5.nothing} nothing to remember, ${run5.failed} failed; ${expectedStill5} legacy episodes still undrived`).test(t)),
+  emptyLog.join(" | "),
+);
+if (derivedEmpty5 > 0) {
+  check("M5 the done line notes how many derived nothing usable", emptyLog.some((t) => new RegExp(`\\(${derivedEmpty5} derived nothing usable and will be offered again\\)$`).test(t)), emptyLog.join(" | "));
+}
+
+// M6 - regression guard: a REAL derived row and a NOTHING row still retire exactly as before
+check("M6 a real derived row (statements > 0) still retires (unchanged behaviour)", r4.statements > 0 && !B.listUndrivedEpisodes(500).some((c) => c.uuid === r4.uuid));
+const nothingText = `2026-08-26 testing testing ${NOTHING_MARKER} still retires as before`;
+const nothingUuid = graph.saveEpisode({ content: nothingText, originalContent: nothingText, source: "migration:remember", sessionId: "nothing-guard", contentHash: contentHash(nothingText), validAt: "2026-08-26T00:00:00.000Z" });
+await B.backfillEpisodes({ limit: 500, model: "bonsai:27b", provider: "ollama-local", runId: "run-nothing-guard" });
+check("M6 an explicit NOTHING_TO_REMEMBER row still retires (unchanged behaviour)", !B.listUndrivedEpisodes(500).some((c) => c.uuid === nothingUuid));
+
+// M7 - the wiring
+const backfillSrc = fs.readFileSync(path.join(root, "src", "lib", "v2", "memory", "backfill.ts"), "utf8");
+check("M7 the WHERE clause only retires a derived row that landed something", /l\.outcome = 'derived' AND \(l\.statements > 0 OR l\.voice_aspects > 0\)/.test(backfillSrc));
+check("M7 the CLI marks a zero-yield row for retry in its per-episode line", /will retry/.test(cliSrc));
 
 finish();

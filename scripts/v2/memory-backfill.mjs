@@ -106,13 +106,18 @@ try {
       console.log(`  ${c.uuid.slice(0, 8)}  ${c.validAt.slice(0, 10)}  ${c.source.padEnd(20)}  ${String(c.chars).padStart(6)} ch  ${c.preview.slice(0, 80)}`);
     }
   } else {
-    console.log(`\nrun ${r.runId} (${r.model} on ${r.provider} at ${r.base}): ${r.derived} derived, ${r.nothing} nothing to remember, ${r.failed} failed in ${(r.ms / 1000).toFixed(1)} s; ${r.remaining - r.derived - r.nothing} still undrived`);
+    // A zero-yield 'derived' row (0 statements, 0 voice) is not actually
+    // retired (backfill.ts UNDRIVED_WHERE) and will be offered again.
+    const derivedEmpty = r.results.filter((e) => e.outcome === "derived" && e.statements === 0 && e.voiceAspects === 0).length;
+    const stillUndrived = r.remaining - (r.derived - derivedEmpty) - r.nothing;
+    console.log(`\nrun ${r.runId} (${r.model} on ${r.provider} at ${r.base}): ${r.derived} derived, ${r.nothing} nothing to remember, ${r.failed} failed in ${(r.ms / 1000).toFixed(1)} s; ${stillUndrived} still undrived` + (derivedEmpty ? ` (${derivedEmpty} derived nothing usable, will be offered again)` : ""));
     for (const e of r.results) {
       const head = `  ${e.uuid.slice(0, 8)}  ${e.validAt.slice(0, 10)}  ${e.outcome.padEnd(8)}`;
       if (e.outcome === "failed") { console.log(`${head}  ${e.error}`); continue; }
       const sa = Object.entries(e.statementAspects).map(([k, v]) => `${k} ${v}`).join(", ") || "-";
       const va = Object.entries(e.voiceAspectKinds).map(([k, v]) => `${k} ${v}`).join(", ") || "-";
-      console.log(`${head}  facts: ${sa}  voice: ${va}  (${(e.ms / 1000).toFixed(1)} s)`);
+      const empty = e.outcome === "derived" && e.statements === 0 && e.voiceAspects === 0 ? "  (will retry)" : "";
+      console.log(`${head}  facts: ${sa}  voice: ${va}  (${(e.ms / 1000).toFixed(1)} s)${empty}`);
       for (const f of e.sampleFacts) console.log(`            ${f}`);
     }
   }

@@ -33,9 +33,13 @@ import { withMemoryModel, openaiCompatBase, openaiCompatReasoningEffort } from "
  *
  * "Lacking derivation" is decided from the graph itself: no provenance edge
  * leaves the episode and no voice_aspects row names it. memory_backfill_log
- * (migration 4) records every attempt; an episode with a derived/nothing row
- * is not offered again, which keeps the run idempotent without touching
- * content_hash. A 'failed' row leaves the episode eligible for the next run.
+ * (migration 4) records every attempt; a 'nothing' row (the model's own
+ * NOTHING_TO_REMEMBER) or a 'derived' row that actually landed a statement or
+ * a voice fact is not offered again, which keeps the run idempotent without
+ * touching content_hash. A 'failed' row, and a 'derived' row with zero of
+ * both, leave the episode eligible for the next run: addEpisode() completing
+ * with nothing usable is a model coming up short, not the episode being
+ * empty, so a stronger pass later should get another try at it.
  *
  * Dedup untouched: addEpisode() is given the episode's own uuid, so the
  * re-save goes through the ON CONFLICT(uuid) path and copies content_hash
@@ -125,13 +129,22 @@ export const BACKFILL_LIMIT_MAX = 500;
 /** Legacy rows are the A9 importers' episodes: source 'migration:<store>'. */
 const LEGACY_SOURCE_LIKE = "migration:%";
 
+// A 'derived' log row only retires the episode when it actually produced
+// something (statements or voice facts): addEpisode() can run the whole
+// pipeline, return an episodeUuid, and still land zero of both — a model
+// under-performing, not the episode being empty (that case comes back as
+// 'nothing', from an explicit NOTHING_TO_REMEMBER, and DOES retire). Without
+// this split a zero-yield row was gone for good after one weak run; observed
+// live 2026-09-03 (bonsai-27b, episode 0f7dea7e: 0 facts, 0 voice, still
+// logged 'derived'). 'nothing' always retires; 'failed' never does (unchanged).
 const UNDRIVED_WHERE = `
   e.source LIKE ?
   AND NOT EXISTS (SELECT 1 FROM edges x WHERE x.type = 'provenance' AND x.from_uuid = e.uuid)
   AND NOT EXISTS (SELECT 1 FROM voice_aspects v WHERE v.episode_uuids LIKE '%"' || e.uuid || '"%')
   AND NOT EXISTS (
     SELECT 1 FROM memory_backfill_log l
-    WHERE l.episode_uuid = e.uuid AND l.outcome IN ('derived', 'nothing')
+    WHERE l.episode_uuid = e.uuid
+      AND (l.outcome = 'nothing' OR (l.outcome = 'derived' AND (l.statements > 0 OR l.voice_aspects > 0)))
   )`;
 
 interface CandidateRow {
@@ -452,6 +465,7 @@ function describe(r: BackfillEpisodeResult): string {
   if (r.outcome === "nothing") return `${id} nothing to remember (row kept, no facts)`;
   const facts = r.statements ? `${r.statements} fact${r.statements === 1 ? "" : "s"} (${fmt(r.statementAspects)})` : "0 facts";
   const voice = r.voiceAspects ? `${r.voiceAspects} voice (${fmt(r.voiceAspectKinds)})` : "0 voice";
+  if (r.statements === 0 && r.voiceAspects === 0) return `${id} derived: ${facts}, ${voice} — stays eligible, will be offered again`;
   return `${id} derived: ${facts}, ${voice}`;
 }
 
@@ -577,7 +591,11 @@ export async function backfillEpisodes(opts: BackfillOptions): Promise<BackfillR
   const derived = results.filter((r) => r.outcome === "derived").length;
   const nothing = results.filter((r) => r.outcome === "nothing").length;
   const failed = results.filter((r) => r.outcome === "failed").length;
-  log(`done: ${derived} derived, ${nothing} nothing to remember, ${failed} failed; ${remaining - derived - nothing} legacy episodes still undrived`);
+  // A zero-yield 'derived' row (0 statements, 0 voice) stays in the undrived
+  // pool per UNDRIVED_WHERE above, so it must not be subtracted here.
+  const derivedEmpty = results.filter((r) => r.outcome === "derived" && r.statements === 0 && r.voiceAspects === 0).length;
+  const stillUndrived = remaining - (derived - derivedEmpty) - nothing;
+  log(`done: ${derived} derived, ${nothing} nothing to remember, ${failed} failed; ${stillUndrived} legacy episodes still undrived` + (derivedEmpty ? ` (${derivedEmpty} derived nothing usable and will be offered again)` : ""));
 
   if (failed === total) {
     throw new Error(

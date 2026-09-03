@@ -34,6 +34,101 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-03 - a zero-fact 'derived' row no longer retires itself
+
+Yoshi flagged this while reviewing the first live sample: episode 0f7dea7e came
+back as `outcome: "derived"` with 0 statements and 0 voice aspects, and the
+existing candidate query treats any `derived` log row as final. That episode
+was gone for good after one weak pass.
+
+The distinction this routine needs is between two things that look identical
+at the type level (`outcome === "derived"`, no error) but mean opposite things:
+
+- **The model explicitly decided there was nothing worth remembering.**
+  `normalizeEpisodeBody()` returns `NOTHING_TO_REMEMBER`, `addEpisode()` short-
+  circuits with `episodeUuid: null`, and `backfillEpisodes()` already logs this
+  as `outcome: "nothing"` — a deliberate verdict about the *episode*, correctly
+  final.
+- **The model ran the whole pipeline and came up empty anyway.** Normalize
+  succeeds, `addEpisode()` returns a real `episodeUuid`, but
+  `comprehendAndClassify()` extracted zero graph facts and zero voice facts.
+  This is a verdict about the *model's pass*, not the episode, and nothing in
+  the code distinguished it from a real derivation.
+
+The fix is in `UNDRIVED_WHERE`'s log-exclusion clause, and it is small because
+`memory_backfill_log` already carries `statements` and `voice_aspects` columns
+per row — no migration needed. A `derived` row only retires the episode now
+when `statements > 0 OR voice_aspects > 0`; `nothing` still always retires,
+`failed` still never does. The graph-side exclusions (a provenance edge, a
+voice_aspects row) were already correct — they only exist when something real
+landed — so the log check was the one place treating a zero-yield attempt as
+done.
+
+Two knock-on fixes, both in the same commit because leaving either wrong would
+make the other's fix report bad numbers:
+
+- **The "still undrived" arithmetic.** `remaining - derived - nothing` assumed
+  every `derived` row left the pool. With zero-yield rows staying eligible,
+  that undercounts what's actually still waiting. Both `backfill.ts`'s own log
+  line and the CLI's mirrored summary line now subtract only
+  `derived - derivedEmpty`, and name the zero-yield count in a parenthetical
+  when it's nonzero.
+- **The per-episode line.** `describe()` now appends "— stays eligible, will
+  be offered again" when a derived row is zero-yield, so the CLI's scrollback
+  is honest about what will happen next, not just the fact count.
+
+**Writing the smoke for this was the actual work, and it surfaced two of its
+own bugs before it passed.** The fake model in this file dispatches by JSON
+schema key, and the pipeline has stages the smoke had never needed to
+distinguish before:
+
+1. The first attempt at an "empty extraction" fixture put the marker only in
+   the raw episode text and let the normalize call's canned response (a crude
+   `/Yoshi [^\n]*/` regex over the WHOLE prompt) decide what survived into
+   `episode.content`. It grabbed some other "Yoshi" occurrence from deeper in
+   the prompt scaffolding, so the marker never reached the extraction calls
+   and the "empty" fixture derived normal facts instead. Fixed by having the
+   marker case's normalize response name the marker explicitly rather than
+   relying on the regex to preserve it by luck.
+2. Reproducing "a stronger pass lands a real fact" needed a second, manual
+   fetch override, and it broke twice more: first by calling
+   `JSON.parse(init.body)` unconditionally, which threw on the bodyless
+   `/api/tags` preflight GET; then, once that was guarded, by only intercepting
+   the terminal `"facts"` schema call while leaving the upstream `"entities"`
+   extraction call empty — which means `comprehendAndClassify()`'s own
+   short-circuit (`worldExtract.graph_facts.length > 0 ? reflect() : []`)
+   never reaches the classify stage at all, so the "facts" branch was dead
+   code. And the reason: `classifyWorldPrompt()` doesn't resend
+   `episode.content` — its prompt is built purely from the graph facts' own
+   `fact` strings (`src/lib/v2/memory/prompts/classify-world.ts`), so the
+   marker had to be carried in the FACT TEXT through extract and reflect, not
+   just in the normalized episode body, for the override to still recognise
+   the call three stages later.
+
+None of that second bug touches the actual fix — it's smoke-fixture plumbing —
+but it's exactly the kind of thing that makes an assertion pass for the wrong
+reason if you don't trace WHY a mocked pipeline reached the state it claims to.
+
+Evidence: `smoke-memory-backfill.mjs` 90 → 108 checks. Section M covers: a
+zero-yield row stays eligible after one weak pass (M1-M2), after two (M3),
+retires once a real fact lands (M4), the log-line wording and the corrected
+"still undrived" arithmetic use the run's own reported numbers rather than a
+hardcoded count (M5, since this file's cumulative fixture state varies run to
+run), and a regression guard that a genuinely-empty (`nothing`) row and a
+genuinely-derived row both retire exactly as before (M6). Also verified
+directly against the owner's real database: `npx tsx scripts/v2/memory-backfill.mjs
+--limit 20 --dry-run` now lists episode `0f7dea7e` — the exact zero-fact row
+from the first live sample — back in the candidate set.
+
+**Not running the remaining ~332 episodes now.** Yoshi needs the VRAM Bonsai
+was using; the full backfill waits for downtime, when he can load multiple
+Bonsai instances at once and parallelize. Noted separately: the customer-
+service triage engine already uses Bonsai's 4B variant in production and it
+performs well there — a data point for later, since a smaller model in that
+role clearly does not carry the same 96%-reasoning-overhead problem the 27B
+model showed on this task, or does but the task tolerates it; not measured
+either way, worth checking if the 4B is ever considered for this pipeline.
+
 ## 2026-09-03 - the backfill was slow because Bonsai thinks for 25 seconds and throws it away
 
 Yoshi ran the first live openai-compat sample and called it: "It's not really
