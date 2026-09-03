@@ -53,8 +53,9 @@ is one line; the journal carries the rest.
   questions, reasons in a scratchpad without code, proposes a tool list for
   approval, then emits JSON. 5-10 tools per server, one tool one job, split by
   persona. Escape hatch: paste your own JSON and have the agent proofread it.
-- [ ] **S8. Voicebox everywhere it makes sense.** Video voiceover, the walkthrough
-  voiceover track below, any module that emits speech. Same client, same settings.
+- [x] **S8. Voicebox everywhere it makes sense.** The Oracle done (2026-09-02, see
+  Done). Still open on the same client: Video voiceover and the walkthrough voiceover
+  track below (backlog).
 - [ ] **S9. OpenMontage module (Artist's Corner).** Local checkout at
   `C:/Users/Yoshi/Documents/OpenMontage`: a Python agentic video production system
   (pipelines, Remotion composer, AGPLv3). Read `AGENT_GUIDE.md` and
@@ -78,11 +79,14 @@ is one line; the journal carries the rest.
 - SPEC-F carries a stale Hermes 3D claim.
 - Licence decision (MIT) deferred.
 - Legacy memory: full backfill size, after S5.
+- Video voiceover on Voicebox (S8 follow-up): `/api/video/voices` and the voiceover step still speak ElevenLabs only; the Oracle's `oracle.voice` block + `module` tag on `/api/hermes/tts` is the pattern to copy.
 - Wrap the remaining 34 long request-scoped routes (`grep -l maxDuration src/app/api`) in `startModuleRun()` as their modules get touched; Deal Desk brief/proposal and Hire Engine first (S4).
 
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-02 · v2.15.0 · S8 The Oracle speaks Voicebox: `settings.oracle.voice` (provider / The Sage profile / ElevenLabs voice / own fallback), a gear in the Oracle's header, `module: "oracle"` on `/api/hermes/tts` so the backup is the Oracle's choice in the Sage's voice, labelled in the footer; smoke-voicebox section H, 48 checks. Video voiceover stays on the backlog.
 
 - 2026-09-02 · v2.14.1 · S0 follow-up: restart-within-60s race fixed. The single-instance guard now treats a fresh heartbeat from a PID that no longer exists as dead; the restart launcher exits 1 and prints the server's last words when nothing comes online.
 - 2026-09-02 · v2.14.0 · S2 Runs survive navigation: module-run registry (`lib/moduleRuns.ts`), `/api/runs` + SSE stream, corner RunsTray in the layout, Content Engine generate + plan wired, 29-check smoke. 34 more long routes are one `startModuleRun()` call each; wire them as each module is touched.

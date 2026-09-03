@@ -30,6 +30,8 @@ const PROFILES = [
   { id: "p-yoshi", name: "Yoshi", description: "clone", language: "en", default_engine: "chatterbox_turbo", voice_type: "cloned" },
   // Trailing space on purpose: the studio keeps names as typed (the real "Alfred " had one).
   { id: "p-morgan", name: "Morgan ", description: null, language: "en", default_engine: null, voice_type: "designed" },
+  // The Oracle's default profile (S8). Third on purpose: it must be found by name, not by position.
+  { id: "p-sage", name: "The Sage", description: "oracle", language: "en", default_engine: "chatterbox_turbo", voice_type: "cloned" },
 ];
 const WAV = new Uint8Array([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]); // "RIFF" + junk
 const seen = [];          // every URL the client requested
@@ -104,7 +106,7 @@ check("localhost accepted", V.voiceboxBase() === "http://localhost:17493");
 // ---- B. profiles + resolution ------------------------------------------------
 console.log("-- B: profiles --");
 const profiles = await V.listVoiceboxProfiles();
-check("two profiles mapped", profiles.length === 2 && profiles[0].engine === "chatterbox_turbo" && profiles[1].engine === null);
+check("three profiles mapped", profiles.length === 3 && profiles[0].engine === "chatterbox_turbo" && profiles[1].engine === null);
 check("resolve by id", (await V.resolveVoiceboxProfile("p-morgan")).id === "p-morgan");
 check("resolve by name, case-insensitive", (await V.resolveVoiceboxProfile("yoshi")).id === "p-yoshi");
 check("resolve by name ignores the studio's trailing whitespace", (await V.resolveVoiceboxProfile("morgan")).id === "p-morgan");
@@ -187,6 +189,46 @@ const okAgain = await route.POST(new Request("http://local/api/hermes/tts", { me
 const okj = await okAgain.json();
 check("studio healthy -> the backup is not consulted", okAgain.ok && okj.provider === "voicebox" && !okj.fellBackFrom && elevenCalls.length === 2, `eleven calls: ${elevenCalls.length}`);
 check("the real Hermes profile was never opened", !fs.existsSync(path.join(dir, ".hermes")) && process.env.USERPROFILE === dir);
+
+// ---- H. S8: the Oracle speaks through the same door, on its own settings ----
+console.log("-- H: Oracle voice (S8) --");
+const od = S.DEFAULT_SETTINGS.oracle?.voice ?? {};
+check("oracle defaults: Voicebox + The Sage, ElevenLabs backup, named Sage voice id",
+  od.provider === "voicebox" && od.voiceboxProfile === "The Sage" && od.fallback === "elevenlabs" && od.elevenVoiceId === S.ORACLE_ELEVEN_VOICE_ID && /^[A-Za-z0-9]{16,}$/.test(S.ORACLE_ELEVEN_VOICE_ID),
+  JSON.stringify(od));
+check("oracle defaults survive the merge with a settings file that lacks them", S.readSettings().oracle?.voice?.voiceboxProfile === "The Sage");
+const oracleSrc = fs.readFileSync(new URL("../../src/components/OracleView.tsx", import.meta.url), "utf8");
+check("OracleView no longer hardcodes provider 'elevenlabs'", !/provider:\s*["']elevenlabs["']/.test(oracleSrc));
+check("OracleView no longer carries the ElevenLabs voice id", !oracleSrc.includes(S.ORACLE_ELEVEN_VOICE_ID));
+check("OracleView reads /api/settings, lists /api/voicebox/profiles, and tags its TTS calls module: oracle",
+  /\/api\/settings/.test(oracleSrc) && /\/api\/voicebox\/profiles/.test(oracleSrc) && /module:\s*["']oracle["']/.test(oracleSrc));
+check("OracleView surfaces fellBackFrom instead of swallowing it", /fellBackFrom/.test(oracleSrc));
+const oracleReq = (extra = {}) => new Request("http://local/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "counsel", provider: "voicebox", voiceId: "The Sage", module: "oracle", ...extra }) });
+// The Sage is found by name; the studio's first profile is NOT what speaks.
+const sage = await route.POST(oracleReq());
+const sagej = await sage.json();
+check("Oracle speaks with The Sage, not the studio's first profile", sage.ok && sagej.provider === "voicebox" && generateBodies.at(-1).profile_id === "p-sage", JSON.stringify(generateBodies.at(-1)));
+// The Oracle's OWN fallback governs, not Jarvis's: Jarvis says ElevenLabs, the Oracle says none.
+S.writeSettings({ jarvis: { voice: { ttsFallback: "elevenlabs" } }, oracle: { voice: { fallback: "none" } } });
+scenario = "fail";
+const beforeEleven = elevenCalls.length;
+const quiet = await route.POST(oracleReq());
+const quietj = await quiet.json();
+check("Oracle fallback 'none' -> 502 with the studio's reason, even though Jarvis's backup is on", quiet.status === 502 && /CUDA/.test(quietj.error ?? "") && elevenCalls.length === beforeEleven, JSON.stringify(quietj));
+// Backup allowed: labelled exactly like the Jarvis path, in the SAGE's ElevenLabs voice, not Alfred's.
+S.writeSettings({ jarvis: { voice: { ttsFallback: "none", ttsVoiceId: "ALFRED00000000000001" } }, oracle: { voice: { fallback: "elevenlabs", elevenVoiceId: "SAGE0000000000000001" } } });
+const ob = await route.POST(oracleReq());
+const obj = await ob.json();
+check("Oracle backup speaks and is labelled (provider/fellBackFrom/fallbackReason)", ob.ok && obj.provider === "elevenlabs" && obj.fellBackFrom === "voicebox" && /CUDA/.test(obj.fallbackReason ?? ""), JSON.stringify({ p: obj.provider, f: obj.fellBackFrom, r: obj.fallbackReason }));
+check("Oracle backup used the Sage's ElevenLabs voice, not Jarvis's", elevenCalls.at(-1)?.voice === "SAGE0000000000000001", elevenCalls.at(-1)?.voice);
+// A missing profile is loud and names the options; it does not quietly pick another voice.
+scenario = "ok";
+S.writeSettings({ oracle: { voice: { fallback: "none" } } });
+const missing = await route.POST(oracleReq({ voiceId: "The Sage of Nowhere" }));
+const missingj = await missing.json();
+check("unknown Oracle profile -> error naming the available profiles", missing.status === 502 && /not found/.test(missingj.error ?? "") && /The Sage/.test(missingj.error ?? ""), JSON.stringify(missingj));
+S.writeSettings({ jarvis: { voice: { ttsFallback: "elevenlabs" } }, oracle: { voice: { fallback: "elevenlabs" } } });
+check("still nothing hosted was contacted by the studio client", !seen.some((u) => /elevenlabs|openai|minimax|api\./.test(u)));
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 process.exit(failures ? 1 : 0);

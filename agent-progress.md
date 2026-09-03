@@ -9,7 +9,15 @@ DEV-JOURNAL.md (hyphen, not underscore).
 - (nothing in progress)
 
 ## Next
-- feat-s8-voicebox-everywhere, then top-down through features.json
+- top-down through features.json (S8 done; S6 is next in file order)
+
+## Follow-ups seen, not done
+- S8 seam for Video: `/api/video/voices` and the voiceover step are ElevenLabs-only.
+  Copy the Oracle pattern (`settings.<module>.voice` block + `module` tag on
+  `/api/hermes/tts` so `fallbackPolicy()` reads that module's own fallback).
+  Listed in ROADMAP.md Backlog.
+- Owner to hear it: the Oracle's "Read aloud" through Voicebox with "The Sage" is
+  smoke-verified only; browser audio needs the rebuilt app and his ear.
 
 ## Standing notes for every session
 - The owner is away (errands, from 2026-09-02 16:14 PDT). He wants as many features done
@@ -28,6 +36,8 @@ DEV-JOURNAL.md (hyphen, not underscore).
   the Artifact is the supervising session's job; leave the HTML at ~/.agentic-os.
 
 ## Log (newest first)
+- 2026-09-02 17:05 PDT feat-s8-voicebox-everywhere PASSING (v2.15.0): Oracle speaks Voicebox on `settings.oracle.voice`, gear in its header, module-scoped fallback in the TTS route; smoke-voicebox section H (48 checks), gate 73/73 exit 0.
+- 2026-09-02 16:52 PDT loop LAUNCHED by the supervising session: `bash scripts/harness/ralph-loop.sh --max-cycles 12` (gate baseline 73/73 green in 396 s at 3900c75).
 - 2026-09-02 16:30 harness installed: features.json holds S8, S6, S3, backlog wrap, S4,
   S5, S7, S9 (S10 has no spec and is not listed). Gate = ./test.sh (tsc + every offline
   smoke). Loop default model claude-fable-5-1, --strict-mcp-config.

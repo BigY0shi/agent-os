@@ -4,14 +4,16 @@ import path from "node:path";
 import os from "node:os";
 import { minimaxToken } from "@/lib/hermesStudio";
 import { readHermesEnv } from "@/lib/hermesPhone";
-import { readSettings, JARVIS_TTS_VOICE_ID } from "@/lib/settings";
+import { readSettings, JARVIS_TTS_VOICE_ID, ORACLE_ELEVEN_VOICE_ID } from "@/lib/settings";
 import { voiceboxSynthesize } from "@/lib/voicebox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/hermes/tts  { text, voiceId?, provider? }  → { audio: dataURI } | { error }
-// Speaks arbitrary text. provider:
+// POST /api/hermes/tts  { text, voiceId?, provider?, module? }  → { audio: dataURI } | { error }
+// Speaks arbitrary text. `module` ("oracle"; anything else = Jarvis) picks WHOSE
+// settings govern the Voicebox backup (rule 20: a fallback is that module's own
+// choice, and the reply labels it). provider:
 //   "voicebox"                    — the local Voicebox studio (lib/voicebox.ts), cloned
 //                                   profiles; voiceId is a profile id or name. The voice
 //                                   engine since 2026-09-02. Never falls back.
@@ -137,12 +139,26 @@ async function localTts(text: string, voiceId: string): Promise<NextResponse> {
   return NextResponse.json({ audio: j.audio });
 }
 
+// Who speaks when Voicebox fails, and in which ElevenLabs voice. The Oracle
+// has its own gear (oracle.voice.fallback + elevenVoiceId, so the backup is
+// the Sage, not Alfred); everything else is Jarvis's setting, with a blank
+// voice so elevenTts resolves Jarvis's configured reply voice as before.
+interface FallbackPolicy { fallback: "elevenlabs" | "none"; voiceId: string }
+function fallbackPolicy(module: string): FallbackPolicy {
+  const s = readSettings();
+  if (module === "oracle") {
+    const v = s.oracle?.voice ?? {};
+    return { fallback: v.fallback ?? "elevenlabs", voiceId: v.elevenVoiceId ?? ORACLE_ELEVEN_VOICE_ID };
+  }
+  return { fallback: s.jarvis?.voice?.ttsFallback ?? "elevenlabs", voiceId: "" };
+}
+
 // Voicebox: voiceId is a profile id or name; blank = settings.voicebox.profile,
 // then the studio's first profile. When the studio fails, the owner's chosen
-// backup (settings.jarvis.voice.ttsFallback, default ElevenLabs) speaks instead
-// and the response SAYS so: provider is the one that actually produced audio,
+// backup for THAT module (default ElevenLabs) speaks instead and the response
+// SAYS so: provider is the one that actually produced audio,
 // fellBackFrom/fallbackReason carry what went wrong. Never a quiet substitution.
-async function voiceboxTts(text: string, profileRef: string): Promise<NextResponse> {
+async function voiceboxTts(text: string, profileRef: string, module: string): Promise<NextResponse> {
   let reason: string;
   try {
     const out = await voiceboxSynthesize(text, { profile: profileRef || null });
@@ -150,12 +166,12 @@ async function voiceboxTts(text: string, profileRef: string): Promise<NextRespon
   } catch (e) {
     reason = String((e as Error)?.message ?? e);
   }
-  const fallback = readSettings().jarvis?.voice?.ttsFallback ?? "elevenlabs";
-  if (fallback !== "elevenlabs") {
+  const policy = fallbackPolicy(module);
+  if (policy.fallback !== "elevenlabs") {
     return NextResponse.json({ error: reason, provider: "voicebox" }, { status: 502 });
   }
-  console.warn(`[tts] Voicebox failed (${reason}); falling back to ElevenLabs as configured`);
-  const r = await elevenTts(text, "");
+  console.warn(`[tts] Voicebox failed (${reason}); falling back to ElevenLabs as configured for ${module || "jarvis"}`);
+  const r = await elevenTts(text, policy.voiceId);
   const j = (await r.json().catch(() => ({}))) as { audio?: string; error?: string; detail?: string };
   if (r.ok && j.audio) {
     return NextResponse.json({ audio: j.audio, provider: "elevenlabs", fellBackFrom: "voicebox", fallbackReason: reason });
@@ -167,13 +183,14 @@ async function voiceboxTts(text: string, profileRef: string): Promise<NextRespon
 }
 
 export async function POST(req: Request) {
-  const { text, voiceId, provider } = await req.json();
+  const { text, voiceId, provider, module } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
     return NextResponse.json({ error: "missing text" }, { status: 400 });
   }
   try {
     const v = typeof voiceId === "string" ? voiceId : "";
-    if (provider === "voicebox") return await voiceboxTts(text, v);
+    const mod = typeof module === "string" ? module : "";
+    if (provider === "voicebox") return await voiceboxTts(text, v, mod);
     if (provider === "local") return await localTts(text, v);
     if (provider === "auto") {
       // First backend that actually yields audio wins: free local Kokoro, then

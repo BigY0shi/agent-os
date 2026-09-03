@@ -35,6 +35,66 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - S8: the Oracle speaks Voicebox, on its own settings
+
+Harness session (feat-s8-voicebox-everywhere). The Oracle still spoke
+ElevenLabs with a voice id hardcoded in `OracleView.tsx` and a picker of its
+own that persisted to localStorage; Yoshi had already cloned "The Sage" in
+the studio for it. Scope was the Oracle only; Video's voiceover is untouched
+and noted as the follow-up in ROADMAP.md.
+
+**What landed.** `settings.oracle.voice` = `{ provider: "voicebox" |
+"elevenlabs", voiceboxProfile, elevenVoiceId, fallback: "elevenlabs" |
+"none" }` with defaults Voicebox + "The Sage" + the Sage's ElevenLabs id
+(now the named constant `ORACLE_ELEVEN_VOICE_ID` in `lib/settings.ts`, where
+Jarvis's lives) + ElevenLabs backup. A gear in the Oracle's eyebrow row
+(rule 16) lists the studio's profiles from `/api/voicebox/profiles` and the
+ElevenLabs voices from `/api/video/voices`, persisting through
+`PATCH /api/settings`. `speak()` reads the settings and sends
+`{ provider, voiceId, module: "oracle" }` to `/api/hermes/tts`.
+
+**The decision: whose fallback.** The TTS route read
+`jarvis.voice.ttsFallback` for every caller. Rule 20 says a fallback is legal
+only when *that module's* settings chose it, so the request now carries
+`module` and `fallbackPolicy(module)` picks `oracle.voice.fallback` for the
+Oracle and Jarvis's setting for everyone else. The rejected alternative was a
+second route; one door for credentials is the house rule. The policy also
+carries the backup *voice*: before this, a Voicebox failure in the Oracle
+would have made ElevenLabs answer as Alfred. Section H pins that the Sage's
+id reaches ElevenLabs, not Jarvis's.
+
+**A missing profile is loud.** `voiceboxProfile` defaults to "The Sage" by
+name. If the studio does not have it, `resolveVoiceboxProfile` throws with
+the available names, the route returns that (or the labelled backup speaks,
+if allowed), and the gear shows the same warning with the saved value kept
+selectable so a typo is visible. The alternative, "use the studio's first
+profile when the named one is missing", is exactly the quiet swap AGENTS.md
+bans.
+
+**Visible, not just logged.** JarvisView only `console.warn`s when the
+backup spoke. The Oracle shows it in the answer's footer ("elevenlabs spoke:
+voicebox failed (...)") as well, because the person reading counsel is not
+watching the console.
+
+**Evidence.** `scripts/v2/smoke-voicebox.mjs` grew section H: 48 checks
+(from 36), offline. It asserts the defaults survive a settings file that
+lacks them, greps `OracleView.tsx` for the absence of `provider: "elevenlabs"`
+and of the voice id, and drives the route with `module: "oracle"` through:
+The Sage found by name (third fixture profile, so position cannot pass it),
+Oracle fallback `none` while Jarvis's is `elevenlabs` (502, no ElevenLabs
+call), the labelled backup in the Sage's voice, and an unknown profile
+naming the options. `tsc --noEmit` clean; `./test.sh` green (the harness
+gate). Not verified: audio in the browser, which needs the rebuilt app and
+Yoshi's ear.
+
+**Cost.** The pickers load when the gear opens, not on page view, so the
+studio and ElevenLabs are not polled by every visit to the Hermes tab. The
+ElevenLabs picker still comes from `/api/video/voices`, a Video route; if
+Video is ever de-ElevenLabs'd that list needs a home of its own.
+
+**Rollback.** Revert the commit. `settings.json` may carry an `oracle` key
+the old code ignores. No migration, no data.
+
 ## 2026-09-02 - The gate had to be made honest before the loop could trust it
 
 Installing the Ralph harness meant running every smoke as one gate, and the

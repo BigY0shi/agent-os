@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Sparkles, Loader2, Clock, X, Moon, ScrollText, Volume2, Square } from "lucide-react";
+import { Sparkles, Loader2, Clock, X, Moon, ScrollText, Volume2, Square, Settings2 } from "lucide-react";
 import AgentPicker from "@/components/AgentPicker";
+import { useSettings, type Settings } from "@/components/ConfigMenu";
 import { MOD } from "@/lib/modKey";
 
 // THE ORACLE — ask the wise old sage a question of judgment, direction or foresight
@@ -11,6 +12,17 @@ import { MOD } from "@/lib/modKey";
 // distinct from the cyan Radar.
 
 interface Consultation { at: string; question: string; answer: string; agent: string; }
+
+// The Oracle's voice lives in settings.oracle.voice (S8), edited in the gear
+// below and read at speak time. Defaults come merged from the server, so the
+// client never carries a voice id of its own.
+interface OracleVoice {
+  provider?: "voicebox" | "elevenlabs";
+  voiceboxProfile?: string;
+  elevenVoiceId?: string;
+  fallback?: "elevenlabs" | "none";
+}
+const voiceOf = (s: unknown): OracleVoice => ((s as { oracle?: { voice?: OracleVoice } } | null)?.oracle?.voice) ?? {};
 
 const CONTEMPLATIONS = [
   "The Oracle draws breath…",
@@ -49,23 +61,45 @@ export default function OracleView() {
   const [askedShown, setAskedShown] = useState<string>(""); // the question tied to the shown answer
   const [err, setErr] = useState<string | null>(null);
   const [history, setHistory] = useState<Consultation[]>([]);
-  const [voiceId, setVoiceId] = useState("Bu13R3bywbVy3lQswSJo"); // ElevenLabs "Hermes, The Oracle" — the user's own sage voice
-  const [voices, setVoices] = useState<{ voice_id: string; name: string }[]>([]);
   const [tts, setTts] = useState<"idle" | "loading" | "playing">("idle");
+  // Who actually spoke the last reply, when it was not the provider asked for
+  // (rule 20: a chosen backup is fine, a quiet one is not).
+  const [spokeVia, setSpokeVia] = useState<string | null>(null);
   const answerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Voice settings + the gear (rule 16: every knob in-app).
+  const { settings, save, saving } = useSettings();
+  const voice = voiceOf(settings);
+  const provider = voice.provider ?? "voicebox";
+  const [gearOpen, setGearOpen] = useState(false);
+  const [vbProfiles, setVbProfiles] = useState<{ id: string; name: string; engine: string | null }[]>([]);
+  const [vbError, setVbError] = useState<string | null>(null);
+  const [elevenVoices, setElevenVoices] = useState<{ voice_id: string; name: string }[]>([]);
+  const patchVoice = (p: Partial<OracleVoice>) => save({ oracle: { voice: p } } as Partial<Settings>);
 
   const loadHistory = useCallback(() => {
     fetch("/api/oracle", { cache: "no-store" }).then((r) => r.json())
       .then((j) => setHistory(Array.isArray(j.items) ? j.items : [])).catch(() => {});
   }, []);
   useEffect(() => { loadHistory(); }, [loadHistory]);
-  useEffect(() => { const v = localStorage.getItem("oracleVoice"); if (v) setVoiceId(v); }, []);
+  // The pickers load only when the gear opens: the studio and ElevenLabs are
+  // not consulted on every page view.
   useEffect(() => {
+    if (!gearOpen) return;
+    let alive = true;
+    fetch("/api/voicebox/profiles", { cache: "no-store" }).then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j?.ok) { setVbProfiles(j.profiles ?? []); setVbError(null); }
+        else { setVbProfiles([]); setVbError(j?.error || "Voicebox not answering"); }
+      })
+      .catch((e) => { if (alive) { setVbProfiles([]); setVbError(String(e)); } });
     fetch("/api/video/voices", { cache: "no-store" }).then((r) => r.json())
-      .then((j) => { if (Array.isArray(j.voices)) setVoices(j.voices.map((v: { voice_id: string; name: string }) => ({ voice_id: v.voice_id, name: v.name }))); })
+      .then((j) => { if (alive && Array.isArray(j.voices)) setElevenVoices(j.voices.map((v: { voice_id: string; name: string }) => ({ voice_id: v.voice_id, name: v.name }))); })
       .catch(() => {});
-  }, []);
+    return () => { alive = false; };
+  }, [gearOpen]);
   useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
 
   useEffect(() => {
@@ -78,11 +112,24 @@ export default function OracleView() {
   const speak = useCallback(async (text: string) => {
     stopSpeak();
     if (!text.trim()) return;
-    setTts("loading");
+    setTts("loading"); setSpokeVia(null);
     try {
-      const r = await fetch("/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, provider: "elevenlabs", voiceId }) });
+      // Settings normally arrived with the page; if not yet, ask once rather
+      // than speak with a guessed voice.
+      let v = settings ? voiceOf(settings) : null;
+      if (!v) {
+        const sr = await fetch("/api/settings", { cache: "no-store" });
+        v = voiceOf((await sr.json())?.settings);
+      }
+      const prov = v.provider ?? "voicebox";
+      const voiceId = prov === "voicebox" ? (v.voiceboxProfile ?? "") : (v.elevenVoiceId ?? "");
+      const r = await fetch("/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, provider: prov, voiceId, module: "oracle" }) });
       const d = await r.json();
-      if (!d.audio) { setTts("idle"); setErr(d.error || "Couldn't reach ElevenLabs — check your key."); return; }
+      if (!d.audio) { setTts("idle"); setErr(d.error || "The Oracle's voice did not answer."); return; }
+      if (d.fellBackFrom) {
+        console.warn(`[oracle] ${d.provider} spoke because ${d.fellBackFrom} failed: ${d.fallbackReason}`);
+        setSpokeVia(`${d.provider} spoke: ${d.fellBackFrom} failed (${d.fallbackReason})`);
+      }
       const a = new Audio(d.audio);
       audioRef.current = a;
       a.onended = () => setTts("idle");
@@ -90,7 +137,7 @@ export default function OracleView() {
       await a.play();
       setTts("playing");
     } catch (e) { setTts("idle"); setErr(String((e as Error)?.message || e)); }
-  }, [voiceId, stopSpeak]);
+  }, [settings, stopSpeak]);
 
   const consult = useCallback(async () => {
     const q = question.trim();
@@ -190,7 +237,20 @@ export default function OracleView() {
         .orc-foot .speak{ display:inline-flex; align-items:center; gap:6px; background:rgba(230,184,102,.1); border:1px solid rgba(230,184,102,.35); color:var(--gold); border-radius:999px; padding:5px 13px; font-size:.68rem; cursor:pointer; font-family:'JetBrains Mono',monospace; transition:border-color .15s, background .15s; }
         .orc-foot .speak:hover{ border-color:var(--gold); background:rgba(230,184,102,.16); }
         .orc-foot .speak:disabled{ opacity:.7; cursor:default; }
-        .orc-foot .voicesel{ background:rgba(8,5,14,.6); color:var(--ink); border:1px solid rgba(230,184,102,.28); border-radius:8px; padding:5px 8px; font-family:'JetBrains Mono',monospace; font-size:.64rem; cursor:pointer; max-width:160px; }
+        .orc-foot .via{ font-size:.62rem; color:#fbbf24; }
+
+        /* GEAR (voice settings) */
+        .orc-gear-btn{ margin-left:auto; background:none; border:1px solid rgba(230,184,102,.24); color:var(--gold); border-radius:8px;
+          padding:4px 6px; cursor:pointer; display:inline-flex; align-items:center; transition:border-color .15s, background .15s; }
+        .orc-gear-btn:hover, .orc-gear-btn.on{ border-color:var(--gold); background:rgba(230,184,102,.1); }
+        .orc-gear{ margin:0 0 14px; padding:12px 14px; border:1px solid rgba(230,184,102,.2); border-radius:12px; background:rgba(8,5,14,.5);
+          display:grid; gap:9px; font-family:'JetBrains Mono',monospace; font-size:.66rem; color:var(--dim); }
+        .orc-gear label{ display:grid; gap:4px; }
+        .orc-gear .lab{ letter-spacing:.18em; text-transform:uppercase; font-size:.58rem; color:var(--gold); }
+        .orc-gear select{ background:rgba(8,5,14,.7); color:var(--ink); border:1px solid rgba(230,184,102,.28); border-radius:8px; padding:6px 8px;
+          font-family:'JetBrains Mono',monospace; font-size:.66rem; cursor:pointer; }
+        .orc-gear select:disabled{ opacity:.6; cursor:default; }
+        .orc-gear .warn{ color:#fbbf24; }
 
         .orc-err{ margin-top:18px; border:1px solid rgba(251,113,133,.4); background:rgba(251,113,133,.08); color:#fecdd3;
           border-radius:12px; padding:12px 16px; font-size:.9rem; display:flex; gap:10px; align-items:flex-start; }
@@ -213,7 +273,61 @@ export default function OracleView() {
         <div>
           {/* ASK */}
           <div className="orc-ask">
-            <div className="orc-eyebrow"><Moon size={13} className="moon" /> The Oracle · counsel &amp; foresight</div>
+            <div className="orc-eyebrow">
+              <Moon size={13} className="moon" /> The Oracle · counsel &amp; foresight
+              <button className={`orc-gear-btn${gearOpen ? " on" : ""}`} onClick={() => setGearOpen((v) => !v)} title="The Oracle's voice">
+                <Settings2 size={12} />
+              </button>
+            </div>
+            {gearOpen && (
+              <div className="orc-gear">
+                <label>
+                  <span className="lab">Voice engine</span>
+                  <select value={provider} disabled={saving} onChange={(e) => patchVoice({ provider: e.target.value as OracleVoice["provider"] })}>
+                    <option value="voicebox">Voicebox (local studio, cloned voices)</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                  </select>
+                </label>
+                {provider === "voicebox" ? (
+                  <>
+                    <label>
+                      <span className="lab">Voicebox profile</span>
+                      <select value={voice.voiceboxProfile ?? ""} disabled={saving || !vbProfiles.length} onChange={(e) => patchVoice({ voiceboxProfile: e.target.value })}>
+                        {/* The saved value stays selectable even when the studio does not list it, so a typo is visible instead of silently re-pointed. */}
+                        {voice.voiceboxProfile && !vbProfiles.some((p) => p.id === voice.voiceboxProfile || p.name.trim().toLowerCase() === (voice.voiceboxProfile ?? "").trim().toLowerCase()) && (
+                          <option value={voice.voiceboxProfile}>{voice.voiceboxProfile} (not in the studio)</option>
+                        )}
+                        {vbProfiles.map((p) => (
+                          <option key={p.id} value={p.name.trim()}>{p.name.trim()}{p.engine ? ` · ${p.engine}` : ""}</option>
+                        ))}
+                      </select>
+                    </label>
+                    {vbError && <div className="warn">{vbError}</div>}
+                    {!vbError && voice.voiceboxProfile && vbProfiles.length > 0 && !vbProfiles.some((p) => p.id === voice.voiceboxProfile || p.name.trim().toLowerCase() === (voice.voiceboxProfile ?? "").trim().toLowerCase()) && (
+                      <div className="warn">Profile &quot;{voice.voiceboxProfile}&quot; is not in the studio. Available: {vbProfiles.map((p) => p.name.trim()).join(", ")}</div>
+                    )}
+                    <label>
+                      <span className="lab">If Voicebox fails</span>
+                      <select value={voice.fallback ?? "elevenlabs"} disabled={saving} onChange={(e) => patchVoice({ fallback: e.target.value as OracleVoice["fallback"] })}>
+                        <option value="elevenlabs">Use the ElevenLabs voice below (labelled)</option>
+                        <option value="none">Report the error, stay silent</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+                {(provider === "elevenlabs" || (voice.fallback ?? "elevenlabs") === "elevenlabs") && (
+                  <label>
+                    <span className="lab">ElevenLabs voice{provider === "voicebox" ? " (backup)" : ""}</span>
+                    <select value={voice.elevenVoiceId ?? ""} disabled={saving || !elevenVoices.length} onChange={(e) => patchVoice({ elevenVoiceId: e.target.value })}>
+                      {voice.elevenVoiceId && !elevenVoices.some((v) => v.voice_id === voice.elevenVoiceId) && (
+                        <option value={voice.elevenVoiceId}>{elevenVoices.length ? `${voice.elevenVoiceId} (not in your ElevenLabs list)` : voice.elevenVoiceId}</option>
+                      )}
+                      {elevenVoices.map((v) => <option key={v.voice_id} value={v.voice_id}>{v.name}</option>)}
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
             <textarea
               className="orc-q"
               value={question}
@@ -266,12 +380,7 @@ export default function OracleView() {
                   {tts === "loading" ? <Loader2 size={12} className="animate-spin" /> : tts === "playing" ? <Square size={12} /> : <Volume2 size={12} />}
                   {tts === "loading" ? "Summoning voice…" : tts === "playing" ? "Stop" : "Read aloud"}
                 </button>
-                {voices.length > 0 && (
-                  <select className="voicesel" value={voiceId} title="ElevenLabs voice"
-                    onChange={(e) => { setVoiceId(e.target.value); localStorage.setItem("oracleVoice", e.target.value); stopSpeak(); }}>
-                    {voices.map((v) => <option key={v.voice_id} value={v.voice_id}>{v.name}</option>)}
-                  </select>
-                )}
+                {spokeVia && <span className="via" title="The voice you chose failed; the backup you allowed spoke instead.">{spokeVia}</span>}
                 <button className="again" onClick={() => { stopSpeak(); setAnswer(null); setErr(null); setQuestion(""); }}>Ask again</button>
               </div>
             </div>

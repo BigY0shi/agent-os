@@ -24,6 +24,22 @@ import os from "node:os";
  */
 export const JARVIS_TTS_VOICE_ID = "I53oUivy0XU4VvbHHiX6";
 
+/**
+ * The Oracle's ElevenLabs voice: "Hermes, The Oracle", the owner's own sage
+ * voice. Used only when oracle.voice.provider is "elevenlabs", or as the
+ * labelled backup voice when Voicebox fails and oracle.voice.fallback allows
+ * it. It used to be hardcoded in OracleView.tsx (S8 moved it here).
+ */
+export const ORACLE_ELEVEN_VOICE_ID = "Bu13R3bywbVy3lQswSJo";
+
+/**
+ * The Voicebox profile the Oracle speaks with by default. The owner cloned it
+ * on 2026-09-02. A missing profile is an error that names the available ones
+ * (lib/voicebox.ts resolveVoiceboxProfile), never a quiet swap to the studio's
+ * first profile.
+ */
+export const ORACLE_VOICEBOX_PROFILE = "The Sage";
+
 export interface SeoSite {
   label: string;
   url: string;        // the live site / repo this SEO content targets
@@ -164,6 +180,20 @@ export interface Settings {
     };
   };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
+  // The Oracle's voice (S8; rule 16: every field in the Oracle's own gear).
+  // provider picks who speaks; voiceboxProfile is a studio profile id or name;
+  // elevenVoiceId is the ElevenLabs voice for provider "elevenlabs" AND for the
+  // labelled backup. fallback is the Oracle's OWN choice (rule 20), independent
+  // of jarvis.voice.ttsFallback: the TTS route reads it when the request says
+  // module: "oracle".
+  oracle: {
+    voice?: {
+      provider?: "voicebox" | "elevenlabs";
+      voiceboxProfile?: string;
+      elevenVoiceId?: string;
+      fallback?: "elevenlabs" | "none";
+    };
+  };
   // Voicebox, the local AI vocal studio (lib/voicebox.ts). url is asserted
   // loopback in code; profile is an id or a name (blank = first profile);
   // engine blank = the profile's own default; timeoutMs bounds one synthesis
@@ -393,6 +423,7 @@ export const DEFAULT_SETTINGS: Settings = {
     hotkey: { key: "F13", enabled: true },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
+  oracle: { voice: { provider: "voicebox", voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
   voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
   runsTray: { enabled: true, autoDismissSec: 45 },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },

@@ -23,8 +23,8 @@
         "A new or extended offline smoke asserts the settings defaults and greps that OracleView no longer hardcodes provider 'elevenlabs'; ./test.sh exits 0.",
         "Version bumped (npm run version:bump -- minor), DEV-JOURNAL.md entry written, ROADMAP.md S8 ticked into Done with commit + version, node scripts/roadmap-page.mjs re-run."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "PASS 2026-09-02 (harness, v2.15.0): settings.oracle.voice {provider voicebox|elevenlabs, voiceboxProfile default The Sage, elevenVoiceId = ORACLE_ELEVEN_VOICE_ID, fallback elevenlabs|none} in lib/settings.ts; Oracle gear (Settings2 in the eyebrow row) lists /api/voicebox/profiles + /api/video/voices, PATCH /api/settings; OracleView speak() reads settings, sends {provider, voiceId, module: oracle} to /api/hermes/tts, shows fellBackFrom in the footer; route fallbackPolicy(module) honours the Oracle own fallback + Sage ElevenLabs voice (rule 20). Evidence: smoke-voicebox.mjs section H, 48 checks (from 36); ./test.sh 73/73 exit 0; tsc clean. Not verified: audio in the browser (needs rebuilt app). Video voiceover left on the ROADMAP backlog per the description."
     },
     {
       "id": "feat-s6-hermes3d-missing",
