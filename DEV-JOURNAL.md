@@ -34,6 +34,33 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S4 (c): the verdict is the first thing a card says
+
+Harness session (feat-s4-deal-desk-control), part one of six. The owner's words: the
+evaluator already scores the listing and then says pass or pursue; that sentence was the
+last thing in the yellow summary box, so every card had to be opened to find it.
+
+**Where the sentence lives.** `pitch.mjs` (Upwork-Leads) writes `why` as "one blunt
+sentence on why it is/isn't a fit" and opens `pitch` with `Skip -` for a lead it scored
+<= 3; `dealBrief.ts` asks for the fit call at the start of `summary`. `deriveVerdict()` in
+the new `src/lib/dealDeskControl.ts` reads those in that order (a `Skip -` pitch wins,
+then the first sentence of `why`, then of `summary`), bands it pursue / maybe / pass on
+the wording, and falls back to `effectiveFit` (>= 7 / >= 4 / below) only when the text
+carries no readable call. Nothing written at all gives `No written verdict yet (fit N/10)`
+with `source: "score"`, never an invented sentence.
+
+**What it cost.** The band regexes are wordlists, and wordlists have edges: `pass` needs a
+negative lookahead so "pass the data through their API" does not read as a pass (smoke
+A14 pins it). The verdict reads the evaluator's own `pitch`, never `editedPitch`, so a
+hand edit cannot flip the band. Rejected: asking the model for a separate `verdict` key,
+because 145 existing cards would have shown nothing until re-briefed.
+
+**UI.** Card edge colour now encodes the verdict (it was the composite score); the band
+label plus sentence sit under the title on the card face; in the drawer the sentence is
+the first line of the summary box, in the band colour. Evidence:
+`scripts/v2/smoke-deal-desk-control.mjs` section A, 15 checks; `tsc` clean.
+
+---
 ## 2026-09-02 - Backlog: Deal Desk and Hire Engine long routes register module runs
 
 Harness session (feat-backlog-wrap-long-routes). S2 built `lib/moduleRuns.ts` and wired

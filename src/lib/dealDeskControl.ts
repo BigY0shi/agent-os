@@ -1,0 +1,89 @@
+// Deal Desk control (roadmap S4) - the pure decisions behind "more control from
+// the chair": the verdict a card leads with, the age gate on scraped listings,
+// the login-wall check on scraped pages, and the URL validation for manual
+// intake. Nothing here touches a file, a config directory, or a process, so
+// scripts/v2/smoke-deal-desk-control.mjs can import it bare.
+
+// -- (c) Verdict first --------------------------------------------------------
+//
+// The evaluator already says pass or pursue: pitch.mjs writes `why` as "one blunt
+// sentence on why it is/isn't a fit" and opens `pitch` with "Skip -" when it
+// scores the lead <= 3; dealBrief.ts asks for the fit call at the start of
+// `summary`. That sentence was buried under the summary and the chips, so the
+// owner opened every card to find it. This pulls it out and bands it so a card
+// can be cleared at reading speed.
+
+export type VerdictBand = "pursue" | "maybe" | "pass";
+
+export interface Verdict {
+  band: VerdictBand;
+  /** The evaluator's own sentence, or an honest "no verdict written" line. */
+  line: string;
+  /** Where the sentence came from; "score" means nothing was written. */
+  source: "why" | "summary" | "pitch" | "score";
+}
+
+export interface VerdictInput {
+  why?: string | null;
+  summary?: string | null;
+  pitch?: string | null;
+  /** The refined fit (1-10); decides the band when no text does. */
+  effectiveFit: number;
+}
+
+const PASS_RE = /\bskip\b|\bpass\b(?!\s*(through|along|it on|the))|not (a|the) (good |strong |real |clean |natural |great )?fit|poor(ly)? fit|weak fit|bad fit|isn'?t a fit|is not a fit|no fit|not (a |our )?(good |strong )?match|out of (our )?scope|don'?t (bid|pursue|bother)|\bavoid\b|not worth|hard pass|\bdecline\b/i;
+const PURSUE_RE = /strong fit|good fit|great fit|excellent fit|solid fit|clear fit|perfect fit|ideal fit|natural fit|high[- ]fit|clean fit|worth (a |the )?(bid|pitch|pursuing|proposal)|\bpursue\b|go for it|\bbid\b|well[- ]suited|squarely in|right in (our|the) (wheelhouse|lane)/i;
+const MAYBE_RE = /\bmaybe\b|borderline|partial(ly)? fit|moderate fit|possible fit|could be|conditional|worth a look|\bdepends\b|mixed|marginal|thin listing|if the/i;
+
+/** The first sentence of a blurb, without a leading "Verdict:"-style label. */
+export function firstSentence(text: string | null | undefined): string {
+  const t = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  const s = t.split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])/)[0].trim();
+  return s.replace(/^(verdict|fit|call|decision)\s*[:\-]\s*/i, "").trim();
+}
+
+function bandFromText(text: string): VerdictBand | null {
+  if (!text) return null;
+  if (PASS_RE.test(text)) return "pass";
+  if (PURSUE_RE.test(text)) return "pursue";
+  if (MAYBE_RE.test(text)) return "maybe";
+  return null;
+}
+
+export function bandFromScore(fit: number): VerdictBand {
+  return fit >= 7 ? "pursue" : fit >= 4 ? "maybe" : "pass";
+}
+
+export function deriveVerdict(d: VerdictInput): Verdict {
+  const pitch = String(d.pitch ?? "").trim();
+  const why = firstSentence(d.why);
+  const summary = firstSentence(d.summary);
+
+  // The pitch pass writes a literal "Skip - <reason>" opener for a lead it
+  // scored out; that is the most explicit verdict any field carries.
+  if (/^skip\b/i.test(pitch)) {
+    return { band: "pass", line: why || firstSentence(pitch) || "Skip.", source: why ? "why" : "pitch" };
+  }
+  const whyBand = bandFromText(why);
+  if (why && whyBand) return { band: whyBand, line: why, source: "why" };
+  const sumBand = bandFromText(summary);
+  if (summary && sumBand) return { band: sumBand, line: summary, source: "summary" };
+  // Text without a readable call: keep the evaluator's sentence, band on the score.
+  if (why) return { band: bandFromScore(d.effectiveFit), line: why, source: "why" };
+  if (summary) return { band: bandFromScore(d.effectiveFit), line: summary, source: "summary" };
+  const fit = Number.isFinite(d.effectiveFit) ? d.effectiveFit : 0;
+  return { band: bandFromScore(fit), line: `No written verdict yet (fit ${fit}/10).`, source: "score" };
+}
+
+export const VERDICT_COLOR: Record<VerdictBand, string> = {
+  pursue: "#86efac",
+  maybe: "#fbbf24",
+  pass: "#f87171",
+};
+
+export const VERDICT_LABEL: Record<VerdictBand, string> = {
+  pursue: "Pursue",
+  maybe: "Maybe",
+  pass: "Pass",
+};

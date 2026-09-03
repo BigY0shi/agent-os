@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
+import { VERDICT_COLOR, VERDICT_LABEL } from "@/lib/dealDeskControl";
 
 const fmtMoney = (n: number | null) => (n == null ? "?" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
 const scoreColor = (n: number) =>
@@ -85,11 +86,16 @@ function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
       onDragStart={(e) => e.dataTransfer.setData("text/plain", deal.id)}
       onClick={() => onOpen(deal)}
       className="panel p-3 cursor-pointer transition hover:brightness-110 mb-2"
-      style={{ borderLeft: `3px solid ${scoreColor(deal.composite)}` }}
+      // S4 (c): the edge encodes the evaluator's verdict (owner's spec), not the composite.
+      style={{ borderLeft: `3px solid ${VERDICT_COLOR[deal.verdict.band]}` }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-[13px] font-medium leading-snug line-clamp-2">{deal.title}</div>
         {deal.needsInfo && <AlertTriangle size={13} style={{ color: "#fbbf24", flexShrink: 0 }} />}
+      </div>
+      <div className="mt-1.5 text-[11px] leading-snug line-clamp-2" title={deal.verdict.line}>
+        <span className="font-semibold uppercase tracking-wide text-[9.5px] mr-1.5" style={{ color: VERDICT_COLOR[deal.verdict.band] }}>{VERDICT_LABEL[deal.verdict.band]}</span>
+        <span className="text-white/60">{deal.verdict.line}</span>
       </div>
       <div className="flex flex-wrap gap-1 mt-2 items-center">
         {deal.source && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(96,165,250,0.18)", color: "#60a5fa" }}>{deal.source}</span>}
@@ -187,9 +193,15 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           </button>
         </div>
 
-        {/* Project summary — quick "what is this" read before the full listing */}
+        {/* Project summary — quick "what is this" read before the full listing.
+            S4 (c): the verdict sentence is the FIRST line, so the call is read before
+            the description of the work (owner's request, 2026-09-02). */}
         {deal.summary && (
-          <div className="rounded-lg p-3 mb-4" style={{ background: "rgba(245,158,11,0.08)", borderLeft: "3px solid rgba(245,158,11,0.55)" }}>
+          <div className="rounded-lg p-3 mb-4" style={{ background: "rgba(245,158,11,0.08)", borderLeft: `3px solid ${VERDICT_COLOR[deal.verdict.band]}` }}>
+            <div className="text-[13px] font-semibold leading-snug mb-2" style={{ color: VERDICT_COLOR[deal.verdict.band] }}>
+              <span className="text-[10px] uppercase tracking-wide mr-2 opacity-80">{VERDICT_LABEL[deal.verdict.band]}</span>
+              {deal.verdict.line}
+            </div>
             <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "#f59e0b" }}>Project summary</div>
             <p className="text-[13px] text-white/85 leading-relaxed">{deal.summary}</p>
           </div>

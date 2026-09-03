@@ -14,6 +14,7 @@ import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
+import { deriveVerdict, type Verdict } from "./dealDeskControl";
 
 // Where the scraper pipeline writes its artifacts. Override with UPWORK_LEADS_DIR.
 export const LEADS_DIR =
@@ -92,6 +93,8 @@ export interface Deal extends BoardRecord {
   notes: string; needsInfo: boolean; editedPitch: string | null;
   answers: Answer[]; enrichment: Enrichment | null; updatedAt: number | null;
   effectiveFit: number;
+  /** S4 (c): the evaluator's pass/pursue call, pulled to the front of the card. */
+  verdict: Verdict;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -337,6 +340,9 @@ export async function listDeals(): Promise<Deal[]> {
     if (STAFFING.test(b.title || "")) effectiveFit = Math.min(effectiveFit, 2);
     const composite = +(0.4 * b.easiness + 0.4 * b.winnability + 0.2 * effectiveFit).toFixed(2);
     const defaultStatus: DealStatus = effectiveFit <= 3 ? "parked" : "new";
+    // A generated brief is newer than the offline pitch pass, so it wins.
+    const summary = st.brief?.summary ?? p.summary ?? null;
+    const why = st.brief?.why ?? p.why ?? null;
     deals.push({
       ...b,
       description: formatDescription(b.description),
@@ -344,9 +350,10 @@ export async function listDeals(): Promise<Deal[]> {
       composite,
       effectiveFit,
       status: st.status || defaultStatus,
-      // A generated brief is newer than the offline pitch pass, so it wins.
-      summary: st.brief?.summary ?? p.summary ?? null,
-      why: st.brief?.why ?? p.why ?? null,
+      summary,
+      why,
+      // The verdict reads the evaluator's OWN opener, never the operator's edit.
+      verdict: deriveVerdict({ why, summary, pitch: p.pitch ?? null, effectiveFit }),
       pitch: st.editedPitch ?? p.pitch ?? null,
       approach: st.brief?.approach ?? p.approach ?? null,
       crashCourse: st.brief?.crashCourse ?? p.crashCourse ?? null,
@@ -377,6 +384,7 @@ export async function listDeals(): Promise<Deal[]> {
       // on-demand brief if one has been generated — previously hardcoded to null,
       // which is why RemoteOK/WWR cards never showed the analysis Upwork cards did.
       summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
+      verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, effectiveFit }),
       pitch: st.editedPitch ?? null,
       approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,

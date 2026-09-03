@@ -33,6 +33,10 @@ Deal Desk merges those with your own per-deal state and renders the board.
 
 Upwork leads already get these in bulk from the offline pitch pass. RemoteOK and WeWorkRemotely leads never go through it, so without the batch route they stay blank forever. That is why `brief-batch` exists and matters more than the single-card route: clicking 248 cards individually is not a workflow.
 
+## The verdict (S4)
+
+Every card leads with the evaluator's own pass-or-pursue sentence, banded **pursue / maybe / pass** (`src/lib/dealDeskControl.ts`, `deriveVerdict`). The sentence is taken, in order, from a `Skip -` pitch opener, the first sentence of `why`, then the first sentence of `summary`; the band comes from the wording and falls back to the refined fit only when the text carries no readable call. The card edge colour and the first line of the drawer's summary box are that verdict. A lead nothing has assessed yet says `No written verdict yet (fit N/10)` rather than inventing one.
+
 ## Setup
 
 Nothing to install inside Agent OS. It needs two things to be useful:
