@@ -34,6 +34,38 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S4 (e): "More info needed" fires a research pass and reports on the card
+
+Harness session (feat-s4-deal-desk-control), part six of six. The owner's words: today it
+paints a yellow cone on the card and fires no task. It should kick off a research pass
+(enrich + brief + the open questions) and report back on the card, with a button inside
+the drawer to ask for more on demand.
+
+**One run, three steps, every skip in words.** `lib/dealResearch.ts` `runResearch()`:
+enrich through the gated runner from (d) (skipped as "feed lead" or "no cookie", said on
+the card, never silent; a login wall flags the card and the pass carries on because the
+other two steps do not need Upwork), then the brief (`generateBrief`), then the open
+questions: a prompt that asks for 3 to 5 questions we would need answered before
+bidding, each with the best answer the listing supports or exactly "Unknown - ask the
+client", saved as Q&A entries so they show where the drawer already shows answers.
+State goes to the card through `setResearch()` as it moves (running, done / error /
+stopped, with a note like `enrich skipped: no cookie · brief done · 2 questions`).
+
+**Not awaited, on purpose.** `/brief` awaits its run; `/research` returns `runId` at once
+and the store polls the board every 5 s until `deal.research.status` settles (capped at
+~12 minutes). A pass is two claude calls and possibly a browser, and the toggle that
+starts it must not hang the drawer for a minute. 409 when a pass is already running on
+that card, with the live `runId`.
+
+**Wiring.** Turning "Need more info" ON starts the pass; turning it off leaves what ran.
+"Get more info" in the drawer runs it without touching the flag. The card face and the
+drawer show the research line (spinner while running, "researched 3m ago · 2 answers",
+or the failure reason). Evidence: `smoke-deal-desk-control` section F, 13 checks, every
+model and browser call replaced by a seam (no cookie, feed lead, login wall on enrich,
+STOP mid-brief leaves the card "stopped", a throwing step leaves it "error"); `tsc`
+clean. Not seen in a browser: the real pass needs the owner's claude CLI.
+
+---
 ## 2026-09-02 - S4 (a): pasted URLs become cards through the normal pipeline
 
 Harness session (feat-s4-deal-desk-control), part five. The owner's words: paste one or

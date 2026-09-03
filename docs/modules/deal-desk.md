@@ -41,6 +41,10 @@ Every card leads with the evaluator's own pass-or-pursue sentence, banded **purs
 
 `deals.maxAgeDays` (gear, default 5) drops listings posted longer ago than that when a scrape or a feed pull lands: `board.json` and `shortlist.json` after scoring and before pitching, `feeds.json` after the pull and before the brief pass. Dropped rows are written beside the file as `<name>.dropped-<date>.json`, never discarded; undated rows are kept. Cards already on the board are not re-gated. Each card shows its age and turns amber with OLD past the gate.
 
+## "Need more info" does work now (S4)
+
+Turning the flag on starts a research pass as one module run: **enrich** (the gated logged-in visit; skipped in words for a feed lead or when no cookie is saved), **brief** (summary, why, approach, crash course), and **open questions** (3 to 5 things to settle before bidding, each answered from the listing or marked "Unknown - ask the client", saved as Q&A on the card). **Get more info** in the drawer runs the same pass without touching the flag. The card shows the state: researching, researched with the answer count, stopped, or the failure reason. Turning the flag off leaves whatever ran.
+
 ## Manual intake (S4)
 
 **Paste URLs** in the header opens a box for Upwork job URLs, one per line, up to 20. Each becomes a card through the same path a scrape uses: `scripts/deals/intake-scrape.mjs` visits the page with the actor's own parser, the row is written into the actor's dataset directory, `score_board.mjs` rebuilds `board.json`, `pitch.mjs` writes the analysis, and the ids are forced into New. Anything that is not an Upwork job listing is rejected by name with the reason; a listing already on the desk is skipped and named. The login-wall gate applies. Cost: the next re-scrape purges the dataset, so an intake row leaves `board.json` unless the search finds it again (desk state survives by id, like every other row).
@@ -81,6 +85,7 @@ Open `/deals`. An empty board means the leads directory has no `board.json`, not
 | `POST /api/deals/enrich` | the older, ungated enrichment; still works, superseded by `enrichment` |
 | `POST /api/deals/scrape` | trigger a scrape |
 | `POST /api/deals/intake` | `{ urls }`: pasted Upwork job URLs go through scrape, score, pitch and land in New (S4) |
+| `POST /api/deals/research` | `{ id, steps? }`: the research pass "More info needed" fires (enrich, brief, open questions) as a module run; returns `runId` at once, the card carries the state (S4) |
 | `POST /api/deals/refill` | top the board back up |
 | `POST /api/deals/feeds` | manage feed sources |
 | `POST /api/deals/cookie` | set the session cookie the scraper needs |

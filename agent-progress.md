@@ -9,9 +9,24 @@ DEV-JOURNAL.md (hyphen, not underscore).
 - (nothing in progress)
 
 ## Next
-- top-down through features.json (S8, S6, S3, backlog-wrap done; S4 deal-desk-control is next in file order)
+- top-down through features.json (S8, S6, S3, backlog-wrap, S4 done; S5 legacy-memory-backfill is next in file order)
 
 ## Follow-ups seen, not done
+- S4 owner-to-look (needs the rebuilt app): the verdict line + edge colour on cards, the
+  Parked/Denied lane under the board, "Paste URLs" against a real upwork.com listing
+  (`scripts/deals/intake-scrape.mjs` uses his Chrome + the actor's parse.js), "Enrich
+  approved" through `/api/deals/enrichment` with a logged-out session (expect the red
+  banner + `needs login` badges), and "Need more info" / "Get more info" firing a
+  research run in the tray. Every browser and model call is smoke-covered by a seam only.
+- S4 seam: `/api/deals/enrich` (old, ungated) was in the owner's working set on
+  2026-09-02 and is superseded by `/api/deals/enrichment`; retire it (or point it at
+  `runEnrichment`) once his `sanitizeSpawnEnv` edit lands.
+- S4 seam: `dealIntake.ts` re-runs `score_board.mjs`, which rebuilds board.json from
+  the actor dataset; a re-scrape purges that dataset, so intake rows leave board.json
+  then (same lifecycle as every board row). If the owner wants pasted listings to
+  survive a re-scrape, keep them in a `feeds.json`-style side file instead.
+- S4 seam: `deals.dropped-<date>.json` sidecars accumulate in the leads dir, one per day
+  with drops; nothing prunes them.
 - Backlog-wrap seam: `generateHireBrief` / `generateHirePitch` (hireBrief.ts) and
   `createGmailDrafts` (hireDraft.ts) take no signal, and both files were in the owner's
   working set on 2026-09-02, so hire/brief, hire/pitch, hire/draft mark a run stopped
@@ -55,6 +70,8 @@ DEV-JOURNAL.md (hyphen, not underscore).
   the Artifact is the supervising session's job; leave the HTML at ~/.agentic-os.
 
 ## Log (newest first)
+- 2026-09-02 ~21:30 PDT feat-s4-deal-desk-control PASSING (v2.18.0..v2.23.0, six commits in the owner's order c,b,f,d,a,e): verdict first + edge colour; face deny + bulk deny + Parked/Denied lane under the board; deals.maxAgeDays gate (gear) with dropped-row sidecars; login-wall gate via lib/dealEnrich.ts + /api/deals/enrichment (old /enrich untouched, owner's working set); manual intake via scripts/deals/intake-scrape.mjs + lib/dealIntake.ts + /api/deals/intake; research pass via lib/dealResearch.ts + /api/deals/research. smoke-deal-desk-control 75 checks; gate 76/76 exit 0. Nothing seen in a browser.
+- 2026-09-02 20:03 PDT loop RELAUNCHED (`--max-cycles 8`) after the 18:18 session limit (cycles 6-8 died on 'You've hit your session limit, resets 8pm'); remaining: S4, S5, S7, S9.
 - 2026-09-02 18:35 PDT feat-backlog-wrap-long-routes PASSING (v2.17.1): 8 Deal Desk / Hire Engine long routes register module runs and return runId (deals/enrich skipped as dirty); lib/runRoute.ts shared catch block; briefBatch split plan/run; smoke-module-runs 84; gate 75/75 exit 0.
 - 2026-09-02 18:05 PDT feat-s3-prelaunch-drawer-stop PASSING (v2.17.0): STOP (AbortController per run, /api/runs/:id stop, tray button, signal reaches the CLI child) + RunLaunchDrawer on Content Engine and Agent Kanban with a strict launchOptions contract persisted in settings.launch.<module>; smoke-launch-drawer 70, smoke-module-runs 62; gate 75/75 exit 0.
 - 2026-09-02 17:30 PDT feat-s6-hermes3d-missing PASSING (v2.16.0): not a stale build, an unmounted route. `/hermes3d` mounted in Artist's Corner on plain three.js (office.glb + seated idle bodies, loud missing-assets panel, gear); smoke-hermes3d-ui 36 checks; gate 74/74 exit 0. Cycle 2 built it and died waiting on its background gate; cycle 3 verified and committed.

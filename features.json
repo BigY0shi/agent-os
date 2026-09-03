@@ -128,8 +128,8 @@
         "smoke-deal-desk.mjs (or a new smoke) covers: verdict extraction, bulk deny, max-age filter, login-wall detection on fixture HTML, intake URL validation; all redirect AGENTIC_OS_DESK / UPWORK_LEADS_DIR / AGENTIC_OS_SETTINGS first; ./test.sh exits 0.",
         "DEV-JOURNAL.md entry per part, ROADMAP.md S4 ticked, version bumped (minor), docs/modules/deal-desk.md updated, roadmap page re-rendered."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "PASSING 2026-09-02 (harness cycle, six commits v2.18.0..v2.23.0, each part its own commit in the owner order c,b,f,d,a,e). (c) deriveVerdict() [lib/dealDeskControl.ts] -> verdict.line first in the summary box + card edge colour by band. (b) setStatusBulk + action bulkStatus; tick box + deny cross on the card face; Deny N selected bar; Parked/Denied full-width lane under the board (two drop targets); Reload shows Reloading. (f) settings.deals.maxAgeDays (gear DealDeskSettings.tsx, default 5); pruneLeadsFileByAge after scoring (board+shortlist) and after a feed pull; dropped rows kept as <name>.dropped-<date>.json; age + OLD on the card. (d) lib/dealEnrich.ts + POST /api/deals/enrichment (module run): login wall stops, flags needsLogin, banner with Open Upwork login + Update cookie, cookie save clears flags; old /enrich untouched (owner working set). (a) parseIntakeUrls + scripts/deals/intake-scrape.mjs + lib/dealIntake.ts + POST /api/deals/intake: dataset -> score_board.mjs -> pitch.mjs -> New. (e) lib/dealResearch.ts + POST /api/deals/research: needsInfo ON fires enrich+brief+open questions as a module run; Get more info in drawer; state on card. Evidence: scripts/v2/smoke-deal-desk-control.mjs 75 checks (A-F), redirects AGENTIC_OS_DESK/UPWORK_LEADS_DIR/AGENTIC_OS_SETTINGS/AGENTIC_OS_RUNS_DIR; ./test.sh 76/76 exit 0. Not seen in a browser: intake-scrape.mjs against upwork.com, the real research pass, and the new lane layout need the rebuilt app and the owner."
     },
     {
       "id": "feat-s5-legacy-memory-backfill",

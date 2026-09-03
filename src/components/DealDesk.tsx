@@ -147,12 +147,29 @@ function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
         {fmtMoney(deal.clientTotalSpent)} · {deal.clientRating ?? "?"}★ · {deal.clientHires ?? "?"}h
         {deal.enrichment?.proposals != null && <span style={{ color: "#22d3ee" }}> · {deal.enrichment.proposals} proposals</span>}
       </div>
+      {/* S4 (e): the research pass reports back here, on the card. */}
+      {deal.research && <ResearchLine research={deal.research} answers={deal.answers.length} />}
+    </div>
+  );
+}
+
+function ResearchLine({ research, answers }: { research: NonNullable<Deal["research"]>; answers: number }) {
+  const color = research.status === "running" ? "#fbbf24" : research.status === "done" ? "#34d399" : research.status === "stopped" ? "#a1a1aa" : "#f87171";
+  const label = research.status === "running" ? "researching…"
+    : research.status === "done" ? `researched ${agoLabel(research.at)}${answers ? ` · ${answers} answer${answers === 1 ? "" : "s"}` : ""}`
+    : research.status === "stopped" ? `research stopped ${agoLabel(research.at)}`
+    : `research failed${research.note ? `: ${research.note}` : ""}`;
+  return (
+    <div className="mt-1 text-[10.5px] inline-flex items-center gap-1" style={{ color }} title={research.note || undefined}>
+      {research.status === "running" ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+      <span className="truncate">{label}</span>
     </div>
   );
 }
 
 function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
-  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask } = useDesk();
+  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research } = useDesk();
+  const researching = deal.research?.status === "running";
   const [notes, setNotes] = useState(deal.notes);
   const [pitch, setPitch] = useState(deal.pitch || "");
   const [question, setQuestion] = useState("");
@@ -221,11 +238,22 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
             ))}
           </select>
           <button onClick={() => toggleNeedsInfo(deal.id)}
+            title={deal.needsInfo ? "Clear the flag (what the research pass found stays on the card)" : "Flag it AND start the research pass: enrich, brief, open questions"}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] transition"
             style={{ background: deal.needsInfo ? "rgba(251,191,36,0.18)" : "rgba(255,255,255,0.05)", color: deal.needsInfo ? "#fbbf24" : "rgba(255,255,255,0.6)" }}>
             <AlertTriangle size={12} /> Need more info
           </button>
+          {/* S4 (e): research on demand, without flipping the flag. */}
+          <button onClick={() => research(deal.id)} disabled={researching}
+            title="Run the research pass now: enrich (logged-in Upwork visit), brief, and the open questions we would need answered before bidding. Runs in the tray."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] transition disabled:opacity-50"
+            style={{ background: "rgba(34,211,238,0.14)", color: "#22d3ee" }}>
+            {researching ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} {researching ? "Researching…" : "Get more info"}
+          </button>
         </div>
+        {deal.research && (
+          <div className="mb-4 -mt-2"><ResearchLine research={deal.research} answers={deal.answers.length} /></div>
+        )}
 
         {/* Project summary — quick "what is this" read before the full listing.
             S4 (c): the verdict sentence is the FIRST line, so the call is read before

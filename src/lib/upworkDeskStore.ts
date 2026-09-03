@@ -43,6 +43,9 @@ interface DeskStore {
   pullingFeeds: boolean;
   feedsResult: string | null;
   pullFeeds: () => Promise<void>;
+  /** S4 (e): the research pass (enrich + brief + open questions) as a module run; the card carries the state. */
+  research: (id: string, steps?: string[]) => Promise<boolean>;
+  pollResearch: (id: string) => void;
   /** S4 (a): pasted Upwork job URLs -> cards through the normal pipeline. */
   intaking: boolean;
   intakeResult: string | null;
@@ -156,6 +159,44 @@ export const useDesk = create<DeskStore>((set, get) => ({
       }),
     }));
     await post("needsInfo", id, next);
+    // S4 (e): the flag fires work. Turning it ON starts the research pass;
+    // turning it off leaves whatever ran on the card.
+    if (next) await get().research(id);
+  },
+
+  research: async (id, steps) => {
+    // Mark it running locally at once so the card shows the spinner before the
+    // first poll; the server overwrites with its own state on the next fetch.
+    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, research: { status: "running", at: Date.now(), steps } } : d)) }));
+    try {
+      const r = await fetch("/api/deals/research", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, steps }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, research: { status: "error", at: Date.now(), note: j.error || "could not start" } } : d)) }));
+        if (j.runId) get().pollResearch(id); // 409: a pass is already running; follow it
+        return false;
+      }
+      get().pollResearch(id);
+      return true;
+    } catch (e) {
+      set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, research: { status: "error", at: Date.now(), note: (e as Error).message } } : d)) }));
+      return false;
+    }
+  },
+
+  pollResearch: (id) => {
+    // Self-rescheduling like pollScrape; stops when the card's research settles
+    // or the card is gone. Capped at ~12 minutes of polling.
+    let ticks = 0;
+    const tick = async () => {
+      await get().fetchDeals();
+      const d = get().deals.find((x) => x.id === id);
+      if (!d || d.research?.status !== "running" || ++ticks > 144) return;
+      setTimeout(tick, 5000);
+    };
+    setTimeout(tick, 4000);
   },
 
   savePitch: async (id, pitch) => {

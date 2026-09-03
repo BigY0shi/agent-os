@@ -20,7 +20,7 @@ is one line; the journal carries the rest.
   run most.
 ## Next
 
-- [ ] **S4. Deal Desk: more control from the chair.** Asked by Yoshi 2026-09-02.
+- [x] **S4. Deal Desk: more control from the chair.** Asked by Yoshi 2026-09-02; all six parts landed 2026-09-02 (see Done, v2.18.0 to v2.23.0). Not yet seen in a browser.
   (a) Manual intake: paste one or more job-listing URLs and have the desk scrape,
   evaluate, and pitch them like any feed item. (b) Deny without opening: a deny
   control on the card face, multi-select with bulk deny, and the Parked/Denied
@@ -85,6 +85,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-02 · v2.18.0 to v2.23.0 · S4 Deal Desk, more control from the chair, six commits in the owner's order. (c) `deriveVerdict()` in `lib/dealDeskControl.ts`: the evaluator's own pass/pursue sentence is the first line of the summary box and the card edge colour. (b) `setStatusBulk` + `action: "bulkStatus"`: tick boxes and a deny cross on every card face, "Deny N selected", Parked/Denied as a full-width lane under the board with two drop targets; Reload says "Reloading…". (f) `settings.deals.maxAgeDays` (gear, default 5): `pruneLeadsFileByAge` after scoring and after a feed pull, dropped rows kept as `<name>.dropped-<date>.json`, undated kept, age on the card with OLD past the gate. (d) `lib/dealEnrich.ts` + `POST /api/deals/enrichment`: a login wall stops the run, flags the unreached cards `needs login`, banner with "Open Upwork login" / "Update cookie", a saved cookie clears the flags (the old `/enrich` route was in the owner's working set; untouched). (a) `parseIntakeUrls` + `scripts/deals/intake-scrape.mjs` + `lib/dealIntake.ts` + `POST /api/deals/intake`: pasted Upwork URLs go dataset → `score_board.mjs` → `pitch.mjs` → New, as a module run. (e) `lib/dealResearch.ts` + `POST /api/deals/research`: "Need more info" ON starts enrich + brief + open questions as a module run, "Get more info" in the drawer, state on the card. smoke-deal-desk-control, 75 checks, every browser and model call a seam. Nothing seen in a browser yet.
 
 - 2026-09-02 · v2.17.1 · Backlog: Deal Desk and Hire Engine long routes register module runs. `deals/brief`, `deals/brief-batch`, `deals/proposal`, `hire/brief`, `hire/draft`, `hire/pitch`, `hire/scrape`, `hire/enrich` call `startModuleRun()`, log their steps, and return `runId`; same awaits, same status codes, 409 `{ stopped }` after STOP. `lib/runRoute.ts` (`HttpError` + `runErrorResponse`) is the shared catch block; `lib/briefBatch.ts` split into `planBriefBatch` + `runBriefBatch` so the batch route owns its run and STOP reaches every claude child. `deals/enrich` skipped (owner's working set). smoke-module-runs 84 checks.
 - 2026-09-02 · v2.17.0 · S3 Configure before launch, STOP after: `RunLaunchDrawer` (seat, skills from /api/skills, per-module guardrails, instructions; persists `settings.launch.<module>`; locked while that module runs) on Content Engine plan/generate and Agent Kanban plan/build; `lib/launchOptions.ts` strict contract (unknown field = 400 naming it); `stopModuleRun` + `POST /api/runs/:id {action:"stop"}` + Stop button in the tray, signal threaded to the CLI child / Ollama fetch; Kanban runs registered in the tray. smoke-launch-drawer 70 checks, smoke-module-runs 62. Not yet seen in a browser.

@@ -271,6 +271,73 @@ console.log("\n-- E (a) intake --");
   check("E13 a missing pipeline script fails loudly by name before anything runs", /pitch\.mjs not found/.test(missing || ""), missing);
 }
 
+// -- F (e) "More info needed" fires a research pass -----------------------------
+console.log("\n-- F (e) research pass --");
+{
+  const R = await import("../../src/lib/dealResearch.ts");
+  const deal = (over = {}) => ({
+    id: "R-1", title: "HubSpot + Zapier cleanup", url: "https://www.upwork.com/jobs/~02R1/", budget: "$1,500", jobType: "Fixed",
+    experienceLevel: "Expert", duration: null, posted: null, description: "200 workflows, some broken. Need an audit and fixes.", tags: ["zapier", "hubspot"],
+    clientCountry: "US", clientTotalSpent: 40000, clientRating: 4.9, clientHires: 12, clientMemberSince: null, easiness: 7, winnability: 7, fit: 8, composite: 7.2,
+    status: "new", postedAt: null, summary: null, why: null, pitch: null, approach: null, crashCourse: null, notes: "", needsInfo: true, editedPitch: null,
+    answers: [], enrichment: null, updatedAt: null, effectiveFit: 8, verdict: { band: "pursue", line: "", source: "score" }, needsLogin: false, loginWallAt: null, research: null,
+    ...over,
+  });
+  check("F1 parseQuestions takes fenced / prefaced JSON and drops malformed rows",
+    R.parseQuestions('Here you go:\n```json\n[{"q":"Which HubSpot tier?","a":"Unknown - ask the client."},{"q":"","a":"x"},{"q":"How many zaps are live?","a":"200 per the listing."}]\n```').length === 2
+    && R.parseQuestions("no json here").length === 0 && R.parseQuestions('{"q":"not an array"}').length === 0);
+  check("F2 the questions prompt carries the listing and asks for JSON only", /HubSpot \+ Zapier cleanup/.test(R.questionsPrompt(deal())) && /ONLY minified JSON/.test(R.questionsPrompt(deal())));
+
+  // The full pass with fakes: no cookie (enrich skipped, in words), a brief, two questions.
+  const logs = [];
+  const o = await R.runResearch(deal(), {
+    runId: "run-1", log: (l) => logs.push(l),
+    briefFn: async () => ({ summary: "Good fit: an audit of 200 zaps.", why: "Strong fit.", approach: "Audit, fix, verify", crashCourse: "" }),
+    askFn: async () => '[{"q":"Which HubSpot tier?","a":"Unknown - ask the client."},{"q":"How many zaps are broken?","a":"Some, per the listing; count unknown."}]',
+  });
+  let live = readLive();
+  check("F3 enrich is skipped IN WORDS when no cookie is saved (never silently)", o.enrich === "skipped: no cookie" && logs.some((l) => /no Upwork cookie/.test(l)), o.enrich);
+  check("F4 the brief was saved on the card", o.brief === "done" && live["R-1"].brief?.summary === "Good fit: an audit of 200 zaps.");
+  check("F5 the open questions landed as Q&A entries on the card", o.questions === 2 && live["R-1"].answers?.length === 2 && live["R-1"].answers[0].q === "Which HubSpot tier?");
+  check("F6 research state is done with the note and the run id", live["R-1"].research?.status === "done" && live["R-1"].research.runId === "run-1" && /enrich skipped: no cookie · brief done · 2 questions/.test(live["R-1"].research.note), live["R-1"].research?.note);
+  check("F7 the steps ran in order enrich, brief, questions", o.steps.join(",") === "enrich,brief,questions");
+
+  // A feed lead: enrich is skipped for a different reason; questions only.
+  const o2 = await R.runResearch(deal({ id: "R-2", source: "remoteok" }), { steps: ["enrich", "questions"], cookie: "c=1", askFn: async () => "nothing useful" });
+  live = readLive();
+  check("F8 a feed lead skips enrich as 'feed lead' even with a cookie", o2.enrich === "skipped: feed lead");
+  check("F9 an unusable answer is reported, not invented", o2.questions === "no usable answer" && (live["R-2"].answers || []).length === 0 && o2.brief === "not requested");
+
+  // A login wall on enrich flags the card and the pass carries on to the brief.
+  const o3 = await R.runResearch(deal({ id: "R-3" }), {
+    cookie: "c=1", steps: ["enrich", "brief"],
+    enrichFn: async () => { await D.setNeedsLogin(["R-3"], true); return { attempted: 1, enriched: 0, stopped: "login", needsLogin: ["R-3"], errors: [], exitCode: 0, stderrTail: "" }; },
+    briefFn: async () => ({ summary: "Still briefed.", why: "ok" }),
+  });
+  live = readLive();
+  check("F10 a login wall on enrich does not stop the brief", o3.enrich === "login wall" && o3.brief === "done" && live["R-3"].needsLogin === true && live["R-3"].brief?.summary === "Still briefed.");
+
+  // STOP mid-pass: the card says stopped, not done, and the caller gets an AbortError.
+  const ac = new AbortController();
+  let thrown = null;
+  try {
+    await R.runResearch(deal({ id: "R-4" }), {
+      signal: ac.signal, steps: ["brief", "questions"],
+      briefFn: async () => { ac.abort(); return { summary: "late", why: "late" }; },
+      askFn: async () => "[]",
+    });
+  } catch (e) { thrown = e; }
+  live = readLive();
+  check("F11 STOP during the brief leaves the card 'stopped' and throws an AbortError", thrown?.name === "AbortError" && live["R-4"].research?.status === "stopped" && !live["R-4"].brief);
+
+  // A failing step: the card says error with the reason.
+  let thrown2 = null;
+  try { await R.runResearch(deal({ id: "R-5" }), { steps: ["questions"], askFn: async () => { throw new Error("agent returned nothing"); } }); } catch (e) { thrown2 = e; }
+  live = readLive();
+  check("F12 a failed step leaves the card 'error' with the message", thrown2 && live["R-5"].research?.status === "error" && /agent returned nothing/.test(live["R-5"].research.note));
+  check("F13 unknown step names are dropped and the default is all three", R.RESEARCH_STEPS.join(",") === "enrich,brief,questions");
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -81,6 +81,16 @@ export interface DealState {
    */
   needsLogin?: boolean;
   loginWallAt?: number;
+  /** S4 (e): the research pass "More info needed" fires, and how it went. */
+  research?: Research;
+}
+export interface Research {
+  status: "running" | "done" | "error" | "stopped";
+  at: number;
+  runId?: string;
+  /** Which steps ran / were skipped, in words, for the card. */
+  note?: string;
+  steps?: string[];
 }
 export interface Brief {
   summary?: string; why?: string; approach?: string; crashCourse?: string; at?: number;
@@ -104,6 +114,8 @@ export interface Deal extends BoardRecord {
   /** S4 (d): the last visit to this listing hit the login wall. */
   needsLogin: boolean;
   loginWallAt: number | null;
+  /** S4 (e): the last research pass on this card, or null if none ran. */
+  research: Research | null;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -394,6 +406,7 @@ export async function listDeals(): Promise<Deal[]> {
       updatedAt: st.updatedAt ?? null,
       needsLogin: st.needsLogin ?? false,
       loginWallAt: st.loginWallAt ?? null,
+      research: st.research ?? null,
     });
   }
 
@@ -421,6 +434,7 @@ export async function listDeals(): Promise<Deal[]> {
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
       answers: st.answers ?? [], enrichment: st.enrichment ?? null, updatedAt: st.updatedAt ?? null,
       needsLogin: st.needsLogin ?? false, loginWallAt: st.loginWallAt ?? null,
+      research: st.research ?? null,
     });
   }
 
@@ -485,6 +499,11 @@ export async function setEnrichment(id: string, e: Enrichment): Promise<DealStat
 
 export async function setBrief(id: string, b: Brief): Promise<DealState> {
   return patch(id, (s) => ({ ...s, brief: { ...b, at: Date.now() } }));
+}
+
+/** S4 (e): the research pass writes its state as it goes; the card reads it. */
+export async function setResearch(id: string, r: Omit<Research, "at"> & { at?: number }): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, research: { ...r, at: r.at ?? Date.now() } }));
 }
 
 /**
