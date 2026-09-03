@@ -21,6 +21,8 @@ interface MemoryDraft {
   embedModel: string;
   tokenBudget: string;
   labelRouterThreshold: string;
+  backfillLimit: string;
+  backfillModel: string;
 }
 
 interface FolderRow { path: string; scopes: ("files" | "coding" | "exec")[] }
@@ -46,6 +48,12 @@ const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax"] as const;
 const EMBED_PROVIDERS = ["ollama-local", "ollama-cloud"] as const;
 const SCOPES = ["files", "coding", "exec"] as const;
 
+function backfillLimitOf(d: { backfillLimit: string }): number {
+  const n = parseInt(d.backfillLimit, 10);
+  if (!Number.isFinite(n) || n < 1) return 20;
+  return Math.min(n, 500);
+}
+
 // A9.3 — legacy migration sources (POST /api/v2/memory/migrate)
 const MIGRATION_SOURCES = [
   { source: "memsearch", label: ".memsearch session logs", hint: "repo .memsearch/memory/*.md" },
@@ -63,6 +71,11 @@ interface MigrateRowResult {
   full: boolean;
   error?: string;
 }
+
+// S5 — legacy backfill (POST /api/v2/memory/backfill). Dry-run answers inline;
+// a real run is a module run the tray carries (module "memory").
+interface BackfillCandidateClient { uuid: string; source: string; validAt: string; chars: number; preview: string }
+interface BackfillDryClient { remaining: number; candidates: BackfillCandidateClient[]; model: string }
 
 function Toggle({
   label, hint, checked, disabled, onChange,
@@ -99,6 +112,11 @@ export default function MemorySettings() {
   const [jobs, setJobs] = useState<JobRowClient[] | null>(null);
   const [migrating, setMigrating] = useState<string | null>(null); // "<source>:<dry|import>"
   const [migrateResults, setMigrateResults] = useState<Record<string, MigrateRowResult>>({});
+  const [backfillBusy, setBackfillBusy] = useState<"dry" | "run" | null>(null);
+  const [backfillDry, setBackfillDry] = useState<BackfillDryClient | null>(null);
+  const [backfillRun, setBackfillRun] = useState<{ runId: string; limit: number; model: string } | null>(null);
+  const [backfillErr, setBackfillErr] = useState<string | null>(null);
+  const [backfillRemaining, setBackfillRemaining] = useState<number | null>(null);
 
   const memory = (settings?.memory ?? {}) as Record<string, unknown>;
   const capability = (settings?.capability ?? {}) as Record<string, unknown>;
@@ -116,6 +134,8 @@ export default function MemorySettings() {
       embedModel: String(memory.embedModel ?? ""),
       tokenBudget: String(memory.tokenBudget ?? 10000),
       labelRouterThreshold: String(memory.labelRouterThreshold ?? 0.7),
+      backfillLimit: String(memory.backfillLimit ?? 20),
+      backfillModel: String(memory.backfillModel ?? "bonsai:27b"),
     });
     setCapDraft({
       folders: Array.isArray(capability.folders) ? (capability.folders as FolderRow[]).map((f) => ({ path: f.path, scopes: [...(f.scopes ?? [])] })) : [],
@@ -139,6 +159,8 @@ export default function MemorySettings() {
         embedModel: draft.embedModel.trim(),
         tokenBudget: Number.isFinite(tokenBudget) ? tokenBudget : 10000,
         labelRouterThreshold: Number.isFinite(threshold) ? threshold : 0.7,
+        backfillLimit: backfillLimitOf(draft),
+        backfillModel: draft.backfillModel.trim() || "bonsai:27b",
       },
       capability: {
         ...capability,
@@ -203,6 +225,54 @@ export default function MemorySettings() {
       }));
     } finally {
       setMigrating(null);
+    }
+  }
+
+  // How many undrived legacy episodes exist right now (reads only).
+  const refreshBackfill = useCallback(async () => {
+    try {
+      const r = await fetch("/api/v2/memory/backfill?limit=1", { cache: "no-store" });
+      const j = await r.json();
+      if (typeof j?.remaining === "number") setBackfillRemaining(j.remaining);
+      if (typeof j?.runId === "string") setBackfillRun((prev) => prev ?? { runId: j.runId, limit: 0, model: "" });
+    } catch { /* offline */ }
+  }, []);
+  useEffect(() => { void refreshBackfill(); }, [refreshBackfill]);
+
+  /** Dry-run lists candidates and writes nothing; a real run persists the two
+   *  knobs first (rule 16) and then hands the work to a module run. */
+  async function runBackfill(dryRun: boolean) {
+    if (!draft) return;
+    const limit = backfillLimitOf(draft);
+    const model = draft.backfillModel.trim() || "bonsai:27b";
+    setBackfillErr(null);
+    setBackfillBusy(dryRun ? "dry" : "run");
+    try {
+      if (!dryRun) {
+        setBackfillDry(null);
+        await save({ memory: { ...memory, backfillLimit: limit, backfillModel: model } });
+      }
+      const r = await fetch("/api/v2/memory/backfill", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ limit, model, dryRun }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setBackfillErr(String(j?.error ?? `HTTP ${r.status}`));
+        if (typeof j?.runId === "string") setBackfillRun({ runId: j.runId, limit, model });
+        return;
+      }
+      if (dryRun) {
+        setBackfillDry({ remaining: j.remaining ?? 0, candidates: Array.isArray(j.candidates) ? j.candidates : [], model: String(j.model ?? model) });
+        setBackfillRemaining(typeof j?.remaining === "number" ? j.remaining : null);
+      } else {
+        setBackfillRun({ runId: String(j.runId ?? ""), limit, model });
+      }
+    } catch (err) {
+      setBackfillErr(err instanceof Error ? err.message : "request failed");
+    } finally {
+      setBackfillBusy(null);
     }
   }
 
@@ -400,6 +470,68 @@ export default function MemorySettings() {
           </div>
         );
       })}
+      <div className="mb-3" />
+
+      {/* ── Legacy backfill (S5) ── */}
+      <SectionTitle>Legacy backfill</SectionTitle>
+      <p className="text-[10.5px] leading-relaxed mb-2" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+        Imported legacy episodes carry no aspect (Identity / Event / Relationship…) because the import
+        wrote them verbatim. This derives them in place through the normal pipeline (6–8 LLM calls each)
+        on a <strong>local Ollama model</strong>, never a hosted one; Ollama down or the model not pulled
+        stops the run with the reason. Existing rows are updated, nothing is re-imported, dedup is untouched.
+        {backfillRemaining !== null && (
+          <span className="block mt-1" style={{ color: "var(--fg-dim, #9aa)" }}>
+            {backfillRemaining === 0 ? "No legacy episodes are waiting for derivation." : `${backfillRemaining} legacy episode${backfillRemaining === 1 ? "" : "s"} still lack derivation.`}
+          </span>
+        )}
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Episodes per run" hint="Start with ~20 and look at the rows before the full set.">
+          <TextInput type="number" min="1" max="500" value={draft.backfillLimit}
+            onChange={(e) => setDraft({ ...draft, backfillLimit: e.target.value })} />
+        </Field>
+        <Field label="Local chat model" hint="Must be pulled on the local Ollama (ollama pull …).">
+          <TextInput value={draft.backfillModel} onChange={(e) => setDraft({ ...draft, backfillModel: e.target.value })} placeholder="bonsai:27b" />
+        </Field>
+      </div>
+      <div className="flex items-center gap-2 mb-2">
+        <button onClick={() => void runBackfill(true)} disabled={backfillBusy !== null || saving}
+          className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
+          style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
+          {backfillBusy === "dry" && <Loader2 size={10} className="animate-spin" />}
+          Dry-run
+        </button>
+        <button onClick={() => void runBackfill(false)} disabled={backfillBusy !== null || saving}
+          className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
+          style={{ border: `1px solid ${MEMORY_ACCENT}44`, color: MEMORY_ACCENT }}>
+          {backfillBusy === "run" && <Loader2 size={10} className="animate-spin" />}
+          Run backfill
+        </button>
+        {backfillRun && (
+          <span className="text-[10.5px]" style={{ color: "var(--fg-dim, #9aa)" }}>
+            running as a module run — progress is in the runs tray
+            <span className="font-mono"> ({backfillRun.runId.slice(0, 8)})</span>
+          </span>
+        )}
+      </div>
+      {backfillErr && (
+        <div className="text-[10.5px] mb-2" style={{ color: "#f87171" }}>error: {backfillErr}</div>
+      )}
+      {backfillDry && (
+        <div className="mb-2">
+          <div className="text-[10.5px] mb-1" style={{ color: "var(--fg-dim, #9aa)" }}>
+            dry-run · {backfillDry.candidates.length} of {backfillDry.remaining} would be derived with <span className="font-mono">{backfillDry.model}</span> · nothing written
+          </div>
+          {backfillDry.candidates.slice(0, 20).map((c) => (
+            <div key={c.uuid} className="py-1" style={{ borderBottom: "1px solid var(--panel-border, #2a2436)" }}>
+              <div className="font-mono text-[9.5px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                {c.uuid.slice(0, 8)} · {c.validAt.slice(0, 10)} · {c.source} · {c.chars} ch
+              </div>
+              <div className="text-[10.5px] truncate" style={{ color: "var(--fg, #e8e2f0)" }}>{c.preview}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mb-3" />
 
       {/* ── System ── */}

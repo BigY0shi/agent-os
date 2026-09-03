@@ -34,6 +34,73 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S5: legacy memory backfill, built; the 20-episode sample waits for the owner
+
+Harness session (feat-s5-legacy-memory-backfill), v2.24.0. HANDOFF item 2: the A9
+importers wrote legacy episodes in raw mode (verbatim text, an embedding, `legacy` labels,
+no LLM calls), so every one of them sits with no aspect. Re-running the import in full
+mode cannot repair that: `content_hash + source` dedup in `migrate.ts` rejects the rows as
+already present. The agreed plan was a routine over the EXISTING rows, on the owner's local
+models, ~20 episodes first so he sees real rows before paying for the full set.
+
+**Pinning the model without touching settings.** Every derivation call goes through
+`resolve()` in `lib/v2/memory/llm.ts`, which reads provider and model from
+`settings.memory`. The backfill must use `bonsai:27b` on the LOCAL Ollama while the owner's
+settings keep naming Ollama Cloud for live ingest, and the pipeline fans out through
+`Promise.all` in `comprehendAndClassify`, so a parameter would have had to be threaded
+through eight functions. The seam is an `AsyncLocalStorage` override, `withMemoryModel()`:
+the whole `addEpisode()` call tree sees `{ provider: "ollama-local", model }`, a concurrent
+queue drain still resolves from settings, and the run's STOP signal rides in the same store
+so `signalFor()` combines it with the per-call timeout and every fetch dies on STOP. The
+rejected alternative was a module-level mutable override; it would have leaked into any
+ingest that overlapped the run.
+
+**"Lacking derivation" is a graph fact, not a flag.** Statements hang off an episode by
+`provenance` edges and voice facts carry `episode_uuids`; an episode with neither was
+never derived. Migration 4 (`memory_backfill_log`, memory band) records every attempt with
+its outcome: `derived`, `nothing` (the pipeline's NOTHING_TO_REMEMBER, row kept verbatim,
+same as live ingest) or `failed` (with the error). Derived and nothing rows are never
+offered again; a failed one is, so a model hiccup costs one retry, not a lost episode.
+Dedup is untouched by construction: `addEpisode()` gets the episode's own uuid, the re-save
+goes through `ON CONFLICT(uuid)` and copies `content_hash` back; `original_content` is
+write-once. The smoke asserts the hash, the original text and the episode count before and
+after.
+
+**Fail loudly, in order.** `checkLocalOllama()` hits `GET /api/tags` on the local host
+before any episode is touched: Ollama unreachable names the host and says there is no
+fallback; the chat model missing names it, lists what is pulled and prints the
+`ollama pull` line; the embed model missing (when `embedProvider` is local) does the same
+for `nomic-embed-text`. Mid-run, one episode failing is recorded and the run continues;
+every episode failing throws, so the tray shows an error and never a quiet "done".
+
+**Three doors, one routine.** `lib/v2/memory/backfill.ts` (`listUndrivedEpisodes`,
+`countUndrivedEpisodes`, `backfillEpisodes`, `listBackfillLog`);
+`scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--dry-run] [--json]` prints
+each episode's aspects and up to five derived facts; `POST /api/v2/memory/backfill` answers
+a dry run inline and otherwise registers a module run (module `memory`, progress per
+episode, 409 while one is in flight), `GET` reports how many legacy rows still lack
+derivation; the Memory gear gained a "Legacy backfill" section (limit, local model, Dry-run,
+Run backfill) that persists both knobs to `settings.memory.backfillLimit/backfillModel`
+before starting (rule 16). RunsTray names the module.
+
+**Evidence.** `smoke-memory-backfill.mjs`, 62 checks, offline behind a fake Ollama on
+`globalThis.fetch` with settings deliberately set to `ollama-cloud` + `glm-5.2:cloud`:
+every chat call went to `127.0.0.1:11434` with `bonsai:27b`; 6 to 8 chat calls per episode;
+Identity + Event statements and a Preference voice fact land on the row; the CLI dry run is
+exercised as a child process against the same temp DB. Gate 77/77, exit 0.
+
+**What I got wrong.** The first per-episode-failure test poisoned its healthy neighbour:
+both fixtures shared a session, and `getSessionContext()` put the failing episode's text in
+the healthy one's normalize prompt, so the mock choked on both. Real consequence worth
+knowing: a backfill run feeds each episode the last five of its session as context, legacy
+sessions are per-day buckets, so derivation quality on day N depends on days already run.
+Oldest-first ordering is deliberate for that reason.
+
+**Not done here.** The real 20-episode sample. The owner asked to see the rows before
+deciding on the full set, and the routine does 6 to 8 local model calls per episode on a
+27B model, so the command is in agent-progress.md for him to run, not run for him.
+
+---
 ## 2026-09-02 - S4 (e): "More info needed" fires a research pass and reports on the card
 
 Harness session (feat-s4-deal-desk-control), part six of six. The owner's words: today it

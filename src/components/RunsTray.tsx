@@ -43,6 +43,7 @@ const MODULE_NAME: Record<string, string> = {
   agents: "Agents",
   loop: "Loop",
   pipeline: "Pipeline",
+  memory: "Memory",
 };
 
 function elapsed(from: number, to?: number): string {

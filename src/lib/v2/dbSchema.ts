@@ -896,6 +896,27 @@ ALTER TABLE newsletter_emails ADD COLUMN source TEXT NOT NULL DEFAULT 'gmail';
 CREATE INDEX IF NOT EXISTS idx_nl_emails_source ON newsletter_emails(source, received_at DESC);
 `;
 
+// S5 (2026-09-02) legacy memory backfill: one row per episode per backfill run.
+// An episode with a derived/nothing row is never picked again, which is what
+// makes the run idempotent without touching content_hash dedup. Memory band
+// (1-3 foundations), next free number.
+const M004_MEMORY_BACKFILL_LOG = `
+CREATE TABLE IF NOT EXISTS memory_backfill_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id        TEXT NOT NULL,
+  episode_uuid  TEXT NOT NULL,
+  model         TEXT NOT NULL,
+  outcome       TEXT NOT NULL CHECK (outcome IN ('derived','nothing','failed')),
+  statements    INTEGER NOT NULL DEFAULT 0,
+  voice_aspects INTEGER NOT NULL DEFAULT 0,
+  error         TEXT,
+  ms            INTEGER,
+  at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mbl_episode ON memory_backfill_log(episode_uuid, at DESC);
+CREATE INDEX IF NOT EXISTS idx_mbl_run ON memory_backfill_log(run_id, id);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -931,6 +952,13 @@ export const MIGRATIONS: Migration[] = [
       // a crash mid-ingest can be recovered (stale PROCESSING → PENDING) and
       // claims can be made atomically (UPDATE ... WHERE status='PENDING').
       db.exec("ALTER TABLE ingestion_queue ADD COLUMN processing_started_at TEXT");
+    },
+  },
+  {
+    version: 4,
+    name: "memory_backfill_log",
+    up: (db) => {
+      db.exec(M004_MEMORY_BACKFILL_LOG);
     },
   },
   {

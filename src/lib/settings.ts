@@ -243,6 +243,10 @@ export interface Settings {
     personaAutoUpdate?: boolean;
     tokenBudget?: number;
     labelRouterThreshold?: number;
+    // S5 legacy backfill (gear): how many undrived legacy episodes one run
+    // takes, and which LOCAL Ollama chat model derives them. Never a hosted model.
+    backfillLimit?: number;
+    backfillModel?: string;
   };
   capability?: {
     folders?: { path: string; scopes: ("files" | "coding" | "exec")[] }[];
@@ -463,6 +467,8 @@ export const DEFAULT_SETTINGS: Settings = {
     personaAutoUpdate: true,
     tokenBudget: 10000,
     labelRouterThreshold: 0.7,
+    backfillLimit: 20,
+    backfillModel: "bonsai:27b",
   },
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},

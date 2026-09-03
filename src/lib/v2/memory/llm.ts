@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { readSettings } from "../../settings";
 import { cliComplete, MINIMAX_CHAT } from "../../loopEngine";
@@ -35,7 +36,29 @@ interface Resolved {
   model: string;
 }
 
+/**
+ * S5 (legacy backfill): a caller may pin provider + model for the duration of
+ * one async call tree — the whole addEpisode() pipeline, Promise.all branches
+ * included — without touching settings. The override is async-local, so a
+ * concurrent ingest on the queue still resolves from settings. An optional
+ * signal rides along so STOP reaches every fetch the tree makes (modelCall
+ * opts.signal still wins when a caller passes one explicitly).
+ */
+export interface MemoryModelOverride {
+  provider: Resolved["provider"];
+  model: string;
+  signal?: AbortSignal;
+}
+
+const OVERRIDE = new AsyncLocalStorage<MemoryModelOverride>();
+
+export function withMemoryModel<T>(override: MemoryModelOverride, fn: () => Promise<T>): Promise<T> {
+  return OVERRIDE.run(override, fn);
+}
+
 function resolve(complexity: Complexity): Resolved {
+  const pinned = OVERRIDE.getStore();
+  if (pinned) return { provider: pinned.provider, model: pinned.model };
   const mem = readSettings().memory ?? {};
   const provider = mem.provider ?? "ollama-cloud";
   const model =
@@ -100,7 +123,10 @@ export function parseStructured<T>(raw: string, schema: z.ZodType<T>): T {
 // ---------------------------------------------------------------------------
 
 function signalFor(opts?: ModelCallOpts): AbortSignal {
-  return opts?.signal ?? AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  if (opts?.signal) return opts.signal;
+  const pinned = OVERRIDE.getStore()?.signal;
+  const timeout = AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  return pinned ? AbortSignal.any([pinned, timeout]) : timeout;
 }
 
 async function ollamaChat(

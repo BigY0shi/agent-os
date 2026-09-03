@@ -38,7 +38,8 @@ is one line; the journal carries the rest.
   scrape time, and show the age on the card. Ride-along from an earlier session:
   a visible Reload spinner. (The "how we'd do it" line already exists.) Deal Desk is also
   the reference for S3, so (b) and (c) shape the drawer pattern.
-- [ ] **S5. Legacy memory backfill, 20-episode sample.** Imported episodes carry no
+- [x] **S5. Legacy memory backfill, 20-episode sample.** Built 2026-09-02 (see Done); the
+  20-episode sample is pending the owner (command in agent-progress.md). Imported episodes carry no
   aspect (Identity/Event/Relationship). Re-import cannot fix it (content-hash
   dedup). New routine reads existing rows and runs derivation over them using the
   local models Yoshi already has (`bonsai 27b`, downloading 2026-09-02, and `nomic-embed-text`). Show him real
@@ -85,6 +86,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-02 · v2.24.0 · S5 Legacy memory backfill, built, sample pending owner. `lib/v2/memory/backfill.ts`: `listUndrivedEpisodes` (legacy rows with no provenance edge and no voice fact, oldest first), `backfillEpisodes({limit, model, dryRun})` runs the normal `addEpisode()` pipeline over the EXISTING rows with the chat model pinned to the local Ollama through the new `withMemoryModel()` async-local override in `llm.ts` (settings untouched, STOP reaches every fetch), embeddings on `nomic-embed-text`; migration 4 `memory_backfill_log` records derived / nothing / failed per episode so a run is idempotent without touching content_hash dedup. Ollama down or the model not pulled stops the run with a named error and no fallback. Three doors: `scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--dry-run]`, `POST /api/v2/memory/backfill` as a module run (module `memory`, progress in the tray), and a "Legacy backfill" section in the Memory gear (limit, model, Dry-run, Run backfill; knobs persist to `settings.memory.backfillLimit/backfillModel`). smoke-memory-backfill, 62 checks, fake Ollama behind fetch. The real 20-episode sample is the owner's to run and look at.
 
 - 2026-09-02 · v2.18.0 to v2.23.0 · S4 Deal Desk, more control from the chair, six commits in the owner's order. (c) `deriveVerdict()` in `lib/dealDeskControl.ts`: the evaluator's own pass/pursue sentence is the first line of the summary box and the card edge colour. (b) `setStatusBulk` + `action: "bulkStatus"`: tick boxes and a deny cross on every card face, "Deny N selected", Parked/Denied as a full-width lane under the board with two drop targets; Reload says "Reloading…". (f) `settings.deals.maxAgeDays` (gear, default 5): `pruneLeadsFileByAge` after scoring and after a feed pull, dropped rows kept as `<name>.dropped-<date>.json`, undated kept, age on the card with OLD past the gate. (d) `lib/dealEnrich.ts` + `POST /api/deals/enrichment`: a login wall stops the run, flags the unreached cards `needs login`, banner with "Open Upwork login" / "Update cookie", a saved cookie clears the flags (the old `/enrich` route was in the owner's working set; untouched). (a) `parseIntakeUrls` + `scripts/deals/intake-scrape.mjs` + `lib/dealIntake.ts` + `POST /api/deals/intake`: pasted Upwork URLs go dataset → `score_board.mjs` → `pitch.mjs` → New, as a module run. (e) `lib/dealResearch.ts` + `POST /api/deals/research`: "Need more info" ON starts enrich + brief + open questions as a module run, "Get more info" in the drawer, state on the card. smoke-deal-desk-control, 75 checks, every browser and model call a seam. Nothing seen in a browser yet.
 

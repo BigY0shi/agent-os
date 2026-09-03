@@ -151,8 +151,8 @@
         "smoke-memory-backfill.mjs passes offline with a mocked model; ./test.sh exits 0.",
         "agent-progress.md carries an AWAITING USER VERIFY checklist with the exact 20-episode command for the owner; DEV-JOURNAL.md entry; version bumped (minor); ROADMAP.md S5 marked 'built, sample pending owner'."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "2026-09-02 v2.24.0: backfill.ts (listUndrivedEpisodes/countUndrivedEpisodes/backfillEpisodes/listBackfillLog) + scripts/v2/memory-backfill.mjs (--limit --model --dry-run --json) + POST/GET /api/v2/memory/backfill as a module run (module memory, ctx.progress, 409 while running) + Memory gear 'Legacy backfill' (limit, model, Dry-run, Run backfill; persists settings.memory.backfillLimit/backfillModel). llm.ts withMemoryModel() AsyncLocalStorage override pins ollama-local + model for the whole addEpisode tree and threads STOP into every fetch. Migration 4 memory_backfill_log (derived/nothing/failed) makes runs idempotent; content_hash + original_content asserted untouched. checkLocalOllama(): Ollama down / chat model missing / embed model missing = named error, no fallback. smoke-memory-backfill.mjs 62 checks offline (fake Ollama on fetch, settings set to ollama-cloud to prove the pin, CLI dry run as a child process). Gate 77/77 exit 0. Real 20-episode sample NOT run per the contract; AWAITING USER VERIFY checklist with the exact commands in agent-progress.md. ROADMAP S5 ticked 'built, sample pending owner'."
     },
     {
       "id": "feat-s7-webmcp-wizard",

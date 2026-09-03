@@ -1,0 +1,344 @@
+// S5 smoke: legacy memory backfill, fully offline.
+//
+// Run: npx tsx scripts/v2/smoke-memory-backfill.mjs
+//
+// Rule 19: AGENTIC_OS_DB, AGENTIC_OS_SETTINGS and AGENTIC_OS_RUNS_DIR are
+// redirected BEFORE any import; memory.ingestEnabled is false so no queue
+// drains; settings deliberately name a HOSTED provider (ollama-cloud +
+// glm-5.2:cloud) so the test proves the backfill pins the local model anyway.
+// The model is a fake Ollama behind globalThis.fetch: /api/tags, /api/chat,
+// /api/embed. Nothing on the network.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-backfill-"));
+const dbFile = path.join(dir, "agentos.db");
+process.env.AGENTIC_OS_DB = dbFile;
+process.env.AGENTIC_OS_SETTINGS = path.join(dir, "settings.json");
+process.env.AGENTIC_OS_RUNS_DIR = dir;
+process.env.OLLAMA_URL = "http://127.0.0.1:11434";
+delete process.env.OLLAMA_API_KEY;
+fs.writeFileSync(
+  process.env.AGENTIC_OS_SETTINGS,
+  JSON.stringify({
+    memory: {
+      ingestEnabled: false,
+      provider: "ollama-cloud",
+      modelLow: "kimi-k2.6:cloud",
+      modelMedium: "glm-5.2:cloud",
+      embedProvider: "ollama-local",
+      embedModel: "nomic-embed-text",
+      backfillLimit: 20,
+      backfillModel: "bonsai:27b",
+    },
+  }),
+  "utf8",
+);
+
+let failures = 0;
+const check = (name, cond, extra = "") => {
+  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${cond || !extra ? "" : `  [${extra}]`}`);
+  if (!cond) failures++;
+};
+
+// ---- the fake Ollama --------------------------------------------------------
+let tagsMode = "ok"; // ok | down | nomodel | noembed
+const calls = { tags: 0, chat: [], embed: 0 };
+const NOTHING_MARKER = "nothing-worth-keeping";
+const DIM = 768;
+const vec = (seed) => Array.from({ length: DIM }, (_, i) => Math.sin(seed * 7 + i));
+
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init = {}) => {
+  const u = new URL(String(url));
+  if (u.hostname !== "127.0.0.1" || u.port !== "11434") {
+    throw new Error(`smoke: unexpected fetch to ${u.origin}${u.pathname} (only the local Ollama may be called)`);
+  }
+  if (u.pathname === "/api/tags") {
+    calls.tags++;
+    if (tagsMode === "down") throw new TypeError("fetch failed: ECONNREFUSED 127.0.0.1:11434");
+    const models = tagsMode === "nomodel"
+      ? [{ name: "nomic-embed-text:latest" }, { name: "glm-5.2:cloud" }]
+      : tagsMode === "noembed"
+        ? [{ name: "bonsai:27b" }]
+        : [{ name: "bonsai:27b" }, { name: "nomic-embed-text:latest" }];
+    return Response.json({ models });
+  }
+  if (u.pathname === "/api/embed") {
+    calls.embed++;
+    const body = JSON.parse(init.body);
+    const input = Array.isArray(body.input) ? body.input : [body.input];
+    return Response.json({ embeddings: input.map((t) => vec(t.length)) });
+  }
+  if (u.pathname === "/api/chat") {
+    const body = JSON.parse(init.body);
+    calls.chat.push({ model: body.model, host: u.origin, format: body.format ? Object.keys(body.format.properties ?? {}) : null, signal: init.signal });
+    const text = body.messages.map((m) => m.content).join("\n");
+    const keys = body.format ? Object.keys(body.format.properties ?? {}) : [];
+    let content;
+    if (keys.length === 0) {
+      // normalize (text call)
+      content = text.includes(NOTHING_MARKER)
+        ? "NOTHING_TO_REMEMBER"
+        : `<output>NORMALIZED: ${/Yoshi [^\n]*/.exec(text)?.[0] ?? "Yoshi did something."}</output>`;
+    } else if (keys.includes("entities")) {
+      content = JSON.stringify({
+        entities: [{ name: "Yoshi", type: "Person", attributes: null }, { name: "Proxmox cluster", type: "Product", attributes: null }],
+        graph_facts: [
+          { source: "Yoshi", predicate: "runs", target: "Proxmox cluster", fact: "Yoshi runs a Proxmox cluster at home", event_date: null },
+          { source: "Yoshi", predicate: "shipped", target: "Voicebox", fact: "Yoshi shipped Voicebox on 2026-09-02", event_date: "2026-09-02" },
+        ],
+      });
+    } else if (keys.includes("graph_facts")) {
+      content = JSON.stringify({ graph_facts: [
+        { source: "Yoshi", predicate: "runs", target: "Proxmox cluster", fact: "Yoshi runs a Proxmox cluster at home", event_date: null },
+        { source: "Yoshi", predicate: "shipped", target: "Voicebox", fact: "Yoshi shipped Voicebox on 2026-09-02", event_date: "2026-09-02" },
+      ] });
+    } else if (keys.includes("voice_facts")) {
+      content = JSON.stringify({ voice_facts: [{ fact: "Yoshi prefers Opera over Chrome" }] });
+    } else if (keys.includes("facts")) {
+      content = JSON.stringify({ facts: [
+        { source: "Yoshi", predicate: "runs", target: "Proxmox cluster", fact: "Yoshi runs a Proxmox cluster at home", aspect: "Identity", event_date: null },
+        { source: "Yoshi", predicate: "shipped", target: "Voicebox", fact: "Yoshi shipped Voicebox on 2026-09-02", aspect: "Event", event_date: "2026-09-02" },
+      ] });
+    } else if (keys.includes("aspects")) {
+      content = JSON.stringify({ aspects: [{ fact: "Yoshi prefers Opera over Chrome", aspect: "Preference" }] });
+    } else {
+      throw new Error(`smoke: unrecognised structured call with keys ${keys.join(",")}`);
+    }
+    return Response.json({ message: { role: "assistant", content } });
+  }
+  throw new Error(`smoke: unexpected path ${u.pathname}`);
+};
+
+const { ensureDb, getDb, __closeForTests } = await import("../../src/lib/v2/db.ts");
+const graph = await import("../../src/lib/v2/memory/graph.ts");
+const { contentHash } = await import("../../src/lib/v2/memory/chunker.ts");
+const B = await import("../../src/lib/v2/memory/backfill.ts");
+
+const cleanup = () => {
+  globalThis.fetch = realFetch;
+  try { __closeForTests(); } catch {}
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+};
+const finish = () => {
+  cleanup();
+  console.log(failures === 0 ? "\nsmoke-memory-backfill: ALL PASS" : `\nsmoke-memory-backfill: ${failures} FAILURES`);
+  process.exit(failures === 0 ? 0 : 1);
+};
+
+ensureDb();
+
+// ---- A. fixture: 5 legacy rows the way A9 raw mode writes them --------------
+console.log("-- A: fixture --");
+const legacyTexts = [
+  "2026-07-14 Yoshi runs a Proxmox cluster at home and self-hosts umbrelOS on LXCs.",
+  "2026-07-20 Yoshi shipped Voicebox as the voice engine and prefers Opera over Chrome.",
+  "2026-07-22 Yoshi audited Agent OS with a council and picked Deal Flow first.",
+  `2026-07-25 testing testing ${NOTHING_MARKER} reply with exactly PONG`,
+  "2026-07-28 Yoshi corrected the parallelism assumption on the .99 homelab box.",
+];
+const legacy = legacyTexts.map((text, i) => {
+  const uuid = graph.saveEpisode({
+    content: text,
+    originalContent: text,
+    metadata: { originFile: `recent-2026-07-${14 + i}.md` },
+    source: i % 2 === 0 ? "migration:remember" : "migration:jarvis",
+    sessionId: `remember-2026-07-${14 + i}`,
+    contentHash: contentHash(text),
+    validAt: `2026-07-${String(14 + i).padStart(2, "0")}T12:00:00.000Z`,
+  });
+  return { uuid, text, hash: contentHash(text) };
+});
+// a non-legacy episode with no derivation: must NOT be a candidate
+const liveUuid = graph.saveEpisode({
+  content: "a live V2 episode that is simply queued, not legacy",
+  originalContent: "a live V2 episode that is simply queued, not legacy",
+  source: "jarvis",
+  sessionId: "live-1",
+  validAt: "2026-09-01T00:00:00.000Z",
+});
+// a legacy episode that already HAS a provenance edge: must NOT be a candidate
+const derivedUuid = graph.saveEpisode({
+  content: "2026-06-01 already derived legacy row",
+  originalContent: "2026-06-01 already derived legacy row",
+  source: "migration:remember",
+  sessionId: "remember-2026-06-01",
+  contentHash: contentHash("2026-06-01 already derived legacy row"),
+  validAt: "2026-06-01T00:00:00.000Z",
+});
+const subj = graph.saveEntity({ name: "Yoshi", type: "Person" });
+const pred = graph.saveEntity({ name: "uses", type: "Predicate" });
+const obj = graph.saveEntity({ name: "Opera", type: "Product" });
+graph.saveTriple({ statement: { fact: "Yoshi uses Opera", aspect: "Preference", validAt: "2026-06-01T00:00:00.000Z" }, subjectUuid: subj, predicateUuid: pred, objectUuid: obj, episodeUuid: derivedUuid });
+
+const episodesBefore = getDb().prepare("SELECT COUNT(*) AS c FROM episodes").get().c;
+check("fixture: 7 episodes in the temp DB", episodesBefore === 7, String(episodesBefore));
+check("migration 4 created memory_backfill_log", !!getDb().prepare("SELECT name FROM sqlite_master WHERE name = 'memory_backfill_log'").get());
+
+// ---- B. listing ---------------------------------------------------------------
+console.log("-- B: listUndrivedEpisodes --");
+const all = B.listUndrivedEpisodes(100);
+check("5 legacy undrived candidates (live + already-derived rows excluded)", all.length === 5, String(all.length));
+check("oldest first", all[0].uuid === legacy[0].uuid && all[4].uuid === legacy[4].uuid);
+check("excludes the non-legacy episode", !all.some((c) => c.uuid === liveUuid));
+check("excludes the legacy row with a provenance edge", !all.some((c) => c.uuid === derivedUuid));
+check("limit respected", B.listUndrivedEpisodes(2).length === 2);
+check("countUndrivedEpisodes = 5", B.countUndrivedEpisodes() === 5);
+check("candidate carries preview + chars + source", all[0].preview.startsWith("2026-07-14 Yoshi") && all[0].chars === legacyTexts[0].length && all[0].source === "migration:remember");
+check("ollamaHasModel: exact, :latest both ways", B.ollamaHasModel(["bonsai:27b", "nomic-embed-text:latest"], "bonsai:27b") && B.ollamaHasModel(["nomic-embed-text:latest"], "nomic-embed-text") && B.ollamaHasModel(["bonsai"], "bonsai:latest") && !B.ollamaHasModel(["bonsai:27b"], "bonsai:8b"));
+
+// ---- C. dry run writes nothing, calls nothing ----------------------------------
+console.log("-- C: dry run --");
+const dryLog = [];
+const dry = await B.backfillEpisodes({ limit: 3, model: "bonsai:27b", dryRun: true, log: (t) => dryLog.push(t) });
+check("dry run lists 3 candidates of 5 remaining", dry.dryRun === true && dry.candidates.length === 3 && dry.remaining === 5);
+check("dry run makes no Ollama call", calls.tags === 0 && calls.chat.length === 0 && calls.embed === 0);
+check("dry run writes no log row", getDb().prepare("SELECT COUNT(*) AS c FROM memory_backfill_log").get().c === 0);
+check("dry run writes no statements", getDb().prepare("SELECT COUNT(*) AS c FROM edges WHERE type = 'provenance'").get().c === 1);
+check("dry run says so in the log", dryLog.some((t) => /dry run: 3 of 5/.test(t) && /nothing written/.test(t)));
+
+// ---- D. Ollama absent / model absent: loud, no fallback ------------------------
+console.log("-- D: fail loudly --");
+tagsMode = "down";
+let err = null;
+try { await B.backfillEpisodes({ limit: 3, model: "bonsai:27b" }); } catch (e) { err = e; }
+check("Ollama down -> error names the host and says no fallback", !!err && /not reachable at http:\/\/127\.0\.0\.1:11434/.test(err.message) && /never falls back/.test(err.message), err?.message);
+check("Ollama down -> no chat call, no write", calls.chat.length === 0 && getDb().prepare("SELECT COUNT(*) AS c FROM memory_backfill_log").get().c === 0);
+
+tagsMode = "nomodel";
+err = null;
+try { await B.backfillEpisodes({ limit: 3, model: "bonsai:27b" }); } catch (e) { err = e; }
+check("model not pulled -> error names the model, lists pulled, gives the pull command", !!err && /'bonsai:27b' is not pulled/.test(err.message) && /Pulled: nomic-embed-text:latest, glm-5.2:cloud/.test(err.message) && /ollama pull bonsai:27b/.test(err.message) && /No fallback/.test(err.message), err?.message);
+check("model not pulled -> no chat call", calls.chat.length === 0);
+
+tagsMode = "noembed";
+err = null;
+try { await B.backfillEpisodes({ limit: 3, model: "bonsai:27b" }); } catch (e) { err = e; }
+check("embed model not pulled -> error names nomic-embed-text", !!err && /'nomic-embed-text'/.test(err.message) && /ollama pull nomic-embed-text/.test(err.message), err?.message);
+
+const tagsBefore = calls.tags;
+err = null;
+try { await B.backfillEpisodes({ limit: 3, model: "   " }); } catch (e) { err = e; }
+check("empty model -> error before any call", !!err && /no chat model/.test(err.message) && calls.tags === tagsBefore, err?.message);
+tagsMode = "ok";
+
+// ---- E. STOP before the first episode ------------------------------------------
+console.log("-- E: STOP --");
+const ac = new AbortController();
+ac.abort();
+err = null;
+try { await B.backfillEpisodes({ limit: 3, model: "bonsai:27b", signal: ac.signal }); } catch (e) { err = e; }
+check("aborted signal -> AbortError, nothing derived", !!err && err.name === "AbortError" && getDb().prepare("SELECT COUNT(*) AS c FROM memory_backfill_log").get().c === 0, err?.name);
+calls.chat.length = 0; calls.embed = 0;
+
+// ---- F. the real run: 3 of 5, local model pinned, dedup untouched ---------------
+console.log("-- F: real run --");
+const runLog = [];
+const prog = [];
+const run = await B.backfillEpisodes({ limit: 3, model: "bonsai:27b", runId: "run-1", log: (t) => runLog.push(t), progress: (n, total) => prog.push([n, total]) });
+check("3 results, oldest 3 candidates", run.results.length === 3 && run.results.map((r) => r.uuid).join() === legacy.slice(0, 3).map((l) => l.uuid).join());
+check("all 3 derived", run.derived === 3 && run.nothing === 0 && run.failed === 0);
+check("every chat call went to the LOCAL host with bonsai:27b (settings say ollama-cloud/glm)", calls.chat.length > 0 && calls.chat.every((c) => c.host === "http://127.0.0.1:11434" && c.model === "bonsai:27b"), JSON.stringify(calls.chat.map((c) => c.model + "@" + c.host).slice(0, 3)));
+check("6-8 chat calls per episode", calls.chat.length >= 18 && calls.chat.length <= 24, String(calls.chat.length));
+check("embeddings requested (episode + facts + entities + voice)", calls.embed >= 3, String(calls.embed));
+check("progress reported 0..3 of 3", prog[0]?.[0] === 0 && prog[0]?.[1] === 3 && prog.at(-1)?.[0] === 3);
+
+const first = run.results[0];
+check("statement aspects landed: Identity 1, Event 1", first.statements === 2 && first.statementAspects.Identity === 1 && first.statementAspects.Event === 1, JSON.stringify(first.statementAspects));
+check("voice aspect landed: Preference 1", first.voiceAspects === 1 && first.voiceAspectKinds.Preference === 1, JSON.stringify(first.voiceAspectKinds));
+check("sample facts name the aspect", first.sampleFacts.some((f) => f.startsWith("[Identity] ")) && first.sampleFacts.some((f) => f.startsWith("[voice:Preference] ")));
+const provRows = getDb().prepare("SELECT COUNT(*) AS c FROM edges WHERE type = 'provenance' AND from_uuid = ?").get(first.uuid).c;
+check("provenance edges exist in the graph for the derived row", provRows === 2, String(provRows));
+const stAspects = getDb().prepare("SELECT s.aspect FROM edges e JOIN statements s ON s.uuid = e.to_uuid WHERE e.type = 'provenance' AND e.from_uuid = ? ORDER BY s.aspect").all(first.uuid).map((r) => r.aspect);
+check("statements rows carry Identity + Event", stAspects.join() === "Event,Identity", stAspects.join());
+
+const rowAfter = getDb().prepare("SELECT content, original_content, content_hash, source FROM episodes WHERE uuid = ?").get(first.uuid);
+check("content_hash untouched", rowAfter.content_hash === legacy[0].hash);
+check("original_content untouched (write-once)", rowAfter.original_content === legacy[0].text);
+check("content now the normalized text", rowAfter.content.startsWith("NORMALIZED: "), rowAfter.content.slice(0, 40));
+check("source still migration:remember", rowAfter.source === "migration:remember");
+check("no re-import: still 7 episodes", getDb().prepare("SELECT COUNT(*) AS c FROM episodes").get().c === 7);
+
+const logRows = B.listBackfillLog(10);
+check("3 log rows for run-1, outcome derived, model recorded", logRows.length === 3 && logRows.every((r) => r.runId === "run-1" && r.outcome === "derived" && r.model === "bonsai:27b" && r.statements === 2 && r.voiceAspects === 1));
+check("derived rows leave the candidate list; 2 remain", B.countUndrivedEpisodes() === 2 && B.listUndrivedEpisodes(10).map((c) => c.uuid).join() === legacy.slice(3).map((l) => l.uuid).join());
+check("log lines say what landed", runLog.some((t) => /derived: 2 facts \(Identity 1, Event 1\), 1 voice \(Preference 1\)/.test(t)) && runLog.some((t) => /^done: 3 derived, 0 nothing to remember, 0 failed; 2 legacy episodes still undrived$/.test(t)), runLog.join(" | "));
+check("preflight logged the local host and both models", runLog.some((t) => /Ollama at http:\/\/127\.0\.0\.1:11434: bonsai:27b pulled, nomic-embed-text pulled/.test(t)));
+
+// ---- G. NOTHING_TO_REMEMBER is an outcome, and the run is idempotent -------------
+console.log("-- G: nothing + idempotent --");
+const run2 = await B.backfillEpisodes({ limit: 10, model: "bonsai:27b", runId: "run-2" });
+check("second run takes only the 2 remaining", run2.results.length === 2 && run2.remaining === 2);
+const nothingRes = run2.results.find((r) => r.uuid === legacy[3].uuid);
+check("NOTHING_TO_REMEMBER -> outcome nothing, no facts", nothingRes?.outcome === "nothing" && nothingRes.statements === 0 && nothingRes.voiceAspects === 0);
+check("the other -> derived", run2.results.find((r) => r.uuid === legacy[4].uuid)?.outcome === "derived" && run2.derived === 1 && run2.nothing === 1);
+const nothingRow = getDb().prepare("SELECT content, content_hash FROM episodes WHERE uuid = ?").get(legacy[3].uuid);
+check("nothing row kept verbatim with its hash", nothingRow.content === legacy[3].text && nothingRow.content_hash === legacy[3].hash);
+check("nothing to remember is not offered again: 0 undrived", B.countUndrivedEpisodes() === 0);
+const run3 = await B.backfillEpisodes({ limit: 10, model: "bonsai:27b", runId: "run-3" });
+check("third run: no candidates, no work, no error", run3.results.length === 0 && run3.remaining === 0);
+check("log has 5 rows total (3 + 2), none for run-3", getDb().prepare("SELECT COUNT(*) AS c FROM memory_backfill_log").get().c === 5 && !B.listBackfillLog(10).some((r) => r.runId === "run-3"));
+
+// ---- H. a failing episode is recorded and the run carries on --------------------
+console.log("-- H: per-episode failure --");
+const failText = "2026-08-01 Yoshi episode that the model will choke on";
+const failUuid = graph.saveEpisode({ content: failText, originalContent: failText, source: "migration:agents", sessionId: "agent-x", contentHash: contentHash(failText), validAt: "2026-08-01T00:00:00.000Z" });
+const okText = "2026-08-02 Yoshi episode that derives fine";
+const okUuid = graph.saveEpisode({ content: okText, originalContent: okText, source: "migration:agents", sessionId: "agent-y", contentHash: contentHash(okText), validAt: "2026-08-02T00:00:00.000Z" });
+const origFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  if (String(url).endsWith("/api/chat") && JSON.parse(init.body).messages.some((m) => m.content.includes("choke on"))) {
+    return new Response("model exploded", { status: 500 });
+  }
+  return origFetch(url, init);
+};
+const run4 = await B.backfillEpisodes({ limit: 10, model: "bonsai:27b", runId: "run-4" });
+globalThis.fetch = origFetch;
+const failRes = run4.results.find((r) => r.uuid === failUuid);
+check("failing episode recorded as failed with the model error", failRes?.outcome === "failed" && /ollama-local chat failed \(500\)/.test(failRes.error ?? ""), failRes?.error);
+check("the run carried on and derived the next one", run4.results.find((r) => r.uuid === okUuid)?.outcome === "derived" && run4.failed === 1 && run4.derived === 1);
+check("a failed episode stays eligible for the next run", B.listUndrivedEpisodes(10).map((c) => c.uuid).join() === failUuid);
+globalThis.fetch = async (url, init) => {
+  if (String(url).endsWith("/api/chat")) return new Response("down", { status: 503 });
+  return origFetch(url, init);
+};
+err = null;
+try { await B.backfillEpisodes({ limit: 10, model: "bonsai:27b", runId: "run-5" }); } catch (e) { err = e; }
+globalThis.fetch = origFetch;
+check("every episode failing -> the run throws (never a quiet done)", !!err && /every one of 1 episodes failed/.test(err.message), err?.message);
+
+// ---- I. the CLI, dry run, as a child process against the same temp DB -----------
+console.log("-- I: CLI --");
+const tsxCli = path.join(root, "node_modules", "tsx", "dist", "cli.mjs");
+check("tsx cli present for the child run", fs.existsSync(tsxCli));
+const cli = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--dry-run", "--limit", "1", "--json"], {
+  cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 120_000,
+});
+let cliJson = null;
+try { cliJson = JSON.parse(cli.stdout.slice(cli.stdout.indexOf("{"))); } catch {}
+check("CLI --dry-run --json exits 0 with the candidate", cli.status === 0 && cliJson?.dryRun === true && cliJson.candidates?.length === 1 && cliJson.candidates[0].uuid === failUuid && cliJson.model === "bonsai:27b", `status=${cli.status} stderr=${cli.stderr.slice(0, 200)}`);
+const badCli = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--limit", "zero"], { cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 60_000 });
+check("CLI rejects a bad --limit with exit 2", badCli.status === 2 && /--limit must be a positive integer/.test(badCli.stderr), `status=${badCli.status}`);
+
+// ---- J. the route + the gear + the tray, statically ------------------------------
+console.log("-- J: wiring --");
+const routeSrc = fs.readFileSync(path.join(root, "src", "app", "api", "v2", "memory", "backfill", "route.ts"), "utf8");
+check("route registers a module run on module 'memory' with progress", /startModuleRun\(/.test(routeSrc) && /module: "memory"/.test(routeSrc) && /progress: ctx\.progress/.test(routeSrc) && /signal: ctx\.signal/.test(routeSrc));
+check("route: dryRun answers inline, real run returns runId, 409 while running", /dryRun: true/.test(routeSrc) && /started: true, runId: run\.id/.test(routeSrc) && /status: 409/.test(routeSrc));
+check("route defaults come from settings.memory.backfillLimit/backfillModel", /backfillLimit/.test(routeSrc) && /backfillModel/.test(routeSrc));
+const gearSrc = fs.readFileSync(path.join(root, "src", "components", "v2", "memory", "MemorySettings.tsx"), "utf8");
+check("gear: limit + model fields, Dry-run and Run buttons, posts to the route", /backfillLimit/.test(gearSrc) && /backfillModel/.test(gearSrc) && /\/api\/v2\/memory\/backfill/.test(gearSrc) && /Run backfill/.test(gearSrc) && /Dry-run/.test(gearSrc));
+check("gear persists limit + model through settings.memory (rule 16)", /backfillLimit: /.test(gearSrc) && /backfillModel: /.test(gearSrc));
+const traySrc = fs.readFileSync(path.join(root, "src", "components", "RunsTray.tsx"), "utf8");
+check("tray names the memory module", /memory: "Memory"/.test(traySrc));
+const settingsSrc = fs.readFileSync(path.join(root, "src", "lib", "settings.ts"), "utf8");
+check("settings defaults: backfillLimit 20, backfillModel bonsai:27b", /backfillLimit: 20/.test(settingsSrc) && /backfillModel: "bonsai:27b"/.test(settingsSrc));
+const llmSrc = fs.readFileSync(path.join(root, "src", "lib", "v2", "memory", "llm.ts"), "utf8");
+check("llm.ts override is async-local (no global mutable model state)", /AsyncLocalStorage/.test(llmSrc) && /export function withMemoryModel/.test(llmSrc));
+
+finish();

@@ -6,10 +6,32 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
-- (nothing in progress)
+- AWAITING USER VERIFY (S5 legacy memory backfill, v2.24.0): the routine is built and
+  smoke-verified against a fake Ollama; the real ~20-episode sample is the owner's to run
+  and look at (feature contract: "Do NOT run the real 20-episode sample yourself"). Owner
+  checklist, in order, all PowerShell-safe:
+  1. Confirm the models are pulled on the local Ollama: `ollama list` should show
+     `bonsai:27b` (downloading 2026-09-02) and `nomic-embed-text`. If the bonsai tag differs
+     (e.g. `bonsai:latest`), use that exact tag below.
+  2. Dry run, writes nothing, shows which legacy rows a run would touch:
+     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b --dry-run`
+  3. The sample (6 to 8 local model calls per episode, so minutes on a 27B model):
+     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b`
+     It prints each episode's outcome, the aspects that landed (Identity / Event / ...),
+     and up to five derived facts. Or from the app: Memory > gear > "Legacy backfill" >
+     Run backfill (the runs tray carries progress; STOP works). The CLI and the app share
+     the DB, so run one at a time.
+  4. Look at the rows: Memory > Episodes (the derived legacy episodes now carry
+     statements and voice facts) and the log in `GET /api/v2/memory/backfill`.
+  5. Decide the full-set size (ROADMAP Later: "Legacy memory: full backfill size"). A
+     bigger run is the same command with a bigger `--limit` (cap 500 per run); derived
+     rows are never picked again, so runs can be repeated until the count reaches 0.
+  6. Retitle this block (e.g. "S5 sample reviewed") to release the harness; S7 and S9
+     are still `failing` in features.json and the loop will pick them up top-down.
 
 ## Next
-- top-down through features.json (S8, S6, S3, backlog-wrap, S4 done; S5 legacy-memory-backfill is next in file order)
+- S7 webmcp-wizard, then S9 openmontage-module (top-down in features.json). Both wait on
+  the marker above being retitled.
 
 ## Follow-ups seen, not done
 - S4 owner-to-look (needs the rebuilt app): the verdict line + edge colour on cards, the
@@ -70,6 +92,7 @@ DEV-JOURNAL.md (hyphen, not underscore).
   the Artifact is the supervising session's job; leave the HTML at ~/.agentic-os.
 
 ## Log (newest first)
+- 2026-09-02 ~22:00 PDT feat-s5-legacy-memory-backfill PASSING (v2.24.0): lib/v2/memory/backfill.ts + scripts/v2/memory-backfill.mjs + POST/GET /api/v2/memory/backfill (module run, module "memory") + "Legacy backfill" section in the Memory gear; withMemoryModel() async-local override in llm.ts pins ollama-local + the chosen model for the whole addEpisode tree; migration 4 memory_backfill_log; loud errors for Ollama down / model not pulled / embed model not pulled, no fallback. smoke-memory-backfill 62 checks; gate 77/77 exit 0. The real 20-episode sample is NOT run (feature contract); AWAITING USER VERIFY block above pauses the loop for it.
 - 2026-09-02 ~21:30 PDT feat-s4-deal-desk-control PASSING (v2.18.0..v2.23.0, six commits in the owner's order c,b,f,d,a,e): verdict first + edge colour; face deny + bulk deny + Parked/Denied lane under the board; deals.maxAgeDays gate (gear) with dropped-row sidecars; login-wall gate via lib/dealEnrich.ts + /api/deals/enrichment (old /enrich untouched, owner's working set); manual intake via scripts/deals/intake-scrape.mjs + lib/dealIntake.ts + /api/deals/intake; research pass via lib/dealResearch.ts + /api/deals/research. smoke-deal-desk-control 75 checks; gate 76/76 exit 0. Nothing seen in a browser.
 - 2026-09-02 20:03 PDT loop RELAUNCHED (`--max-cycles 8`) after the 18:18 session limit (cycles 6-8 died on 'You've hit your session limit, resets 8pm'); remaining: S4, S5, S7, S9.
 - 2026-09-02 18:35 PDT feat-backlog-wrap-long-routes PASSING (v2.17.1): 8 Deal Desk / Hire Engine long routes register module runs and return runId (deals/enrich skipped as dirty); lib/runRoute.ts shared catch block; briefBatch split plan/run; smoke-module-runs 84; gate 75/75 exit 0.
