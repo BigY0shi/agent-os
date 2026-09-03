@@ -11,6 +11,7 @@
 // pastes themselves into a config field (e.g. an optional Suno third-party key).
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { DEFAULT_HERMES3D } from "./v2/hermes3d/sceneDefaults";
 import path from "node:path";
 import os from "node:os";
 
@@ -380,6 +381,7 @@ export interface Settings {
     shadows?: boolean;
     talkingHoldMs?: number;              // how long "talking" holds after a response (default 4000)
     quality?: "full" | "lite";           // lite: no env lighting, half pixelRatio
+    seatedCount?: number;                // idle bodies on chairs (default 4); 0 = office alone
     clips?: Record<string, string[]>;    // state -> eligible clip slugs
   };
 
@@ -391,7 +393,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // src/lib/v2/hermes3d/clips.ts is the single source of truth, so an untouched
   // install picks up new clips as they are baked instead of freezing the pool
   // into a settings file written months ago.
-  hermes3d: { showFps: false, shadows: false, talkingHoldMs: 4000, quality: "full" },
+  hermes3d: { ...DEFAULT_HERMES3D },
   defaultAgent: "claude",
   loop: {},
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper, ChevronDown, ChevronRight } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper, ChevronDown, ChevronRight, Armchair } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -83,6 +83,9 @@ const NAV: NavItem[] = [
   { href: "/games",    label: "Game Studio", icon: <Gamepad2 size={16} />, accent: "#39ff8e", dim: "rgba(57,255,142,0.16)" },
   { href: "/thumbnails", label: "Thumbnails", icon: <ImageIcon size={16} />, accent: "#fb7185", dim: "rgba(251,113,133,0.16)" },
   { href: "/notebook", label: "Notebook", icon: <NotebookText size={16} />, accent: "#fde047", dim: "rgba(253,224,71,0.16)" },
+  // Hermes 3D (SPEC-F L2): the baked Synty office in three.js. Mounted
+  // 2026-09-02 (S6) - the assets had been baked for two days with no route.
+  { href: "/hermes3d", label: "Hermes 3D", icon: <Armchair size={16} />, accent: "#f472b6", dim: "rgba(244,114,182,0.16)" },
   { href: "/kanban",   label: "Kanban",   icon: <Columns3 size={16} />,  accent: "#14b8a6", dim: "rgba(20,184,166,0.16)" },
   // Tasks V2 (SPEC-B): list + calendar + drag-drop board + agents strip. Lives in
   // "Self" by default (sectionOf fallback) — do NOT add to the section Sets.
@@ -127,7 +130,7 @@ const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynot
 // Corner. Skills and Terminal went to the Toolbox rather than being left as a
 // two-item orphan group - move them if that reads wrong.
 const TOOLBOX_ROUTES = new Set(["/loop", "/seo", "/leads", "/memory", "/content-engine", "/kanban", "/tasks", "/today", "/webmcp", "/skills", "/terminal"]);
-const ARTIST_ROUTES = new Set(["/opendesign", "/video", "/music", "/games", "/thumbnails", "/notebook"]);
+const ARTIST_ROUTES = new Set(["/opendesign", "/video", "/music", "/games", "/thumbnails", "/notebook", "/hermes3d"]);
 function sectionOf(href: string): string {
   if (WORKSPACE_ROUTES.has(href)) return "Workspace";
   if (TOOLBOX_ROUTES.has(href)) return "Agent Toolbox";

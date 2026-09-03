@@ -46,8 +46,8 @@
         "An offline smoke asserts the NAV/Set placement, the pageMeta entry, and that office-seats.json parses to >= 100 anchors when present (skip with a printed reason when the gitignored dir is absent); ./test.sh exits 0.",
         "DEV-JOURNAL.md records what was actually missing and what was mounted; ROADMAP.md S6 ticked; version bumped; roadmap page re-rendered."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "PASSING 2026-09-02 17:30 PDT (v2.16.0). Cause: not a stale build, an unmounted route - public/hermes3d was fully baked 2026-08-31 (office.glb 5.5 MB, hermes-clips.glb 7.7 MB, 18 characters + atlas, office-seats.json 149 anchors) but no page/NAV/component existed; SPEC-F L2 was never started (r3f/drei never installed). Mounted: src/app/hermes3d/page.tsx -> Hermes3DView (client, ssr:false boundary) -> HermesOffice (plain three.js GLTFLoader+OrbitControls; HEAD-probes office.glb before any WebGL and shows MISSING_ASSETS_MESSAGE naming _design/hermes3d/PIPELINE.md; zero-mesh GLB is an error panel; seats idle bodies on pickSeats() chairs with the SEATED idle clips; HUD says bodies are not agents). Sidebar NAV + ARTIST_ROUTES, pageMeta /hermes3d, gear (quality/shadows/showFps/seatedCount) via ConfigMenu, settings.hermes3d spreads DEFAULT_HERMES3D. Evidence: scripts/v2/smoke-hermes3d-ui.mjs 36 checks ALL PASS (section E parses the real office-seats.json: >=100 anchors, 4 deterministic chairs; SKIPs with a printed reason when the dir is absent); ./test.sh exit 0, tsc clean, 74/74 smokes (.harness-logs/gate-s6-cycle3.log). Built by cycle 2, which ended before its background gate finished; cycle 3 verified and committed. NOT verified: the picture in a browser (owner). Follow-up: wire run state (SPEC-F L2.1) so real agents take the seats."
     },
     {
       "id": "feat-s3-prelaunch-drawer-stop",

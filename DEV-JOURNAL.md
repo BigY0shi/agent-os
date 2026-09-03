@@ -35,6 +35,73 @@ for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
 
+## 2026-09-02 - S6: Hermes 3D was never mounted; now it is
+
+Harness session (feat-s6-hermes3d-missing). Yoshi's report was "Hermes 3D is
+nowhere". The roadmap asked first whether that was a stale build or an
+unmounted route.
+
+**What was actually missing.** Not a build. `public/hermes3d/` held every
+baked artifact (office.glb 5.5 MB, hermes-clips.glb 7.7 MB, 18 character
+GLBs + atlas, office-seats.json with 149 anchors, all dated 2026-08-31) and
+`smoke-hermes3d.mjs` had been green against them for two days. What did not
+exist: a page under `src/app`, a NAV entry, a component, anything in
+`src/components` or `src/app` containing the string `hermes3d` (grep,
+this session). SPEC-F L2.2 planned the scene on `@react-three/fiber` +
+`drei`, and neither was ever installed (`package.json`: `three` 0.184
+and its types only). The asset pipeline (L1, L3) shipped; the scene (L2) was
+never started. A smoke that asserts the artifacts cannot notice that nobody
+looks at them, which is why this slice adds a second smoke for the mount.
+
+**What landed.** `/hermes3d` in Artist's Corner (Sidebar NAV +
+`ARTIST_ROUTES`, pageMeta "Hermes 3D"), a server page shell,
+`Hermes3DView` (client; owns the `dynamic(..., { ssr: false })` boundary,
+which Next 16 accepts only inside a client component) and `HermesOffice`,
+the scene on plain three.js with `GLTFLoader` + `OrbitControls` from
+`three/examples/jsm`. It loads office.glb, then office-seats.json, then the
+clip library and N character bodies, seats them on the chairs nearest the
+chairs' centroid (`pickSeats` in `lib/v2/hermes3d/scene.ts`, deterministic)
+and plays the SEATED idle clips (`idle-sitting`, `idle-sitting-2`, baked
+but excluded from the standing pools for the reason PIPELINE.md gives). The
+atlas is applied at runtime because the character bake exports untextured.
+A gear (rule 16) edits `hermes3d.quality / shadows / showFps / seatedCount`;
+`seatedCount` is new in `settings.ts`, default 4, and 0 shows the office
+alone. `DEFAULT_SETTINGS.hermes3d` now spreads `DEFAULT_HERMES3D` from
+`sceneDefaults.ts` so the gear and the store cannot drift.
+
+**Honesty rules in the scene.** The seated bodies are NOT agents: no run
+state reaches this scene yet, so the HUD says so in words ("Not agents: run
+state is not wired") and the pageMeta standfirst says the same. Idle is the
+one state a body may hold with no run behind it (clips.ts); anything else
+would be the fake-telemetry pattern in 3D. Missing assets are a probe
+(`HEAD /hermes3d/office.glb`) before any WebGL exists, and the answer is a
+panel quoting `MISSING_ASSETS_MESSAGE`, which names PIPELINE.md. An
+office.glb that parses to zero meshes is an error panel, not a dark canvas.
+Every partial failure (seats file, clip library, atlas, one body) is a line
+in the HUD, never a swallowed catch. `talkingHoldMs` stays out of the gear
+because nothing consumes it yet; a switch wired to nothing is a lie of the
+same family.
+
+**Evidence.** `scripts/v2/smoke-hermes3d-ui.mjs`: 36 checks, offline, §E
+parses the real office-seats.json (149 rows, 60 chairs, 4 picked, stable
+across two calls) and SKIPs with a printed reason when the gitignored dir is
+absent. `tsc --noEmit` clean. Gate `./test.sh` exit 0, 74/74 smokes
+(`.harness-logs/gate-s6-cycle3.log`). The building session (harness cycle 2)
+ended while its gate was still running in the background, so nothing was
+committed; cycle 3 re-verified the tree and landed the commit.
+What is NOT verified: the picture. This session cannot open the app; the
+first look at the framing (a raised three-quarter view of the seated
+cluster), the seat height of a Mixamo sitting clip on a Synty chair, and
+whether the baked level has a roof that hides the top-down view, is Yoshi's.
+
+**Costs and follow-ups.** Run state (SPEC-F L2.1: `mapRunToState` per
+agent, characters assigned by `characterFor`) is the next slice and is
+listed in agent-progress.md; `clips` pools in settings are still unread by
+the scene. Draco decoder files were never copied and are not needed: the
+bake does not Draco-compress. Version v2.16.0.
+
+---
+
 ## 2026-09-02 - S8: the Oracle speaks Voicebox, on its own settings
 
 Harness session (feat-s8-voicebox-everywhere). The Oracle still spoke
