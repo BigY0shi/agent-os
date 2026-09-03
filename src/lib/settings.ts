@@ -233,7 +233,7 @@ export interface Settings {
 
   // ---- V2 foundations (SPEC-A; ultraplan/CONVENTIONS.md) ----
   memory?: {
-    provider?: "ollama-cloud" | "ollama-local" | "cli" | "minimax";
+    provider?: "ollama-cloud" | "ollama-local" | "cli" | "minimax" | "openai-compat";
     modelLow?: string;
     modelMedium?: string;
     embedProvider?: "ollama-local" | "ollama-cloud";
@@ -247,6 +247,16 @@ export interface Settings {
     // takes, and which LOCAL Ollama chat model derives them. Never a hosted model.
     backfillLimit?: number;
     backfillModel?: string;
+    // Which server derives them. 'ollama-local' is Ollama on :11434;
+    // 'openai-compat' is any OpenAI-wire server (LM Studio, llama.cpp, vLLM) at
+    // openaiCompatUrl - the path for models Ollama cannot serve at all, such as
+    // Bonsai 27B, which needs a llama.cpp fork. Embeddings stay on Ollama
+    // either way (embedProvider above), so a real run needs Ollama up too.
+    backfillProvider?: "ollama-local" | "openai-compat";
+    // Base URL of the OpenAI-compatible server, /v1 segment included.
+    // A key, if the server wants one, comes from OPENAI_COMPAT_API_KEY in the
+    // environment and is never stored here.
+    openaiCompatUrl?: string;
   };
   capability?: {
     folders?: { path: string; scopes: ("files" | "coding" | "exec")[] }[];
@@ -469,6 +479,8 @@ export const DEFAULT_SETTINGS: Settings = {
     labelRouterThreshold: 0.7,
     backfillLimit: 20,
     backfillModel: "bonsai:27b",
+    backfillProvider: "ollama-local",
+    openaiCompatUrl: "http://127.0.0.1:1234/v1",
   },
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},

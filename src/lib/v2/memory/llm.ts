@@ -32,7 +32,7 @@ export interface ModelCallOpts {
 const DEFAULT_TIMEOUT_MS = 240_000;
 
 interface Resolved {
-  provider: "ollama-cloud" | "ollama-local" | "cli" | "minimax";
+  provider: "ollama-cloud" | "ollama-local" | "cli" | "minimax" | "openai-compat";
   model: string;
 }
 
@@ -195,6 +195,82 @@ async function minimaxChat(model: string, messages: ChatMessage[], opts?: ModelC
   return c;
 }
 
+/**
+ * OpenAI-compatible chat (LM Studio, llama.cpp server, vLLM, any /v1 shim).
+ *
+ * The reason this provider exists: models that need a llama.cpp fork - Bonsai
+ * 27B is the case in hand - cannot be served by Ollama at all, and LM Studio
+ * fronts them on the OpenAI wire format instead. This is a plain completion
+ * transport: messages in, text out, NO tool calls. Base URL comes from
+ * settings.memory.openaiCompatUrl (or OPENAI_COMPAT_URL), and must include the
+ * /v1 path segment; LM Studio's default is http://127.0.0.1:1234/v1.
+ *
+ * A key is read from the environment only (OPENAI_COMPAT_API_KEY) and never
+ * from settings, so no getter in this codebase can return key material. Local
+ * servers normally need none.
+ *
+ * Structured output is belt AND suspenders, same as the Ollama path: the JSON
+ * schema goes in `response_format` for servers that honour it, and the schema
+ * is ALSO spelled out in the prompt by the caller (withJsonInstruction). A
+ * reasoning model's <think> block is stripped, as on the MiniMax path.
+ */
+export function openaiCompatBase(): string {
+  const configured = readSettings().memory?.openaiCompatUrl || process.env.OPENAI_COMPAT_URL || "";
+  const base = (configured || "http://127.0.0.1:1234/v1").trim().replace(/\/+$/, "");
+  return base;
+}
+
+async function openaiCompatChat(
+  model: string,
+  messages: ChatMessage[],
+  schema: z.ZodType<unknown> | undefined,
+  opts?: ModelCallOpts,
+): Promise<string> {
+  const base = openaiCompatBase();
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const key = process.env.OPENAI_COMPAT_API_KEY || "";
+  if (key) headers.authorization = `Bearer ${key}`;
+
+  const body: Record<string, unknown> = { model, messages, stream: false };
+  if (opts?.temperature !== undefined) body.temperature = opts.temperature;
+  if (schema) {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: { name: "memory_output", strict: false, schema: z.toJSONSchema(schema as z.ZodType) },
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: signalFor(opts),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `openai-compat chat could not reach ${base} (${msg}) model=${model}. ` +
+        `Start the server (LM Studio: Developer tab > Start Server) or set settings.memory.openaiCompatUrl. No fallback.`,
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`openai-compat chat failed (${res.status}) model=${model} at ${base}: ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json().catch(() => null)) as {
+    choices?: { message?: { content?: string } }[];
+    error?: { message?: string };
+  } | null;
+  if (!data?.choices?.[0]) {
+    throw new Error(`openai-compat chat returned no choices (model=${model} at ${base}): ${data?.error?.message ?? "unknown"}`);
+  }
+  let c = String(data.choices[0].message?.content ?? "").trim();
+  c = c.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^[\s\S]*?<\/think>/i, "").trim();
+  return c;
+}
+
 function flattenForCli(messages: ChatMessage[]): string {
   return messages
     .map((m) => (m.role === "system" ? m.content : `${m.role === "user" ? "USER" : "ASSISTANT"}:\n${m.content}`))
@@ -265,6 +341,11 @@ async function rawCall(
     case "minimax": {
       const msgs = schema ? withJsonInstruction(messages, schema) : messages;
       out = await minimaxChat(model, msgs, opts);
+      break;
+    }
+    case "openai-compat": {
+      const msgs = schema ? withJsonInstruction(messages, schema) : messages;
+      out = await openaiCompatChat(model, msgs, schema, opts);
       break;
     }
     default:

@@ -6,19 +6,27 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
-- AWAITING USER VERIFY (S5 legacy memory backfill, v2.24.0): the routine is built and
-  smoke-verified against a fake Ollama; the real ~20-episode sample is the owner's to run
-  and look at (feature contract: "Do NOT run the real 20-episode sample yourself"). Owner
-  checklist, in order, all PowerShell-safe:
-  1. Confirm the models are pulled on the local Ollama: `ollama list` should show
-     `bonsai:27b` (downloading 2026-09-02) and `nomic-embed-text`. If the bonsai tag differs
-     (e.g. `bonsai:latest`), use that exact tag below.
-  2. Dry run, writes nothing, shows which legacy rows a run would touch:
-     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b --dry-run`
-  3. The sample (6 to 8 local model calls per episode, so minutes on a 27B model):
-     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b`
+- OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
+  LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
+  a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature
+  contract: "Do NOT run the real 20-episode sample yourself"). Owner checklist, in order,
+  all PowerShell-safe:
+  1. Decide which server holds the chat model. Bonsai 27B needs a llama.cpp fork, so
+     Ollama cannot serve it; LM Studio can. Either way the EMBEDDING model stays on
+     Ollama, so Ollama must be running as well. Both were DOWN when this was written
+     (nothing listening on 1234 or 11434 at 2026-09-03 ~05:00 PDT).
+     - LM Studio: load Bonsai, Developer tab > Start Server, note the API identifier
+       (the owner reported `bonsai-27b`). Confirm: `Invoke-RestMethod http://127.0.0.1:1234/v1/models`
+     - Ollama: `ollama list` must show `nomic-embed-text` (and `bonsai:27b` only if the
+       chat model runs there too).
+  2. Dry run, writes nothing, contacts no model server:
+     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --dry-run`
+  3. The sample (6 to 8 model calls per episode, so minutes on a 27B model):
+     - on LM Studio: `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --provider openai-compat --model bonsai-27b`
+     - on Ollama:    `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b`
      It prints each episode's outcome, the aspects that landed (Identity / Event / ...),
      and up to five derived facts. Or from the app: Memory > gear > "Legacy backfill" >
+     pick "Served by", fill the model id and (for openai-compat) the server URL, then
      Run backfill (the runs tray carries progress; STOP works). The CLI and the app share
      the DB, so run one at a time.
   4. Look at the rows: Memory > Episodes (the derived legacy episodes now carry
@@ -26,8 +34,16 @@ DEV-JOURNAL.md (hyphen, not underscore).
   5. Decide the full-set size (ROADMAP Later: "Legacy memory: full backfill size"). A
      bigger run is the same command with a bigger `--limit` (cap 500 per run); derived
      rows are never picked again, so runs can be repeated until the count reaches 0.
-  6. Retitle this block (e.g. "S5 sample reviewed") to release the harness; S7 and S9
-     are still `failing` in features.json and the loop will pick them up top-down.
+  6. (Retitled by the supervisor so the loop could continue to S7 and S9, per the owner's
+     "if you block at one, go to the next"; the checklist above is also in HANDOFF.md.)
+- Cactus Needle 2 is the owner's tool-calling model and is NOT involved here: the backfill
+  makes no tool calls, only structured-JSON completions, which is the role he assigned to
+  Bonsai. He noted it is installed under his python311 folder inside KiCad.
+- UNCOMMITTED partial work from the killed pass-3 S7 cycle is still in the tree:
+  `src/lib/v2/webmcp/wizard.ts` (untracked) plus a `resolveModel()` export in
+  `llm.ts` and hunks in `settings.ts` / `dbSchema.ts`. `wizard.ts` was ALSO untracked
+  before that cycle, so the session may have overwritten the owner's own draft; no
+  `.exile` copy exists. Ask him before the next S7 run.
 
 ## Next
 - S7 webmcp-wizard, then S9 openmontage-module (top-down in features.json). Both wait on
@@ -92,7 +108,9 @@ DEV-JOURNAL.md (hyphen, not underscore).
   the Artifact is the supervising session's job; leave the HTML at ~/.agentic-os.
 
 ## Log (newest first)
-- 2026-09-02 ~22:00 PDT feat-s5-legacy-memory-backfill PASSING (v2.24.0): lib/v2/memory/backfill.ts + scripts/v2/memory-backfill.mjs + POST/GET /api/v2/memory/backfill (module run, module "memory") + "Legacy backfill" section in the Memory gear; withMemoryModel() async-local override in llm.ts pins ollama-local + the chosen model for the whole addEpisode tree; migration 4 memory_backfill_log; loud errors for Ollama down / model not pulled / embed model not pulled, no fallback. smoke-memory-backfill 62 checks; gate 77/77 exit 0. The real 20-episode sample is NOT run (feature contract); AWAITING USER VERIFY block above pauses the loop for it.
+- 2026-09-03 05:30 PDT S5 follow-up (v2.25.0): the backfill can be served by LM Studio. New memory provider `openai-compat` in llm.ts; backfill takes `provider` and preflights GET /v1/models (exact id match: LM Studio says `bonsai-27b`, Ollama says `bonsai:27b`); embeddings stay Ollama-only and are still checked, with the error naming which of the two servers is short. CLI --provider/--base-url, route body `provider` (400 on unknown), gear "Served by" + "Server URL". No key in settings (OPENAI_COMPAT_API_KEY from the env). smoke-memory-backfill 62 -> 79 checks, fake LM Studio at 127.0.0.1:1234. Neither real server was up during the build, so the openai-compat path has never spoken to a live LM Studio.
+- 2026-09-02 21:12 PDT supervisor retitled the S5 verify marker (checklist kept, copied to HANDOFF.md) and RELAUNCHED the loop (`--max-cycles 4`) for S7 and S9.
+- 2026-09-02 ~22:00 PDT feat-s5-legacy-memory-backfill PASSING (v2.24.0): lib/v2/memory/backfill.ts + scripts/v2/memory-backfill.mjs + POST/GET /api/v2/memory/backfill (module run, module "memory") + "Legacy backfill" section in the Memory gear; withMemoryModel() async-local override in llm.ts pins ollama-local + the chosen model for the whole addEpisode tree; migration 4 memory_backfill_log; loud errors for Ollama down / model not pulled / embed model not pulled, no fallback. smoke-memory-backfill 62 checks; gate 77/77 exit 0. The real 20-episode sample is NOT run (feature contract); the owner-verify block above (retitled by the supervisor 21:12) carries the checklist.
 - 2026-09-02 ~21:30 PDT feat-s4-deal-desk-control PASSING (v2.18.0..v2.23.0, six commits in the owner's order c,b,f,d,a,e): verdict first + edge colour; face deny + bulk deny + Parked/Denied lane under the board; deals.maxAgeDays gate (gear) with dropped-row sidecars; login-wall gate via lib/dealEnrich.ts + /api/deals/enrichment (old /enrich untouched, owner's working set); manual intake via scripts/deals/intake-scrape.mjs + lib/dealIntake.ts + /api/deals/intake; research pass via lib/dealResearch.ts + /api/deals/research. smoke-deal-desk-control 75 checks; gate 76/76 exit 0. Nothing seen in a browser.
 - 2026-09-02 20:03 PDT loop RELAUNCHED (`--max-cycles 8`) after the 18:18 session limit (cycles 6-8 died on 'You've hit your session limit, resets 8pm'); remaining: S4, S5, S7, S9.
 - 2026-09-02 18:35 PDT feat-backlog-wrap-long-routes PASSING (v2.17.1): 8 Deal Desk / Hire Engine long routes register module runs and return runId (deals/enrich skipped as dirty); lib/runRoute.ts shared catch block; briefBatch split plan/run; smoke-module-runs 84; gate 75/75 exit 0.

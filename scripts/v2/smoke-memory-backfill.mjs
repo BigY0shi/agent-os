@@ -6,8 +6,10 @@
 // redirected BEFORE any import; memory.ingestEnabled is false so no queue
 // drains; settings deliberately name a HOSTED provider (ollama-cloud +
 // glm-5.2:cloud) so the test proves the backfill pins the local model anyway.
-// The model is a fake Ollama behind globalThis.fetch: /api/tags, /api/chat,
-// /api/embed. Nothing on the network.
+// The model is a fake Ollama behind globalThis.fetch (/api/tags, /api/chat,
+// /api/embed) PLUS a fake OpenAI-compatible server on 127.0.0.1:1234 standing
+// in for LM Studio (/v1/models, /v1/chat/completions) for section K. Any other
+// origin throws. Nothing on the network.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -34,6 +36,8 @@ fs.writeFileSync(
       embedModel: "nomic-embed-text",
       backfillLimit: 20,
       backfillModel: "bonsai:27b",
+      backfillProvider: "ollama-local",
+      openaiCompatUrl: "http://127.0.0.1:1234/v1",
     },
   }),
   "utf8",
@@ -47,7 +51,8 @@ const check = (name, cond, extra = "") => {
 
 // ---- the fake Ollama --------------------------------------------------------
 let tagsMode = "ok"; // ok | down | nomodel | noembed
-const calls = { tags: 0, chat: [], embed: 0 };
+let lmMode = "ok";   // ok | down | nomodel
+const calls = { tags: 0, chat: [], embed: 0, lmModels: 0, lmChat: [] };
 const NOTHING_MARKER = "nothing-worth-keeping";
 const DIM = 768;
 const vec = (seed) => Array.from({ length: DIM }, (_, i) => Math.sin(seed * 7 + i));
@@ -55,9 +60,10 @@ const vec = (seed) => Array.from({ length: DIM }, (_, i) => Math.sin(seed * 7 + 
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(String(url));
-  if (u.hostname !== "127.0.0.1" || u.port !== "11434") {
-    throw new Error(`smoke: unexpected fetch to ${u.origin}${u.pathname} (only the local Ollama may be called)`);
+  if (u.hostname !== "127.0.0.1" || (u.port !== "11434" && u.port !== "1234")) {
+    throw new Error(`smoke: unexpected fetch to ${u.origin}${u.pathname} (only the local Ollama and the fake LM Studio may be called)`);
   }
+  if (u.port === "1234") return lmStudio(u, init);
   if (u.pathname === "/api/tags") {
     calls.tags++;
     if (tagsMode === "down") throw new TypeError("fetch failed: ECONNREFUSED 127.0.0.1:11434");
@@ -77,8 +83,45 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.pathname === "/api/chat") {
     const body = JSON.parse(init.body);
     calls.chat.push({ model: body.model, host: u.origin, format: body.format ? Object.keys(body.format.properties ?? {}) : null, signal: init.signal });
-    const text = body.messages.map((m) => m.content).join("\n");
     const keys = body.format ? Object.keys(body.format.properties ?? {}) : [];
+    return Response.json({ message: { role: "assistant", content: modelContent(body.messages, keys) } });
+  }
+  throw new Error(`smoke: unexpected path ${u.pathname}`);
+};
+
+/**
+ * The fake LM Studio: the OpenAI wire format on 127.0.0.1:1234. Same content as
+ * the Ollama fake, so section K proves the transport swap and nothing else. The
+ * reply is wrapped in a <think> block to prove the strip in openaiCompatChat.
+ */
+function lmStudio(u, init) {
+  if (lmMode === "down") throw new TypeError("fetch failed: ECONNREFUSED 127.0.0.1:1234");
+  if (u.pathname === "/v1/models") {
+    calls.lmModels++;
+    const data = lmMode === "nomodel"
+      ? [{ id: "qwen3-4b" }, { id: "text-embedding-nomic" }]
+      : [{ id: "bonsai-27b" }, { id: "qwen3-4b" }];
+    return Response.json({ object: "list", data });
+  }
+  if (u.pathname === "/v1/chat/completions") {
+    const body = JSON.parse(init.body);
+    const schema = body.response_format?.json_schema?.schema;
+    const keys = schema ? Object.keys(schema.properties ?? {}) : [];
+    calls.lmChat.push({
+      model: body.model,
+      host: u.origin,
+      responseFormat: body.response_format?.type ?? null,
+      schemaKeys: keys,
+    });
+    const content = `<think>weighing it up</think>${modelContent(body.messages, keys)}`;
+    return Response.json({ choices: [{ index: 0, message: { role: "assistant", content } }] });
+  }
+  throw new Error(`smoke: unexpected LM Studio path ${u.pathname}`);
+}
+
+/** Structured (or normalize) output for a call, keyed off the schema's top-level properties. */
+function modelContent(messages, keys) {
+    const text = messages.map((m) => m.content).join("\n");
     let content;
     if (keys.length === 0) {
       // normalize (text call)
@@ -110,10 +153,8 @@ globalThis.fetch = async (url, init = {}) => {
     } else {
       throw new Error(`smoke: unrecognised structured call with keys ${keys.join(",")}`);
     }
-    return Response.json({ message: { role: "assistant", content } });
-  }
-  throw new Error(`smoke: unexpected path ${u.pathname}`);
-};
+    return content;
+}
 
 const { ensureDb, getDb, __closeForTests } = await import("../../src/lib/v2/db.ts");
 const graph = await import("../../src/lib/v2/memory/graph.ts");
@@ -267,8 +308,8 @@ check("no re-import: still 7 episodes", getDb().prepare("SELECT COUNT(*) AS c FR
 const logRows = B.listBackfillLog(10);
 check("3 log rows for run-1, outcome derived, model recorded", logRows.length === 3 && logRows.every((r) => r.runId === "run-1" && r.outcome === "derived" && r.model === "bonsai:27b" && r.statements === 2 && r.voiceAspects === 1));
 check("derived rows leave the candidate list; 2 remain", B.countUndrivedEpisodes() === 2 && B.listUndrivedEpisodes(10).map((c) => c.uuid).join() === legacy.slice(3).map((l) => l.uuid).join());
-check("log lines say what landed", runLog.some((t) => /derived: 2 facts \(Identity 1, Event 1\), 1 voice \(Preference 1\)/.test(t)) && runLog.some((t) => /^done: 3 derived, 0 nothing to remember, 0 failed; 2 legacy episodes still undrived$/.test(t)), runLog.join(" | "));
-check("preflight logged the local host and both models", runLog.some((t) => /Ollama at http:\/\/127\.0\.0\.1:11434: bonsai:27b pulled, nomic-embed-text pulled/.test(t)));
+check("log lines say what landed", runLog.some((t) => /derived: 2 facts \((Identity 1, Event 1|Event 1, Identity 1)\), 1 voice \(Preference 1\)/.test(t)) && runLog.some((t) => /^done: 3 derived, 0 nothing to remember, 0 failed; 2 legacy episodes still undrived$/.test(t)), runLog.join(" | "));
+check("preflight logged the local host, the model and the embed model", runLog.some((t) => /ollama-local at http:\/\/127\.0\.0\.1:11434: bonsai:27b ready; embeddings nomic-embed-text on Ollama at http:\/\/127\.0\.0\.1:11434/.test(t)), runLog[0]);
 
 // ---- G. NOTHING_TO_REMEMBER is an outcome, and the run is idempotent -------------
 console.log("-- G: nothing + idempotent --");
@@ -338,7 +379,78 @@ const traySrc = fs.readFileSync(path.join(root, "src", "components", "RunsTray.t
 check("tray names the memory module", /memory: "Memory"/.test(traySrc));
 const settingsSrc = fs.readFileSync(path.join(root, "src", "lib", "settings.ts"), "utf8");
 check("settings defaults: backfillLimit 20, backfillModel bonsai:27b", /backfillLimit: 20/.test(settingsSrc) && /backfillModel: "bonsai:27b"/.test(settingsSrc));
+check("settings carry backfillProvider + openaiCompatUrl with a local default", /backfillProvider: "ollama-local"/.test(settingsSrc) && /openaiCompatUrl: "http:\/\/127\.0\.0\.1:1234\/v1"/.test(settingsSrc));
 const llmSrc = fs.readFileSync(path.join(root, "src", "lib", "v2", "memory", "llm.ts"), "utf8");
 check("llm.ts override is async-local (no global mutable model state)", /AsyncLocalStorage/.test(llmSrc) && /export function withMemoryModel/.test(llmSrc));
+check("llm.ts has an openai-compat transport and holds no key in settings", /case "openai-compat"/.test(llmSrc) && /chat\/completions/.test(llmSrc) && /OPENAI_COMPAT_API_KEY/.test(llmSrc) && !/openaiCompatKey/.test(llmSrc));
+check("gear offers the provider choice and the server URL", /BACKFILL_PROVIDERS/.test(gearSrc) && /backfillProvider/.test(gearSrc) && /openaiCompatUrl/.test(gearSrc));
+check("route validates provider instead of defaulting an unknown one", /provider must be one of/.test(routeSrc) && /status: 400/.test(routeSrc));
+
+// ---- K. openai-compat: LM Studio serves the chat, Ollama still serves embeddings ----
+console.log("-- K: openai-compat (LM Studio) --");
+const kTexts = [
+  "2026-08-10 Yoshi runs Bonsai 27B in LM Studio because it needs a llama.cpp fork.",
+  "2026-08-11 Yoshi keeps embeddings on Ollama and prefers Opera over Chrome.",
+];
+const kRows = kTexts.map((text, i) => ({
+  uuid: graph.saveEpisode({
+    content: text, originalContent: text, source: "migration:remember",
+    sessionId: `lm-${i}`, contentHash: contentHash(text),
+    validAt: `2026-08-1${i}T00:00:00.000Z`,
+  }),
+  text,
+}));
+check("fixture: 3 candidates waiting for the openai-compat run", B.countUndrivedEpisodes() === 3, String(B.countUndrivedEpisodes()));
+
+// K1 - server down
+lmMode = "down";
+err = null;
+try { await B.backfillEpisodes({ limit: 1, model: "bonsai-27b", provider: "openai-compat" }); } catch (e) { err = e; }
+check("K1 server down -> error names the URL and the LM Studio toggle", !!err && /No OpenAI-compatible server at http:\/\/127\.0\.0\.1:1234\/v1/.test(err.message) && /Developer tab > Start Server/.test(err.message) && /No fallback/.test(err.message), err?.message);
+
+// K2 - model not served
+lmMode = "nomodel";
+err = null;
+try { await B.backfillEpisodes({ limit: 1, model: "bonsai-27b", provider: "openai-compat" }); } catch (e) { err = e; }
+check("K2 model not served -> error lists what IS served, no fallback", !!err && /'bonsai-27b' is not served/.test(err.message) && /Served: qwen3-4b, text-embedding-nomic/.test(err.message) && /No fallback/.test(err.message), err?.message);
+check("K2 made no chat call", calls.lmChat.length === 0);
+
+// K3 - chat is served, but the embed model is missing on Ollama
+lmMode = "ok";
+tagsMode = "noembed";
+err = null;
+try { await B.backfillEpisodes({ limit: 1, model: "bonsai-27b", provider: "openai-compat" }); } catch (e) { err = e; }
+check("K3 embeddings are Ollama-only -> the error says which server is missing what", !!err && /Chat is served at http:\/\/127\.0\.0\.1:1234\/v1/.test(err.message) && /'nomic-embed-text' is not pulled on Ollama/.test(err.message) && /never run on the OpenAI-compatible server/.test(err.message), err?.message);
+tagsMode = "ok";
+
+// K4 - the real run
+calls.chat.length = 0;
+const embedBefore = calls.embed;
+const lmLog = [];
+const lmRun = await B.backfillEpisodes({ limit: 10, model: "bonsai-27b", provider: "openai-compat", runId: "run-lm", log: (t) => lmLog.push(t) });
+check("K4 run derived through LM Studio", lmRun.derived >= 2 && lmRun.failed === 0, JSON.stringify({ d: lmRun.derived, f: lmRun.failed }));
+check("K4 result names the provider and the base URL (rule 20)", lmRun.provider === "openai-compat" && lmRun.base === "http://127.0.0.1:1234/v1", `${lmRun.provider} ${lmRun.base}`);
+check("K4 every chat call went to the fake LM Studio with bonsai-27b", calls.lmChat.length > 0 && calls.lmChat.every((c) => c.host === "http://127.0.0.1:1234" && c.model === "bonsai-27b"), JSON.stringify(calls.lmChat.slice(0, 2)));
+check("K4 NOT ONE chat call went to Ollama", calls.chat.length === 0, String(calls.chat.length));
+check("K4 embeddings still went to Ollama", calls.embed > embedBefore, `${embedBefore} -> ${calls.embed}`);
+check("K4 structured calls carried response_format json_schema", calls.lmChat.some((c) => c.responseFormat === "json_schema" && c.schemaKeys.length > 0));
+check("K4 a <think> block in the reply was stripped, not parsed", lmRun.results.every((r) => r.outcome !== "failed"));
+check("K4 preflight logged the openai-compat host and the Ollama embed host", lmLog.some((t) => /openai-compat at http:\/\/127\.0\.0\.1:1234\/v1: bonsai-27b ready/.test(t) && /embeddings nomic-embed-text on Ollama at http:\/\/127\.0\.0\.1:11434/.test(t)), lmLog[0]);
+const lmLogRows = B.listBackfillLog(20).filter((r) => r.runId === "run-lm");
+check("K4 log rows record the openai-compat model id", lmLogRows.length >= 2 && lmLogRows.every((r) => r.model === "bonsai-27b"));
+const kRowAfter = getDb().prepare("SELECT original_content, content_hash FROM episodes WHERE uuid = ?").get(kRows[0].uuid);
+check("K4 dedup untouched on the openai-compat path too", kRowAfter.content_hash === contentHash(kRows[0].text) && kRowAfter.original_content === kRows[0].text);
+
+// K5 - the CLI flags
+const lmCli = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--dry-run", "--json", "--provider", "openai-compat", "--model", "bonsai-27b", "--base-url", "http://127.0.0.1:1234/v1"], {
+  cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 120_000,
+});
+let lmCliJson = null;
+try { lmCliJson = JSON.parse(lmCli.stdout.slice(lmCli.stdout.indexOf("{"))); } catch {}
+check("K5 CLI --provider openai-compat --base-url is honoured", lmCli.status === 0 && lmCliJson?.provider === "openai-compat" && lmCliJson.model === "bonsai-27b" && lmCliJson.base === "http://127.0.0.1:1234/v1", `status=${lmCli.status} stderr=${lmCli.stderr.slice(0, 200)}`);
+const badProv = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--provider", "lmstudio"], { cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 60_000 });
+check("K5 CLI rejects an unknown --provider with exit 2", badProv.status === 2 && /--provider must be one of/.test(badProv.stderr), `status=${badProv.status}`);
+const badUrl = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--base-url", "127.0.0.1:1234"], { cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 60_000 });
+check("K5 CLI rejects a --base-url with no scheme", badUrl.status === 2 && /--base-url must be an http\(s\) URL/.test(badUrl.stderr), `status=${badUrl.status}`);
 
 finish();

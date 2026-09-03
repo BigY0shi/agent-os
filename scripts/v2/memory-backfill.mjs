@@ -1,38 +1,59 @@
 // S5 — legacy memory backfill from the CLI (same routine the Memory gear runs).
 //
 //   npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--dry-run] [--json]
+//   npx tsx scripts/v2/memory-backfill.mjs --limit 20 --provider openai-compat --model bonsai-27b
 //
 // Reads the undrived legacy episodes (imported raw by A9, so they carry no
-// aspect), derives them in place through the full ingest pipeline on the LOCAL
-// Ollama chat model named by --model (default settings.memory.backfillModel),
-// embeddings on settings.memory.embedModel. Ollama down or the model not pulled
-// exits 1 with the reason; nothing is ever routed to a hosted model.
+// aspect) and derives them in place through the full ingest pipeline, on a
+// LOCAL chat model named by --model (default settings.memory.backfillModel).
 //
-// --dry-run lists what a run would touch and writes nothing (no Ollama call).
+// --provider picks which local server serves that model:
+//   ollama-local   Ollama on :11434, model named by its tag (bonsai:27b)
+//   openai-compat  any OpenAI-wire server (LM Studio, llama.cpp, vLLM) at
+//                  --base-url / settings.memory.openaiCompatUrl, model named by
+//                  the server's API identifier (bonsai-27b). Use this for models
+//                  Ollama cannot serve, such as Bonsai 27B on a llama.cpp fork.
+// Embeddings are Ollama-only either way (settings.memory.embedModel), so an
+// openai-compat run still needs Ollama up. A server down or a model absent
+// exits 1 naming which one; nothing is ever routed to a hosted model.
+//
+// --dry-run lists what a run would touch and writes nothing (no model call).
 // --json prints the BackfillResult instead of the table (the smoke uses this).
 // Exit codes: 0 done (or dry run), 1 error / every episode failed, 2 bad flags.
 import { ensureDb, __closeForTests } from "../../src/lib/v2/db.ts";
 import { readSettings } from "../../src/lib/settings.ts";
 import { backfillEpisodes } from "../../src/lib/v2/memory/backfill.ts";
 
+const PROVIDERS = ["ollama-local", "openai-compat"];
+
 function parseArgs(argv) {
-  const out = { limit: null, model: null, dryRun: false, json: false };
+  const out = { limit: null, model: null, provider: null, baseUrl: null, dryRun: false, json: false };
+  const setValue = (flag, v) => {
+    if (v === undefined || v.startsWith("--")) throw new Error(`${flag} needs a value`);
+    if (flag === "--limit") {
+      const n = parseInt(v, 10);
+      if (!Number.isFinite(n) || n < 1) throw new Error(`--limit must be a positive integer, got '${v}'`);
+      out.limit = n;
+    } else if (flag === "--model") out.model = v;
+    else if (flag === "--provider") {
+      if (!PROVIDERS.includes(v)) throw new Error(`--provider must be one of ${PROVIDERS.join(" | ")}, got '${v}'`);
+      out.provider = v;
+    } else if (flag === "--base-url") {
+      if (!/^https?:\/\//i.test(v)) throw new Error(`--base-url must be an http(s) URL, got '${v}'`);
+      out.baseUrl = v;
+    }
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--dry-run") out.dryRun = true;
     else if (a === "--json") out.json = true;
-    else if (a === "--limit" || a === "--model") {
-      const v = argv[++i];
-      if (v === undefined || v.startsWith("--")) throw new Error(`${a} needs a value`);
-      if (a === "--limit") {
-        const n = parseInt(v, 10);
-        if (!Number.isFinite(n) || n < 1) throw new Error(`--limit must be a positive integer, got '${v}'`);
-        out.limit = n;
-      } else out.model = v;
-    } else if (a.startsWith("--limit=")) out.limit = parseInt(a.slice(8), 10);
-    else if (a.startsWith("--model=")) out.model = a.slice(8);
+    else if (a === "--limit" || a === "--model" || a === "--provider" || a === "--base-url") setValue(a, argv[++i]);
+    else if (a.startsWith("--limit=")) setValue("--limit", a.slice(8));
+    else if (a.startsWith("--model=")) setValue("--model", a.slice(8));
+    else if (a.startsWith("--provider=")) setValue("--provider", a.slice(11));
+    else if (a.startsWith("--base-url=")) setValue("--base-url", a.slice(11));
     else if (a === "-h" || a === "--help") {
-      console.log("usage: npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--dry-run] [--json]");
+      console.log("usage: npx tsx scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--provider ollama-local|openai-compat] [--base-url http://127.0.0.1:1234/v1] [--dry-run] [--json]");
       process.exit(0);
     } else throw new Error(`unknown flag '${a}'`);
   }
@@ -47,10 +68,15 @@ try {
   process.exit(2);
 }
 
+// --base-url is read by openaiCompatBase() through the environment, so the flag
+// overrides settings for this process only and writes nothing to disk.
+if (args.baseUrl) process.env.OPENAI_COMPAT_URL = args.baseUrl;
+
 ensureDb();
 const mem = readSettings().memory ?? {};
 const limit = args.limit ?? mem.backfillLimit ?? 20;
 const model = args.model ?? mem.backfillModel ?? "bonsai:27b";
+const provider = args.provider ?? mem.backfillProvider ?? "ollama-local";
 
 const log = args.json ? () => {} : (t) => console.log(`  ${t}`);
 const progress = args.json
@@ -58,16 +84,16 @@ const progress = args.json
   : (n, total) => { if (n < total) console.log(`  [${n + 1}/${total}]`); };
 
 try {
-  const r = await backfillEpisodes({ limit, model, dryRun: args.dryRun, log, progress });
+  const r = await backfillEpisodes({ limit, model, provider, dryRun: args.dryRun, log, progress });
   if (args.json) {
     console.log(JSON.stringify(r, null, 2));
   } else if (r.dryRun) {
-    console.log(`\nDRY RUN: ${r.candidates.length} of ${r.remaining} undrived legacy episodes would be derived with ${r.model} (embeddings: ${r.embedModel}); nothing written.`);
+    console.log(`\nDRY RUN: ${r.candidates.length} of ${r.remaining} undrived legacy episodes would be derived with ${r.model} on ${r.provider} at ${r.base} (embeddings: ${r.embedModel} on Ollama); nothing written.`);
     for (const c of r.candidates) {
       console.log(`  ${c.uuid.slice(0, 8)}  ${c.validAt.slice(0, 10)}  ${c.source.padEnd(20)}  ${String(c.chars).padStart(6)} ch  ${c.preview.slice(0, 80)}`);
     }
   } else {
-    console.log(`\nrun ${r.runId}: ${r.derived} derived, ${r.nothing} nothing to remember, ${r.failed} failed in ${(r.ms / 1000).toFixed(1)} s; ${r.remaining - r.derived - r.nothing} still undrived`);
+    console.log(`\nrun ${r.runId} (${r.model} on ${r.provider} at ${r.base}): ${r.derived} derived, ${r.nothing} nothing to remember, ${r.failed} failed in ${(r.ms / 1000).toFixed(1)} s; ${r.remaining - r.derived - r.nothing} still undrived`);
     for (const e of r.results) {
       const head = `  ${e.uuid.slice(0, 8)}  ${e.validAt.slice(0, 10)}  ${e.outcome.padEnd(8)}`;
       if (e.outcome === "failed") { console.log(`${head}  ${e.error}`); continue; }

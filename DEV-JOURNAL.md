@@ -34,6 +34,73 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-03 - S5: the backfill can run on LM Studio, because Bonsai 27B cannot run on Ollama
+
+Yoshi asked whether the memory backfill could use LM Studio, because Bonsai 27B
+needs a llama.cpp fork and Ollama will not serve it. As shipped yesterday the
+answer was no, and the reason is worth recording: the backfill was written as
+"local means Ollama". It hard-pinned `provider: "ollama-local"` in
+`withMemoryModel()` and preflighted `GET /api/tags`. Both of those encode a
+transport, not a policy. The policy Yoshi actually stated on 2026-09-02 was
+"local models only, never a hosted one", and LM Studio on loopback satisfies it.
+
+So `openai-compat` is a fifth memory provider, not a special case inside the
+backfill. `openaiCompatChat()` in `llm.ts` posts to
+`{settings.memory.openaiCompatUrl}/chat/completions` with the JSON schema in
+`response_format.json_schema` AND the same textual `withJsonInstruction()` the
+Ollama path uses, because the belt-and-suspenders note in that file (SPEC-A risk
+#8) applies at least as much to a llama.cpp server as to Ollama. A `<think>`
+block is stripped, copying `minimaxChat`. The whole memory pipeline can use the
+provider now, not only the backfill, which is why it went in the choke point.
+
+**The design decision worth the entry: the preflight splits rather than swaps.**
+The backfill has two model roles, and only one of them moved. Chat goes wherever
+`backfillProvider` says; embeddings are Ollama-only, because
+`settings.memory.embedProvider` accepts `ollama-local | ollama-cloud` and nothing
+else. A run on LM Studio therefore needs Ollama up as well, and the first draft
+of `checkOpenAICompat()` did not check for that. It would have preflighted green
+and then failed on the first episode with a connection error from deep inside
+`embed.ts`, which is exactly the "backfill failed" non-answer the rest of this
+routine was written to avoid. It now checks both and names which server is
+missing what: "Chat is served at http://127.0.0.1:1234/v1, but the embedding
+model 'nomic-embed-text' is not pulled on Ollama at http://127.0.0.1:11434".
+Smoke section K3 pins that sentence.
+
+Model naming is the trap for whoever runs this next. Ollama wants the tag
+`bonsai:27b`; LM Studio wants its API identifier, `bonsai-27b`, which Yoshi read
+off the Developer tab. They are not interchangeable and `ollamaHasModel`'s
+`:latest` fuzzing would happily paper over a near-miss, so the openai-compat
+check (`openaiCompatHasModel`) is exact-match only and the error lists every id
+the server reported. The gear swaps its own hint text and placeholder on the
+provider select for the same reason.
+
+No key is stored. `OPENAI_COMPAT_API_KEY` is read from the environment inside
+the request that uses it and appears in no settings field and no getter, per the
+credentials rule in AGENTS.md. Local servers normally want none. Smoke section J
+asserts `openaiCompatKey` appears nowhere in `llm.ts`.
+
+Evidence: `smoke-memory-backfill.mjs` grew from 62 to 79 checks, ALL PASS. The
+fake LM Studio lives behind the same `globalThis.fetch` shim as the fake Ollama;
+the host guard was widened to exactly two loopback origins and still throws on
+anything else, and K4 asserts every chat call went to :1234 with `bonsai-27b`
+while every embedding call still went to :11434. Section F also carried a latent
+flake: it asserted the derived aspects render in the order "Identity 1, Event 1",
+which depends on statement row order and had simply been lucky. It failed on a
+rerun today and now accepts either order.
+
+**What is NOT done:** the real sample. `curl` to 127.0.0.1:1234 answered nothing
+while this was written, so the openai-compat path has never spoken to a real LM
+Studio, only to the fake. Ollama was also down. The 20-episode sample stays the
+owner's to run, as the feature contract says.
+
+Files: `src/lib/v2/memory/llm.ts` (provider union, `openaiCompatBase`,
+`openaiCompatChat`), `src/lib/v2/memory/backfill.ts` (`BackfillProvider`,
+`checkOpenAICompat`, `checkBackfillProvider`, result carries `provider` + `base`),
+`src/lib/settings.ts` (`memory.backfillProvider`, `memory.openaiCompatUrl`),
+`scripts/v2/memory-backfill.mjs` (`--provider`, `--base-url`),
+`src/app/api/v2/memory/backfill/route.ts` (body `provider`, 400 on an unknown one),
+`src/components/v2/memory/MemorySettings.tsx` (Served by select, Server URL field).
+
 ## 2026-09-02 - S5: legacy memory backfill, built; the 20-episode sample waits for the owner
 
 Harness session (feat-s5-legacy-memory-backfill), v2.24.0. HANDOFF item 2: the A9

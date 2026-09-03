@@ -3,7 +3,7 @@ import { uuid as newUuid, now } from "../ids";
 import { readSettings } from "../../settings";
 import { getEpisode, getStatementsForEpisode } from "./graph";
 import { addEpisode } from "./ingest";
-import { withMemoryModel } from "./llm";
+import { withMemoryModel, openaiCompatBase } from "./llm";
 
 /**
  * S5 — legacy memory backfill (roadmap S5, HANDOFF item 2).
@@ -17,11 +17,19 @@ import { withMemoryModel } from "./llm";
  * place (normalize → extract → reflect → classify → triples + voice aspects),
  * 6-8 LLM calls per episode.
  *
- * Model policy: the owner's LOCAL models only. The chat model is pinned to
- * provider 'ollama-local' for the whole call tree through withMemoryModel(),
- * whatever settings.memory.provider says; embeddings stay on
- * settings.memory.embedModel (nomic-embed-text). Ollama down or the model not
- * pulled = a named error before any episode is touched. Never a hosted model.
+ * Model policy: the owner's LOCAL models only. The chat model is pinned for
+ * the whole call tree through withMemoryModel(), whatever
+ * settings.memory.provider says, to ONE of two local servers:
+ *   'ollama-local'   - Ollama on :11434 (the default).
+ *   'openai-compat'  - any OpenAI-wire local server at
+ *                      settings.memory.openaiCompatUrl. This exists because
+ *                      some models cannot run on Ollama at all: Bonsai 27B
+ *                      needs a llama.cpp fork, and LM Studio serves it.
+ * Embeddings are Ollama-only either way (settings.memory.embedProvider /
+ * embedModel), so an openai-compat run still needs Ollama up for the vector
+ * half - the preflight checks BOTH and says which one is missing. A server
+ * down or a model absent = a named error before any episode is touched.
+ * Never a hosted model, never a silent swap between the two.
  *
  * "Lacking derivation" is decided from the graph itself: no provenance edge
  * leaves the episode and no voice_aspects row names it. memory_backfill_log
@@ -63,9 +71,13 @@ export interface BackfillEpisodeResult {
   ms: number;
 }
 
+export type BackfillProvider = "ollama-local" | "openai-compat";
+
 export interface BackfillOptions {
   limit: number;
   model: string;
+  /** Which local server derives. Default settings.memory.backfillProvider, else 'ollama-local'. */
+  provider?: BackfillProvider;
   dryRun?: boolean;
   signal?: AbortSignal;
   log?: (text: string) => void;
@@ -77,6 +89,10 @@ export interface BackfillOptions {
 export interface BackfillResult {
   runId: string;
   model: string;
+  /** Which local server actually answered (rule 20: the reply names it). */
+  provider: BackfillProvider;
+  /** Base URL of that server, so a log line is unambiguous about where it went. */
+  base: string;
   embedModel: string;
   dryRun: boolean;
   /** How many undrived legacy episodes exist in total (before the limit). */
@@ -199,31 +215,23 @@ export function ollamaHasModel(pulled: string[], wanted: string): boolean {
   return pulled.some((p) => p === w || p === `${w}:latest` || `${p}:latest` === w);
 }
 
-export interface OllamaPreflight {
+export interface BackfillPreflight {
+  provider: BackfillProvider;
+  /** Base URL of the chat server that answered the preflight. */
   base: string;
   chatModel: string;
   embedModel: string;
-  /** Whether the embed model was checked here (only when embedProvider is ollama-local). */
+  /** Whether the embed model was verified (only when embedProvider is ollama-local). */
   embedChecked: boolean;
-  pulled: string[];
+  /** Base URL of the Ollama that serves embeddings, when it was checked. */
+  embedBase?: string;
+  /** Model ids the chat server reported. */
+  available: string[];
 }
 
-/**
- * GET /api/tags on the LOCAL Ollama. Throws a named error when Ollama is not
- * reachable, when the chat model is not pulled, or (embedProvider
- * 'ollama-local') when the embed model is not pulled. No other provider is
- * ever consulted.
- */
-export async function checkLocalOllama(
-  chatModel: string,
-  opts: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<OllamaPreflight> {
+/** GET /api/tags on the local Ollama. Throws a named error when it is unreachable. */
+async function ollamaTags(signal: AbortSignal): Promise<{ base: string; pulled: string[] }> {
   const base = localOllamaBase();
-  const model = chatModel.trim();
-  if (!model) throw new Error("backfill: no chat model given (settings.memory.backfillModel or --model).");
-
-  const timeout = AbortSignal.timeout(opts.timeoutMs ?? 8_000);
-  const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
   let res: Response;
   try {
     res = await fetch(`${base}/api/tags`, { signal });
@@ -235,12 +243,40 @@ export async function checkLocalOllama(
     );
   }
   if (!res.ok) {
-    throw new Error(`Ollama at ${base} answered ${res.status} on /api/tags; the backfill cannot verify model '${model}'.`);
+    throw new Error(`Ollama at ${base} answered ${res.status} on /api/tags; the backfill cannot verify its models.`);
   }
   const data = (await res.json().catch(() => ({}))) as { models?: Array<{ name?: string; model?: string }> };
   const pulled = (data.models ?? [])
     .map((m) => String(m.name ?? m.model ?? "").trim())
     .filter(Boolean);
+  return { base, pulled };
+}
+
+/** Settings-driven embed model + whether it lives on the local Ollama. */
+function embedTarget(): { embedModel: string; embedChecked: boolean } {
+  const mem = readSettings().memory ?? {};
+  return {
+    embedModel: mem.embedModel || "nomic-embed-text",
+    embedChecked: (mem.embedProvider ?? "ollama-local") === "ollama-local",
+  };
+}
+
+function deadline(opts: { signal?: AbortSignal; timeoutMs?: number }): AbortSignal {
+  const timeout = AbortSignal.timeout(opts.timeoutMs ?? 8_000);
+  return opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+}
+
+/**
+ * Ollama preflight: chat model AND (when embeddings are local) the embed model
+ * must both be pulled. No other provider is ever consulted.
+ */
+export async function checkLocalOllama(
+  chatModel: string,
+  opts: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<BackfillPreflight> {
+  const model = chatModel.trim();
+  if (!model) throw new Error("backfill: no chat model given (settings.memory.backfillModel or --model).");
+  const { base, pulled } = await ollamaTags(deadline(opts));
 
   if (!ollamaHasModel(pulled, model)) {
     throw new Error(
@@ -249,16 +285,103 @@ export async function checkLocalOllama(
     );
   }
 
-  const mem = readSettings().memory ?? {};
-  const embedModel = mem.embedModel || "nomic-embed-text";
-  const embedChecked = (mem.embedProvider ?? "ollama-local") === "ollama-local";
+  const { embedModel, embedChecked } = embedTarget();
   if (embedChecked && !ollamaHasModel(pulled, embedModel)) {
     throw new Error(
       `Embedding model '${embedModel}' (settings.memory.embedModel) is not pulled on Ollama at ${base}. ` +
         `Run: ollama pull ${embedModel}. No fallback.`,
     );
   }
-  return { base, chatModel: model, embedModel, embedChecked, pulled };
+  return {
+    provider: "ollama-local",
+    base,
+    chatModel: model,
+    embedModel,
+    embedChecked,
+    embedBase: embedChecked ? base : undefined,
+    available: pulled,
+  };
+}
+
+/** An OpenAI /v1/models list carries the served ids under data[].id. */
+export function openaiCompatHasModel(available: string[], wanted: string): boolean {
+  const w = wanted.trim();
+  if (!w) return false;
+  return available.some((a) => a === w);
+}
+
+/**
+ * OpenAI-compatible preflight (LM Studio and friends): GET {base}/models must
+ * list the chat model id exactly as the server names it — LM Studio shows it in
+ * the Developer tab as the "API identifier", e.g. `bonsai-27b`, which is NOT
+ * the Ollama-style `bonsai:27b` tag.
+ *
+ * Embeddings are Ollama-only, so this ALSO checks the embed model on Ollama
+ * when embedProvider is 'ollama-local'. Two servers, two named failures: the
+ * error says which one is missing rather than "backfill failed".
+ */
+export async function checkOpenAICompat(
+  chatModel: string,
+  opts: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<BackfillPreflight> {
+  const model = chatModel.trim();
+  if (!model) throw new Error("backfill: no chat model given (settings.memory.backfillModel or --model).");
+  const base = openaiCompatBase();
+  const signal = deadline(opts);
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/models`, {
+      signal,
+      headers: process.env.OPENAI_COMPAT_API_KEY
+        ? { authorization: `Bearer ${process.env.OPENAI_COMPAT_API_KEY}` }
+        : undefined,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `No OpenAI-compatible server at ${base} (${msg}). In LM Studio: Developer tab > Start Server, ` +
+        `load the model, and confirm the port matches settings.memory.openaiCompatUrl. No fallback.`,
+    );
+  }
+  if (!res.ok) {
+    throw new Error(`OpenAI-compatible server at ${base} answered ${res.status} on /models; cannot verify '${model}'.`);
+  }
+  const data = (await res.json().catch(() => ({}))) as { data?: Array<{ id?: string }> };
+  const available = (data.data ?? []).map((m) => String(m.id ?? "").trim()).filter(Boolean);
+
+  if (!openaiCompatHasModel(available, model)) {
+    throw new Error(
+      `Model '${model}' is not served at ${base}. Served: ${available.length ? available.join(", ") : "(none)"}. ` +
+        `Load it in LM Studio and use its API identifier verbatim. No fallback.`,
+    );
+  }
+
+  const { embedModel, embedChecked } = embedTarget();
+  let embedBase: string | undefined;
+  if (embedChecked) {
+    // The vector half still runs on Ollama; say so plainly when it is missing.
+    const tags = await ollamaTags(deadline(opts));
+    embedBase = tags.base;
+    if (!ollamaHasModel(tags.pulled, embedModel)) {
+      throw new Error(
+        `Chat is served at ${base}, but the embedding model '${embedModel}' is not pulled on Ollama at ${tags.base}. ` +
+          `Embeddings never run on the OpenAI-compatible server. Run: ollama pull ${embedModel}. No fallback.`,
+      );
+    }
+  }
+  return { provider: "openai-compat", base, chatModel: model, embedModel, embedChecked, embedBase, available };
+}
+
+/** Preflight the server the run will actually use. */
+export async function checkBackfillProvider(
+  provider: BackfillProvider,
+  chatModel: string,
+  opts: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<BackfillPreflight> {
+  return provider === "openai-compat"
+    ? checkOpenAICompat(chatModel, opts)
+    : checkLocalOllama(chatModel, opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -352,30 +475,35 @@ export async function backfillEpisodes(opts: BackfillOptions): Promise<BackfillR
   const progress = opts.progress ?? (() => {});
   const limit = clampLimit(opts.limit);
   const dryRun = opts.dryRun === true;
-  const embedModel = readSettings().memory?.embedModel || "nomic-embed-text";
+  const mem = readSettings().memory ?? {};
+  const embedModel = mem.embedModel || "nomic-embed-text";
+  const provider: BackfillProvider = opts.provider ?? mem.backfillProvider ?? "ollama-local";
+  const base = provider === "openai-compat" ? openaiCompatBase() : localOllamaBase();
 
   if (!model) throw new Error("backfill: no chat model given (settings.memory.backfillModel or --model).");
 
   const remaining = countUndrivedEpisodes();
   const candidates = listUndrivedEpisodes(limit);
-  const base: BackfillResult = {
-    runId, model, embedModel, dryRun, remaining, candidates,
+  const shell: BackfillResult = {
+    runId, model, provider, base, embedModel, dryRun, remaining, candidates,
     results: [], derived: 0, nothing: 0, failed: 0, ms: 0,
   };
 
   if (dryRun) {
-    log(`dry run: ${candidates.length} of ${remaining} undrived legacy episode${remaining === 1 ? "" : "s"} would be derived with ${model}; nothing written`);
-    return { ...base, ms: Date.now() - t0 };
+    log(`dry run: ${candidates.length} of ${remaining} undrived legacy episode${remaining === 1 ? "" : "s"} would be derived with ${model} on ${provider} (${base}); nothing written`);
+    return { ...shell, ms: Date.now() - t0 };
   }
   if (candidates.length === 0) {
     log("no undrived legacy episodes; nothing to do");
-    return { ...base, ms: Date.now() - t0 };
+    return { ...shell, ms: Date.now() - t0 };
   }
 
-  const pre = await checkLocalOllama(model, { signal: opts.signal });
+  const pre = await checkBackfillProvider(provider, model, { signal: opts.signal });
   log(
-    `Ollama at ${pre.base}: ${pre.chatModel} pulled` +
-      (pre.embedChecked ? `, ${pre.embedModel} pulled` : `, embeddings on ${readSettings().memory?.embedProvider}`),
+    `${pre.provider} at ${pre.base}: ${pre.chatModel} ready` +
+      (pre.embedChecked
+        ? `; embeddings ${pre.embedModel} on Ollama at ${pre.embedBase}`
+        : `; embeddings on ${mem.embedProvider}`),
   );
   log(`deriving ${candidates.length} of ${remaining} undrived legacy episodes, oldest first`);
 
@@ -400,7 +528,7 @@ export async function backfillEpisodes(opts: BackfillOptions): Promise<BackfillR
 
     const started = Date.now();
     try {
-      const out = await withMemoryModel({ provider: "ollama-local", model, signal: opts.signal }, () =>
+      const out = await withMemoryModel({ provider, model, signal: opts.signal }, () =>
         addEpisode({
           episodeUuid: ep.uuid,
           episodeBody: ep.originalContent,
@@ -452,5 +580,5 @@ export async function backfillEpisodes(opts: BackfillOptions): Promise<BackfillR
       `backfill: every one of ${total} episodes failed (model ${model}); first error: ${results[0]?.error ?? "unknown"}`,
     );
   }
-  return { ...base, results, derived, nothing, failed, ms: Date.now() - t0 };
+  return { ...shell, results, derived, nothing, failed, ms: Date.now() - t0 };
 }

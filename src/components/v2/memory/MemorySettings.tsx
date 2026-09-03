@@ -23,6 +23,8 @@ interface MemoryDraft {
   labelRouterThreshold: string;
   backfillLimit: string;
   backfillModel: string;
+  backfillProvider: string;
+  openaiCompatUrl: string;
 }
 
 interface FolderRow { path: string; scopes: ("files" | "coding" | "exec")[] }
@@ -44,7 +46,11 @@ interface JobRowClient {
   enabled: number;
 }
 
-const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax"] as const;
+const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax", "openai-compat"] as const;
+// S5 backfill: which LOCAL server derives. 'openai-compat' is LM Studio and
+// friends, for models Ollama cannot serve (Bonsai 27B needs a llama.cpp fork).
+const BACKFILL_PROVIDERS = ["ollama-local", "openai-compat"] as const;
+const DEFAULT_COMPAT_URL = "http://127.0.0.1:1234/v1";
 const EMBED_PROVIDERS = ["ollama-local", "ollama-cloud"] as const;
 const SCOPES = ["files", "coding", "exec"] as const;
 
@@ -136,6 +142,8 @@ export default function MemorySettings() {
       labelRouterThreshold: String(memory.labelRouterThreshold ?? 0.7),
       backfillLimit: String(memory.backfillLimit ?? 20),
       backfillModel: String(memory.backfillModel ?? "bonsai:27b"),
+      backfillProvider: String(memory.backfillProvider ?? "ollama-local"),
+      openaiCompatUrl: String(memory.openaiCompatUrl ?? DEFAULT_COMPAT_URL),
     });
     setCapDraft({
       folders: Array.isArray(capability.folders) ? (capability.folders as FolderRow[]).map((f) => ({ path: f.path, scopes: [...(f.scopes ?? [])] })) : [],
@@ -161,6 +169,8 @@ export default function MemorySettings() {
         labelRouterThreshold: Number.isFinite(threshold) ? threshold : 0.7,
         backfillLimit: backfillLimitOf(draft),
         backfillModel: draft.backfillModel.trim() || "bonsai:27b",
+        backfillProvider: draft.backfillProvider,
+        openaiCompatUrl: draft.openaiCompatUrl.trim() || DEFAULT_COMPAT_URL,
       },
       capability: {
         ...capability,
@@ -245,17 +255,29 @@ export default function MemorySettings() {
     if (!draft) return;
     const limit = backfillLimitOf(draft);
     const model = draft.backfillModel.trim() || "bonsai:27b";
+    const provider = draft.backfillProvider;
+    const compatUrl = draft.openaiCompatUrl.trim() || DEFAULT_COMPAT_URL;
     setBackfillErr(null);
     setBackfillBusy(dryRun ? "dry" : "run");
     try {
       if (!dryRun) {
         setBackfillDry(null);
-        await save({ memory: { ...memory, backfillLimit: limit, backfillModel: model } });
+        // The URL is persisted too: the server reads it from settings, so a run
+        // started here must not depend on an unsaved field (rule 16).
+        await save({
+          memory: {
+            ...memory,
+            backfillLimit: limit,
+            backfillModel: model,
+            backfillProvider: provider,
+            openaiCompatUrl: compatUrl,
+          },
+        });
       }
       const r = await fetch("/api/v2/memory/backfill", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ limit, model, dryRun }),
+        body: JSON.stringify({ limit, model, provider, dryRun }),
       });
       const j = await r.json();
       if (!r.ok) {
@@ -477,8 +499,9 @@ export default function MemorySettings() {
       <p className="text-[10.5px] leading-relaxed mb-2" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
         Imported legacy episodes carry no aspect (Identity / Event / Relationship…) because the import
         wrote them verbatim. This derives them in place through the normal pipeline (6–8 LLM calls each)
-        on a <strong>local Ollama model</strong>, never a hosted one; Ollama down or the model not pulled
+        on a <strong>local model</strong>, never a hosted one; the server down or the model absent
         stops the run with the reason. Existing rows are updated, nothing is re-imported, dedup is untouched.
+        Embeddings always run on Ollama, so an LM Studio run needs Ollama up as well.
         {backfillRemaining !== null && (
           <span className="block mt-1" style={{ color: "var(--fg-dim, #9aa)" }}>
             {backfillRemaining === 0 ? "No legacy episodes are waiting for derivation." : `${backfillRemaining} legacy episode${backfillRemaining === 1 ? "" : "s"} still lack derivation.`}
@@ -490,9 +513,29 @@ export default function MemorySettings() {
           <TextInput type="number" min="1" max="500" value={draft.backfillLimit}
             onChange={(e) => setDraft({ ...draft, backfillLimit: e.target.value })} />
         </Field>
-        <Field label="Local chat model" hint="Must be pulled on the local Ollama (ollama pull …).">
-          <TextInput value={draft.backfillModel} onChange={(e) => setDraft({ ...draft, backfillModel: e.target.value })} placeholder="bonsai:27b" />
+        <Field label="Served by" hint="Ollama, or an OpenAI-compatible server such as LM Studio.">
+          <select value={draft.backfillProvider} onChange={(e) => setDraft({ ...draft, backfillProvider: e.target.value })}
+            className="w-full h-8 rounded-md px-2 text-[12.5px] outline-none" style={inputStyle}>
+            {BACKFILL_PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
         </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Chat model"
+          hint={draft.backfillProvider === "openai-compat"
+            ? "The server's API identifier, verbatim (LM Studio shows it in the Developer tab), e.g. bonsai-27b."
+            : "Must be pulled on the local Ollama (ollama pull …), e.g. bonsai:27b."}
+        >
+          <TextInput value={draft.backfillModel} onChange={(e) => setDraft({ ...draft, backfillModel: e.target.value })}
+            placeholder={draft.backfillProvider === "openai-compat" ? "bonsai-27b" : "bonsai:27b"} />
+        </Field>
+        {draft.backfillProvider === "openai-compat" ? (
+          <Field label="Server URL" hint="Include the /v1 segment. A key, if needed, comes from OPENAI_COMPAT_API_KEY in the environment.">
+            <TextInput value={draft.openaiCompatUrl} onChange={(e) => setDraft({ ...draft, openaiCompatUrl: e.target.value })}
+              placeholder={DEFAULT_COMPAT_URL} />
+          </Field>
+        ) : <div />}
       </div>
       <div className="flex items-center gap-2 mb-2">
         <button onClick={() => void runBackfill(true)} disabled={backfillBusy !== null || saving}

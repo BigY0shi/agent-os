@@ -1,120 +1,90 @@
-# Handoff, 2026-09-02
+# Handoff, 2026-09-02 (autonomous run while Yoshi was out)
 
-Branch `feat/v2-hermes3d-and-versioning`, tracking `origin/feat/v2-hermes3d-and-versioning`.
-Written at the end of a session that worked the 7-item TASKLIST. Read `AGENTS.md` first,
-especially the new "Running it" section, then this.
+Branch `feat/v2-hermes3d-and-versioning`, tracking origin. Read `AGENTS.md` first
+("Running it" and "Harness"), then this. The roadmap checklist is `ROADMAP.md`, published at
+https://claude.ai/code/artifact/bae4deb6-3e84-43df-a594-bcdb1f2cf2b0 (regenerate with
+`node scripts/roadmap-page.mjs`; only an interactive session can republish it).
 
-## Tree state
+## Done today before the loop (all pushed)
 
-Recent work on this branch, oldest first:
+| version | what |
+|---|---|
+| v2.11.1 | ROADMAP.md checklist + `scripts/roadmap-page.mjs` + published page |
+| v2.11.2 | S0: `Restart Agent OS.bat` honours an aborted restart |
+| v2.12.0 | S1: Voicebox is the voice engine (client, TTS provider, local-Whisper mic, gear, smoke) |
+| v2.13.0 | ElevenLabs stays as the owner-chosen, labelled backup (AGENTS.md rule 20) |
+| v2.13.1 | Profile names matched trimmed ("Alfred " had a trailing space); live audio verified |
+| v2.14.0 | S2: module-run registry, `/api/runs` + SSE, RunsTray, Content Engine wired |
+| v2.14.1 | Restart-within-60s race: guard frees a lock whose PID is gone; launcher exits 1 |
+| docs | Agent OS system map (`_design/agentos-map/`), Tailscale/https note, harness install |
 
-| commit | version | what |
+Verified live by Yoshi at 16:12: Jarvis reply voice (Voicebox) and the local-Whisper mic
+work at http://localhost:3737 in Opera. At the Tailscale address the mic stays hidden until
+`tailscale serve --bg 3737` fronts the app with https (MagicDNS `desktop.hair-halfmoon.ts.net`,
+certs enabled, no serve config yet).
+
+## The loop
+
+`scripts/harness/ralph-loop.sh` was launched in the background at the time noted in
+`agent-progress.md`. It spawns one fresh `claude -p --model claude-fable-5-1` session per
+`failing` row of `features.json`, top-down: S8, S6, S3, backlog route wrapping, S4, S5, S7, S9.
+Each cycle's transcript is in `.harness-logs/cycle-N-<id>-<ts>.log`. A row a session could not
+finish carries `SKIP <date>: <reason>` in `notes` and is left for you to reorder; the loop moves
+on. Exit codes: 0 done, 2 paused on a marker in `agent-progress.md`, 3 stalled.
+
+## Loop pass 1 (16:52 to 18:18 PDT): four features landed, all pushed
+
+| version | feature | what |
 |---|---|---|
-| `eccdbf9` | v2.8.0 | Mac wording and Cmd glyphs replaced for a Windows owner |
-| `ded6823` | v2.9.0 | Jarvis: register the browser action set it was missing |
-| `4c1c06b` | v2.10.0 | Sidebar: Artist's Corner and Agent Toolbox, foldable sections |
-| `d46a79e` | v2.11.0 | Version display, AGENTS.md "Running it", this handoff |
+| v2.15.0 | S8 | The Oracle speaks Voicebox on its own settings (`settings.oracle.voice`, gear in its header, module-scoped fallback in the TTS route); smoke-voicebox section H |
+| v2.16.0 | S6 | Hermes 3D was never mounted, not stale: `/hermes3d` in Artist's Corner on plain three.js (office.glb, seated idle bodies, loud missing-assets panel, gear); smoke-hermes3d-ui 36 checks |
+| v2.17.0 | S3 | STOP (AbortController per run, `/api/runs/:id` stop, tray button, signal reaches the CLI child) + RunLaunchDrawer on Content Engine and Agent Kanban, options persisted in `settings.launch.<module>`; smoke-launch-drawer 70 |
+| v2.17.1 | backlog | 8 Deal Desk / Hire Engine long routes register module runs (`deals/enrich` skipped: in your dirty set); `lib/runRoute.ts`; smoke-module-runs 84 |
 
-Do not trust a hardcoded pushed/unpushed count in a file like this one; it goes stale the
-moment someone pushes. Ask git instead:
-`git log --oneline origin/feat/v2-hermes3d-and-versioning..HEAD`. Everything above is
-`tsc --noEmit` clean.
+Cycles 6-8 (S4) died at 18:18 on "You've hit your session limit, resets 8pm" and the loop
+stalled out (exit 3). Relaunched at 20:03 for S4, S5, S7, S9 (`.harness-logs/loop-2026-09-02-b.log`).
+Follow-ups the sessions noticed but did not do are listed in `agent-progress.md` under
+"Follow-ups seen, not done" (Video voiceover on Voicebox, Hermes 3D run-state wiring, hire
+routes' STOP once your hireBrief/hireDraft edits land, feed-pull runs in the tray).
 
-The running app is **older than all of them**: `.next/BUILD_ID` is stamped
-2026-09-01 06:28. Anything reported as "not working" in the live UI may simply predate
-these commits. Check that mtime before believing a bug report about them.
+## Loop pass 2 (20:03 to 21:07 PDT): S4 and S5 landed, all pushed
 
-## Uncommitted, from the end of this session
+| version | feature | what |
+|---|---|---|
+| v2.18.0 .. v2.23.0 | S4 | Deal Desk control in your order c,b,f,d,a,e, one commit each: verdict first + edge colour; deny from the card face, bulk deny, a Parked/Denied lane under the board; `deals.maxAgeDays` gate (gear); login-wall gate via `lib/dealEnrich.ts` + `/api/deals/enrichment` (your dirty `/enrich` untouched); manual URL intake (`/api/deals/intake`); "Need more info" fires a research pass (`/api/deals/research`); smoke-deal-desk-control 75 checks |
+| v2.24.0 | S5 | Legacy memory backfill: `lib/v2/memory/backfill.ts`, `scripts/v2/memory-backfill.mjs`, `/api/v2/memory/backfill` as a module run, "Legacy backfill" in the Memory gear, local model pinned for the whole derivation, loud errors when Ollama or a model is missing; smoke-memory-backfill 62 checks. The 20-episode sample was NOT run: that is yours (checklist below) |
 
-Three files, reviewed but not committed. They belong together as one commit:
+The loop then paused on the S5 verify marker. Per your "if you block at one, go to the next",
+the supervisor retitled it (checklist preserved) and relaunched for S7 and S9 at 21:12
+(`.harness-logs/loop-2026-09-02-c.log`). Nothing has been seen in a browser by anyone.
 
-- `src/app/api/version/route.ts` (new, untracked) and `src/components/Sidebar.tsx`:
-  the sidebar was displaying "v0.2 Build 2026-06-24". Two independent stale sources.
-  `v0.2` was a hardcoded literal in `Sidebar.tsx`; the date came from the root `VERSION`
-  file, which git shows was written once by `202ed22 chore: baseline snapshot before
-  Phase-0 repair` and never touched again. `VERSION` is the **upstream pack's** stamp,
-  like `CHANGELOG.md`, and is not ours to bump. Nothing was reading `package.json`,
-  which is the version `npm run version:bump` actually maintains (rule 18).
-  The route now returns `{ version, pack }`: `version` from `package.json`, `pack` from
-  `VERSION`, labeled in the UI as an upstream stamp rather than as this build.
-- `AGENTS.md`: new "## Running it" section recording port 3737, the production-only
-  workflow, the `.bat` launchers, the auth gate, and the `BUILD_ID` staleness check.
+## What to do when you are back
 
-**`AGENTS.md` had the git skip-worktree bit set** (`git ls-files -v` returned `S`). It was
-the only file in the repo carrying it, and the working copy was byte-identical to HEAD, so
-it was protecting nothing. Edits to the project contract were silently unshippable: they
-lived on disk and never reached a commit or a clone. The bit was cleared with
-`git update-index --no-skip-worktree AGENTS.md`. If it comes back, that is the reason
-contract edits keep evaporating.
+1. **Rebuild and restart** (your scripts). Everything below assumes the new build.
+2. **S5, the memory sample (PowerShell-safe, in order).** Extended 2026-09-03 (v2.25.0) so the
+   chat model can be served by LM Studio: Bonsai 27B needs a llama.cpp fork and Ollama cannot
+   serve it at all. Embeddings are Ollama-only either way, so **both servers must be up**.
+   Neither was listening when this was written.
+   - LM Studio: load Bonsai, Developer tab > Start Server, and note the API identifier
+     (you reported `bonsai-27b`; it is not the Ollama-style `bonsai:27b`).
+     Confirm with `Invoke-RestMethod http://127.0.0.1:1234/v1/models`
+   - Ollama: `ollama list` must show `nomic-embed-text`.
+   - Dry run, writes nothing, contacts no model server:
+     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --dry-run`
+   - The sample (6-8 model calls per episode, so minutes):
+     `npx tsx scripts/v2/memory-backfill.mjs --limit 20 --provider openai-compat --model bonsai-27b`
+     Or, if the model is on Ollama instead: `… --limit 20 --model bonsai:27b`
+     Or from the app: Memory > gear > Legacy backfill > pick "Served by", fill the model id and
+     the server URL, then Run (the tray shows progress; STOP works). CLI and app share the DB:
+     one at a time.
+   - Look at the rows: Memory > Episodes, and `GET /api/v2/memory/backfill` for the log. Then
+     decide the full-set size; bigger runs are the same command with a bigger `--limit`
+     (cap 500), derived rows are never picked twice.
+3. **Look at, in this order:** Deal Desk (verdict line at the top of the yellow box, edge colour, deny on the card face, the lane under the board, paste a URL into intake, "Need more info" on a card), the runs tray bottom-left while a Content Engine generate runs, then STOP it, `/hermes3d` in Artist's Corner (framing, seat height, roof), the Oracle's Read aloud on The Sage, Kanban's launch drawer.
+4. **Remote mic:** `tailscale serve --bg 3737` on the host, then `https://desktop.hair-halfmoon.ts.net`.
+5. **Follow-ups the sessions noticed but did not do** are listed in `agent-progress.md` under "Follow-ups seen, not done". Two involve your dirty files (`hireBrief.ts`, `hireDraft.ts`, `deals/enrich`): once your edits land, their STOP wiring and run registration are one call each.
 
-## The tasklist
 
-1. **Mac references and control glyphs.** Done, `eccdbf9` / v2.8.0. The first sweep
-   under-reported: a subagent found 3 files, the tree actually held 13 occurrences across
-   6 files plus 3 more in `src/lib/pageMeta.ts`, and 25 glyph instances across 22 files.
-   Verify counts against the tree, not against an agent's summary.
-2. **Legacy memory.** Open, not started. Imported episodes sit untagged with no aspect
-   (Identity, Event, Relationship). Re-running import in `full` mode cannot fix them:
-   content-hash dedup rejects the rows as already present. This needs a new backfill
-   routine that reads existing episode rows and runs derivation over them. Yoshi has
-   `bonsai 8b` and `nomic-embed-text` local and asked why the backlog would not use those
-   first. Agreed plan: run ~20 episodes, show him real rows, then decide on the full set.
-   Derivation is 6 to 8 LLM calls per episode, so the full run is not cheap.
-3. **Jarvis.** Browser action set fixed in `ded6823` / v2.9.0. **Voice is dead and that is
-   settled**: Yoshi confirmed on 2026-09-02 that Jarvis voice does not work, and said it is
-   fine because there is a new avenue now. That avenue was not named, so ask before
-   assuming what replaces it. Do not spend more time on Web Speech providers. Background
-   for whoever revisits it: Opera disables Web Speech by spec, and Kokoro at
-   `/api/hermes/tts` is text-to-speech, so it was never going to appear in a
-   recognition list.
-4. **WebMCP wizard.** Open, not started. Wanted shape: exact description in, AI digests it
-   and asks clarifying questions, reasons in a scratchpad without writing code, proposes a
-   tool list for approval, and only then emits JSON. 5 to 10 tools per server, one tool one
-   job, split by persona. Needs an escape hatch: write your own JSON and have the agent
-   proofread it.
-5. **Runs disappear on navigation.** Open, not started. Leaving a module page mid-run loses
-   the run with nothing shown on the Agents page. Root cause found: the agents module
-   detaches work to a registry, Content Engine bypasses that registry entirely. Wanted: a
-   corner tray stacking one entry per live run, or failing that every run listed on the
-   agents page.
-6. **Granular run control.** Open, now unblocked. Decided by Yoshi on 2026-09-02:
-   **configuration happens BEFORE a run launches, in a settings drawer, and the only
-   mid-run control is a STOP button.** No live intervention, no editing constraints while
-   a run is in flight. The drawer is where skills get applied and guardrails get added or
-   removed. Yoshi's own note was "the deal desk is the only one that I think is done
-   pretty well and tight", so Deal Desk is the reference implementation to copy.
-7. **Sidebar.** Done, `4c1c06b` / v2.10.0. Two new groups named by Yoshi: "Artist's Corner"
-   and "Agent Toolbox". Sections fold, CLI Agents starts collapsed, state persists in
-   `localStorage` under `agentos.sidebar.collapsed`. Group membership comes from
-   `sectionOf()` and the route Sets, not from array order. Yoshi confirmed on 2026-09-02
-   that Skills and Terminal are correctly placed in Agent Toolbox.
 
-## Open questions for Yoshi
-
-Items 3, 6 and 7 were answered on 2026-09-02 and are folded into the list above. What is
-still open:
-
-- `Restart Agent OS.bat` has been seen exiting silently. The `.bat` files have never been
-  read; a request to read them was declined earlier, so ask before opening them.
-- Item 2: how many legacy episodes to backfill after the ~20-episode sample is reviewed.
-- What the "new avenue" for Jarvis is, now that voice is retired.
-
-## Traps worth knowing
-
-- **Never `git add -A`.** The tree carries 49 dirty files of Yoshi's in-progress work.
-  Stage an explicit file list. This has already swept ~30 unrelated files into a commit once.
-- **Smokes must run offline.** A smoke here once made live calls to ollama.com because the
-  memory queue drains `while (ingestEnabled())` and the setting defaults true. Set
-  `memory.ingestEnabled: false` before importing. Any smoke touching a credential directory
-  must redirect it first (rule 19). `smoke-agentmail.mjs` section F greps siblings to enforce this.
-- **`listDeals` skips board records with no matching `pitches.json` entry**, keyed by URL.
-  An unpitched Upwork lead has no card, cannot be decided on, and cannot be remembered.
-  That is real behavior, not a test artifact.
-- **CRLF.** Multi-line anchors fail against CRLF files. Normalize for matching, restore the
-  original ending on write.
-- **Verify subagent output against the tree.** See item 1.
-
-## Backlog carried forward
-
-Roughly 33 module docs unwritten. `PROGRESS.md` is stale. SPEC-F still carries a stale
-Hermes 3D claim. The licence decision (MIT) is still deferred.
+_(filled in by the supervising session when the loop stops; if this section is still empty,
+the session was cut off: read `agent-progress.md` and `git log --oneline` for the truth.)_
