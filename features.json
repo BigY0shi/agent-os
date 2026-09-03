@@ -101,8 +101,8 @@
         "smoke-module-runs.mjs section F greps each wired route for startModuleRun; ./test.sh exits 0.",
         "DEV-JOURNAL.md notes which routes were wired and which were skipped as dirty; version bumped (patch); ROADMAP.md backlog line updated."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "2026-09-02 PASSING (v2.17.1). Wired 8: deals/brief, deals/brief-batch, deals/proposal, hire/brief, hire/draft, hire/pitch, hire/scrape, hire/enrich (startModuleRun, ctx.log, same await, runId in every response, codes unchanged, 409 {stopped} after STOP). Skipped as dirty: deals/enrich (owner working set). New lib/runRoute.ts (HttpError + runErrorResponse); lib/briefBatch.ts split planBriefBatch/runBriefBatch so the batch route owns its run. STOP kills the child in deals/* + hire/scrape + hire/enrich; hire/brief|pitch|draft mark stopped only (hireBrief.ts/hireDraft.ts take no signal and are dirty) - seam noted in ROADMAP. smoke-module-runs 84 checks; gate 75/75 exit 0."
     },
     {
       "id": "feat-s4-deal-desk-control",

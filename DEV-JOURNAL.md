@@ -34,6 +34,63 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - Backlog: Deal Desk and Hire Engine long routes register module runs
+
+Harness session (feat-backlog-wrap-long-routes). S2 built `lib/moduleRuns.ts` and wired
+Content Engine; S3 added STOP. This wraps the next tranche the roadmap named: the Deal
+Desk and Hire Engine "await a model for minutes" routes.
+
+**Wired (8):** `deals/brief`, `deals/brief-batch`, `deals/proposal`, `hire/brief`,
+`hire/draft`, `hire/pitch`, `hire/scrape`, `hire/enrich`. Each calls
+`startModuleRun({ module: "deals" | "hire", label, href })`, logs its meaningful steps,
+awaits the same promise it always did, and adds `runId` to every response. Status codes
+are unchanged (400/404 pre-checks still run BEFORE a run is registered, so a rejected
+request never leaves a tray row); the one new code is 409 `{ stopped: true }` after a
+STOP, the same contract content-engine/generate set.
+
+**Skipped as dirty (1):** `deals/enrich` was in the owner's uncommitted working set
+(`sanitizeSpawnEnv` on the actor spawn), so it was not touched or staged. Its wrap is one
+call once that change lands.
+
+Decisions and what they cost:
+
+- **`lib/runRoute.ts` instead of a regex per route.** content-engine/generate maps the
+  error message to a status with `/did not return JSON|.../.test(msg)`. Eight more copies
+  of that would drift. `HttpError(status, message)` thrown inside the run keeps the status
+  the route always sent and puts the reason on the run record; `runErrorResponse` is the
+  one catch block. It is pure, so the smoke exercises it (409 / 502 / 500 / non-Error).
+- **`brief-batch` never awaited its work, and still does not.** The pass ran in a
+  fire-and-forget IIFE inside `startBriefBatch`, so nothing in the route could hold the
+  run. Split the lib: `planBriefBatch` (pure target selection) + `runBriefBatch` (owns the
+  job state, takes `signal` / `onProgress` / `log` / `runId`). The route registers the run
+  around `runBriefBatch` and answers at once as before; `startBriefBatch` still exists as
+  plan+run for the feed pull and "refill", which are NOT in the tray (that is the honest
+  state: they were never routes on this list). `BriefJob.runId` is new so the GET poll
+  can name the tray row. Rejected: polling `briefBatchStatus()` inside a run until
+  `running` flips, which would have kept the signal away from the children.
+- **STOP reaches the child in five of eight, and the other three say so.**
+  `generateBrief` and `run()` already take a signal (committed), so deals/brief,
+  deals/brief-batch and deals/proposal kill the claude child on STOP; hire/scrape kills
+  the `hire.mjs` child from an abort listener; hire/enrich ends the Hunter fetches with
+  `AbortSignal.any([timeout, ctx.signal])` and a stopped lead is NOT written as a failed
+  firmo. `generateHireBrief`, `generateHirePitch` and `createGmailDrafts` take no signal
+  and live in `hireBrief.ts` / `hireDraft.ts`, both in the owner's working set, so they
+  were not changed: those three routes mark the run stopped, answer 409, and let the
+  child finish and discard its result. Each carries a comment saying exactly that and the
+  smoke asserts the comment, so the seam cannot be forgotten silently. The seam:
+  `signal?: AbortSignal` on those three exports, threaded to `claudeJson` -> `run()`.
+- **Nothing secret in a label or a log line.** Labels name the listing or lead; the
+  enrich log names companies and verdicts, the draft log names subjects. No email
+  address, no Hunter key, no `to` field reaches `module-runs.json`.
+
+What I got wrong: the first smoke run failed 3 checks because the "says why STOP cannot
+reach the child" regex used `\s+` across a wrapped comment line and could not cross the
+`// ` prefix. The routes were right; the regex now spans `[\s/]+`.
+
+Evidence: `npx tsc --noEmit` rc=0; `smoke-module-runs.mjs` section F grows from 62 to 84
+checks (eight route greps, eight signal/seam checks, two for the briefBatch split, four
+runRoute cases); `./test.sh` 75 passed, 0 failed, exit 0.
+
 ## 2026-09-02 - S3: configure before launch, STOP after
 
 Harness session (feat-s3-prelaunch-drawer-stop). Yoshi's decision: configuration

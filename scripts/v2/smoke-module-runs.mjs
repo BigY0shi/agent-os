@@ -186,6 +186,40 @@ check("content-engine/generate registers a run", /startModuleRun\(/.test(src("sr
 check("content-engine/plan registers a run", /startModuleRun\(/.test(src("src/app/api/content-engine/plan/route.ts")));
 check("RunsTray is mounted in the root layout", /<RunsTray\s*\/>/.test(src("src/app/layout.tsx")));
 check("agentsRuntime exposes live runs for the tray", /export function listLiveAgentRuns/.test(src("src/lib/agentsRuntime.ts")));
+
+// Backlog wrap (feat-backlog-wrap-long-routes): the Deal Desk and Hire Engine long
+// routes register runs and answer with runId. deals/enrich is NOT listed on
+// purpose: it was in the owner's uncommitted working set when this landed.
+const WRAPPED = {
+  "src/app/api/deals/brief/route.ts": { signal: true },
+  "src/app/api/deals/brief-batch/route.ts": { signal: true },
+  "src/app/api/deals/proposal/route.ts": { signal: true },
+  "src/app/api/hire/brief/route.ts": { signal: false },   // generateHireBrief takes no signal yet
+  "src/app/api/hire/draft/route.ts": { signal: false },   // createGmailDrafts takes no signal yet
+  "src/app/api/hire/pitch/route.ts": { signal: false },   // generateHirePitch takes no signal yet
+  "src/app/api/hire/scrape/route.ts": { signal: true },
+  "src/app/api/hire/enrich/route.ts": { signal: true },
+};
+for (const [p, want] of Object.entries(WRAPPED)) {
+  const s = src(p);
+  const name = p.split("/").slice(3, 5).join("/");
+  check(`${name} registers a run and returns runId`, /startModuleRun\(/.test(s) && /runId: (run|moduleRun)\.id/.test(s));
+  if (want.signal) check(`${name} threads ctx.signal to the child / fetch`, /ctx\.signal/.test(s) && /(signal: ctx\.signal|generateBrief\([^)]*ctx\.signal|addEventListener\("abort"|lookup\([^)]*ctx\.signal)/.test(s));
+  else check(`${name} says why STOP cannot reach the child`, /takes no[\s/]+signal yet/.test(s)); // spans the "// " of a wrapped comment
+}
+check("briefBatch is split into plan + run so the route owns the module run", /export async function planBriefBatch/.test(src("src/lib/briefBatch.ts")) && /export async function runBriefBatch/.test(src("src/lib/briefBatch.ts")) && /generateBrief\(deal, opts\.signal\)/.test(src("src/lib/briefBatch.ts")));
+check("startBriefBatch (feed pull / refill) still exists for the other callers", /export async function startBriefBatch/.test(src("src/lib/briefBatch.ts")));
+// runRoute.ts is the shared catch block; it is pure, so it can be exercised, not just grepped.
+const RR = await import("../../src/lib/runRoute.ts");
+const abortErr = new Error("run stopped by owner"); abortErr.name = "AbortError";
+const rrStop = RR.runErrorResponse(abortErr, "r1");
+const rrStopJ = await rrStop.json();
+check("runErrorResponse: a STOP is 409 { stopped: true, runId }", rrStop.status === 409 && rrStopJ.stopped === true && rrStopJ.runId === "r1" && rrStopJ.ok === false);
+const rr502 = RR.runErrorResponse(new RR.HttpError(502, "agent returned nothing"), "r2");
+check("runErrorResponse: an HttpError keeps its status", rr502.status === 502 && (await rr502.json()).error === "agent returned nothing");
+const rr500 = RR.runErrorResponse(new Error("boom"), "r3");
+check("runErrorResponse: anything else is 500 with runId", rr500.status === 500 && (await rr500.json()).runId === "r3");
+check("runErrorResponse: a non-Error throw is still a 500 with a message", RR.runErrorResponse("nope", "r4").status === 500);
 check("no ~/.agentic-os touched", !fs.existsSync(path.join(os.homedir(), ".agentic-os", "module-runs.json")) || fs.statSync(path.join(os.homedir(), ".agentic-os", "module-runs.json")).mtimeMs < Date.now() - 60_000);
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
