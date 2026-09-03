@@ -73,12 +73,13 @@ export const SKILLS_HEADER = "══ OPERATING SKILLS";
 // skills always leaves the total under the limit.
 export const SKILL_ARG_SAFE_CHARS = 6_000;
 
-// The injectable instruction block: global skills + the module's skills, concatenated.
+// The injectable instruction block: global skills + the module's skills + any
+// `extra` names a pre-launch drawer picked for THIS run (S3), concatenated.
 // Returns "" when nothing applies, so call sites can prepend unconditionally.
 // `maxChars` (for arg-length-capped call sites) trims the skill TEXT to fit while
 // keeping the header/footer intact; ≤ overhead-sized caps return "" (prompt survives bare).
-export function skillBlock(module?: string, maxChars?: number): string {
-  const bodies = activeSkillNames(module)
+export function skillBlock(module?: string, maxChars?: number, extra: readonly string[] = []): string {
+  const bodies = [...new Set([...activeSkillNames(module), ...extra])]
     .map((n) => ({ n, body: readSkillBody(n) }))
     .filter((x) => x.body);
   if (!bodies.length) return "";
@@ -97,8 +98,8 @@ export function skillBlock(module?: string, maxChars?: number): string {
 
 // Convenience: prefix a prompt with the applicable skills. A prompt that already
 // starts with the block (wrapped by the caller) passes through untouched.
-export function withSkills(prompt: string, module?: string, maxChars?: number): string {
+export function withSkills(prompt: string, module?: string, maxChars?: number, extra: readonly string[] = []): string {
   if (prompt.startsWith(SKILLS_HEADER)) return prompt;
-  const block = skillBlock(module, maxChars);
+  const block = skillBlock(module, maxChars, extra);
   return block ? `${block}\n${prompt}` : prompt;
 }

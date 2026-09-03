@@ -13,7 +13,7 @@ is one line; the journal carries the rest.
 
 ## Now
 
-- [ ] **S3. Pre-launch settings drawer + STOP.** Decided by Yoshi 2026-09-02:
+- [x] **S3. Pre-launch settings drawer + STOP.** Shipped 2026-09-02 (see Done). Decided by Yoshi 2026-09-02:
   configuration happens before launch in a drawer (skills applied, guardrails
   added/removed); the only mid-run control is STOP. Deal Desk is the reference
   implementation to copy. Start with Content Engine and Kanban, the two he has
@@ -86,6 +86,7 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-09-02 · v2.17.0 · S3 Configure before launch, STOP after: `RunLaunchDrawer` (seat, skills from /api/skills, per-module guardrails, instructions; persists `settings.launch.<module>`; locked while that module runs) on Content Engine plan/generate and Agent Kanban plan/build; `lib/launchOptions.ts` strict contract (unknown field = 400 naming it); `stopModuleRun` + `POST /api/runs/:id {action:"stop"}` + Stop button in the tray, signal threaded to the CLI child / Ollama fetch; Kanban runs registered in the tray. smoke-launch-drawer 70 checks, smoke-module-runs 62. Not yet seen in a browser.
 - 2026-09-02 · v2.16.0 · S6 Hermes 3D mounted: `/hermes3d` in Artist's Corner, office.glb + seated idle bodies on plain three.js (r3f was never installed), gear for quality/shadows/fps/seatedCount, loud "assets not baked" panel naming PIPELINE.md, HUD that says the bodies are not agents. smoke-hermes3d-ui, 36 checks. Follow-up: wire run state (L2.1) so real agents take the seats.
 - 2026-09-02 · v2.15.0 · S8 The Oracle speaks Voicebox: `settings.oracle.voice` (provider / The Sage profile / ElevenLabs voice / own fallback), a gear in the Oracle's header, `module: "oracle"` on `/api/hermes/tts` so the backup is the Oracle's choice in the Sage's voice, labelled in the footer; smoke-voicebox section H, 48 checks. Video voiceover stays on the backlog.
 

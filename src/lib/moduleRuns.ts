@@ -24,7 +24,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-export type ModuleRunStatus = "running" | "done" | "error" | "lost";
+export type ModuleRunStatus = "running" | "done" | "error" | "lost" | "stopped";
 
 export interface ModuleRunEvent { at: number; text: string }
 
@@ -39,6 +39,8 @@ export interface ModuleRun {
   status: ModuleRunStatus;
   startedAt: number;
   endedAt?: number;
+  /** Who pressed STOP (roadmap S3); set only when status is "stopped". */
+  stoppedBy?: string;
   error?: string;
   /** Small, JSON-safe summary of the outcome (never the full payload). */
   result?: unknown;
@@ -49,6 +51,8 @@ export interface ModuleRun {
 
 export interface ModuleRunContext {
   id: string;
+  /** Fires when the owner presses STOP. Pass it to cliComplete / fetch so the child actually dies. */
+  signal: AbortSignal;
   log: (text: string) => void;
   progress: (n: number, total: number) => void;
 }
@@ -61,6 +65,8 @@ type Listener = (run: ModuleRun) => void;
 
 interface Registry {
   runs: Map<string, ModuleRun>;
+  /** One controller per LIVE run; never persisted. */
+  controllers: Map<string, AbortController>;
   listeners: Set<Listener>;
   loaded: boolean;
   persistTimer: ReturnType<typeof setTimeout> | null;
@@ -69,7 +75,7 @@ interface Registry {
 // One registry per process, like agentsRuntime's RUNS map: Next can evaluate
 // this module more than once, and the tray must see the route's runs.
 const g = globalThis as unknown as { __moduleRuns?: Registry };
-const REG: Registry = (g.__moduleRuns ??= { runs: new Map(), listeners: new Set(), loaded: false, persistTimer: null });
+const REG: Registry = (g.__moduleRuns ??= { runs: new Map(), controllers: new Map(), listeners: new Set(), loaded: false, persistTimer: null });
 
 export function runsDir(): string {
   const o = process.env.AGENTIC_OS_RUNS_DIR?.trim();
@@ -164,10 +170,13 @@ export function startModuleRun<T>(
     events: [],
   };
   REG.runs.set(id, run);
+  const ac = new AbortController();
+  REG.controllers.set(id, ac);
   emit(run);
 
   const ctx: ModuleRunContext = {
     id,
+    signal: ac.signal,
     log: (text) => {
       const t = String(text ?? "").trim();
       if (!t) return;
@@ -184,6 +193,10 @@ export function startModuleRun<T>(
   const promise = (async () => {
     try {
       const result = await work(ctx);
+      // A run the owner stopped stays "stopped" even if the work limped to a
+      // value afterwards; the caller gets the abort, never a result it must
+      // not trust.
+      if (run.status === "stopped") throw stoppedError(run);
       run.status = "done";
       run.endedAt = Date.now();
       if (opts.summarize) {
@@ -192,17 +205,51 @@ export function startModuleRun<T>(
       emit(run);
       return result;
     } catch (e) {
+      if (run.status === "stopped") throw stoppedError(run);
       run.status = "error";
       run.endedAt = Date.now();
       run.error = summarizeError(e);
       emit(run);
       throw e;
+    } finally {
+      REG.controllers.delete(id);
     }
   })();
   // A caller that does not await must not turn a failed run into an
   // unhandled rejection; the run record already carries the error.
   promise.catch(() => {});
   return { id, promise };
+}
+
+/** The error an awaiting caller sees for a stopped run: AbortError-shaped, so
+ *  `e.name === "AbortError"` and /stopped/ both hold. */
+function stoppedError(run: ModuleRun): Error {
+  const e = new Error(`run stopped by ${run.stoppedBy ?? "owner"}`);
+  e.name = "AbortError";
+  return e;
+}
+
+/**
+ * STOP (roadmap S3): the one mid-run control. Aborts the run's signal so the
+ * child CLI / fetch dies (runner.ts killTree on abort), marks the run
+ * "stopped" with who and when, and emits. Returns false when the run is not
+ * in flight; the route turns that into a 409.
+ */
+export function stopModuleRun(id: string, by = "owner"): boolean {
+  load();
+  const run = REG.runs.get(id);
+  if (!run || run.status !== "running") return false;
+  run.status = "stopped";
+  run.endedAt = Date.now();
+  run.stoppedBy = by;
+  run.error = `stopped by ${by}`;
+  run.events.push({ at: run.endedAt, text: `STOP pressed by ${by}` });
+  if (run.events.length > MAX_EVENTS) run.events.splice(0, run.events.length - MAX_EVENTS);
+  const ac = REG.controllers.get(id);
+  REG.controllers.delete(id);
+  emit(run);
+  try { ac?.abort(stoppedError(run)); } catch { /* an abort listener that throws must not undo the stop */ }
+  return true;
 }
 
 export function getModuleRun(id: string): ModuleRun | null {
@@ -247,6 +294,7 @@ export function runningModuleCount(): number {
 /** Test-only: forget everything in memory so a smoke can exercise load(). */
 export function __resetModuleRunsForTests(): void {
   REG.runs.clear();
+  REG.controllers.clear();
   REG.listeners.clear();
   REG.loaded = false;
   if (REG.persistTimer) { clearTimeout(REG.persistTimer); REG.persistTimer = null; }

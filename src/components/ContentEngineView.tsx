@@ -6,9 +6,15 @@ import {
 } from "lucide-react";
 import { CHANNELS, type Channel, type ContentItem, type EngineState, type ItemStatus } from "@/lib/contentEngineTypes";
 import ModelSettings from "./ModelSettings";
+import RunLaunchDrawer from "./RunLaunchDrawer";
+import type { LaunchOptions } from "@/lib/launchOptions";
 
 // Content Engine — plan a posting calendar, generate the materials, log how the
 // posts performed, and let the analyst read the numbers. Server: /api/content-engine/*.
+//
+// Plan and Generate go through the pre-launch drawer (RunLaunchDrawer, roadmap
+// S3): seat, skills, guardrails and instructions are chosen BEFORE the run and
+// sent in the POST body; the only control after launch is Stop in the runs tray.
 
 const CHANNEL_COLOR: Record<Channel, string> = {
   x: "#cbd5e1", linkedin: "#60a5fa", youtube: "#ef4444", tiktok: "#f472b6",
@@ -41,6 +47,7 @@ export default function ContentEngineView() {
   const [note, setNote] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showPlanner, setShowPlanner] = useState(false);
+  const [showLaunch, setShowLaunch] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   // Planner form
@@ -62,16 +69,21 @@ export default function ContentEngineView() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  async function planCalendar() {
+  function openPlanLaunch() {
     if (!goals.trim() || !channels.length) { setNote("Give the planner goals and at least one channel."); return; }
+    setShowLaunch(true);
+  }
+
+  async function planCalendar(launch: LaunchOptions) {
     setPlanning(true);
-    setNote("Planning the calendar… (Claude, ~1 min)");
+    setNote(`Planning the calendar… (${launch.agent === "rotation" ? "claude" : launch.agent}, ~1 min). Stop it from the runs tray if needed.`);
     try {
       const j = await (await fetch("/api/content-engine/plan", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goals: goals.trim(), channels, perWeek, weeks }),
+        body: JSON.stringify({ goals: goals.trim(), channels, perWeek, weeks, launch }),
       })).json();
-      if (j.ok) { setNote(`Planned ${j.added} slots${j.kept ? ` · kept ${j.kept} in-flight items` : ""}`); setShowPlanner(false); await load(); }
+      if (j.ok) { setNote(`Planned ${j.added} slots${j.by ? ` by ${j.by}` : ""}${j.kept ? ` · kept ${j.kept} in-flight items` : ""}`); setShowPlanner(false); await load(); }
+      else if (j.stopped) setNote("Planning stopped. The calendar was not changed.");
       else setNote(j.error || "Planning failed");
     } catch (e) { setNote((e as Error).message); }
     setPlanning(false);
@@ -169,11 +181,12 @@ export default function ContentEngineView() {
               <input type="number" min={1} max={8} value={weeks} onChange={(e) => setWeeks(+e.target.value || 2)}
                 className="panel bg-transparent px-2 py-1 w-16 text-[12px]" />
             </label>
-            <button onClick={planCalendar} disabled={planning}
+            <button onClick={openPlanLaunch} disabled={planning}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: "rgba(232,121,249,0.16)", color: "#e879f9" }}>
+              style={{ background: "rgba(232,121,249,0.16)", color: "#e879f9" }}
+              title="Opens the pre-launch drawer: seat, skills, guardrails, instructions">
               {planning ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-              {planning ? "Planning…" : "Plan calendar"}
+              {planning ? "Planning…" : "Plan calendar…"}
             </button>
             <span className="text-[11px] text-white/35">A replan keeps drafted/posted items and only replaces untouched planned slots.</span>
           </div>
@@ -242,6 +255,17 @@ export default function ContentEngineView() {
       ))}
 
       {selected && <ItemDrawer item={selected} onClose={() => setOpenId(null)} onSaved={load} />}
+
+      <RunLaunchDrawer
+        module="content-engine"
+        open={showLaunch}
+        onClose={() => setShowLaunch(false)}
+        busy={planning}
+        launchLabel="Plan calendar"
+        accent="#e879f9"
+        summary={<span>Plan <b>{weeks}w × {perWeek}/wk</b> on {channels.join(", ") || "no channels"}. A replan keeps drafted/posted items.</span>}
+        onLaunch={async (launch) => { setShowLaunch(false); await planCalendar(launch); }}
+      />
     </div>
   );
 }
@@ -256,6 +280,7 @@ function ItemDrawer({ item, onClose, onSaved }: { item: ContentItem; onClose: ()
     clicks: item.metrics?.clicks?.toString() ?? "",
   });
   const [generating, setGenerating] = useState(false);
+  const [showLaunch, setShowLaunch] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
@@ -274,14 +299,15 @@ function ItemDrawer({ item, onClose, onSaved }: { item: ContentItem; onClose: ()
     }).catch(() => {});
   }
 
-  async function generate() {
+  async function generate(launch: LaunchOptions) {
     setGenerating(true); setErr("");
     try {
       const j = await (await fetch("/api/content-engine/generate", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id }),
+        body: JSON.stringify({ id: item.id, launch }),
       })).json();
       if (j.ok) { setCopy(j.item?.materials?.copy || ""); onSaved(); }
+      else if (j.stopped) setErr("Stopped. The materials were not changed.");
       else setErr(j.error || "Generation failed");
     } catch (e) { setErr((e as Error).message); }
     setGenerating(false);
@@ -329,12 +355,23 @@ function ItemDrawer({ item, onClose, onSaved }: { item: ContentItem; onClose: ()
         {err && <div className="text-[12px] mb-3" style={{ color: "#f87171" }}>{err}</div>}
 
         <Section title={item.materials?.by ? `Post copy (editable) · generated by ${item.materials.by}` : "Post copy (editable)"}>
-          <button onClick={generate} disabled={generating}
+          <button onClick={() => setShowLaunch(true)} disabled={generating}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 mb-2 rounded-lg text-[12px] font-medium disabled:opacity-40"
-            style={{ background: "rgba(34,211,238,0.16)", color: "#22d3ee" }}>
+            style={{ background: "rgba(34,211,238,0.16)", color: "#22d3ee" }}
+            title="Opens the pre-launch drawer: seat, skills, guardrails, instructions">
             {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {generating ? "Generating…" : item.materials?.copy ? "Regenerate materials" : "Generate materials"}
+            {generating ? "Generating… (Stop from the runs tray)" : item.materials?.copy ? "Regenerate materials…" : "Generate materials…"}
           </button>
+          <RunLaunchDrawer
+            module="content-engine"
+            open={showLaunch}
+            onClose={() => setShowLaunch(false)}
+            busy={generating}
+            launchLabel={item.materials?.copy ? "Regenerate materials" : "Generate materials"}
+            accent="#22d3ee"
+            summary={<span><b>{item.topic}</b> · {item.channel} · {item.format} · {item.date}</span>}
+            onLaunch={async (launch) => { setShowLaunch(false); await generate(launch); }}
+          />
           <textarea value={copy} onChange={(e) => setCopy(e.target.value)} onBlur={() => act("copy", copy)}
             rows={10} placeholder="No materials yet — generate, or write your own."
             className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />

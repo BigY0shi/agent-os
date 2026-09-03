@@ -12,6 +12,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { DEFAULT_HERMES3D } from "./v2/hermes3d/sceneDefaults";
+import { defaultLaunchOptions, type LaunchModule, type LaunchOptions } from "./launchOptions";
 import path from "node:path";
 import os from "node:os";
 
@@ -204,6 +205,11 @@ export interface Settings {
   // (components/RunsTray.tsx). autoDismissSec 0 = keep finished runs until
   // dismissed by hand. Gear lives in the tray itself.
   runsTray: { enabled?: boolean; autoDismissSec?: number };
+
+  // Pre-launch drawer (S3): the last-used launch options per module, so the
+  // drawer opens pre-filled. Shape and validation live in lib/launchOptions.ts;
+  // the route honors the body, and the drawer persists here on Launch (rule 16).
+  launch: Partial<Record<LaunchModule, LaunchOptions>>;
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
   // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer
@@ -428,6 +434,7 @@ export const DEFAULT_SETTINGS: Settings = {
   oracle: { voice: { provider: "voicebox", voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
   voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
   runsTray: { enabled: true, autoDismissSec: 45 },
+  launch: { "content-engine": defaultLaunchOptions("content-engine"), "agent-kanban": defaultLaunchOptions("agent-kanban") },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
   ideaEngine: {

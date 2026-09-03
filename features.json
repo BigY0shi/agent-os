@@ -74,8 +74,8 @@
         "smoke-module-runs.mjs covers stop; smoke-launch-drawer.mjs covers the settings shape and route validation; ./test.sh exits 0.",
         "DEV-JOURNAL.md entry, ROADMAP.md S3 ticked into Done, version bumped (minor), roadmap page re-rendered."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "PASSING 2026-09-02 (v2.17.0, harness cycle 4). STOP: moduleRuns AbortController per run, ctx.signal, stopModuleRun(id, by) -> status stopped + stoppedBy, POST /api/runs/:id {action:stop} (409 when not running), RunsTray Stop button + stopped label (never done); signal threaded through seatComplete/kimiComplete/multiModelComplete/localChat to runner.ts killTree; no fallback after a STOP. Drawer: lib/launchOptions.ts (per-module seats + enforced guardrails: content-engine timeoutMin/noFallback, agent-kanban timeoutMin/maxCards/noExternalScripts; strict parse, unknown field = 400 naming it; resolve body > settings.launch.<module> > defaults), RunLaunchDrawer.tsx (skills from /api/skills, persists settings.launch on Launch, locked while that module runs, no control but Stop), wired to Content Engine plan/generate and Agent Kanban plan/build; kanban routes now register runs; Deal Desk untouched. Evidence: smoke-module-runs 62 checks, smoke-launch-drawer 70 checks, tsc clean, ./test.sh 75/75 exit 0 (.harness-logs/gate-s3.log). Not verified: the drawer/STOP in a browser (owner to look after rebuild)."
     },
     {
       "id": "feat-backlog-wrap-long-routes",

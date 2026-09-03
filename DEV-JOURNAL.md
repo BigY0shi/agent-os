@@ -34,6 +34,82 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S3: configure before launch, STOP after
+
+Harness session (feat-s3-prelaunch-drawer-stop). Yoshi's decision: configuration
+happens BEFORE a run launches, in a drawer; the only mid-run control is STOP. No
+live editing of constraints. Built for Content Engine (plan, generate) and Agent
+Kanban (plan, build), the two he runs most. Deal Desk untouched (S4 owns it).
+
+**STOP.** `lib/moduleRuns.ts` keeps one AbortController per live run (in
+memory, never persisted) and hands `ctx.signal` to the work. `stopModuleRun(id,
+by)` marks the run "stopped" with who and when plus a STOP event, then aborts.
+Order matters: the status is set before the abort fires, so the work's rejection
+lands in a catch that already knows the run was stopped and rethrows an
+AbortError-shaped error instead of flipping the row to "error". A work that
+ignores the signal and resolves later is caught the same way: "stopped" is
+terminal, the awaiting caller never receives a result it must not trust.
+`POST /api/runs/:id {action:"stop"}`, 409 when the run is not in flight. The
+tray shows a Stop button on running rows and "stopped by owner after 12s",
+never "done". The signal actually reaches the child: `seatComplete`,
+`kimiComplete`, `multiModelComplete` and `localChat` gained an opts.signal,
+threaded from ctx.signal, and `runner.ts` already killed the process tree on
+abort (taskkill /T on win32). That kill path has existed since the Loop and was
+simply unreachable from these four routes. A STOP is never something to fall
+back from: multiModelComplete rethrows when the signal is aborted instead of
+rescuing with Claude.
+
+Rejected: recording a stop as status "error" with "stopped by owner" in the
+message. The tray would have shown a red triangle for something the owner did
+on purpose; a stop is not a failure and must not look like one.
+
+**Drawer.** `lib/launchOptions.ts` is the contract: per module, the seats and
+the guardrails its routes actually enforce. Content Engine declares
+`timeoutMin` and `noFallback`; Kanban declares `timeoutMin`, `maxCards`,
+`noExternalScripts`. The feature text's example list ("max steps / no network /
+require test run") was not adopted as written, because nothing in these four
+routes could honour "require test run", and a switch wired to nothing is the
+fake-telemetry pattern again. Parse is strict: an unknown top-level field, an
+unknown guardrail, a wrong type, an out-of-range number, a foreign seat or a bad
+skill name is a 400 that names the field. The alternative (drop unknown fields)
+was rejected because a mistyped guardrail would launch WITHOUT the guardrail the
+operator believed they had set. Resolve order is body > settings.launch.<module>
+> defaults; a stale stored value falls back to defaults field by field and the
+result says which source won. `RunLaunchDrawer.tsx` renders exactly those
+declarations plus the installed skills from /api/skills and an instructions
+box; on Launch it PATCHes settings.launch.<module> first (rule 16) and then hands
+the same object to the caller, which POSTs it. While a run of that module is in
+flight (caller flag OR a /api/runs probe every 4 s) the fieldset is disabled
+and Launch is replaced by "Stop it from the runs tray". Skills chosen in the
+drawer ride through `skillBlock(module, max, extra)`, so the local Ollama seat
+and the Kimi seat get them too. Before this, only CLI seats received any
+skills at all; the Kimi seat in the Content Engine rotation got none.
+
+Kanban's Builder picker moved into the drawer; the composer no longer sends
+`agent`, though both routes still accept the legacy field and turn it into a
+launch object through the same validation. Each plan and each card build is now
+a run in the tray. A stopped build halts the client loop and puts the remaining
+cards back in the backlog instead of marching on.
+
+**Evidence.** `smoke-module-runs.mjs` §G+F, 62 checks: the signal fires,
+status "stopped" with stoppedBy, the promise rejects with name AbortError, a
+late resolve cannot flip to "done", route 200/409/404, "stopped" survives a
+restart as "stopped" (not "lost"). `smoke-launch-drawer.mjs`, 70 checks:
+declarations, twelve rejection shapes, resolve order, settings round-trip
+(arrays replaced wholesale), the helpers, all four routes 400 on a bad launch
+with zero runs registered, source wiring, and the real settings.json untouched.
+`tsc --noEmit` clean. Gate `./test.sh` exit 0, 75/75 (`.harness-logs/gate-s3.log`).
+NOT verified: the drawer in a browser, and a STOP against a live CLI child (the
+smoke proves the signal fires and the route flips the status; the taskkill leg
+is runner.ts's and predates this slice).
+
+**Costs.** A guardrail is declared once in launchOptions.ts and enforced by hand
+in each route; adding one means both, and the smoke's wiring section is what
+catches a declaration without an enforcement. A five-card board is now six tray
+rows. `AbortSignal.any` needs Node 20+ (node 24 here). Version v2.17.0.
+
+---
+
 
 ## 2026-09-02 - S6: Hermes 3D was never mounted; now it is
 

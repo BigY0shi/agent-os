@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WifiOff, Sparkles, Send, Loader2, Trash2, ExternalLink, Compass, Hammer, ShieldCheck, Play, LayoutDashboard, FolderOpen, RotateCw } from "lucide-react";
-import AgentPicker from "./AgentPicker";
+import RunLaunchDrawer from "./RunLaunchDrawer";
+import type { LaunchOptions } from "@/lib/launchOptions";
+
+// Agent Kanban — Planner / Builder / Reviewer on the owner's own seats. Plan and
+// Run go through the pre-launch drawer (RunLaunchDrawer, roadmap S3): the seat,
+// skills, guardrails (timeout, max cards, no external scripts) and instructions
+// are chosen BEFORE the run and sent in the POST body; every plan and every
+// card build is a module run in the tray, and Stop there is the only mid-run
+// control. A stopped build halts the team loop and leaves the rest queued.
 
 const LSK = "agentic-os/agent-kanban/v1";
 
@@ -24,7 +32,6 @@ const TEAM = [
   { key: "builder", name: "Builder", icon: Hammer, accent: "#d4a574", does: "builds each card" },
   { key: "reviewer", name: "Reviewer", icon: ShieldCheck, accent: "#5ab896", does: "checks it's really built" },
 ] as const;
-const KANBAN_CLI_AGENTS = ["claude", "codex", "cursor", "pi", "hermes"];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -32,7 +39,7 @@ export default function AgentKanban() {
   const [goal, setGoal] = useState("");
   const [cards, setCards] = useState<Card[]>([]);
   const [model, setModel] = useState<string | null>(null);
-  const [builderAgent, setBuilderAgent] = useState("local");
+  const [launchFor, setLaunchFor] = useState<null | "plan" | "run">(null);
   const [planning, setPlanning] = useState(false);
   const [running, setRunning] = useState(false);
   const [active, setActive] = useState<string | null>(null); // which team member is working
@@ -49,12 +56,11 @@ export default function AgentKanban() {
         setCards(d.cards ?? []);
         setGoal(d.goal ?? "");
         setModel(d.model ?? null);
-        setBuilderAgent(d.builderAgent ?? "local");
       }
     } catch {}
     hydrated.current = true;
   }, []);
-  useEffect(() => { if (hydrated.current) try { localStorage.setItem(LSK, JSON.stringify({ cards, goal, model, builderAgent })); } catch {} }, [cards, goal, model, builderAgent]);
+  useEffect(() => { if (hydrated.current) try { localStorage.setItem(LSK, JSON.stringify({ cards, goal, model })); } catch {} }, [cards, goal, model]);
 
   const loadWorkspace = useCallback(async () => {
     try { const r = await fetch("/api/agent-kanban/workspace", { cache: "no-store" }); const j = await r.json(); setWs(j.builds ?? []); } catch {}
@@ -69,32 +75,39 @@ export default function AgentKanban() {
 
   const setCard = (id: string, patch: Partial<Card>) => setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
-  const plan = useCallback(async () => {
+  const plan = useCallback(async (launch: LaunchOptions) => {
     const g = goal.trim();
     if (!g || planning || running) return;
     setErr(null); setPlanning(true); setActive("planner"); setCards([]);
     try {
-      const r = await fetch("/api/agent-kanban/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ goal: g, agent: builderAgent }) });
+      const r = await fetch("/api/agent-kanban/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ goal: g, launch }) });
       const j = await r.json();
       if (j.cards?.length) { setModel(j.model); setCards(j.cards.map((c: Card) => ({ ...c, stage: "queued" as Stage }))); }
+      else if (j.stopped) setErr("planner stopped — the board is unchanged");
       else setErr(j.error || "the planner returned nothing");
     } catch (e) { setErr(`planner unreachable: ${String(e).slice(0, 120)}`); }
     setActive(null); setPlanning(false);
-  }, [goal, planning, running, builderAgent]);
+  }, [goal, planning, running]);
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (launch: LaunchOptions) => {
     if (running || planning) return;
     const queue = cards.filter((c) => c.stage === "queued" || c.stage === "rejected");
     if (!queue.length) return;
     setErr(null); setRunning(true);
     for (const card of queue) {
       setActive("builder"); setCard(card.id, { stage: "building", note: undefined });
-      let res: { ok?: boolean; bytes?: number; verdict?: string; note?: string; model?: string } = {};
+      let res: { ok?: boolean; bytes?: number; verdict?: string; note?: string; model?: string; stopped?: boolean } = {};
       try {
-        const r = await fetch("/api/agent-kanban/build", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: card.id, title: card.title, brief: card.brief, goal, agent: builderAgent }) });
+        const r = await fetch("/api/agent-kanban/build", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: card.id, title: card.title, brief: card.brief, goal, launch }) });
         res = await r.json();
         if (res.model) setModel(res.model);
       } catch (e) { res = { ok: false, note: String(e).slice(0, 120) }; }
+      if (res.stopped) {
+        // STOP from the tray ends the whole team run; this card and the rest go back to the backlog.
+        setCard(card.id, { stage: "queued", note: undefined });
+        setErr("stopped from the runs tray — the remaining cards are still queued");
+        break;
+      }
       // hand off to the Reviewer — let it visibly "check"
       setActive("reviewer"); setCard(card.id, { stage: "reviewing" });
       await sleep(950);
@@ -102,7 +115,7 @@ export default function AgentKanban() {
     }
     setActive(null); setRunning(false);
     loadWorkspace(); // new builds are now saved in the workspace
-  }, [cards, running, planning, goal, builderAgent, loadWorkspace]);
+  }, [cards, running, planning, goal, loadWorkspace]);
 
   function clearBoard() { if (confirm("Clear the board?")) { setCards([]); setModel(null); try { localStorage.removeItem(LSK); } catch {} } }
 
@@ -154,16 +167,15 @@ export default function AgentKanban() {
       {tab === "board" && (<>
       {/* composer */}
       <div className="flex items-end gap-2 mb-3 shrink-0">
-        <input value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") plan(); }}
+        <input value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && goal.trim() && !planning && !running) setLaunchFor("plan"); }}
           placeholder="Give the team a goal — e.g. 'a set of fun neon web toys' or 'a tiny finance toolkit'"
           className="flex-1 bg-[var(--bg-mid)] border border-[var(--line-soft)] rounded-xl px-3.5 py-2.5 text-[13.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] focus:outline-none" />
-        <AgentPicker value={builderAgent} onChange={setBuilderAgent} kinds={["cli"]} includeIds={KANBAN_CLI_AGENTS} extraOptions={[{ id: "local", label: "Local team (Ollama)" }]} accent="#38bdf8" label="Builder" />
-        <button onClick={plan} disabled={!goal.trim() || planning || running} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#38bdf8", color: "#04121f" }}>
-          {planning ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Assemble board
+        <button onClick={() => setLaunchFor("plan")} disabled={!goal.trim() || planning || running} title="Opens the pre-launch drawer: seat, skills, guardrails, instructions" className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#38bdf8", color: "#04121f" }}>
+          {planning ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} {planning ? "Planning… (Stop from the runs tray)" : "Assemble board…"}
         </button>
         {queuedLeft && !planning && (
-          <button onClick={run} disabled={running} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#5ab896", color: "#08130d" }}>
-            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Run the team
+          <button onClick={() => setLaunchFor("run")} disabled={running} title="Opens the pre-launch drawer: seat, skills, guardrails, instructions" className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#5ab896", color: "#08130d" }}>
+            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {running ? "Building… (Stop from the runs tray)" : "Run the team…"}
           </button>
         )}
         {cards.length > 0 && <button onClick={clearBoard} title="Clear board" className="p-2.5 rounded-xl text-[var(--cream-mute)] hover:text-[var(--plum)] border border-[var(--line-soft)]"><Trash2 size={14} /></button>}
@@ -254,6 +266,19 @@ export default function AgentKanban() {
           </div>
         </div>
       )}
+
+      <RunLaunchDrawer
+        module="agent-kanban"
+        open={launchFor !== null}
+        onClose={() => setLaunchFor(null)}
+        busy={planning || running}
+        launchLabel={launchFor === "run" ? "Run the team" : "Assemble board"}
+        accent="#38bdf8"
+        summary={launchFor === "run"
+          ? <span>Build <b>{cards.filter((c) => c.stage === "queued" || c.stage === "rejected").length}</b> queued card(s) for “{goal.trim() || "the board"}”. Each card is its own run in the tray.</span>
+          : <span>Plan a board for “<b>{goal.trim()}</b>”. The Planner replaces the current cards.</span>}
+        onLaunch={async (launch) => { const which = launchFor; setLaunchFor(null); if (which === "run") await run(launch); else await plan(launch); }}
+      />
     </div>
   );
 }

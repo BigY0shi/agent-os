@@ -9,9 +9,11 @@ DEV-JOURNAL.md (hyphen, not underscore).
 - (nothing in progress)
 
 ## Next
-- top-down through features.json (S8, S6 done; S3 is next in file order)
+- top-down through features.json (S8, S6, S3 done; the backlog-wrap row is next in file order)
 
 ## Follow-ups seen, not done
+- S3 owner-to-look: the pre-launch drawer on Content Engine (Plan calendar…, Generate materials…) and Agent Kanban (Assemble board…, Run the team…), and a Stop from the tray against a real CLI child. Needs the rebuilt app. The Kanban Builder picker now lives in the drawer, not the composer.
+- S3 seam: the other 34 long routes get STOP for free once they call startModuleRun and pass ctx.signal; the drawer needs a LAUNCH_MODULE_DEFS entry per module (declare only guardrails the route enforces).
 - S6 follow-up: wire run state into the Hermes 3D scene (SPEC-F L2.1: `mapRunToState`
   per agent, bodies assigned by `characterFor`, `settings.hermes3d.clips` pools read by
   the scene, `talkingHoldMs` consumed). Today the seats hold idle bodies that the HUD
@@ -45,6 +47,7 @@ DEV-JOURNAL.md (hyphen, not underscore).
   the Artifact is the supervising session's job; leave the HTML at ~/.agentic-os.
 
 ## Log (newest first)
+- 2026-09-02 18:05 PDT feat-s3-prelaunch-drawer-stop PASSING (v2.17.0): STOP (AbortController per run, /api/runs/:id stop, tray button, signal reaches the CLI child) + RunLaunchDrawer on Content Engine and Agent Kanban with a strict launchOptions contract persisted in settings.launch.<module>; smoke-launch-drawer 70, smoke-module-runs 62; gate 75/75 exit 0.
 - 2026-09-02 17:30 PDT feat-s6-hermes3d-missing PASSING (v2.16.0): not a stale build, an unmounted route. `/hermes3d` mounted in Artist's Corner on plain three.js (office.glb + seated idle bodies, loud missing-assets panel, gear); smoke-hermes3d-ui 36 checks; gate 74/74 exit 0. Cycle 2 built it and died waiting on its background gate; cycle 3 verified and committed.
 - 2026-09-02 17:05 PDT feat-s8-voicebox-everywhere PASSING (v2.15.0): Oracle speaks Voicebox on `settings.oracle.voice`, gear in its header, module-scoped fallback in the TTS route; smoke-voicebox section H (48 checks), gate 73/73 exit 0.
 - 2026-09-02 16:52 PDT loop LAUNCHED by the supervising session: `bash scripts/harness/ralph-loop.sh --max-cycles 12` (gate baseline 73/73 green in 396 s at 3900c75).

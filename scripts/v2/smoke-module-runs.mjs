@@ -1,4 +1,4 @@
-// Module runs registry + /api/runs routes, fully offline.
+// Module runs registry + /api/runs routes + STOP (roadmap S3), fully offline.
 //
 // Run: npx tsx scripts/v2/smoke-module-runs.mjs
 //
@@ -109,9 +109,79 @@ const okd = await one.POST(new Request("http://local/api/runs/x", { method: "POS
 const okj = await okd.json();
 check("dismissing a finished run works", okd.ok && okj.run.dismissedAt > 0);
 
+// ---- G. STOP (roadmap S3): the one mid-run control ------------------------------
+console.log("-- G: stop --");
+const postRun = (id, action) => one.POST(new Request("http://local/api/runs/x", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) }), { params: Promise.resolve({ id }) });
+
+// G1: work that honours ctx.signal (the way cliComplete -> runner.ts killTree does)
+let sawAbort = false;
+const g1 = M.startModuleRun({ module: "content-engine", label: "Generate: stoppable" }, (ctx) => new Promise((_, reject) => {
+  ctx.signal.addEventListener("abort", () => { sawAbort = true; reject(ctx.signal.reason ?? new Error("aborted")); }, { once: true });
+}));
+await sleep(5);
+const g1live = M.getModuleRun(g1.id);
+check("ctx.signal is a live AbortSignal on a running run", g1live.status === "running" && sawAbort === false);
+check("stopModuleRun on a running run returns true", M.stopModuleRun(g1.id, "owner") === true);
+check("the signal fired (the child would be killed)", sawAbort === true);
+const g1r = M.getModuleRun(g1.id);
+check("status is 'stopped' with who and when", g1r.status === "stopped" && g1r.stoppedBy === "owner" && g1r.endedAt > 0 && /stopped by owner/.test(g1r.error ?? ""), JSON.stringify({ s: g1r.status, by: g1r.stoppedBy, e: g1r.error }));
+check("a STOP event is in the run log", g1r.events.some((e) => /STOP pressed by owner/.test(e.text)));
+let g1err = null; try { await g1.promise; } catch (e) { g1err = e; }
+check("the promise rejects AbortError-like", !!g1err && g1err.name === "AbortError" && /stopped/.test(g1err.message), String(g1err));
+check("a stopped run is never 'done' or 'error'", M.getModuleRun(g1.id).status === "stopped");
+check("stopping it again is refused", M.stopModuleRun(g1.id) === false);
+check("dismiss is allowed after stop", M.dismissModuleRun(g1.id) === true);
+
+// G2: work that IGNORES the signal and resolves later: still 'stopped', caller still gets the abort
+const g2d = deferred();
+const g2 = M.startModuleRun({ module: "agent-kanban", label: "Build: ignores signal" }, async () => g2d.p, { summarize: (r) => r });
+check("stop works without the work listening", M.stopModuleRun(g2.id, "owner") === true);
+g2d.resolve({ html: "<div/>" });
+let g2err = null; try { await g2.promise; } catch (e) { g2err = e; }
+const g2r = M.getModuleRun(g2.id);
+check("a late result cannot flip 'stopped' to 'done'", g2r.status === "stopped" && g2r.result === undefined && g2err?.name === "AbortError", JSON.stringify(g2r.status));
+
+// G3: only a running run can be stopped
+check("a finished run cannot be stopped", M.stopModuleRun(run2.id) === false && M.getModuleRun(run2.id).status === "error");
+check("an unknown id cannot be stopped", M.stopModuleRun("nope") === false);
+check("stopped runs count as finished (not running)", M.runningModuleCount() === 0);
+
+// G4: the route
+const g4 = M.startModuleRun({ module: "content-engine", label: "Plan: via route" }, (ctx) => new Promise((_, reject) => {
+  ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true });
+}));
+const stopRes = await postRun(g4.id, "stop");
+const stopJ = await stopRes.json();
+check("POST /api/runs/:id {action:'stop'} on a running run -> 200 + stopped", stopRes.status === 200 && stopJ.ok === true && stopJ.run.status === "stopped" && stopJ.run.stoppedBy === "owner", JSON.stringify(stopJ).slice(0, 160));
+check("POST stop on an already-stopped run -> 409", (await postRun(g4.id, "stop")).status === 409);
+check("POST stop on an unknown run -> 404", (await postRun("nope", "stop")).status === 404);
+check("dismiss after stop works via the route", (await postRun(g4.id, "dismiss")).status === 200);
+const g4d = deferred();
+const g4b = M.startModuleRun({ module: "hire", label: "still running" }, async () => g4d.p);
+check("dismiss on a running run still says STOP first", (await postRun(g4b.id, "dismiss")).status === 409);
+check("POST stop on a finished (error) run -> 409", (await postRun(run2.id, "stop")).status === 409);
+g4d.resolve(1); await g4b.promise;
+
+// G5: 'stopped' survives a restart as 'stopped', not 'lost'
+M.persistNow();
+M.__resetModuleRunsForTests();
+check("stopped survives a restart as stopped, never lost", M.getModuleRun(g4.id)?.status === "stopped" && M.getModuleRun(g4.id)?.stoppedBy === "owner", JSON.stringify(M.getModuleRun(g4.id)?.status));
+
 // ---- F. wiring: the routes that were supposed to register runs do -------------
 console.log("-- F: wiring --");
 const src = (p) => fs.readFileSync(path.join(process.cwd(), p), "utf8");
+// STOP reaches the child: the signal path exists end to end (S3).
+check("runner.ts kills the child tree on abort", /addEventListener\("abort", onAbort/.test(src("src/lib/runner.ts")) && /killTree\(child\)/.test(src("src/lib/runner.ts")));
+check("cliComplete forwards opts.signal to run()", /signal: opts\?\.signal/.test(src("src/lib/loopEngine.ts")));
+check("seatComplete / kimiComplete take the signal", /export async function seatComplete\([^)]*opts\?: SeatOpts/.test(src("src/lib/brainstorm.ts")) && /AbortSignal\.any/.test(src("src/lib/brainstorm.ts")));
+check("multiModelComplete never falls back after a STOP", /opts\.signal\?\.aborted\) throw e/.test(src("src/lib/contentEngine.ts")));
+check("localChat forwards the signal to fetch", /signal: opts\.signal/.test(src("src/lib/localOllama.ts")));
+for (const p of ["src/app/api/content-engine/generate/route.ts", "src/app/api/content-engine/plan/route.ts", "src/app/api/agent-kanban/plan/route.ts", "src/app/api/agent-kanban/build/route.ts"]) {
+  check(`${p.split("/").slice(3, 5).join("/")} registers a run AND passes ctx.signal`, /startModuleRun\(/.test(src(p)) && /signal: ctx\.signal/.test(src(p)));
+}
+check("/api/runs/:id handles action 'stop'", /action === "stop"/.test(src("src/app/api/runs/[id]/route.ts")) && /stopModuleRun\(/.test(src("src/app/api/runs/[id]/route.ts")));
+check("RunsTray shows STOP on running runs and 'stopped' as its own status", /action: "stop"/.test(src("src/components/RunsTray.tsx")) && /"stopped"/.test(src("src/components/RunsTray.tsx")) && /stopped by/.test(src("src/components/RunsTray.tsx")));
+check("RunsTray never labels a stopped run 'done'", !/stopped \? "done"/.test(src("src/components/RunsTray.tsx")));
 check("content-engine/generate registers a run", /startModuleRun\(/.test(src("src/app/api/content-engine/generate/route.ts")));
 check("content-engine/plan registers a run", /startModuleRun\(/.test(src("src/app/api/content-engine/plan/route.ts")));
 check("RunsTray is mounted in the root layout", /<RunsTray\s*\/>/.test(src("src/app/layout.tsx")));

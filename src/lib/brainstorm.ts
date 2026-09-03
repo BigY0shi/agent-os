@@ -114,7 +114,16 @@ export async function resolveKimiModel(preferred?: string): Promise<string> {
   throw new Error("No Kimi model found on Ollama Cloud");
 }
 
-async function kimiComplete(prompt: string, model: string): Promise<string> {
+/** Per-seat call options (S3): STOP's signal and the launch drawer's timeout. */
+export interface SeatOpts { signal?: AbortSignal; timeoutMs?: number }
+
+/** The caller's STOP signal joined with a hard timeout; either one aborts the fetch. */
+function seatSignal(opts: SeatOpts | undefined, defaultMs: number): AbortSignal {
+  const t = AbortSignal.timeout(opts?.timeoutMs ?? defaultMs);
+  return opts?.signal ? AbortSignal.any([opts.signal, t]) : t;
+}
+
+async function kimiComplete(prompt: string, model: string, opts?: SeatOpts): Promise<string> {
   const key = ollamaKey();
   if (!key) throw new Error("No Ollama Cloud key");
   const r = await fetch(`${OLLAMA_HOST}/api/chat`, {
@@ -125,7 +134,7 @@ async function kimiComplete(prompt: string, model: string): Promise<string> {
       messages: [{ role: "user", content: prompt }],
       options: { num_predict: 1000 },
     }),
-    signal: AbortSignal.timeout(180_000),
+    signal: seatSignal(opts, 180_000),
   });
   if (!r.ok) throw new Error(`Ollama Cloud chat ${r.status}: ${(await r.text()).slice(0, 160)}`);
   const j = await r.json() as { message?: { content?: string } };
@@ -136,10 +145,11 @@ async function kimiComplete(prompt: string, model: string): Promise<string> {
 
 // ── Seat dispatch ───────────────────────────────────────────────────────────────
 
-export async function seatComplete(seat: CouncilSeat, prompt: string, kimiModel: string): Promise<string> {
-  if (seat === "kimi") return kimiComplete(prompt, kimiModel);
+export async function seatComplete(seat: CouncilSeat, prompt: string, kimiModel: string, opts?: SeatOpts): Promise<string> {
+  if (seat === "kimi") return kimiComplete(prompt, kimiModel, opts);
   // claude + codex go through the shared CLI helper (subscription auth, no keys).
-  const text = await cliComplete(seat, prompt, { timeoutMs: 240_000 });
+  // opts.signal is STOP (moduleRuns ctx.signal): runner.ts kills the child tree on abort.
+  const text = await cliComplete(seat, prompt, { timeoutMs: opts?.timeoutMs ?? 240_000, signal: opts?.signal });
   const t = text.trim();
   if (!t) throw new Error(`${seat} returned nothing`);
   return t;
