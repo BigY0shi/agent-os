@@ -3,7 +3,7 @@ import { uuid as newUuid, now } from "../ids";
 import { readSettings } from "../../settings";
 import { getEpisode, getStatementsForEpisode } from "./graph";
 import { addEpisode } from "./ingest";
-import { withMemoryModel, openaiCompatBase } from "./llm";
+import { withMemoryModel, openaiCompatBase, openaiCompatReasoningEffort } from "./llm";
 
 /**
  * S5 — legacy memory backfill (roadmap S5, HANDOFF item 2).
@@ -93,6 +93,8 @@ export interface BackfillResult {
   provider: BackfillProvider;
   /** Base URL of that server, so a log line is unambiguous about where it went. */
   base: string;
+  /** `reasoning_effort` sent on the openai-compat path ("" = not sent, absent for Ollama). */
+  reasoningEffort?: string;
   embedModel: string;
   dryRun: boolean;
   /** How many undrived legacy episodes exist in total (before the limit). */
@@ -479,13 +481,14 @@ export async function backfillEpisodes(opts: BackfillOptions): Promise<BackfillR
   const embedModel = mem.embedModel || "nomic-embed-text";
   const provider: BackfillProvider = opts.provider ?? mem.backfillProvider ?? "ollama-local";
   const base = provider === "openai-compat" ? openaiCompatBase() : localOllamaBase();
+  const reasoningEffort = provider === "openai-compat" ? openaiCompatReasoningEffort() : undefined;
 
   if (!model) throw new Error("backfill: no chat model given (settings.memory.backfillModel or --model).");
 
   const remaining = countUndrivedEpisodes();
   const candidates = listUndrivedEpisodes(limit);
   const shell: BackfillResult = {
-    runId, model, provider, base, embedModel, dryRun, remaining, candidates,
+    runId, model, provider, base, reasoningEffort, embedModel, dryRun, remaining, candidates,
     results: [], derived: 0, nothing: 0, failed: 0, ms: 0,
   };
 
@@ -501,6 +504,7 @@ export async function backfillEpisodes(opts: BackfillOptions): Promise<BackfillR
   const pre = await checkBackfillProvider(provider, model, { signal: opts.signal });
   log(
     `${pre.provider} at ${pre.base}: ${pre.chatModel} ready` +
+      (reasoningEffort ? `, reasoning_effort=${reasoningEffort}` : provider === "openai-compat" ? ", reasoning_effort not sent" : "") +
       (pre.embedChecked
         ? `; embeddings ${pre.embedModel} on Ollama at ${pre.embedBase}`
         : `; embeddings on ${mem.embedProvider}`),

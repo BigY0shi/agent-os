@@ -82,7 +82,7 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.pathname === "/api/chat") {
     const body = JSON.parse(init.body);
-    calls.chat.push({ model: body.model, host: u.origin, format: body.format ? Object.keys(body.format.properties ?? {}) : null, signal: init.signal });
+    calls.chat.push({ model: body.model, host: u.origin, format: body.format ? Object.keys(body.format.properties ?? {}) : null, reasoningEffort: body.reasoning_effort, signal: init.signal });
     const keys = body.format ? Object.keys(body.format.properties ?? {}) : [];
     return Response.json({ message: { role: "assistant", content: modelContent(body.messages, keys) } });
   }
@@ -111,6 +111,7 @@ function lmStudio(u, init) {
       model: body.model,
       host: u.origin,
       responseFormat: body.response_format?.type ?? null,
+      reasoningEffort: body.reasoning_effort,
       schemaKeys: keys,
     });
     const content = `<think>weighing it up</think>${modelContent(body.messages, keys)}`;
@@ -452,5 +453,55 @@ const badProv = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", 
 check("K5 CLI rejects an unknown --provider with exit 2", badProv.status === 2 && /--provider must be one of/.test(badProv.stderr), `status=${badProv.status}`);
 const badUrl = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--base-url", "127.0.0.1:1234"], { cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 60_000 });
 check("K5 CLI rejects a --base-url with no scheme", badUrl.status === 2 && /--base-url must be an http\(s\) URL/.test(badUrl.stderr), `status=${badUrl.status}`);
+
+// ---- L. reasoning_effort: the thinking budget on the openai-compat path -------
+console.log("-- L: reasoning budget --");
+const lTexts = [
+  "2026-08-20 Yoshi measured Bonsai spending 1900 reasoning tokens on a 51-token answer.",
+  "2026-08-21 Yoshi set the thinking budget to none and prefers Opera over Chrome.",
+];
+lTexts.forEach((text, i) => graph.saveEpisode({
+  content: text, originalContent: text, source: "migration:remember",
+  sessionId: `eff-${i}`, contentHash: contentHash(text),
+  validAt: `2026-08-2${i}T00:00:00.000Z`,
+}));
+
+// L1 - the settings default ("none") rides on every openai-compat chat call
+calls.lmChat.length = 0;
+const effRun = await B.backfillEpisodes({ limit: 1, model: "bonsai-27b", provider: "openai-compat", runId: "run-eff" });
+check("L1 default thinking budget is sent as reasoning_effort=none", calls.lmChat.length > 0 && calls.lmChat.every((c) => c.reasoningEffort === "none"), JSON.stringify(calls.lmChat.map((c) => c.reasoningEffort).slice(0, 3)));
+check("L1 the result reports the budget that actually went out", effRun.reasoningEffort === "none", String(effRun.reasoningEffort));
+check("L1 the log line names it", effRun.derived + effRun.nothing + effRun.failed === 1);
+
+// L2 - an explicit value overrides, via the same env door the CLI uses
+calls.lmChat.length = 0;
+process.env.OPENAI_COMPAT_REASONING_EFFORT = "high";
+const effRun2 = await B.backfillEpisodes({ limit: 1, model: "bonsai-27b", provider: "openai-compat", runId: "run-eff2" });
+check("L2 an explicit budget overrides the gear", calls.lmChat.length > 0 && calls.lmChat.every((c) => c.reasoningEffort === "high") && effRun2.reasoningEffort === "high", JSON.stringify(calls.lmChat.map((c) => c.reasoningEffort).slice(0, 3)));
+
+// L3 - empty means send NOTHING, not send an empty string
+calls.lmChat.length = 0;
+process.env.OPENAI_COMPAT_REASONING_EFFORT = "";
+const lText = "2026-08-22 Yoshi left the thinking budget unset to let the server decide.";
+graph.saveEpisode({ content: lText, originalContent: lText, source: "migration:remember", sessionId: "eff-3", contentHash: contentHash(lText), validAt: "2026-08-22T00:00:00.000Z" });
+const effRun3 = await B.backfillEpisodes({ limit: 1, model: "bonsai-27b", provider: "openai-compat", runId: "run-eff3" });
+check("L3 an empty budget omits the field entirely", calls.lmChat.length > 0 && calls.lmChat.every((c) => c.reasoningEffort === undefined) && effRun3.reasoningEffort === "", JSON.stringify(calls.lmChat.map((c) => c.reasoningEffort).slice(0, 3)));
+delete process.env.OPENAI_COMPAT_REASONING_EFFORT;
+
+// L4 - the Ollama path never learns about it
+calls.chat.length = 0;
+const oText = "2026-08-23 Yoshi kept the Ollama path free of OpenAI-only fields.";
+graph.saveEpisode({ content: oText, originalContent: oText, source: "migration:remember", sessionId: "eff-4", contentHash: contentHash(oText), validAt: "2026-08-23T00:00:00.000Z" });
+const ollamaRun = await B.backfillEpisodes({ limit: 1, model: "bonsai:27b", provider: "ollama-local", runId: "run-eff4" });
+check("L4 the Ollama path carries no reasoning_effort", ollamaRun.reasoningEffort === undefined && calls.chat.length > 0 && calls.chat.every((c) => c.reasoningEffort === undefined));
+
+// L5 - the wiring
+check("L5 settings default the budget to none and offer the full set", /openaiCompatReasoningEffort: "none"/.test(settingsSrc) && /"" \| "none" \| "minimal" \| "low" \| "medium" \| "high"/.test(settingsSrc));
+check("L5 llm.ts sends it only when non-empty and reads the env door first", /body\.reasoning_effort = effort/.test(llmSrc) && /OPENAI_COMPAT_REASONING_EFFORT/.test(llmSrc) && /if \(effort\)/.test(llmSrc));
+check("L5 the gear exposes it (rule 16, not config-file-only)", /REASONING_EFFORTS/.test(gearSrc) && /Thinking budget/.test(gearSrc) && /openaiCompatReasoningEffort/.test(gearSrc));
+const cliSrc = fs.readFileSync(path.join(root, "scripts", "v2", "memory-backfill.mjs"), "utf8");
+check("L5 the CLI takes --reasoning-effort and writes nothing to disk", /--reasoning-effort/.test(cliSrc) && /process\.env\.OPENAI_COMPAT_REASONING_EFFORT = args\.effort/.test(cliSrc));
+const badEff = spawnSync(process.execPath, [tsxCli, path.join(root, "scripts", "v2", "memory-backfill.mjs"), "--reasoning-effort", "hard"], { cwd: root, encoding: "utf8", env: { ...process.env }, timeout: 60_000 });
+check("L5 CLI rejects an unknown --reasoning-effort with exit 2", badEff.status === 2 && /--reasoning-effort must be one of/.test(badEff.stderr), `status=${badEff.status}`);
 
 finish();

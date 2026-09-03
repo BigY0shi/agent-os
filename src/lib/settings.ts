@@ -257,6 +257,12 @@ export interface Settings {
     // A key, if the server wants one, comes from OPENAI_COMPAT_API_KEY in the
     // environment and is never stored here.
     openaiCompatUrl?: string;
+    // How hard a reasoning model may think before answering, sent as
+    // `reasoning_effort`. Measured on bonsai-27b 2026-09-03: left alone it
+    // spends ~1900 reasoning tokens (26 s) to produce a 51-token answer, and
+    // "none" gives the same facts in 1.2 s. Empty string = send nothing and
+    // let the server decide. Servers that do not know the field ignore it.
+    openaiCompatReasoningEffort?: "" | "none" | "minimal" | "low" | "medium" | "high";
   };
   capability?: {
     folders?: { path: string; scopes: ("files" | "coding" | "exec")[] }[];
@@ -481,6 +487,7 @@ export const DEFAULT_SETTINGS: Settings = {
     backfillModel: "bonsai:27b",
     backfillProvider: "ollama-local",
     openaiCompatUrl: "http://127.0.0.1:1234/v1",
+    openaiCompatReasoningEffort: "none",
   },
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},

@@ -34,6 +34,87 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-03 - the backfill was slow because Bonsai thinks for 25 seconds and throws it away
+
+Yoshi ran the first live openai-compat sample and called it: "It's not really
+worth the time. Why is it taking so long per episode? Is there a lot to read
+through, or is it just thinking real hard?" Both halves of that question turned
+out to be answerable with numbers, and the answer was the second one.
+
+The 3-episode sample took 496.8 s, about 165 s per episode. The obvious
+suspects were wrong. Measured against the live server:
+
+| probe | result |
+|---|---|
+| fixed per-request overhead | 0.1 s |
+| ~1200 extra prompt tokens | 0.8 s |
+| generation speed | 76 tok/s |
+
+Nothing to read (prompts are 136 tokens), nothing slow about the hardware. The
+`usage` block gave it away: `completion_tokens 1978`, of which
+`reasoning_tokens 1905`. The answer itself was 51 tokens. Bonsai writes a
+7,600-character monologue into `message.reasoning_content` to emit a
+205-character JSON object, and this pipeline discards every word of it. 96% of
+the wall clock was the model talking to itself.
+
+**Why the earlier `<think>` strip never fired.** `openaiCompatChat` strips
+`<think>…</think>` out of `content`, copied from the MiniMax path. LM Studio
+does not put it there; it splits reasoning into a separate `reasoning_content`
+field and leaves `content` clean. So the strip was correct, did nothing, and
+told us nothing. The first probe printed `has <think>: false` and I read that as
+"not a reasoning model", which was exactly backwards. The token counts, not the
+response shape, are what settle this question.
+
+Four knobs were tried against the live server. Only one works, and the two
+chat-template ones are silently ignored rather than rejected:
+
+| knob | time | reasoning tokens |
+|---|---|---|
+| baseline | 26.6 s | 1925 |
+| `reasoning_effort: low` | 30.0 s | 2216 |
+| `reasoning_effort: minimal` | 22.2 s | 1615 |
+| `reasoning_effort: none` | **1.2 s** | **0** |
+| `chat_template_kwargs.enable_thinking: false` | 26.8 s | 1986 |
+| `chat_template_kwargs.thinking: false` | 24.9 s | 1837 |
+
+Note `low` is SLOWER than baseline. Treating these as a monotonic dial would be
+a mistake; only `none` is worth having.
+
+**Quality does not drop, which is the part that matters.** Side by side on three
+real legacy notes, thinking-off returned the same facts, and on the browser-
+preference note it caught a third fact (the instruction about wording) that
+thinking-on missed. The live re-run bears it out: 3 episodes in 63.8 s (21.3 s
+each, down from 165) producing 12 facts against the earlier run's 8, across a
+wider aspect set (Problem, Event, Knowledge). Spot-checked the three `Problem`
+facts on episode 3e67a84a against `original_content` before trusting them: the
+note really does end "regressed: dummy data, Paperclip crashes, Express 404s",
+so they are grounded, not invented.
+
+For the whole corpus this is the difference between ~15 hours and ~2 hours.
+
+**The setting defaults to "none", and that is a deliberate behaviour change, so
+it is stated out loud rather than buried.** `settings.memory.openaiCompatReasoningEffort`
+is in the Memory gear as "Thinking budget" (rule 16), the run's preflight line
+now reads `reasoning_effort=none` or `reasoning_effort not sent`, and
+`BackfillResult.reasoningEffort` carries what actually went out (rule 20). Empty
+string means omit the field entirely and let the server decide - which is a
+different thing from sending `""`, and smoke L3 pins that distinction. The CLI
+flag `--reasoning-effort` overrides through `OPENAI_COMPAT_REASONING_EFFORT`,
+the same env door `--base-url` uses, so neither flag writes to disk.
+
+The field never reaches the Ollama path; smoke L4 asserts it by recording
+`reasoning_effort` on the fake Ollama and requiring it to be undefined.
+
+Evidence: smoke-memory-backfill 79 -> 90 checks, ALL PASS. Live run
+a445501c: 3 derived, 0 failed, 63.8 s.
+
+**Still open:** an episode that derives zero facts is logged `derived` and never
+offered again (seen once on 0f7dea7e in the first sample). The outcome is
+decided by whether the pipeline returned an episode, not by whether anything was
+learned. Yoshi has not yet said whether to change it. Also unchanged: 0 voice
+aspects across six real episodes, though this window is all terse June
+changelog entries with no stated preferences, so that may be honest.
+
 ## 2026-09-03 - S5: the backfill can run on LM Studio, because Bonsai 27B cannot run on Ollama
 
 Yoshi asked whether the memory backfill could use LM Studio, because Bonsai 27B

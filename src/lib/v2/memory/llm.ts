@@ -209,11 +209,25 @@ async function minimaxChat(model: string, messages: ChatMessage[], opts?: ModelC
  * from settings, so no getter in this codebase can return key material. Local
  * servers normally need none.
  *
+ * `reasoning_effort` rides along when settings.memory.openaiCompatReasoningEffort
+ * is set (default "none"), because a thinking model otherwise spends ~25 s per
+ * call on a monologue this pipeline discards.
+ *
  * Structured output is belt AND suspenders, same as the Ollama path: the JSON
  * schema goes in `response_format` for servers that honour it, and the schema
  * is ALSO spelled out in the prompt by the caller (withJsonInstruction). A
  * reasoning model's <think> block is stripped, as on the MiniMax path.
  */
+/**
+ * `reasoning_effort` for the openai-compat call, or "" to send nothing.
+ * Exported so a caller can say in its own log which value actually went out.
+ */
+export function openaiCompatReasoningEffort(): string {
+  const env = process.env.OPENAI_COMPAT_REASONING_EFFORT;
+  if (env !== undefined) return env.trim(); // set by the CLI --reasoning-effort flag
+  return (readSettings().memory?.openaiCompatReasoningEffort ?? "none").trim();
+}
+
 export function openaiCompatBase(): string {
   const configured = readSettings().memory?.openaiCompatUrl || process.env.OPENAI_COMPAT_URL || "";
   const base = (configured || "http://127.0.0.1:1234/v1").trim().replace(/\/+$/, "");
@@ -233,6 +247,12 @@ async function openaiCompatChat(
 
   const body: Record<string, unknown> = { model, messages, stream: false };
   if (opts?.temperature !== undefined) body.temperature = opts.temperature;
+  // A reasoning model left to itself burns most of its budget on a monologue
+  // the caller throws away (bonsai-27b: 1905 reasoning tokens for a 51-token
+  // answer, 26 s vs 1.2 s with "none", same facts). Sent only when chosen;
+  // servers that do not know the field ignore it.
+  const effort = openaiCompatReasoningEffort();
+  if (effort) body.reasoning_effort = effort;
   if (schema) {
     body.response_format = {
       type: "json_schema",

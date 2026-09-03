@@ -25,6 +25,7 @@ interface MemoryDraft {
   backfillModel: string;
   backfillProvider: string;
   openaiCompatUrl: string;
+  openaiCompatReasoningEffort: string;
 }
 
 interface FolderRow { path: string; scopes: ("files" | "coding" | "exec")[] }
@@ -51,6 +52,10 @@ const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax", "openai-com
 // friends, for models Ollama cannot serve (Bonsai 27B needs a llama.cpp fork).
 const BACKFILL_PROVIDERS = ["ollama-local", "openai-compat"] as const;
 const DEFAULT_COMPAT_URL = "http://127.0.0.1:1234/v1";
+// How hard a thinking model may deliberate. Measured on bonsai-27b 2026-09-03:
+// unset it burns ~1900 reasoning tokens (26 s) per call for a 51-token answer;
+// "none" returns the same facts in 1.2 s. "" sends nothing at all.
+const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", ""] as const;
 const EMBED_PROVIDERS = ["ollama-local", "ollama-cloud"] as const;
 const SCOPES = ["files", "coding", "exec"] as const;
 
@@ -144,6 +149,7 @@ export default function MemorySettings() {
       backfillModel: String(memory.backfillModel ?? "bonsai:27b"),
       backfillProvider: String(memory.backfillProvider ?? "ollama-local"),
       openaiCompatUrl: String(memory.openaiCompatUrl ?? DEFAULT_COMPAT_URL),
+      openaiCompatReasoningEffort: String(memory.openaiCompatReasoningEffort ?? "none"),
     });
     setCapDraft({
       folders: Array.isArray(capability.folders) ? (capability.folders as FolderRow[]).map((f) => ({ path: f.path, scopes: [...(f.scopes ?? [])] })) : [],
@@ -171,6 +177,7 @@ export default function MemorySettings() {
         backfillModel: draft.backfillModel.trim() || "bonsai:27b",
         backfillProvider: draft.backfillProvider,
         openaiCompatUrl: draft.openaiCompatUrl.trim() || DEFAULT_COMPAT_URL,
+        openaiCompatReasoningEffort: draft.openaiCompatReasoningEffort as "" | "none" | "minimal" | "low" | "medium" | "high",
       },
       capability: {
         ...capability,
@@ -257,6 +264,7 @@ export default function MemorySettings() {
     const model = draft.backfillModel.trim() || "bonsai:27b";
     const provider = draft.backfillProvider;
     const compatUrl = draft.openaiCompatUrl.trim() || DEFAULT_COMPAT_URL;
+    const effort = draft.openaiCompatReasoningEffort;
     setBackfillErr(null);
     setBackfillBusy(dryRun ? "dry" : "run");
     try {
@@ -271,6 +279,7 @@ export default function MemorySettings() {
             backfillModel: model,
             backfillProvider: provider,
             openaiCompatUrl: compatUrl,
+            openaiCompatReasoningEffort: effort as "" | "none" | "minimal" | "low" | "medium" | "high",
           },
         });
       }
@@ -537,6 +546,17 @@ export default function MemorySettings() {
           </Field>
         ) : <div />}
       </div>
+      {draft.backfillProvider === "openai-compat" && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Thinking budget" hint="A reasoning model can spend 25 s per call deliberating for a one-line answer. 'none' measured 22x faster on bonsai-27b with the same facts.">
+            <select value={draft.openaiCompatReasoningEffort} onChange={(e) => setDraft({ ...draft, openaiCompatReasoningEffort: e.target.value })}
+              className="w-full h-8 rounded-md px-2 text-[12.5px] outline-none" style={inputStyle}>
+              {REASONING_EFFORTS.map((p) => <option key={p || "unset"} value={p}>{p || "(send nothing, server decides)"}</option>)}
+            </select>
+          </Field>
+          <div />
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-2">
         <button onClick={() => void runBackfill(true)} disabled={backfillBusy !== null || saving}
           className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
