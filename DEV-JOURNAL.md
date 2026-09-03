@@ -34,6 +34,43 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-02 - S4 (a): pasted URLs become cards through the normal pipeline
+
+Harness session (feat-s4-deal-desk-control), part five. The owner's words: paste one or
+more job-listing URLs and have the desk scrape, evaluate and pitch them like any feed
+item.
+
+**Why it goes through the actor's pipeline and not a shortcut.** `listDeals()` shows a
+board row only when `pitches.json` has its URL, and `score_board.mjs` rebuilds
+`board.json` from the actor's dataset directory. So the shortest honest path was to make
+an intake row look exactly like a scraped one: `scripts/deals/intake-scrape.mjs`
+(Playwright from this repo, the owner's real Chrome channel like the actor) visits each
+page and calls the actor's own `parseDetailPage` + `mergeRecord` (imported by file URL
+from `UPWORK_ACTOR_DIR`), `lib/dealIntake.ts` writes the row as
+`intake-<uid>.json` into the dataset dir, runs `score_board.mjs`, then `pitch.mjs` with
+the new ids, then forces them into New the way refill does. Rejected: porting the
+scorer's three functions into the repo to append to board.json directly; that is
+external logic that would drift the day the owner tunes it.
+
+**What it costs, said plainly.** Crawlee purges the dataset at the start of the next
+actor run, so a re-scrape drops intake rows from board.json unless the search finds the
+same listing. That is already the lifecycle of every board row (a re-scrape replaces every
+URL; the scrape route's header note measured 0 overlap), and desk state survives by id.
+Also: the scraper only accepts Upwork job pages, because the record shape is keyed on
+the job uid; any other URL is rejected by name with the reason
+(`parseIntakeUrls`, cap 20 per paste, the apply-form spelling and `~01` ids
+canonicalise to the same target).
+
+**The gate rides along.** The intake rows pass `detectLoginWall()`; a wall stops the run
+and flags the rest `needsLogin`, the same state (d) built. The route is a module run
+("Intake: N pasted listings", STOP kills whichever child is up); the paste box is a
+panel under the header. Evidence: `smoke-deal-desk-control` section E, 13 checks, with
+fake intake / score / pitch scripts in the redirected leads dir (row 1 lands in New
+with a pursue verdict, row 2 is the login page, row 3 is never reached); `tsc` clean.
+Not seen in a browser: the real `intake-scrape.mjs` against upwork.com needs the owner's
+Chrome and his session.
+
+---
 ## 2026-09-02 - S4 (d): enrichment stops at the login wall and says so on the card
 
 Harness session (feat-s4-deal-desk-control), part four. The owner's words: the browser

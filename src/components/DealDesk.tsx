@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download,
+  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste,
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
@@ -372,6 +372,14 @@ function CookieModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function DealDesk() {
+  const { intake, intaking, intakeResult } = useDesk();
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const submitIntake = async () => {
+    if (!pasteText.trim()) return;
+    const ok = await intake(pasteText);
+    if (ok) { setPasteText(""); setShowPaste(false); }
+  };
   const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
@@ -455,6 +463,12 @@ export default function DealDesk() {
             title="Dismiss leads you didn't approve, then pitch the next-best to refill the queue to 20">
             {refilling ? <Loader2 size={13} className="animate-spin" /> : <ListRestart size={13} />} Clear passed & refill
           </button>
+          <button onClick={() => setShowPaste((v) => !v)} disabled={intaking}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: showPaste ? "rgba(52,211,153,0.28)" : "rgba(52,211,153,0.16)", color: "#34d399" }}
+            title="Paste one or more Upwork job URLs; the desk scrapes, scores and pitches them like any feed item">
+            {intaking ? <Loader2 size={13} className="animate-spin" /> : <ClipboardPaste size={13} />} Paste URLs
+          </button>
           <button onClick={pullFeeds} disabled={pullingFeeds}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
             style={{ background: "rgba(96,165,250,0.16)", color: "#60a5fa" }}
@@ -476,6 +490,25 @@ export default function DealDesk() {
       </div>
       <p className="text-sm text-white/45 mb-5">Upwork fast-wins — drag to move stages, open a card to review the pitch, approach, crash course, and notes before you bid.</p>
 
+      {/* S4 (a): manual intake. Paste Upwork job URLs; they go through scrape ->
+          score -> pitch like any scraped listing and land in New. */}
+      {showPaste && (
+        <div className="panel p-3 mb-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/45 mb-1.5">Paste Upwork job URLs, one per line</div>
+          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={3} disabled={intaking}
+            placeholder="https://www.upwork.com/jobs/~021234567890123456/"
+            className="w-full panel bg-transparent p-2 text-[12px] font-mono resize-y" />
+          <div className="flex items-center gap-2 mt-2">
+            <button onClick={submitIntake} disabled={intaking || !pasteText.trim()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+              style={{ background: "rgba(52,211,153,0.16)", color: "#34d399" }}>
+              {intaking ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} {intaking ? "Scraping, scoring, pitching…" : "Take them in"}
+            </button>
+            <span className="text-[11px] text-white/40">Upwork listings only (max 20). Runs in the tray; a listing already on the desk is skipped and named.</span>
+          </div>
+        </div>
+      )}
+      {intakeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#34d399" }}>{intakeResult}</div>}
       {/* S4 (d): the login wall, said once at the top with the way out. */}
       {needsLoginCount > 0 && (
         <div className="panel p-3 mb-4 text-[12.5px] flex flex-wrap items-center gap-x-3 gap-y-2" style={{ borderColor: "rgba(248,113,113,0.5)", color: "#fca5a5" }}>

@@ -152,6 +152,54 @@ export function detectLoginWall(page: ScrapedPage): LoginWallCheck {
 /** The page to send the owner to when a wall is hit. */
 export const UPWORK_LOGIN_URL = "https://www.upwork.com/ab/account-security/login";
 
+// -- (a) Manual intake ------------------------------------------------------------
+//
+// The owner pastes one or more job-listing URLs and the desk scrapes, evaluates
+// and pitches them like feed items. Only Upwork job pages are accepted today:
+// the scraper's record shape (Upwork-Leads/actor/src/parse.js mergeRecord) is
+// keyed on the job uid, and every other host would need its own parser. A URL
+// that is not that is rejected BY NAME with the reason, never dropped quietly.
+
+export const INTAKE_MAX_URLS = 20;
+
+export interface IntakeTarget {
+  /** The job uid (digits after ~02 / ~01); the desk's stable key. */
+  id: string;
+  /** Canonical listing URL, the form the scraper writes. */
+  url: string;
+  /** What was pasted, for the report. */
+  input: string;
+}
+
+export interface IntakeParse {
+  accepted: IntakeTarget[];
+  rejected: { input: string; reason: string }[];
+}
+
+const UID_RE = /~0[12](\d{15,22})\b/;
+
+/** Split pasted text (or a list) into distinct, canonical Upwork job targets. */
+export function parseIntakeUrls(input: string | string[]): IntakeParse {
+  const raw = Array.isArray(input) ? input : String(input ?? "").split(/[\s,;]+/);
+  const out: IntakeParse = { accepted: [], rejected: [] };
+  const seen = new Set<string>();
+  for (const piece of raw) {
+    const s = String(piece ?? "").trim();
+    if (!s) continue;
+    if (out.accepted.length >= INTAKE_MAX_URLS) { out.rejected.push({ input: s, reason: `over the ${INTAKE_MAX_URLS}-URL cap for one paste` }); continue; }
+    let u: URL;
+    try { u = new URL(/^https?:\/\//i.test(s) ? s : `https://${s}`); } catch { out.rejected.push({ input: s, reason: "not a URL" }); continue; }
+    if (!/(^|\.)upwork\.com$/i.test(u.hostname)) { out.rejected.push({ input: s, reason: `not an Upwork listing (${u.hostname})` }); continue; }
+    const m = u.pathname.match(UID_RE) || u.search.match(UID_RE);
+    if (!m) { out.rejected.push({ input: s, reason: "an Upwork page, but not a job listing (no ~02 job id in the path)" }); continue; }
+    const id = m[1];
+    if (seen.has(id)) continue; // the same listing pasted twice is one target
+    seen.add(id);
+    out.accepted.push({ id, url: `https://www.upwork.com/jobs/~02${id}/`, input: s });
+  }
+  return out;
+}
+
 export interface AgePartition<T> {
   kept: T[];
   dropped: T[];

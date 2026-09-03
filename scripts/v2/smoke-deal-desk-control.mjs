@@ -191,6 +191,86 @@ console.log("\n-- D (d) login wall --");
   check("D17 listDeals carries needsLogin/loginWallAt (no board rows here, so the field just has to exist on the type path)", Array.isArray(deals));
 }
 
+// -- E (a) manual intake ---------------------------------------------------------
+console.log("\n-- E (a) intake --");
+{
+  const p = C.parseIntakeUrls([
+    "https://www.upwork.com/jobs/~021234567890123456/",
+    "https://www.upwork.com/freelance-jobs/apply/Zapier-cleanup_~021234567890123456/",   // same listing, apply form
+    "www.upwork.com/jobs/Make-scenario_~019876543210987654?referrer=x",
+    "https://www.upwork.com/nx/search/jobs/?q=zapier",
+    "https://remoteok.com/remote-jobs/12345",
+    "not a url at all",
+    "",
+  ]);
+  check("E1 the two spellings of the same listing collapse to one canonical target", p.accepted.length === 2 && p.accepted[0].url === "https://www.upwork.com/jobs/~021234567890123456/" && p.accepted[0].id === "1234567890123456", JSON.stringify(p.accepted));
+  check("E2 a bare host and ~01 ids are accepted and canonicalised", p.accepted[1]?.id === "9876543210987654" && p.accepted[1].url.endsWith("~029876543210987654/"));
+  check("E3 rejections are named with reasons", p.rejected.length === 3 && p.rejected.every((r) => r.reason), JSON.stringify(p.rejected));
+  check("E4 a search page is 'not a job listing', another host is 'not an Upwork listing'", /not a job listing/.test(p.rejected[0].reason) && /not an Upwork listing/.test(p.rejected[1].reason) && /not a URL/.test(p.rejected[2].reason));
+  const text = C.parseIntakeUrls("https://www.upwork.com/jobs/~021111111111111111/\nhttps://www.upwork.com/jobs/~022222222222222222/, https://www.upwork.com/jobs/~021111111111111111/");
+  check("E5 pasted text splits on newlines, commas and spaces, and dedupes", text.accepted.length === 2);
+  const many = C.parseIntakeUrls(Array.from({ length: 25 }, (_, i) => `https://www.upwork.com/jobs/~02${String(1000000000000000 + i)}/`));
+  check("E6 the per-paste cap is enforced by name", many.accepted.length === C.INTAKE_MAX_URLS && many.rejected.length === 5 && /cap/.test(many.rejected[0].reason));
+
+  // The runner with fake scripts in the redirected leads dir: a fake intake
+  // scraper (row 1 fine, row 2 the login page, row 3 unreached), a fake
+  // score_board that rebuilds board.json from the dataset, a fake pitch.mjs
+  // that merges pitches.json. No browser, no claude.
+  const leads = process.env.UPWORK_LEADS_DIR;
+  const fakeDir = path.join(leads, "fake");
+  fs.mkdirSync(fakeDir, { recursive: true });
+  const w = (name, lines) => { const f = path.join(fakeDir, name); fs.writeFileSync(f, lines.join("\n"), "utf8"); return f; };
+  const intakeScript = w("intake.mjs", [
+    'import fs from "node:fs";',
+    'const t = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));',
+    'if (!process.env.UPWORK_ACTOR_DIR) { console.error("NO_ACTOR_DIR"); process.exit(2); }',
+    'const rows = [];',
+    'const rec = (id) => ({ id, title: "Pasted listing " + id, url: "https://www.upwork.com/jobs/~02" + id + "/", budget: "$500", jobType: "Fixed", description: "Fix our Zapier", datePosted: new Date().toISOString(), _query: "intake", tags: [] });',
+    'rows.push({ id: t[0].id, url: t[0].url, page: { title: "Pasted listing - Upwork", url: t[0].url, text: "Fix our Zapier. Proposals: 5 to 10. About the client" }, record: rec(t[0].id) });',
+    'if (t[1]) rows.push({ id: t[1].id, url: t[1].url, page: { title: "Log in to Upwork", url: "https://www.upwork.com/ab/account-security/login", text: "Welcome back Password" }, record: null });',
+    'fs.writeFileSync(process.argv[3], JSON.stringify(rows));',
+    'console.log(JSON.stringify({ done: true, count: rows.length }));',
+  ]);
+  const scoreScript = w("score.mjs", [
+    'import fs from "node:fs"; import path from "node:path";',
+    `const ds = ${JSON.stringify(path.join(leads, "dataset"))};`,
+    'const rows = fs.readdirSync(ds).filter((f) => f.endsWith(".json")).map((f) => JSON.parse(fs.readFileSync(path.join(ds, f), "utf8")));',
+    'const scored = rows.map((r) => ({ ...r, easiness: 7, winnability: 6, fit: 8, composite: 6.8 }));',
+    `fs.writeFileSync(${JSON.stringify(path.join(leads, "board.json"))}, JSON.stringify(scored));`,
+    'console.log("Scored " + scored.length);',
+  ]);
+  const pitchScript = w("pitch.mjs", [
+    'import fs from "node:fs";',
+    'const ids = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));',
+    `const f = ${JSON.stringify(path.join(leads, "pitches.json"))};`,
+    'let prev = []; try { prev = JSON.parse(fs.readFileSync(f, "utf8")); } catch {}',
+    'const next = ids.map((id) => ({ url: "https://www.upwork.com/jobs/~02" + id + "/", fitRefined: 8, summary: "Good fit: a Zapier fix.", why: "Strong fit, squarely in our lane.", pitch: "I read your posting.", approach: "Audit, fix, verify", crashCourse: "n/a" }));',
+    'fs.writeFileSync(f, JSON.stringify([...prev, ...next]));',
+    'console.log(JSON.stringify({ pitched: ids.length }));',
+  ]);
+  const I = await import("../../src/lib/dealIntake.ts");
+  const seams = { intakeScript, scoreScript, pitchScript, actorDir: leads, datasetDir: path.join(leads, "dataset") };
+  fs.writeFileSync(path.join(leads, "board.json"), "[]", "utf8"); // the age-gate section left a board; start clean
+  const logs = [];
+  const t = [
+    { id: "3000000000000001", url: "https://www.upwork.com/jobs/~023000000000000001/", input: "" },
+    { id: "3000000000000002", url: "https://www.upwork.com/jobs/~023000000000000002/", input: "" },
+    { id: "3000000000000003", url: "https://www.upwork.com/jobs/~023000000000000003/", input: "" },
+  ];
+  const o = await I.runIntake(t, { ...seams, log: (l) => logs.push(l) });
+  check("E7 the clean listing was scraped, the wall stopped the rest", o.scraped === 1 && o.stopped === "login", JSON.stringify(o));
+  check("E8 the wall card and the unreached card are flagged needs login", o.needsLogin.sort().join(",") === "3000000000000002,3000000000000003" && readLive()["3000000000000003"]?.needsLogin === true);
+  check("E9 the dataset row was written in the scraper's shape", fs.existsSync(path.join(leads, "dataset", "intake-3000000000000001.json")));
+  check("E10 score then pitch ran and the card is in New", o.pitched === 1 && o.ids.join(",") === "3000000000000001" && readLive()["3000000000000001"]?.status === "new", JSON.stringify(o));
+  const deals = await D.listDeals();
+  const card = deals.find((d) => d.id === "3000000000000001");
+  check("E11 listDeals shows the pasted listing with its pitch and a pursue verdict", !!card && card.summary === "Good fit: a Zapier fix." && card.verdict.band === "pursue" && card.status === "new", card ? `${card.verdict.band}/${card.status}` : "no card");
+  check("E12 the run log names each stage", logs.some((l) => /visiting/.test(l)) && logs.some((l) => /scoring/.test(l)) && logs.some((l) => /pitching/.test(l)) && logs.some((l) => /login wall/.test(l)), logs.join(" | "));
+  let missing = null;
+  try { await I.runIntake(t.slice(0, 1), { ...seams, pitchScript: path.join(leads, "nope.mjs") }); } catch (e) { missing = e.message; }
+  check("E13 a missing pipeline script fails loudly by name before anything runs", /pitch\.mjs not found/.test(missing || ""), missing);
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);

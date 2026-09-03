@@ -41,6 +41,10 @@ Every card leads with the evaluator's own pass-or-pursue sentence, banded **purs
 
 `deals.maxAgeDays` (gear, default 5) drops listings posted longer ago than that when a scrape or a feed pull lands: `board.json` and `shortlist.json` after scoring and before pitching, `feeds.json` after the pull and before the brief pass. Dropped rows are written beside the file as `<name>.dropped-<date>.json`, never discarded; undated rows are kept. Cards already on the board are not re-gated. Each card shows its age and turns amber with OLD past the gate.
 
+## Manual intake (S4)
+
+**Paste URLs** in the header opens a box for Upwork job URLs, one per line, up to 20. Each becomes a card through the same path a scrape uses: `scripts/deals/intake-scrape.mjs` visits the page with the actor's own parser, the row is written into the actor's dataset directory, `score_board.mjs` rebuilds `board.json`, `pitch.mjs` writes the analysis, and the ids are forced into New. Anything that is not an Upwork job listing is rejected by name with the reason; a listing already on the desk is skipped and named. The login-wall gate applies. Cost: the next re-scrape purges the dataset, so an intake row leaves `board.json` unless the search finds it again (desk state survives by id, like every other row).
+
 ## The login wall (S4)
 
 Enrichment needs a logged-in Upwork session. When a visit lands on the login page (`detectLoginWall` in `src/lib/dealDeskControl.ts`: the `/ab/account-security/login` URL, a "Log in" title, or the login-form text with none of a listing's markers), the run stops, the card at the wall and every card it never reached are flagged `needs login`, and a banner above the board offers **Open Upwork login** and **Update cookie**. Saving a fresh cookie clears every flag; a dead session flags them again on the next run.
@@ -76,6 +80,7 @@ Open `/deals`. An empty board means the leads directory has no `board.json`, not
 | `POST /api/deals/enrichment` | the gated enrichment (S4): stops at Upwork's login wall, flags the cards it did not reach `needs login`, runs in the tray |
 | `POST /api/deals/enrich` | the older, ungated enrichment; still works, superseded by `enrichment` |
 | `POST /api/deals/scrape` | trigger a scrape |
+| `POST /api/deals/intake` | `{ urls }`: pasted Upwork job URLs go through scrape, score, pitch and land in New (S4) |
 | `POST /api/deals/refill` | top the board back up |
 | `POST /api/deals/feeds` | manage feed sources |
 | `POST /api/deals/cookie` | set the session cookie the scraper needs |

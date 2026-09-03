@@ -43,6 +43,10 @@ interface DeskStore {
   pullingFeeds: boolean;
   feedsResult: string | null;
   pullFeeds: () => Promise<void>;
+  /** S4 (a): pasted Upwork job URLs -> cards through the normal pipeline. */
+  intaking: boolean;
+  intakeResult: string | null;
+  intake: (text: string) => Promise<boolean>;
 }
 
 async function post(action: string, id: string, value?: unknown): Promise<void> {
@@ -70,6 +74,35 @@ export const useDesk = create<DeskStore>((set, get) => ({
   briefBatchResult: null,
   pullingFeeds: false,
   feedsResult: null,
+  intaking: false,
+  intakeResult: null,
+
+  intake: async (text) => {
+    set({ intaking: true, intakeResult: null });
+    try {
+      const r = await fetch("/api/deals/intake", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: text }),
+      });
+      const j = await r.json();
+      const rej = (j.rejected || []) as { input: string; reason: string }[];
+      const rejText = rej.length ? ` · rejected ${rej.length}: ${rej.map((x) => `${x.input} (${x.reason})`).join("; ")}` : "";
+      if (!j.ok) {
+        set({ intakeResult: j.stopped ? "Intake stopped." : `${j.error || "Intake failed"}${rejText}` });
+        if (j.stopped) await get().fetchDeals();
+        return false;
+      }
+      const skipped = (j.skipped || []).length;
+      const wall = j.stopped === "login" ? ` · stopped at the Upwork login wall, ${(j.needsLogin || []).length} marked needs login` : "";
+      set({ intakeResult: `Took in ${j.ids?.length ?? 0} listing(s) (scraped ${j.scraped}, pitched ${j.pitched})${skipped ? ` · ${skipped} already on the desk` : ""}${wall}${rejText}` });
+      await get().fetchDeals();
+      return true;
+    } catch (e) {
+      set({ intakeResult: (e as Error).message });
+      return false;
+    } finally {
+      set({ intaking: false });
+    }
+  },
 
   fetchDeals: async () => {
     set({ loading: true, error: null });
