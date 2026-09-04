@@ -126,6 +126,8 @@ npm run build
 
 This is the repository's current compile-time validation command. It is a local, offline validation step; it does not confirm remote provider connectivity or any externally hosted credentialed services.
 
+In this sandbox, the build did not complete because `next/font` attempted to fetch the `Geist` and `Geist Mono` fonts from Google Fonts and the environment has no outbound access to that domain. The failure is environmental, not a code-level regression in the documentation change itself.
+
 ## Unverified / owner-checked items
 
 The following items are either deliberately kept as placeholders or require explicit owner confirmation before being treated as a final release promise:
