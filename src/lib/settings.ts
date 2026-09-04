@@ -123,6 +123,8 @@ export interface Settings {
     screenModel?: string;
     /** Screen the unjudged leads automatically after a feed pull. */
     screenOnPull?: boolean;
+    /** Model for the dossier pass; falls back to CLAUDE_MODEL when unset. */
+    dossierModel?: string;
   };
 
   // Operating skills (~/.agentic-os/skills/<name>/SKILL.md) injected into agent prompts.

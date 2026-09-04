@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste, ScanLine,
+  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste, ScanLine, ClipboardList,
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
-import { VERDICT_COLOR, VERDICT_LABEL, ageDays, UPWORK_LOGIN_URL } from "@/lib/dealDeskControl";
+import { VERDICT_COLOR, VERDICT_LABEL, ageDays, UPWORK_LOGIN_URL, dossierInputHash, dossierIsStale } from "@/lib/dealDeskControl";
 import DealDeskSettings from "@/components/DealDeskSettings";
 
 const fmtMoney = (n: number | null) => (n == null ? "?" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
@@ -172,7 +172,8 @@ function ResearchLine({ research, answers }: { research: NonNullable<Deal["resea
 }
 
 function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
-  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research } = useDesk();
+  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research, fetchDeals } = useDesk();
+  const [buildingDossier, setBuildingDossier] = useState(false);
   const researching = deal.research?.status === "running";
   const [notes, setNotes] = useState(deal.notes);
   const [pitch, setPitch] = useState(deal.pitch || "");
@@ -203,6 +204,27 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
     const text = await draftProposal(deal.id);   // full ~120-word proposal, notes woven in
     if (text) setPitch(text);                    // drop it into the editable box
     setDrafting(false);
+  };
+
+  // The dossier is data the owner can read and correct BEFORE a proposal is written,
+  // which is the whole reason it is not an agent's private context. Staleness is
+  // computed from the persisted inputs (deal.notes, not the unsaved textarea), so
+  // saving a note visibly invalidates the account rather than silently keeping it.
+  const dossierStale = dossierIsStale(deal.dossier, dossierInputHash({
+    description: deal.description, notes: deal.notes, answers: deal.answers,
+    summary: deal.summary, why: deal.why, approach: deal.approach, crashCourse: deal.crashCourse,
+  }));
+  const buildDossier = async () => {
+    setBuildingDossier(true);
+    try {
+      await fetch("/api/deals/dossier", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deal.id, force: true }),
+      });
+      await fetchDeals();
+    } finally {
+      setBuildingDossier(false);
+    }
   };
 
   return (
@@ -303,6 +325,57 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           </button>
           <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
             rows={8} className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
+        </Section>
+
+        <Section title="Dossier — what they actually asked">
+          <div className="flex items-center gap-2 mb-2">
+            <button onClick={buildDossier} disabled={buildingDossier}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] font-medium disabled:opacity-40"
+              style={{ background: "rgba(96,165,250,0.16)", color: "#60a5fa" }}>
+              {buildingDossier ? <Loader2 size={12} className="animate-spin" /> : <ClipboardList size={12} />}
+              {deal.dossier ? "Rebuild" : "Build dossier"}
+            </button>
+            {deal.dossier && dossierStale && (
+              <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24" }}
+                title="The notes, the Q&A or the listing changed after this was built. A proposal will rebuild it.">
+                stale
+              </span>
+            )}
+          </div>
+          {!deal.dossier ? (
+            <p className="text-[12px] text-white/40">
+              None yet. Drafting a proposal builds one automatically; build it here first if you want to check it.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {deal.dossier.openWith && (
+                <div className="text-[12px] px-2 py-1.5 rounded" style={{ background: "rgba(248,113,113,0.12)", color: "#fca5a5" }}>
+                  Must open with: <span className="font-mono">{deal.dossier.openWith}</span>
+                </div>
+              )}
+              <p className="text-[12.5px] text-white/65 leading-relaxed">{deal.dossier.position}</p>
+              {deal.dossier.asks.length === 0 ? (
+                <p className="text-[12px] text-white/40">This listing asks for nothing specific.</p>
+              ) : (
+                <ol className="space-y-1.5">
+                  {deal.dossier.asks.map((a, i) => (
+                    <li key={i} className="text-[12px] leading-snug">
+                      <span className="text-white/80">{i + 1}. {a.ask}</span>
+                      <br />
+                      <span style={{ color: a.answer ? "rgba(255,255,255,0.5)" : "#fbbf24" }}>
+                        {a.answer ?? "nothing on hand answers this"}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {deal.dossier.gaps.length > 0 && (
+                <div className="text-[11.5px]" style={{ color: "#fbbf24" }}>
+                  Gaps: {deal.dossier.gaps.join(" · ")}
+                </div>
+              )}
+            </div>
+          )}
         </Section>
 
         {deal.approach && deal.approach !== "n/a" && (

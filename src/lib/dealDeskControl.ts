@@ -119,6 +119,126 @@ export function fitLabel(band: VerdictBand, fit: number): string {
   return band === "unknown" ? "NA" : String(fit);
 }
 
+// -- Dossier ---------------------------------------------------------------------
+//
+// Splitting "understand this listing" from "write the proposal". The proposal pass
+// used to receive the notes, the card Q&A, the brief and up to 14k of listing all at
+// once, and had to reconcile them WHILE producing copy. The dossier does the
+// reconciling once and writes it down, so the writer consumes a settled account
+// instead of re-deriving one on every regeneration.
+//
+// Kept as data rather than as a warm agent holding context: every desk route shells
+// out to a `claude -p` that exits, the server restarts often, and an account the owner
+// can read and correct beats session state he cannot open.
+
+export interface DossierAsk {
+  /** The client's requirement, verbatim from the listing wherever possible. */
+  ask: string;
+  /** How we answer it from the material on hand, or null when nothing covers it. */
+  answer: string | null;
+}
+
+export interface Dossier {
+  /** Every explicit question or application instruction found in the listing. */
+  asks: DossierAsk[];
+  /** A phrase the listing demands the proposal open with, when it names one. */
+  openWith: string | null;
+  /** Our angle, reconciled from the notes, the Q&A and the brief. */
+  position: string;
+  /** What they asked that nothing on hand answers. Honest gaps, not filler. */
+  gaps: string[];
+  at: number;
+  model?: string;
+  /** Fingerprint of the inputs this was built from, so staleness is detectable. */
+  inputHash: string;
+}
+
+/**
+ * FNV-1a over the inputs a dossier was built from. Deliberately dependency-free so
+ * this module stays bare-importable by the smoke; it is a change detector, not a
+ * security primitive.
+ */
+export function dossierInputHash(parts: {
+  description?: string | null;
+  notes?: string | null;
+  answers?: { q: string; a: string }[] | null;
+  summary?: string | null;
+  why?: string | null;
+  approach?: string | null;
+  crashCourse?: string | null;
+}): string {
+  const joined = [
+    parts.description ?? "",
+    parts.notes ?? "",
+    (parts.answers ?? []).map((a) => `${a.q}\u0000${a.a}`).join("\u0001"),
+    parts.summary ?? "",
+    parts.why ?? "",
+    parts.approach ?? "",
+    parts.crashCourse ?? "",
+  ].join("\u0002");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < joined.length; i++) {
+    h ^= joined.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/**
+ * A dossier is stale once any input it was built from has changed - the owner adding
+ * a note or asking another question is exactly when it must be rebuilt, and silently
+ * writing a proposal off the old account is the failure worth preventing.
+ */
+export function dossierIsStale(dossier: Dossier | null | undefined, currentHash: string): boolean {
+  if (!dossier) return true;
+  return dossier.inputHash !== currentHash;
+}
+
+const STOPWORDS = new Set([
+  "the", "and", "for", "with", "you", "your", "our", "this", "that", "have", "has", "are",
+  "will", "would", "should", "can", "any", "all", "from", "into", "about", "please", "tell",
+  "what", "when", "which", "who", "how", "why", "include", "provide", "describe", "explain",
+  "want", "need", "like", "make", "give", "also", "must", "each", "their", "them", "they",
+]);
+
+/** Distinctive words of an ask: what a real answer would almost certainly echo. */
+function keyTerms(text: string): string[] {
+  const seen = new Set<string>();
+  for (const w of String(text).toLowerCase().match(/[a-z0-9][a-z0-9+.#-]{3,}/g) ?? []) {
+    if (!STOPWORDS.has(w)) seen.add(w);
+  }
+  return [...seen];
+}
+
+/**
+ * Asks the draft looks like it never addressed.
+ *
+ * This is a HEURISTIC and is framed as one on purpose: it reports what is probably
+ * MISSING and never asserts that anything is covered. Term overlap cannot prove an
+ * answer is present or good, and a check that claimed it could would be the same
+ * invention the NA verdict band exists to prevent. Treat a hit as "look at this",
+ * not as a verdict.
+ */
+export function likelyMissedAsks(draft: string, dossier: Dossier | null | undefined, threshold = 0.34): DossierAsk[] {
+  if (!dossier?.asks?.length) return [];
+  const hay = String(draft ?? "").toLowerCase();
+  if (!hay.trim()) return dossier.asks.slice();
+  return dossier.asks.filter((a) => {
+    const terms = keyTerms(a.ask);
+    // Nothing distinctive to look for; do not guess either way.
+    if (!terms.length) return false;
+    const hits = terms.filter((t) => hay.includes(t)).length;
+    return hits / terms.length < threshold;
+  });
+}
+
+/** The listing demanded an opening phrase and the draft does not start with it. */
+export function openWithViolated(draft: string, dossier: Dossier | null | undefined): boolean {
+  const want = dossier?.openWith?.trim();
+  if (!want) return false;
+  return !String(draft ?? "").trim().toLowerCase().startsWith(want.toLowerCase());
+}
+
 // -- Listing text for a model prompt --------------------------------------------
 //
 // The proposal route sliced the description at 1500 characters while the BRIEF got

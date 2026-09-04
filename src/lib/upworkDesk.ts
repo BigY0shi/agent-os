@@ -14,7 +14,7 @@ import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
-import { deriveVerdict, partitionByAge, type Verdict, type ScreenResult } from "./dealDeskControl";
+import { deriveVerdict, partitionByAge, type Verdict, type ScreenResult, type Dossier } from "./dealDeskControl";
 
 // Where the scraper pipeline writes its artifacts. Override with UPWORK_LEADS_DIR.
 export const LEADS_DIR =
@@ -82,6 +82,11 @@ export interface DealState {
    */
   screen?: ScreenResult;
   /**
+   * The settled account of this listing: the client's asks and our answers,
+   * reconciled once so the proposal writer is not re-deriving them mid-draft.
+   */
+  dossier?: Dossier;
+  /**
    * S4 (d): enrichment (or intake) hit Upwork's login wall on this card. Set by
    * the gated runner, cleared by a fresh cookie or a later successful visit.
    */
@@ -124,6 +129,8 @@ export interface Deal extends BoardRecord {
   research: Research | null;
   /** The quick pass/not check's result, or null if it has not run or did not stick. */
   screen: ScreenResult | null;
+  /** The dossier, or null if none has been built for this card. */
+  dossier: Dossier | null;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -404,6 +411,7 @@ export async function listDeals(): Promise<Deal[]> {
       // The verdict reads the evaluator's OWN opener, never the operator's edit.
       verdict: deriveVerdict({ why, summary, pitch: p.pitch ?? null, screen: st.screen ?? null, effectiveFit }),
       screen: st.screen ?? null,
+      dossier: st.dossier ?? null,
       pitch: st.editedPitch ?? p.pitch ?? null,
       approach: st.brief?.approach ?? p.approach ?? null,
       crashCourse: st.brief?.crashCourse ?? p.crashCourse ?? null,
@@ -439,6 +447,7 @@ export async function listDeals(): Promise<Deal[]> {
       summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
       verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, screen: st.screen ?? null, effectiveFit }),
       screen: st.screen ?? null,
+      dossier: st.dossier ?? null,
       pitch: st.editedPitch ?? null,
       approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
@@ -518,6 +527,15 @@ export async function setBrief(id: string, b: Brief): Promise<DealState> {
  */
 export async function setScreen(id: string, r: Omit<ScreenResult, "at">): Promise<DealState> {
   return patch(id, (s) => ({ ...s, screen: { ...r, at: Date.now() } }));
+}
+
+/**
+ * Persist a dossier. Like a screen, a failed build writes nothing: the card simply
+ * has no dossier, which the proposal path treats as "build one" rather than as an
+ * empty account it can proceed from.
+ */
+export async function setDossier(id: string, d: Dossier): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, dossier: d }));
 }
 
 /** S4 (e): the research pass writes its state as it goes; the card reads it. */

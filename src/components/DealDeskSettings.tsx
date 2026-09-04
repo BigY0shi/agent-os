@@ -14,14 +14,16 @@ export default function DealDeskSettings({ onSaved }: { onSaved?: () => void } =
   const [maxAge, setMaxAge] = useState(String(DEFAULT_MAX_AGE_DAYS));
   const [screenModel, setScreenModel] = useState("");
   const [screenOnPull, setScreenOnPull] = useState(true);
+  const [dossierModel, setDossierModel] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
-    const d = (settings as { deals?: { maxAgeDays?: number; screenModel?: string; screenOnPull?: boolean } }).deals || {};
+    const d = (settings as { deals?: { maxAgeDays?: number; screenModel?: string; screenOnPull?: boolean; dossierModel?: string } }).deals || {};
     setMaxAge(String(clampMaxAgeDays(d.maxAgeDays)));
     setScreenModel(d.screenModel ?? "");
     setScreenOnPull(d.screenOnPull !== false);
+    setDossierModel(d.dossierModel ?? "");
   }, [settings]);
 
   async function onSave() {
@@ -29,7 +31,7 @@ export default function DealDeskSettings({ onSaved }: { onSaved?: () => void } =
     setMaxAge(String(maxAgeDays));
     // An empty model box means "use the configured Claude model", so it is stored as
     // undefined rather than an empty string a caller would have to re-check.
-    await save({ deals: { maxAgeDays, screenModel: screenModel.trim() || undefined, screenOnPull } });
+    await save({ deals: { maxAgeDays, screenModel: screenModel.trim() || undefined, screenOnPull, dossierModel: dossierModel.trim() || undefined } });
     setSaved(true); setTimeout(() => setSaved(false), 1800);
     onSaved?.();
   }
@@ -53,6 +55,10 @@ export default function DealDeskSettings({ onSaved }: { onSaved?: () => void } =
           <input type="checkbox" checked={screenOnPull} onChange={(e) => setScreenOnPull(e.target.checked)} />
           Screen automatically
         </label>
+      </Field>
+      <Field label="Dossier model"
+        hint="Model for the pass that reads a listing and writes down what the client actually asked, before any proposal is drafted. Blank uses the configured Claude model.">
+        <TextInput value={dossierModel} onChange={(e) => setDossierModel(e.target.value)} placeholder="leave blank for the default" />
       </Field>
       <SaveBar saving={saving} saved={saved} onSave={onSave} accent={ACCENT} />
     </ConfigMenu>

@@ -34,6 +34,53 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-04 - the dossier: understanding a listing before writing about it
+
+The owner proposed two shapes for fixing thin proposals. Either an agent per listing
+that stays warm and owns the whole life of a card, or a pass that reviews the chats, the
+posting and the material, writes durable notes, and only then writes the proposal.
+
+The first does not survive this codebase. Every desk route shells out to a `claude -p`
+that exits when it answers; there is no long-lived agent to hold context. Keeping one
+warm per listing means either resident processes that die on each server restart, or
+replaying the accumulated context on every call - which is the second option with a
+session store nobody can open. The CLI can `--resume`, but that state is opaque: when
+the agent drifts you cannot read it, diff it, or correct it. His second idea is the same
+continuity expressed as data, and data is the better substrate precisely because the
+server restarts and because he can edit it.
+
+So: a dossier per card, in `DealState` beside `brief` and `screen`. It holds the
+client's asks quoted from the listing with our answer to each, the phrase the listing
+demands the proposal open with, our reconciled position, and the honest gaps. The
+proposal route now runs it first and writes from that account.
+
+The part worth more than the prompt improvement: once the asks are a LIST rather than
+prose buried at the bottom of a 12,000-character posting, "did the draft answer them?"
+becomes checkable. `likelyMissedAsks()` compares the draft against each ask, and a miss
+triggers one bounded revision pass told exactly which asks are unaddressed. What
+survives that is reported on the response rather than swallowed.
+
+That check is deliberately one-sided and the smoke pins it as such. It reports what
+looks MISSING and never asserts that anything is covered, because term overlap cannot
+prove an answer is present or good. A "covered" claim would be the same invention the NA
+verdict band was added to prevent two commits ago. The function is named for what it can
+actually claim, and section D asserts no `coveredAsks` exists to be misread.
+
+Staleness is computed from the inputs, not from age: an FNV-1a hash over the
+description, notes, Q&A and brief. The owner adding a note after a dossier was built is
+exactly when the account must be rebuilt, and a proposal quietly anchored to superseded
+material is the failure that matters. The card shows a "stale" badge and the proposal
+route rebuilds before writing.
+
+Failure paths, as ever: `parseDossier` returns null unless the shape is usable and
+nothing is persisted on failure, because an EMPTY dossier would read as "this listing
+asks for nothing" and license a draft that answers no questions. A card with no dossier
+reads as stale, which means "build one".
+
+Gate: 76 passed, 1 failed (`smoke-webmcp-ui`, the owner's in-flight S7 wizard work).
+`smoke-deal-dossier.mjs` adds 40 offline checks. `settings.ts` again carried his
+uncommitted S7 changes, so only the `dossierModel` hunk was staged (rule 22).
+
 ## 2026-09-04 - the proposal writer could not see the questions it had to answer
 
 Three things the owner asked for, and one of them turned out to be a measurable defect
