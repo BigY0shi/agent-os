@@ -15,7 +15,8 @@ interface DeskStore {
   fetchDeals: () => Promise<void>;
   move: (id: string, status: DealStatus) => Promise<void>;
   /** S4 (b): one status for many cards in one write (bulk deny from the board face). */
-  moveMany: (ids: string[], status: DealStatus) => Promise<boolean>;
+  /** `sweep` clears a whole stale column: the cards move, but no memory episodes are written. */
+  moveMany: (ids: string[], status: DealStatus, opts?: { sweep?: boolean }) => Promise<boolean>;
   saveNotes: (id: string, notes: string) => Promise<void>;
   toggleNeedsInfo: (id: string) => Promise<void>;
   savePitch: (id: string, pitch: string) => Promise<void>;
@@ -133,13 +134,13 @@ export const useDesk = create<DeskStore>((set, get) => ({
     await post("status", id, status);
   },
 
-  moveMany: async (ids, status) => {
+  moveMany: async (ids, status, opts) => {
     const want = new Set(ids);
     set((s) => ({ deals: s.deals.map((d) => (want.has(d.id) ? { ...d, status } : d)) }));
     try {
       const r = await fetch("/api/deals/action", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "bulkStatus", ids, value: status }),
+        body: JSON.stringify({ action: "bulkStatus", ids, value: status, sweep: opts?.sweep }),
       });
       const j = await r.json();
       if (!j.ok) { set({ error: j.error || "Bulk move failed" }); await get().fetchDeals(); return false; }

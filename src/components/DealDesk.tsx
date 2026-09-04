@@ -441,7 +441,12 @@ export default function DealDesk() {
   const denyPicked = async () => {
     if (!picked.length) return;
     setDenying(true);
-    await moveMany(picked.map((d) => d.id), "denied");
+    // Denying a handful of cards is a judgment per card and each earns a memory
+    // episode. Selecting the whole column with "Select all" is a different act: the
+    // call is that the board is stale, not that 130 listings were each assessed. That
+    // goes as a sweep, which moves the cards but writes no episodes - the same reason
+    // the brief pass only records an assessment for a lead you approved.
+    await moveMany(picked.map((d) => d.id), "denied", { sweep: allVisibleNewPicked });
     setSel(new Set());
     setDenying(false);
   };
@@ -465,6 +470,15 @@ export default function DealDesk() {
   const presentSources = Object.keys(sourceCounts).sort((a, b) =>
     a === "upwork" ? -1 : b === "upwork" ? 1 : a.localeCompare(b));
   const effTab = srcTab !== "all" && !sourceCounts[srcTab] ? "all" : srcTab; // ignore a stale tab after reload
+  // The New cards actually on screen. "Select all" must pick exactly these rather
+  // than reaching past the source tab the owner is looking at.
+  const visibleNew = effTab !== "all" ? firstItems.filter((d) => srcKey(d) === effTab) : firstItems;
+  const allVisibleNewPicked = visibleNew.length > 0 && visibleNew.every((d) => sel.has(d.id));
+  const toggleSelectAllNew = () => setSel((s) => {
+    const n = new Set(s);
+    for (const d of visibleNew) { if (allVisibleNewPicked) n.delete(d.id); else n.add(d.id); }
+    return n;
+  });
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -592,7 +606,7 @@ export default function DealDesk() {
         {allColumns.map((col) => {
           const isFirst = col.key === firstKey;
           const colItems = byCol(col.key);
-          const items = isFirst && effTab !== "all" ? colItems.filter((d) => srcKey(d) === effTab) : colItems;
+          const items = isFirst ? visibleNew : colItems;
           return (
             <div key={col.key}
               onDragOver={(e) => e.preventDefault()}
@@ -602,6 +616,19 @@ export default function DealDesk() {
                 <span className="h-2 w-2 rounded-full" style={{ background: col.accent }} />
                 <span className="text-[12px] font-semibold">{col.label}</span>
                 <span className="text-[11px] text-white/35">{colItems.length}</span>
+                {isFirst && items.length > 0 && (
+                  <button onClick={toggleSelectAllNew}
+                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded border transition"
+                    style={{
+                      borderColor: allVisibleNewPicked ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.15)",
+                      color: allVisibleNewPicked ? "#f87171" : "rgba(255,255,255,0.5)",
+                    }}
+                    title={allVisibleNewPicked
+                      ? "Clear the selection"
+                      : `Select all ${items.length} cards shown here, then use Deny below. Respects the source tab.`}>
+                    {allVisibleNewPicked ? "Clear" : `Select all ${items.length}`}
+                  </button>
+                )}
               </div>
               {isFirst && presentSources.length > 1 && (
                 <div className="flex flex-wrap gap-1 mb-2 px-1">

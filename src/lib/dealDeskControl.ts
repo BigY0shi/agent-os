@@ -119,6 +119,30 @@ export function fitLabel(band: VerdictBand, fit: number): string {
   return band === "unknown" ? "NA" : String(fit);
 }
 
+// -- Listing text for a model prompt --------------------------------------------
+//
+// The proposal route sliced the description at 1500 characters while the BRIEF got
+// 4000, so the one component that must answer the client's questions was the one that
+// could not see them. Measured over the real board (170 listings): 88 run past 1500
+// characters, 75 carry explicit application instructions, and 54 of those 75 sit PAST
+// character 1500. Those instructions are terminal ("To Apply", "When applying"), so a
+// head slice drops exactly what has to be answered.
+//
+// The cap clears the longest listing in the corpus (12,069). If one ever exceeds it,
+// BOTH ends are kept, because the tail is where the instructions live.
+export const DESC_CAP = 14000;
+export const TAIL_KEEP = 4000;
+
+export function listingText(d: string | null | undefined): string {
+  const t = String(d ?? "");
+  if (t.length <= DESC_CAP) return t;
+  return `${t.slice(0, DESC_CAP - TAIL_KEEP)}
+
+[... middle of the listing trimmed ...]
+
+${t.slice(-TAIL_KEEP)}`;
+}
+
 // -- (f) Age gate ---------------------------------------------------------------
 //
 // The feed was pulling listings three to four weeks old and the board showed them

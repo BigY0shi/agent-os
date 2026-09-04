@@ -343,6 +343,23 @@ console.log("\n-- F (e) research pass --");
   check("F13 unknown step names are dropped and the default is all three", R.RESEARCH_STEPS.join(",") === "enrich,brief,questions");
 }
 
+// -- G listing text: the tail survives, because that is where the questions are --
+console.log("");
+console.log("-- G listing text --");
+{
+  check("G1 a normal listing passes through untouched", C.listingText("short listing") === "short listing");
+  check("G2 null/undefined become an empty string", C.listingText(null) === "" && C.listingText(undefined) === "");
+  // The failure this replaced: a head slice dropped the application instructions.
+  const tail = "To Apply: answer these three questions and open with the word BANANA.";
+  const huge = "x".repeat(C.DESC_CAP + 5000) + tail;
+  const out = C.listingText(huge);
+  check("G3 an over-long listing still ends with its tail", out.endsWith(tail), out.slice(-40));
+  check("G4 and keeps the head too", out.startsWith("xxxx"));
+  check("G5 the trim is announced rather than silent", out.includes("middle of the listing trimmed"));
+  check("G6 the result stays bounded", out.length <= C.DESC_CAP + 60, String(out.length));
+  check("G7 the corpus maximum (12,069) is under the cap, so nothing real is trimmed today", 12069 < C.DESC_CAP);
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);

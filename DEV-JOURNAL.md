@@ -34,6 +34,56 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-04 - the proposal writer could not see the questions it had to answer
+
+Three things the owner asked for, and one of them turned out to be a measurable defect
+rather than a preference.
+
+**Selecting a stale board.** He had ~130 New cards to clear and bulk deny already
+existed (S4 b), but only over a hand-built selection - hence 130 clicks. The New column
+header gets "Select all N", scoped to the visible source tab so it never reaches past
+the filter he is looking at. He asked for the selection, not a one-click nuke, and was
+explicit about it: "Really, I just need to be able to select them."
+
+Denying a handful is a judgment per card and each earns a memory episode. Selecting the
+whole column is a different act - the call is that the board is stale, not that 130
+listings were each assessed - so `bulkStatus` takes a `sweep` flag that moves the cards
+without writing episodes. Same reasoning as the brief pass only recording an assessment
+for a lead you approved: 130 near-identical "denied" episodes would bury the signal.
+
+**The proposal writer was blind to the application instructions.** It built its prompt
+from `description.slice(0, 1500)` while the BRIEF got 4000. Measured over the real board
+(170 listings): 88 run past 1500 characters, 75 carry explicit application instructions,
+and **54 of those 75 sit past character 1500**. Instructions are terminal - "To Apply",
+"How to Apply", "When applying" are all in the SECTION_HEADERS list at the bottom of a
+posting - so the head slice removed exactly what had to be answered, in 72% of the
+listings that asked for anything. The one component whose whole job is answering the
+client was the one component that could not see the questions.
+
+`listingText()` now lives in `dealDeskControl.ts` (pure, so the smoke imports it bare)
+with a 14,000 cap that clears the corpus maximum of 12,069. If a listing ever exceeds
+it, both ends are kept, because the tail is the part that matters. The prompt also now
+carries the card's Q&A as ground truth, the full brief including `why` and crashCourse
+(neither of which reached it before - only `summary` and `approach` did, as loose "raw
+material"), and an instruction to extract and answer every question before writing.
+
+**The card chat had no memory.** He noticed it first: "is the chat bot a new
+zero-context every time? It doesn't seem to have any memory of what the last message
+was." It was. `ask/route.ts` rebuilt its prompt from the listing plus the single
+question and never passed `deal.answers`, so a follow-up had nothing to resolve against.
+It now gets the conversation so far, and the full description instead of 1500 characters
+- which was also why asking "what are they asking applicants for?" could not be answered
+from the prompt.
+
+Gate: 75 passed, 1 failed (`smoke-webmcp-ui`, the owner's in-flight S7 wizard work),
+unchanged from before these edits. `smoke-deal-desk-control.mjs` gains section G, seven
+checks pinning that an over-long listing keeps its tail.
+
+A note on process: two patch attempts corrupted this route because `\n` escapes collapse
+when a generator script is piped through the shell here, and a third failed because em
+dashes in a match anchor were re-encoded. Long anchors carrying escapes or non-ASCII are
+not reliable in this environment; write the file directly or splice by line index.
+
 ## 2026-09-03 - an unjudged lead now says NA instead of inventing a Pursue
 
 The owner noticed the verdict-first card (S4 c) had taken something with it: the

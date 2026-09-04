@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 // POST { id, action: "status"|"notes"|"needsInfo"|"editPitch", value }
 // POST { action: "bulkStatus", ids: string[], value: DealStatus }   (S4 b: deny many at once)
 export async function POST(req: Request) {
-  const { id, ids, action, value } = await req.json().catch(() => ({})) as {
-    id?: string; ids?: unknown; action?: string; value?: unknown;
+  const { id, ids, action, value, sweep } = await req.json().catch(() => ({})) as {
+    id?: string; ids?: unknown; action?: string; value?: unknown; sweep?: boolean;
   };
   if (!action) return Response.json({ ok: false, error: "action required" }, { status: 400 });
 
@@ -19,9 +19,16 @@ export async function POST(req: Request) {
       if (!list.length) return Response.json({ ok: false, error: "ids[] required" }, { status: 400 });
       if (!VALID_STATUS.includes(status)) return Response.json({ ok: false, error: `Invalid status: ${status}` }, { status: 400 });
       const written = await setStatusBulk(list, status);
-      // A bulk deny is still a judgment the owner made card by card, so each one
-      // earns its episode; refill's bulk DISMISS stays silent (that is triage).
-      if (isJudgmentStatus("deal-desk", status)) {
+      // A bulk deny over a hand-picked selection is still a judgment the owner made
+      // card by card, so each one earns its episode; refill's bulk DISMISS stays
+      // silent (that is triage).
+      //
+      // `sweep` is the third case: clearing a whole stale column in one click. The
+      // cards land in Denied because that is where the owner expects them, but he did
+      // not judge 130 listings, he judged that the board was stale. Writing an episode
+      // per card would record 130 decisions nobody made - the same invention the NA
+      // verdict band exists to prevent - so a sweep records nothing.
+      if (!sweep && isJudgmentStatus("deal-desk", status)) {
         const deals = await listDeals();
         const byId = new Map(deals.map((d) => [d.id, d]));
         for (const did of written) {
@@ -29,7 +36,7 @@ export async function POST(req: Request) {
           if (deal) void recordDeskDecision("deal-desk", dealSubject(deal), status, deal.notes);
         }
       }
-      return Response.json({ ok: true, ids: written, status });
+      return Response.json({ ok: true, ids: written, status, swept: !!sweep });
     }
 
     if (!id) return Response.json({ ok: false, error: "id and action required" }, { status: 400 });
