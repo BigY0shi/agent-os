@@ -34,6 +34,72 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-04 - a scrape could take a card the owner had already approved
+
+The owner, after a scrape: "it also nuked all of my 'ready to send' and 'approved'
+lists... I thought they were immutable until I explicitly and manually dropped them
+off the board."
+
+That expectation was right, and the desk did not honour it.
+
+Nothing had actually been destroyed, which was worth establishing before anything
+else. The state file still held all 151 rows - 11 approved, 5 ready - and 8 of the
+missing cards were carrying finished proposals, one of them 3,037 characters. What
+had gone was the *lead record* the board joins against.
+
+Root cause, and it predates every change made today. `score_board.mjs` ends with
+
+    fs.writeFileSync(`${OUT}/board.json`, JSON.stringify(scored, null, 2))
+
+a wholesale replacement. The desk's leads are pipeline output; the owner's decisions
+live in a separate file keyed by lead id. Any scrape that does not re-find a lead
+removes its record, and the state row is left pointing at nothing. `listDeals()`
+walks the lead files and looks up state by id, so a state row with no lead is
+invisible - the approval survives and the card does not.
+
+Two things were ruled out with evidence before accepting that diagnosis, because
+both were plausible and one was mine. `feeds.json` was untouched since Sep 2, so the
+feed pull was not it. And the read-time age gate shipped an hour earlier exempts
+approved and ready - if it had been holding those cards, "Show them anyway" would
+have brought them back. It did not, because they were not being filtered.
+
+The fix is one idea: **the desk keeps its own copy of anything it has committed to.**
+`patch()` is the single funnel every state mutation goes through, so the capture goes
+there - touching a card in any way is the owner committing to it, and from that
+moment `DealState.lead` holds the record. `listDeals()` then emits from the snapshot
+when the pipeline no longer has a row. A lead nobody has touched is still disposable,
+which is correct: it is pure scraper output and nothing is lost by regenerating it.
+
+The snapshot is a floor, never a ceiling. It is captured once and never refreshed,
+and when the live record exists the normal path serves it, so a later scrape is free
+to supply fresher fields. It just can no longer take the card away. Dismissal still
+removes a card, and keeps the snapshot, so even that stays reversible.
+
+`scripts/v2/recover-desk-leads.mjs` rebuilt the 16 already-orphaned rows from
+`pitches.json`, which is keyed by the same ids and still held title, url and the
+analysis. Dry run by default; `--apply` copies the state file to `.exile/` first. All
+16 recovered with real titles and zero unrecoverable. Approved is back to 11 and
+Ready to 5, each with its proposal.
+
+A rebuilt card says what it does not know. `easiness` and `winnability` were the
+scraper's and are genuinely gone, so `recovered: true` makes the UI render them as a
+purple NA instead of the 0 they default to, alongside a "rebuilt" badge. `fitRefined`
+came from the pitch pass and is a real judgement, so it is kept. Client details and
+the posted date stay null. Showing a fabricated 0 here would have been the same
+mistake as the invented uptime already stripped out of this codebase.
+
+The new smoke earned its place immediately: section D caught that the board and feeds
+loops never added to the `emitted` set, so a lead present in both a pipeline file and
+the snapshot rendered twice. Found by a test asserting the live record wins, which is
+not a case anyone would have clicked through by hand.
+
+Still open, and the owner's call: `score_board.mjs` lives in the leads directory, not
+this repo, and it will keep replacing `board.json` on every scrape. The desk is now
+immune to that, but the file itself still loses history.
+
+Gate: 77 passed, 1 failed (`smoke-webmcp-ui`, the owner's in-flight S7 wizard work in
+`settings.ts`; unchanged before and after).
+
 ## 2026-09-04 - the age gate was pruning a file, when it needed to filter a view
 
 The owner: "off the rip, it is still pulling old ass listings. 3 weeks old..."

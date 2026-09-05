@@ -94,6 +94,37 @@ export interface DealState {
   loginWallAt?: number;
   /** S4 (e): the research pass "More info needed" fires, and how it went. */
   research?: Research;
+  /**
+   * The lead record itself, copied here the first time the owner touches this card.
+   *
+   * The desk used to hold only a POINTER into board.json / feeds.json, and those are
+   * pipeline output: score_board.mjs ends with a wholesale
+   * `writeFileSync(board.json, scored)`, so every scrape replaces the file outright.
+   * A lead the new run did not re-find lost its record, and the state row here - the
+   * owner's approval, his notes, a finished proposal - was left pointing at nothing
+   * and vanished off the board. That happened on 2026-09-04: 12 rows orphaned, 8 of
+   * them carrying submit-ready proposals.
+   *
+   * The owner's expectation, in his words, was that a card is "immutable until I
+   * explicitly and manually drop them off the board". This is what makes that true.
+   * Once the desk has committed to a lead it owns a copy, and no pipeline rewrite can
+   * take it away again.
+   */
+  lead?: LeadSnapshot;
+}
+
+/**
+ * A captured lead record. `at` and `from` are provenance, not decoration: a recovered
+ * card needs to be able to say where its fields came from rather than implying the
+ * scraper vouched for them.
+ */
+export interface LeadSnapshot extends Partial<BoardRecord> {
+  id: string;
+  title: string;
+  url: string;
+  at: number;
+  /** "board" / "feeds" when captured live; "pitches" when rebuilt after the record was lost. */
+  from: "board" | "feeds" | "pitches";
 }
 export interface Research {
   status: "running" | "done" | "error" | "stopped";
@@ -131,6 +162,12 @@ export interface Deal extends BoardRecord {
   screen: ScreenResult | null;
   /** The dossier, or null if none has been built for this card. */
   dossier: Dossier | null;
+  /**
+   * This card is being served from the desk's own snapshot because the pipeline no
+   * longer has its record. The scores the scraper owned are not knowable for a card
+   * rebuilt from pitches.json, so the UI shows them as NA rather than as zero.
+   */
+  recovered?: boolean;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -387,6 +424,9 @@ export async function listDeals(): Promise<Deal[]> {
 
   // Only surface the pitched shortlist — those are the reviewable deals.
   const deals: Deal[] = [];
+  // What the pipeline files still know about, so the snapshot pass below can tell
+  // "already shown" from "the record is gone and only our copy remains".
+  const emitted = new Set<string>();
   for (const b of board) {
     const p = pitchByUrl.get(b.url);
     if (!p) continue;
@@ -425,6 +465,7 @@ export async function listDeals(): Promise<Deal[]> {
       loginWallAt: st.loginWallAt ?? null,
       research: st.research ?? null,
     });
+    emitted.add(b.id);
   }
 
   // Remote freelance feeds (RemoteOK / WWR / Reddit) — source-tagged; no pre-pitch, proposal
@@ -455,6 +496,48 @@ export async function listDeals(): Promise<Deal[]> {
       needsLogin: st.needsLogin ?? false, loginWallAt: st.loginWallAt ?? null,
       research: st.research ?? null,
     });
+    emitted.add(f.id);
+  }
+
+  // Anything the owner has touched whose record the pipeline has since dropped. This
+  // is the half of the fix that does the work: the capture in patch() is worthless if
+  // the read still insists on finding a row in a file that no longer has one.
+  for (const [id, st] of Object.entries(state)) {
+    if (emitted.has(id) || !st.lead || st.status === "dismissed") continue;
+    const L = st.lead;
+    const effectiveFit = L.fit ?? 0;
+    const easiness = L.easiness ?? 0;
+    const winnability = L.winnability ?? 0;
+    deals.push({
+      id, subId: L.subId, title: L.title, url: L.url,
+      budget: L.budget ?? null, jobType: L.jobType ?? null, experienceLevel: L.experienceLevel ?? null,
+      duration: L.duration ?? null, posted: L.posted ?? null,
+      description: formatDescription(L.description ?? null),
+      datePosted: L.datePosted ?? null, _scrapedAt: L._scrapedAt ?? null,
+      tags: L.tags ?? [], clientCountry: L.clientCountry ?? null,
+      clientTotalSpent: L.clientTotalSpent ?? null, clientRating: L.clientRating ?? null,
+      clientHires: L.clientHires ?? null, clientMemberSince: L.clientMemberSince ?? null,
+      easiness, winnability, fit: L.fit ?? 0,
+      composite: L.composite ?? +(0.4 * easiness + 0.4 * winnability + 0.2 * effectiveFit).toFixed(2),
+      source: (L as { source?: string }).source,
+      postedAt: resolvePostedAt(L),
+      status: st.status || "new",
+      effectiveFit,
+      summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
+      verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, screen: st.screen ?? null, effectiveFit }),
+      screen: st.screen ?? null,
+      dossier: st.dossier ?? null,
+      pitch: st.editedPitch ?? null,
+      approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
+      notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
+      answers: st.answers ?? [], enrichment: st.enrichment ?? null, updatedAt: st.updatedAt ?? null,
+      needsLogin: st.needsLogin ?? false, loginWallAt: st.loginWallAt ?? null,
+      research: st.research ?? null,
+      // Only a pitches.json rebuild is missing the scraper's own scores; a snapshot
+      // captured live off board.json carries them and is not flagged.
+      recovered: L.from === "pitches",
+    });
+    emitted.add(id);
   }
 
   deals.sort((a, b) => b.composite - a.composite);
@@ -466,11 +549,41 @@ export async function getDeal(id: string): Promise<Deal | null> {
 }
 
 // ── Mutations (all merge into the state store) ──────────────────────────────────
+/**
+ * Find a lead's record in the files the pipeline owns, so the desk can keep its own
+ * copy. Returns null when the record is already gone - nothing to capture, and a
+ * fabricated stub would be worse than an honest miss.
+ */
+async function findLeadRecord(id: string): Promise<LeadSnapshot | null> {
+  const [board, feeds] = await Promise.all([
+    readJson<BoardRecord[]>(BOARD_FILE, []),
+    readJson<(BoardRecord & { source?: string })[]>(FEEDS_FILE, []),
+  ]);
+  const hit = board.find((r) => r.id === id);
+  if (hit) return { ...hit, at: Date.now(), from: "board" };
+  const fed = feeds.find((r) => r.id === id);
+  if (fed) return { ...fed, at: Date.now(), from: "feeds" };
+  return null;
+}
+
+/**
+ * Every state mutation funnels through here, which is exactly why the snapshot is
+ * taken here: touching a card in ANY way (a status, a note, a brief, a proposal, a
+ * dossier answer) is the owner committing to it, and from that moment the desk keeps
+ * its own copy of the lead. One capture, never refreshed - a later scrape re-finding
+ * the lead is welcome to supply fresher fields via the normal board path, but it can
+ * no longer take the card away.
+ */
 async function patch(id: string, fn: (s: DealState) => DealState): Promise<DealState> {
+  // Read outside the lock: findLeadRecord touches only pipeline files, and holding the
+  // state lock across two more file reads would serialise every desk click behind them.
+  const snapshotNeeded = !(await readState())[id]?.lead;
+  const captured = snapshotNeeded ? await findLeadRecord(id) : null;
   return withLock(async () => {
     const store = await readState();
     const next = fn(store[id] || {});
     next.updatedAt = Date.now();
+    if (!next.lead && captured) next.lead = captured;
     store[id] = next;
     await writeState(store);
     return next;

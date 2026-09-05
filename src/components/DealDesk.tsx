@@ -138,10 +138,19 @@ function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
       <div className="flex flex-wrap gap-1 mt-2 items-center">
         {deal.source && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(96,165,250,0.18)", color: "#60a5fa" }}>{deal.source}</span>}
         {deal.automatable && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(52,211,153,0.18)", color: "#34d399" }} title="Repetitive role — take-and-automate or pitch Launchworks">auto</span>}
+        {deal.recovered && (
+          <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
+            style={{ background: "rgba(192,132,252,0.18)", color: "#c084fc" }}
+            title="A scrape dropped this listing's record. The card was rebuilt from your own pitch data - your status, notes and proposal are intact, but the scraper's scores and the client details are gone.">
+            rebuilt
+          </span>
+        )}
         <Chip label="F" value={deal.effectiveFit} na={deal.verdict.band === "unknown"} />
-        <Chip label="E" value={deal.easiness} />
-        <Chip label="W" value={deal.winnability} />
-        <span className="text-[10px] text-white/40 font-mono ml-auto self-center">{deal.composite}</span>
+        {/* A rebuilt card never had the scraper's easiness/winnability, so showing the
+            0 they default to would assert a score nobody ever gave this lead. */}
+        <Chip label="E" value={deal.easiness} na={deal.recovered} />
+        <Chip label="W" value={deal.winnability} na={deal.recovered} />
+        <span className="text-[10px] text-white/40 font-mono ml-auto self-center">{deal.recovered ? "NA" : deal.composite}</span>
       </div>
       <div className="flex items-center justify-between mt-2 text-[10.5px] text-white/45">
         <span>{deal.budget || "—"} {deal.jobType || ""}</span>
