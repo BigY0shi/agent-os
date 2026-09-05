@@ -34,6 +34,41 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-04 - the dossier was user-facing and invisible, which is the same as absent
+
+The owner: "is the dossier supposed to be user facing? I don't see it, even though
+the AI is referencing it."
+
+It was rendering. `grep -l "what they actually asked" .next/static/chunks/*.js` found
+it in the live bundle, and the section has no conditional around it. It was just at
+the bottom of the drawer, under an uncapped `whitespace-pre-wrap` block holding the
+entire job posting - up to 18,781 characters on this board - plus an eight-row
+proposal textarea. Two screens of scrolling to reach the panel whose whole purpose is
+to be checked *before* drafting.
+
+Shipping a feature below the fold of a wall of text is indistinguishable from not
+shipping it. The drawer now reads verdict, dossier, proposal, listing: what they
+asked, what we write, then the raw posting as reference. The description is capped at
+13rem with a fade and a "Show the full listing (N characters)" toggle, so no section
+can be buried under it again.
+
+Found while measuring the burial, and worse than the burial: **`feeds.mjs` truncates
+feed descriptions at the source.** Line 52 does `it.desc.slice(0, 1500)` for WWR and
+line 46 `slice(0, 2000)` for RemoteOK. 130 of the 131 rows in `feeds.json` are exactly
+1500 characters. `board.json` (Upwork) is untouched, median 2,064 and max 18,781.
+
+That is the same defect fixed downstream this afternoon, one layer earlier. Raising
+the proposal's window from 1,500 to 14,000 characters was measured against Upwork
+listings and is real for them; for every WWR and RemoteOK lead there is nothing past
+1,500 to read, because the scraper threw it away before the file was written. The
+application instructions those listings carry - the thing the dossier exists to
+extract - are cut off before anything in this repo can see them.
+
+`feeds.mjs` lives in the leads directory, not here, so it is the owner's call like
+`score_board.mjs`. Flagged, not changed.
+
+Gate: 77 passed, 1 failed (`smoke-webmcp-ui`, unchanged).
+
 ## 2026-09-04 - a scrape could take a card the owner had already approved
 
 The owner, after a scrape: "it also nuked all of my 'ready to send' and 'approved'

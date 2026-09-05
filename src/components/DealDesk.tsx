@@ -183,6 +183,7 @@ function ResearchLine({ research, answers }: { research: NonNullable<Deal["resea
 function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
   const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research, fetchDeals } = useDesk();
   const [buildingDossier, setBuildingDossier] = useState(false);
+  const [showFullDesc, setShowFullDesc] = useState(false);
   const researching = deal.research?.status === "running";
   const [notes, setNotes] = useState(deal.notes);
   const [pitch, setPitch] = useState(deal.pitch || "");
@@ -321,21 +322,11 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           </div>
         )}
 
-        <Section title="Description">
-          <div className="text-[12.5px] text-white/65 whitespace-pre-wrap leading-relaxed">{deal.description || "—"}</div>
-        </Section>
-
-        <Section title="Proposal (editable)">
-          <button onClick={draftFull} disabled={drafting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 mb-2 rounded-lg text-[12px] font-medium disabled:opacity-40"
-            style={{ background: "rgba(52,211,153,0.16)", color: "#34d399" }}
-            title="Generate a full ~120-word proposal from the listing + your Notes below">
-            {drafting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Draft full proposal (uses your Notes)
-          </button>
-          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
-            rows={8} className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
-        </Section>
-
+        {/* Above the listing on purpose. This is the settled account of what the client
+            asked and how we answer it, which is what the owner needs before drafting -
+            and when it sat below Description plus the proposal textarea he could not
+            find it at all ("is the dossier supposed to be user facing? I don't see
+            it", 2026-09-04). The raw posting is reference; this is the decision. */}
         <Section title="Dossier — what they actually asked">
           <div className="flex items-center gap-2 mb-2">
             <button onClick={buildDossier} disabled={buildingDossier}
@@ -384,6 +375,34 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
                 </div>
               )}
             </div>
+          )}
+        </Section>
+
+        <Section title="Proposal (editable)">
+          <button onClick={draftFull} disabled={drafting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 mb-2 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(52,211,153,0.16)", color: "#34d399" }}
+            title="Generate a full ~120-word proposal from the listing + your Notes below">
+            {drafting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Draft full proposal (uses your Notes)
+          </button>
+          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
+            rows={8} className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
+        </Section>
+
+        <Section title="Description">
+          {/* Collapsed by default. A listing runs to 18,781 characters on this board and
+              an uncapped block pushed every section under it off the screen. */}
+          <div
+            className="text-[12.5px] text-white/65 whitespace-pre-wrap leading-relaxed overflow-hidden"
+            style={showFullDesc ? undefined : { maxHeight: "13rem", maskImage: "linear-gradient(#000 70%, transparent)", WebkitMaskImage: "linear-gradient(#000 70%, transparent)" }}
+          >
+            {deal.description || "—"}
+          </div>
+          {(deal.description || "").length > 600 && (
+            <button onClick={() => setShowFullDesc(!showFullDesc)}
+              className="mt-1 text-[11.5px] text-white/45 hover:text-white/75 transition">
+              {showFullDesc ? "Collapse the listing" : `Show the full listing (${(deal.description || "").length.toLocaleString()} characters)`}
+            </button>
           )}
         </Section>
 
