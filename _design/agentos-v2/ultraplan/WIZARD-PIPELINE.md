@@ -86,6 +86,23 @@ you reverse-engineered.
 S0 is **not** available for third-party commercial software, which is why the taxonomy
 below it still matters.
 
+**Owning Program X makes this the cheapest case, not merely a cheaper one.** The
+expensive part of an integration was never the MCP layer — that layer is a list of tool
+descriptors plus handler bindings, and on the `http` lane it is configuration rather than
+code. The expense is *seam discovery and bridging on software you do not control*: the
+reverse-engineering, the undocumented API, the bridge, and the standing risk that a
+vendor release breaks it. Owning the target deletes that entire category:
+
+- Stability scores 5 by construction — you cannot break your own contract unknowingly.
+- No bridge, no scraping, no reverse-engineering.
+- You already know the domain model, the invariants, and which operations are dangerous,
+  so Phases 2 and 3 collapse to writing them down.
+- You control release cadence, so the seam ships when you need it.
+
+What remains is ordinary feature work in your own codebase — a handful of endpoints —
+plus a package definition. Budget it as "a few endpoints and a spec sheet", not as
+"building an MCP server".
+
 ### 2.2 Seam scoring
 
 A target often has several seams. Score each on six axes, 1–5, and take the highest
@@ -129,7 +146,45 @@ the cheapest one, and it is the single highest-leverage step in the whole pipeli
 
 ---
 
-## 3. Phases
+---
+
+## 3. Scope boundaries — one server per audience
+
+**Partition tool packages by who uses them, not by which program they talk to.** This is
+a separate decision from the seam, and getting it wrong is the most common structural
+mistake in a multi-team deployment.
+
+The unit of scoping is the **role**: a service desk, a sales team, a warehouse, finance.
+Two consequences follow, and both are normal:
+
+- **One program may back several packages.** If service and sales both use Program X but
+  need different verbs, that is two packages, not one package with everyone's tools in it.
+- **One package may span several programs.** If the sales role needs Program X and the
+  CRM, one sales package covering both beats two packages the salesperson has to choose
+  between. The role is the boundary; the program is not.
+
+Why the role and not the program:
+
+| Reason | Consequence |
+|---|---|
+| **Tool budget is per session** | An agent loads every tool in an attached package on every turn. 12 tools × 4 role packages is fine; 48 tools in one package measurably degrades selection. The budget in Phase 3 is per package *because* packages are per role. |
+| **Credentials are scoped to the package** | The sales package never holds service-write credentials. Blast radius is bounded by the package boundary, so the boundary should follow the trust boundary. |
+| **Danger differs by role** | The same operation can be routine for one team and high-danger for another. `requiresApproval` is a property of the package, not of the underlying endpoint. |
+| **Independent versioning** | Fixing a sales description should not republish the service team's tools. |
+| **Enablement is per role** | The capability card is one page in the users' own vocabulary. That is only achievable if the package matches one job. A card covering four departments fails the three-tasks-unaided gate in Phase 8. |
+
+So the expected shape of a multi-team engagement is **several small packages sharing one
+seam and, where one was needed, one bridge**. The per-package cost after the first is
+low: the seam is already classified, the bridge already exists, the harness pattern is
+already written. Only Phases 2, 3, 8 and 9 repeat — the capability map, the tool spec,
+the enablement material and the log review — and those are the per-role work that
+genuinely differs.
+
+**This is not duplication and P0 does not discourage it.** P0 is about rebuilding a
+package that already exists *for the same role*; carving a second package for a different
+audience is the architecture working as intended.
+
+## 4. Phases
 
 Each phase has an input, an owner, an output artifact, and a **gate**. A phase may not
 advance until its gate passes. Gates are checkable by a machine wherever possible.
@@ -155,6 +210,7 @@ Minimum viable brief:
 Target:      <Program X>, version, OS, where it runs
 Ownership:   ours | client's | third party's
 Verbs:       3–10 things you want done, in plain language
+Audience:    the ONE role this package serves (see §3) — service, sales, warehouse…
 Users:       who will actually be typing at this, and what they know
 Environment: local / our server / the client's machine
 Rules:       what must never happen
@@ -170,7 +226,8 @@ Rules:       what must never happen
   engagement, not after.
 
 **Gate:** a brief with no verbs is not a brief. A third-party target with no confirmed
-right to integrate is not a project. Park and ask.
+right to integrate is not a project. A brief naming two audiences is two briefs (§3).
+Park and ask.
 
 ### Phase 1 — Recon (the probe ladder)
 
@@ -179,7 +236,7 @@ Cost ascends down the ladder; P0–P1 can end the project in minutes.
 
 | Rung | Probe | Yields |
 |---|---|---|
-| **P0** | Does an MCP server for Program X already exist? | done — install it, do not build |
+| **P0** | Does an MCP server already cover Program X **for this audience**? | done — install or subset it |
 | **P1** | Does a community bridge / automation library exist? | collapses S4/S5/S7 → S1 |
 | **P2** | **Do we own Program X?** | S0 — consider adding the seam |
 | **P3** | Official docs: API, webhooks, integration guide | S1 |
@@ -190,9 +247,28 @@ Cost ascends down the ladder; P0–P1 can end the project in minutes.
 | **P8** | OS automation surface (AppleScript dictionary, COM, D-Bus introspection) | S4 |
 | **P9** | none of the above | S8 → abort or escalate |
 
-**P0 is not optional and not a formality.** Building a second MCP server for a program
-that already has a maintained one is the most expensive avoidable failure in this
-pipeline — and on a paid engagement it is the one that damages trust.
+**What P0 is actually protecting against.** Not "two servers" — see §3, where several
+role-scoped packages over one seam is the intended shape. P0 is about rebuilding, from
+scratch, a package that already exists *for the same target and the same audience*.
+
+The cost of that is not the build time, which is usually modest. It is that you take on
+permanent maintenance of something a maintainer was already carrying for free, and your
+copy stops receiving their upstream fixes the day you fork the idea. On a paid engagement
+there is a second cost: billing to rebuild what an install command would have provided is
+hard to defend once the client finds the original.
+
+Three outcomes at this rung, and only the first is "stop":
+
+- **An existing package fits this audience** → install it. Done.
+- **An existing package covers the target but its tool surface is wrong for this role**
+  (sixty tools where the role needs eight) → **subset it**, don't rebuild it. A curated
+  package over someone else's maintained surface keeps their fixes and respects the tool
+  budget.
+- **Nothing covers this target** → continue down the ladder.
+
+Calibration, since this is a judgement call: a fragile seam that fails the stability floor
+is usually the *more* expensive mistake over a year, because it recurs. Duplicated effort
+is paid once and then bleeds slowly; a bad seam bleeds continuously.
 
 `SeamReport` records, per candidate seam: id, evidence (URL, command output, port), the
 six scores, and the recommended lane. **Evidence means something observed** — a fetched
@@ -217,9 +293,11 @@ Three outcomes per verb, all recorded:
 
 ### Phase 3 — Tool spec
 
-**Tool budget: default ceiling 12, hard ceiling 25.** Tool cards are context the model
-re-reads every turn, and near-duplicate tools measurably degrade selection. Exceeding
-the default requires a stated reason in the package description.
+**Tool budget: default ceiling 12, hard ceiling 25 — per package, not per program.**
+Tool cards are context the model re-reads every turn, and near-duplicate tools measurably
+degrade selection. Exceeding the default requires a stated reason in the package
+description. If a target genuinely needs thirty verbs, that is a signal to split by
+audience (§3), not to raise the ceiling.
 
 Mechanical rules:
 
@@ -385,7 +463,7 @@ deliberately removed.
 
 ---
 
-## 4. Human checkpoints — PARK, do not spin
+## 5. Human checkpoints — PARK, do not spin
 
 Consistent with INDEX.md's checkpoint convention, the wizard stops and waits at:
 
@@ -401,11 +479,13 @@ Consistent with INDEX.md's checkpoint convention, the wizard stops and waits at:
 
 Everything else runs unattended.
 
-## 5. Abort conditions
+## 6. Abort conditions
 
 Stop and report rather than degrade:
 
-- **P0 hit** — a maintained MCP server already exists. Install it.
+- **P0 hit** — a maintained package already covers this target *for this audience*.
+  Install it, or subset it. Building a package for a *different* audience is not a
+  P0 hit (§3).
 - **No right to integrate** — vendor terms forbid it, or the client cannot grant access.
 - **S8 only** — no programmatic seam and none can be added. Synthetic input is a bespoke
   decision, not a wizard output.
@@ -414,7 +494,7 @@ Stop and report rather than degrade:
 - **Stability floor unmet with no alternative** — say so; let the operator decide whether
   a fragile integration is worth its recurring maintenance cost.
 
-## 6. Record shapes
+## 7. Record shapes
 
 One row per wizard run:
 
@@ -430,7 +510,7 @@ RunState      { phase, gateResults[], parkedAt?, operatorDecisions[] }
 `ToolSpec` is deliberately a superset of `ToolInput` — `danger` is the wizard's field and
 maps to `requiresApproval` at Phase 6.
 
-## 7. What this pipeline does not do
+## 8. What this pipeline does not do
 
 - It does not make Program X do things it cannot already do — unless we own it and choose
   to add them (S0).
