@@ -360,6 +360,46 @@ console.log("-- G listing text --");
   check("G7 the corpus maximum (12,069) is under the cap, so nothing real is trimmed today", 12069 < C.DESC_CAP);
 }
 
+// -- H the gate is enforced on the READ, not only when a pull lands -------------
+//
+// Landing-time pruning left two holes, and the live board fell through both: on
+// 2026-09-04 feeds.json held 131 rows of which a 5-day gate would drop 120, and no
+// feeds.dropped-*.json had ever been written. A row can arrive by a path the prune
+// never sees, and a row that passed the gate last week is stale this week with
+// nothing looking again.
+console.log("");
+console.log("-- H the read-time gate --");
+{
+  const NOW_H = Date.UTC(2026, 8, 4, 12, 0, 0);
+  const days = (n) => NOW_H - n * 86_400_000;
+
+  check("H1 a fresh untouched lead is shown", C.hiddenByAgeGate("new", days(2), 5, NOW_H) === false);
+  check("H2 an old untouched lead is hidden", C.hiddenByAgeGate("new", days(21), 5, NOW_H) === true);
+  check("H3 exactly the gate still shows", C.hiddenByAgeGate("new", days(5), 5, NOW_H) === false);
+  check("H4 one day past it does not", C.hiddenByAgeGate("new", days(6), 5, NOW_H) === true);
+  check("H5 parked triage is gated too", C.hiddenByAgeGate("parked", days(21), 5, NOW_H) === true);
+
+  // The rule that keeps this from destroying work: once a lead is picked up, the
+  // posting date stops being the point. Hiding a card out from under a proposal
+  // already sent would be worse than showing something old.
+  for (const st of ["reviewing", "approved", "ready", "sent", "denied", "dismissed"]) {
+    check(`H6 an engaged lead (${st}) is never hidden`, C.hiddenByAgeGate(st, days(844), 5, NOW_H) === false);
+  }
+
+  // Same rule the prune uses: an unknown date is not an old one.
+  check("H7 an undated lead is kept", C.hiddenByAgeGate("new", null, 5, NOW_H) === false);
+  check("H8 and so is an unparseable one", C.hiddenByAgeGate("new", NaN, 5, NOW_H) === false);
+
+  check("H9 the window is the gear's, not a constant", C.hiddenByAgeGate("new", days(21), 30, NOW_H) === false);
+  check("H10 a junk window falls back to the 5-day default", C.hiddenByAgeGate("new", days(21), "abc", NOW_H) === true);
+
+  // The live shape that started this: 3 of the WWR rows on the board are from 2024.
+  check("H11 an 844-day-old New lead is hidden", C.hiddenByAgeGate("new", days(844), 5, NOW_H) === true);
+
+  check("H12 the exempt set is exactly the picked-up statuses",
+    [...C.AGE_GATE_EXEMPT].sort().join(",") === "approved,denied,dismissed,ready,reviewing,sent");
+}
+
 console.log(`\n${failures === 0 ? "OK" : "FAILED"}  ${failures} failure(s)`);
 console.log(`fixture: ${dir}`);
 process.exit(failures === 0 ? 0 : 1);

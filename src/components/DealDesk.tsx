@@ -485,7 +485,7 @@ export default function DealDesk() {
     const ok = await intake(pasteText);
     if (ok) { setPasteText(""); setShowPaste(false); }
   };
-  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs, screenAll, screening, screenResult } = useDesk();
+  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs, screenAll, screening, screenResult, maxAgeDays, agedOut, showStale, setShowStale } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
@@ -656,6 +656,25 @@ export default function DealDesk() {
       {feedsResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#60a5fa" }}>{feedsResult}</div>}
       {scrapeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#d97757" }}>{scrapeResult}</div>}
       {briefBatchResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#f59e0b" }}>{briefBatchResult}</div>}
+
+      {/* An empty column because everything aged out is a different fact from an empty
+          column because the feed returned nothing, so the board says which it is. */}
+      {(agedOut > 0 || showStale) && (
+        <div className="panel p-2.5 mb-4 text-[12.5px] flex flex-wrap items-center gap-2" style={{ color: "#fb923c" }}>
+          <span>
+            {showStale
+              ? `Showing every lead, including ${agedOut} posted more than ${maxAgeDays} days ago.`
+              : `${agedOut} lead${agedOut === 1 ? "" : "s"} hidden - posted more than ${maxAgeDays} days ago. Leads you have already picked up are never hidden.`}
+          </span>
+          <button
+            onClick={() => setShowStale(!showStale)}
+            className="px-2.5 py-1 rounded-lg text-[12px] panel hover:brightness-110"
+          >
+            {showStale ? "Hide the old ones" : "Show them anyway"}
+          </button>
+          <span className="opacity-60">Change the window in the gear.</span>
+        </div>
+      )}
 
       {error && <div className="panel p-3 mb-4 text-[12.5px]" style={{ color: "#f87171" }}>{error}</div>}
       {!loading && !error && deals.length === 0 && (

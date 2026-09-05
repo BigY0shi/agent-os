@@ -10,6 +10,10 @@ interface DeskStore {
   columns: Column[];
   /** S4 (f): the age gate (settings.deals.maxAgeDays) the cards are shown against. */
   maxAgeDays: number;
+  /** How many leads the gate is withholding right now, and whether we asked to see them. */
+  agedOut: number;
+  showStale: boolean;
+  setShowStale: (v: boolean) => void;
   loading: boolean;
   error: string | null;
   fetchDeals: () => Promise<void>;
@@ -70,6 +74,8 @@ export const useDesk = create<DeskStore>((set, get) => ({
   deals: [],
   columns: [],
   maxAgeDays: 5,
+  agedOut: 0,
+  showStale: false,
   loading: false,
   error: null,
   cookie: { set: false, hint: "" },
@@ -115,12 +121,22 @@ export const useDesk = create<DeskStore>((set, get) => ({
     }
   },
 
+  setShowStale: (v) => { set({ showStale: v }); void get().fetchDeals(); },
+
   fetchDeals: async () => {
     set({ loading: true, error: null });
     try {
-      const r = await fetch("/api/deals/list", { cache: "no-store" });
+      // The gate lives on the server, so "show the aged-out ones" is a request for a
+      // different answer, not a client-side unfilter: the count has to come from the
+      // same place that did the withholding or the two can disagree.
+      const r = await fetch(`/api/deals/list${get().showStale ? "?stale=1" : ""}`, { cache: "no-store" });
       const j = await r.json();
-      if (j.ok) set({ deals: j.deals, columns: j.columns, maxAgeDays: typeof j.maxAgeDays === "number" ? j.maxAgeDays : get().maxAgeDays });
+      if (j.ok) set({
+        deals: j.deals,
+        columns: j.columns,
+        maxAgeDays: typeof j.maxAgeDays === "number" ? j.maxAgeDays : get().maxAgeDays,
+        agedOut: typeof j.ageGate?.hidden === "number" ? j.ageGate.hidden : 0,
+      });
       else set({ error: j.error || "Failed to load deals" });
     } catch (e) {
       set({ error: (e as Error).message });

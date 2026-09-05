@@ -34,6 +34,65 @@ Newest entry at the top. Date each one. Companion docs: `_design/agentos-v2/`
 for the plan, `_audit/2026-07-22/` for the original audit.
 
 ---
+## 2026-09-04 - the age gate was pruning a file, when it needed to filter a view
+
+The owner: "off the rip, it is still pulling old ass listings. 3 weeks old..."
+
+He was right, and the gate that was supposed to stop it had never once run.
+
+Measured before touching anything. `listDeals()` returned 151 rows, 111 of them in
+New and every one of those from WeWorkRemotely. By age: 6 at 0-5 days, 13 at 6-10,
+63 at 11-21, and 29 at 22 or more, including three postings from **2024** (844, 810
+and 810 days old). None were undated, so none were being kept by the "an unknown
+date is not an old one" rule. `settings.deals.maxAgeDays` was 5.
+
+Then the decisive pair. Running `partitionByAge` over the live `feeds.json` with a
+5-day window: 131 rows, keep 11, drop 120. So the logic was correct. And
+`ls *.dropped-*.json` in the leads directory: **nothing**. `pruneLeadsFileByAge`
+writes the dropped records beside the file every time it drops any, so an empty
+result there is proof the prune had never dropped a row in that directory. Working
+code that had never executed.
+
+Two holes let that happen, and they are the same hole seen from two sides.
+
+The prune only runs inside `POST /api/deals/feeds`. Anything that writes
+`feeds.json` by another path never meets it - running `feeds.mjs` by hand, or the
+route returning early at its own 502 guard before reaching the prune. And more
+fundamentally: **age is not a property that holds still.** A row that passed a
+5-day gate on Monday is 12 days old by the following Friday, and nothing looked at
+it a second time. Landing-time pruning can only ever be correct at the instant it
+runs.
+
+So the gate is now also applied where the board is READ, against the current clock,
+in `GET /api/deals/list`. Filtering, not deleting: the rows stay in `feeds.json`,
+and `ageGate.hidden` rides back on the response so the board can say how many it
+withheld. An empty column because 107 leads aged out is a different fact from an
+empty column because the feed returned nothing, and the desk now distinguishes
+them out loud rather than just looking broken.
+
+One rule keeps this from destroying work. `AGE_GATE_EXEMPT` covers reviewing,
+approved, ready, sent, denied and dismissed: once a lead has been picked up, its
+posting date stops being the point, and hiding a card out from under a proposal
+already sent would be far worse than showing something old. Only untouched triage
+("new", "parked") is eligible. Twelve checks in section H of
+`smoke-deal-desk-control.mjs` pin that, the inclusive boundary, the undated
+carve-out, and the 844-day row from the live board.
+
+What the fix exposes, which is worth saying plainly rather than hiding behind a
+filter: at his 5-day setting the board goes from 151 rows to 44, and New from 111
+to **6**. The stale cards were not the disease. `feeds.json` was last written
+Sep 2 and its rows were already old then, so the desk has been showing three weeks
+of the same listings because no successful pull has replaced them. At 14 days the
+board is 63 with 25 in New; at 30 days, 135 with 97. The window is a gear setting
+and this is now his dial to turn, but the honest reading is that the feed itself
+needs looking at next.
+
+Left alone deliberately: `pruneLeadsFileByAge` on the pull path. It keeps the file
+from growing without bound, and it is no longer load-bearing for correctness.
+
+Gate: 76 passed, 1 failed (`smoke-webmcp-ui`, the owner's in-flight S7 wizard work
+in `settings.ts`; unchanged before and after).
+
 ## 2026-09-04 - the dossier: understanding a listing before writing about it
 
 The owner proposed two shapes for fixing thin proposals. Either an agent per listing

@@ -286,6 +286,46 @@ export function clampMaxAgeDays(v: unknown): number {
   return Math.min(365, Math.round(n));
 }
 
+// Landing-time pruning alone was never enough, and the board proved it: on
+// 2026-09-04 feeds.json held 131 rows of which a 5-day gate would have dropped
+// 120, and no feeds.dropped-*.json had ever been written, so the prune had never
+// run on that data at all. Two holes made that possible. A row written by any
+// path other than POST /api/deals/feeds (running feeds.mjs by hand, an early
+// return at the route's 502 guard) is never seen by the prune; and age is not a
+// property that holds still, so a row that passed the gate on Monday is stale by
+// Friday and nothing looks at it again.
+//
+// So the gate is also applied where the board is READ, against the current
+// clock. Non-destructive on purpose: the row stays in the file, the desk simply
+// does not show it, and the count of what was hidden is reported rather than
+// swallowed.
+
+/**
+ * Statuses the gate never hides. Once a lead has been picked up, its posting
+ * date stops being the point: dropping a card out from under a proposal already
+ * sent would destroy work, which is worse than showing something old.
+ */
+export const AGE_GATE_EXEMPT: ReadonlySet<string> = new Set([
+  "reviewing", "approved", "ready", "sent", "denied", "dismissed",
+]);
+
+/**
+ * Should the desk hide this lead as stale? Only untouched triage ("new",
+ * "parked") is eligible. An unresolvable post time is KEPT, matching the prune:
+ * an unknown date is not an old one.
+ */
+export function hiddenByAgeGate(
+  status: string,
+  postedAt: number | null | undefined,
+  maxAgeDays: number,
+  now = Date.now(),
+): boolean {
+  if (AGE_GATE_EXEMPT.has(status)) return false;
+  const age = ageDays(postedAt, now);
+  if (age === null) return false;
+  return age > clampMaxAgeDays(maxAgeDays);
+}
+
 // -- (d) Login wall -------------------------------------------------------------
 //
 // The browser was logged out and enrichment ran against the login page as if it
