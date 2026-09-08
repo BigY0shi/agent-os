@@ -1,5 +1,50 @@
 # Agent OS — Dev Journal
 
+## 2026-09-08 - "(no reply)" after one message was the brain, not the voice (v2.31.1)
+
+Owner: "Still immediately fails with (no reply) after 1 message." That string is the
+overlay's placeholder for an ask stream that ended with no sentence and no error,
+so this was never Voicebox. It was also, almost certainly, the real cause of the
+morning's "I can get one reply and then voicebox breaks": the voice was blamed for
+a brain that had gone silent.
+
+**Evidence.** `jarvis_messages` held 11 assistant rows reading exactly `(no reply)`.
+Within one conversation the pattern was: turn one answered; every later turn was
+`(no reply)` with a ONE MILLISECOND gap between the user row and the assistant row
+(21:25:10.734 -> 21:25:10.735). The "sometimes it works again" the owner saw was him
+opening a new conversation: a fresh SDK session answers its first turn, then dies
+the same way (three conversations in the log, same shape each).
+
+**Cause.** `askSdk` read the warm session with `for await (const msg of b.q) { ...
+if (msg.type === "result") break; }`. `break` inside `for await` calls the
+iterator's `return()`. The Agent SDK's `Query` returns itself as its iterator and
+implements `return(e)` as `await this.cleanup(); return this.sdkMessages.return(e)`
+(sdk.mjs, read this session). So the end of every first turn tore the session
+down; turn two pushed its message into a dead query and `next()` came back `done`
+instantly, which the loop treated as an empty answer.
+
+**Why nothing caught it.** The brain smoke's live leg asked its second question in a
+NEW conversation, and its offline sections never touch the SDK iterator. The
+persistent-session design (S-C3) was verified turn-by-turn with fresh conversations.
+
+**Fix.** Explicit `await b.q.next()` in a `while (true)`; `break` out of a while does
+not call `return()`. A `done` step is now a thrown error ("Jarvis session ended /
+was already closed; ask again (session rebuilt)") with the session cleared, and an
+`is_error` result with no text throws `SDK <subtype>: <errors>` instead of being
+persisted as `(no reply)`. Live, outside the smoke: turn one 10.6 s cold, turn two
+1.9 s warm, `turns: 2`, "pong" then "ping".
+
+**Smoke.** `smoke-jarvis-brain` live leg gained a same-conversation second turn
+(must answer, no error) and a `turns === 2` check that the warm session was reused.
+The turns check failed once on its first live run and passed on the rerun; I could
+not explain the first result from evidence, so the check now prints the `done`
+event and durations when it fails. If it flakes again, that is the thread to pull
+(a suspected cause: `toolsSignature()` changing between the two turns and forcing a
+rebuild, which would still answer, just cold).
+
+**Cost.** None to the owner's flow. The error path is new text where there was
+silence; a rebuilt session costs one cold start.
+
 ## 2026-09-08 - off Voicebox: Parakeet hears, Kokoro speaks (v2.31.0)
 
 Owner: "I don't care about voicebox. I want to switch off of it ... Download Nvidia

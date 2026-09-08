@@ -610,6 +610,19 @@ if (process.env.SMOKE_SKIP_SDK === "1") {
     console.log(`SKIP  claude SDK lane unavailable (${probe.timedOut ? "timeout" : err?.message ?? "no pong"}) — live tool leg skipped.`);
   } else {
     check("sdk probe: sentences streamed + meta engine 'sdk'", probe.evs[0]?.type === "meta" && probe.evs[0]?.engine === "sdk");
+    // Second turn in the SAME conversation, on the same warm session. Until
+    // 2026-09-08 the read loop ended each turn with a `break` out of `for await`,
+    // which calls the query's return() -> cleanup(); turn two then read a closed
+    // stream and persisted "(no reply)" in 1 ms. A fresh conversation (like the
+    // live tool leg below) never sees that, which is why this check exists.
+    const probeConv = probe.evs.find((e) => e.type === "meta")?.conversationId;
+    const second = await runWithTimeout({ text: "Now reply with the single word ping.", conversationId: probeConv }, 120_000);
+    const secondText = second.evs.filter((e) => e.type === "sentence").map((e) => e.text).join(" ");
+    check("sdk turn 2 on the same conversation still answers (session survives a turn)",
+      !second.timedOut && /ping/i.test(secondText) && !second.evs.some((e) => e.type === "error"),
+      JSON.stringify(second.evs.slice(0, 4)).slice(0, 300));
+    const secondDone = second.evs.find((e) => e.type === "done");
+    check("sdk turn 2 reused the warm session (turns counter = 2)", secondDone?.turns === 2, `done=${JSON.stringify(secondDone)} durations probe=${probe.evs.find((e) => e.type === "done")?.durationMs}ms`);
     const live = await runWithTimeout(
       { text: "Use your tasks_create tool to create a task titled exactly 'smoke brain test', then tell me its display id." },
       240_000,

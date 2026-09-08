@@ -352,7 +352,21 @@ async function askSdk(
   };
 
   try {
-    for await (const msg of b.q) {
+    // Explicit next(): a `break` out of `for await` calls the query's return(),
+    // which the SDK implements as cleanup() — it killed the warm session at the
+    // end of EVERY first turn, so turn two iterated a closed stream and came back
+    // "(no reply)" in 1 ms (11 such rows in jarvis_messages, 2026-09-08).
+    let sawMessage = false;
+    while (true) {
+      const step = await b.q.next();
+      if (step.done) {
+        g.__jarvisBrainV2 = null;
+        throw new Error(sawMessage
+          ? "Jarvis session ended before a result; ask again (session rebuilt)"
+          : "Jarvis session was already closed; ask again (session rebuilt)");
+      }
+      const msg = step.value;
+      sawMessage = true;
       if (msg.type === "stream_event") {
         const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };
         if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") {
@@ -366,7 +380,12 @@ async function askSdk(
         }
       } else if (msg.type === "result") {
         cost = "total_cost_usd" in msg ? ((msg as { total_cost_usd?: number }).total_cost_usd ?? null) : null;
-        break;
+        const r = msg as { is_error?: boolean; subtype?: string; errors?: string[] };
+        if (r.is_error && sentences.length === 0 && !buf.text.trim()) {
+          // An error result with no text is a failure, not an empty answer.
+          throw new Error(`SDK ${r.subtype ?? "error"}${r.errors?.length ? `: ${r.errors.join("; ").slice(0, 200)}` : ""}`);
+        }
+        break; // out of the while — does NOT call q.return()
       }
     }
   } catch (err) {
