@@ -173,7 +173,7 @@ export interface Settings {
     engine?: "sdk" | "cli";
     cliAgent?: string;     // cli-lane agent id (claude/codex/cursor/… per cliComplete matrix)
     voice?: {
-      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox";
+      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox" | "parakeet";
       autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
       pushToTalk?: boolean;  // true = hold-to-record; false = click-to-toggle
       // The ELEVENLABS reply voice. Distinct from `provider` above, which picks
@@ -214,6 +214,9 @@ export interface Settings {
   // engine blank = the profile's own default; timeoutMs bounds one synthesis
   // (CPU boxes load a model on first use, which can take minutes).
   voicebox: { url?: string; profile?: string; engine?: string; timeoutMs?: number };
+  // Parakeet, the local speech-to-text server (lib/parakeet.ts). url is asserted
+  // loopback in code; the default is 127.0.0.1:8881 (parakeet-start.ps1).
+  stt: { parakeetUrl?: string };
   // The corner tray that keeps module runs visible after their page is gone
   // (components/RunsTray.tsx). autoDismissSec 0 = keep finished runs until
   // dismissed by hand. Gear lives in the tray itself.
@@ -461,12 +464,13 @@ export const DEFAULT_SETTINGS: Settings = {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "voicebox", ttsFallback: "elevenlabs" },
+    voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs" },
     hotkey: { key: "F13", enabled: true },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
   oracle: { voice: { provider: "voicebox", voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
   voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
+  stt: { parakeetUrl: "http://127.0.0.1:8881" },
   runsTray: { enabled: true, autoDismissSec: 45 },
   launch: { "content-engine": defaultLaunchOptions("content-engine"), "agent-kanban": defaultLaunchOptions("agent-kanban") },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },

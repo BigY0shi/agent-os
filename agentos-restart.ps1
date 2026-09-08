@@ -32,8 +32,14 @@ function Get-KokoroPids {
     Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
 }
 
+function Get-ParakeetPids {
+  # Local STT (Parakeet, port 8881) - same treatment as Kokoro.
+  return @(Get-NetTCPConnection -LocalPort 8881 -State Listen |
+    Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
+}
+
 Write-Host "  [1/3] Stopping the old server..."
-foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) | Sort-Object -Unique)) {
+foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) + @(Get-ParakeetPids) | Sort-Object -Unique)) {
   try {
     Stop-Process -Id $procId -Force -ErrorAction Stop
     Write-Host "        killed PID $procId" -ForegroundColor Yellow
@@ -70,6 +76,7 @@ Start-Process -WindowStyle Hidden -FilePath 'node' `
   -RedirectStandardError  (Join-Path $logDir 'agentos-server.err.log')
 
 & (Join-Path $dir 'kokoro-start.ps1')
+& (Join-Path $dir 'parakeet-start.ps1')
 
 Write-Host "  [3/3] Waiting for it to come online..."
 $ok = $false

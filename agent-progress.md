@@ -50,6 +50,12 @@ DEV-JOURNAL.md (hyphen, not underscore).
   the marker above being retitled.
 
 ## Follow-ups seen, not done
+- Voice stack is now Parakeet (STT, 8881) + Kokoro (TTS, 8880), both local servers started
+  by the launchers (v2.31.0, 2026-09-08). Voicebox is retired as a default but still
+  selectable. Owner-to-look after rebuild: Jarvis gear shows "Parakeet model loaded"
+  under Voice provider; dictate one sentence in the overlay (push-to-talk) and see it land
+  in the text box. Not done by the brief: VoxCPM cloning (only if a cloned voice is
+  wanted again); the Oracle still defaults to Voicebox + ElevenLabs backup.
 - Screen control (v2.30.0, 2026-09-08) owner-to-look, needs the rebuilt app: open the
   overlay on /deals and say "open the first listing and read me the notes", then
   "set its status to approved" (expect the select to change and the reply to cite

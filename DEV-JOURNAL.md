@@ -1,5 +1,62 @@
 # Agent OS — Dev Journal
 
+## 2026-09-08 - off Voicebox: Parakeet hears, Kokoro speaks (v2.31.0)
+
+Owner: "I don't care about voicebox. I want to switch off of it ... Download Nvidia
+Parakeet TDT and hook it up to Kokoro or Piper, or VoxCPM if we need to do voice
+cloning. And call it a day." This retires the S1 decision of 2026-09-02 (Voicebox
+as the voice engine). Voicebox code stays in the tree and stays selectable; nothing
+defaults to it any more.
+
+**Speaking** needed no new code: the Kokoro server the launchers already start on
+8880 (`kokoro-start.ps1`, PyTorch venv under `~/.agentic-os/kokoro-tts`) is the
+"local" reply voice, and the owner had already switched to it in the gear. For the
+record: Kokoro is not bundled ONNX inside the app, it is a sibling local server like
+everything else here; the weights (hexgrad/Kokoro-82M) sit in the shared Hugging
+Face cache, the same file Voicebox had downloaded.
+
+**Hearing** is new. `~/.agentic-os/parakeet-stt/server.py` (FastAPI, port 8881)
+runs NVIDIA Parakeet-TDT 0.6B v2 through ONNX Runtime via the `onnx-asr` package,
+int8 on CPU. CPU on purpose: the GPU had 12.7 of 16 GB taken by the local LLMs when
+this was built, and a 0.6B TDT model on CPU is already faster than speech. Measured
+on this box, cold model load 16.4 s; then, over five consecutive different sentences
+through the live HTTP server (Kokoro speech encoded to webm/opus exactly as the
+browser's MediaRecorder sends it, decoded by ffmpeg to 16 kHz mono): 0.18 to 0.32 s
+of recognition per utterance, round trips 225 to 470 ms, all five word-correct
+("JobNimbus" came back as "Job Nimbus"), model still loaded afterwards. That
+consecutive run was the owner's question, because Voicebox died on message two.
+NeMo was rejected outright: it is the reference runtime but a Windows swamp, and
+the ONNX export is the same weights.
+
+**Wiring.** `lib/parakeet.ts` (loopback asserted like Voicebox), `/api/stt/transcribe`
+and `/api/stt/health`, a `parakeet` capture provider listed first in
+`useVoiceCapture`, the Voicebox-only recorder branch generalised to `usesRecorder()`
+so both local recognisers share one MediaRecorder lane, `transcribeClient` picks the
+endpoint from the provider and refuses providers with no local transcriber, gear
+shows Parakeet health + URL when selected (rule 16), defaults `provider: "parakeet"`
++ `ttsProvider: "local"`, `parakeet-start.ps1` called from Start and Restart (kill
+list too). The owner's saved settings were flipped the same way, with the previous
+file exiled to `~/.agentic-os/.exile/2026-09-08_135836/settings.json`.
+
+**Got wrong on the way.** A replace-all of the Voicebox lane check rewrote the body
+of the new `usesRecorder()` into a call to itself; caught by rereading the grep
+before running anything. The smoke's own section A wrote an empty URL into the temp
+settings and then the "defaults" check read that back; defaults are now captured
+before any write. `settings.ts` carries the killed S7 cycle's `wizardProvider`
+hunks, so it was staged hunk-by-hunk from a filtered patch, never whole.
+
+**Not done, by the brief.** VoxCPM (cloning) only "if we need to"; the cloned
+profiles (Alfred, Stokes, The Sage, Yoshi) are one reference sample each and
+exportable from Voicebox when that day comes. The Oracle's own voice setting still
+defaults to Voicebox with its ElevenLabs backup; untouched, one line if wanted.
+GPU inference for Parakeet is an env var (`PARAKEET_PROVIDER=cuda`) plus
+`onnxruntime-gpu`, not worth it at 0.2 s on CPU.
+
+Evidence: smoke-parakeet-stt, 28 checks (fake server; client, both routes, hook
+wiring, defaults, launchers); smoke-voicebox, smoke-jarvis-ui,
+smoke-jarvis-conversations, smoke-jarvis-brain still pass; `tsc` clean. Live: the
+five-utterance run above, plus `/api/stt/health` from the gear once rebuilt.
+
 ## 2026-09-08 - first live run: the curtain and the silent backup (v2.30.1)
 
 Owner, after rebuilding v2.30.0: "I can get one reply and then voicebox breaks. No

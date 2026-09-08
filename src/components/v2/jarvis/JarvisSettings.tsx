@@ -59,6 +59,20 @@ export default function JarvisSettings({
   const [vbProfiles, setVbProfiles] = useState<{ id: string; name: string; engine: string | null }[]>([]);
   const [vbError, setVbError] = useState<string | null>(null);
   const [vbHealth, setVbHealth] = useState<{ modelLoaded: boolean; gpu: boolean; backend: string | null } | null>(null);
+  // Parakeet (local STT). Health from /api/stt/health; the URL is loopback-only (lib/parakeet.ts).
+  const stt = ((settings as unknown as { stt?: { parakeetUrl?: string } })?.stt) ?? {};
+  const [pkHealth, setPkHealth] = useState<{ ok: boolean; loaded: boolean; model: string; provider: string } | { error: string } | null>(null);
+  const [pkUrlDraft, setPkUrlDraft] = useState(stt.parakeetUrl ?? "");
+  useEffect(() => { setPkUrlDraft(stt.parakeetUrl ?? ""); }, [stt.parakeetUrl]);
+  useEffect(() => {
+    if (provider !== "parakeet") return;
+    let live = true;
+    fetch("/api/stt/health", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live) setPkHealth(j?.ok ? { ok: true, loaded: !!j.loaded, model: String(j.model ?? ""), provider: String(j.provider ?? "") } : { error: String(j?.error ?? "Parakeet not answering") }); })
+      .catch((e) => { if (live) setPkHealth({ error: String(e) }); });
+    return () => { live = false; };
+  }, [provider, stt.parakeetUrl]);
   const [vbUrlDraft, setVbUrlDraft] = useState(vb.url ?? "http://127.0.0.1:17493");
   useEffect(() => setVbUrlDraft(vb.url ?? "http://127.0.0.1:17493"), [vb.url]);
   useEffect(() => {
@@ -156,6 +170,27 @@ export default function JarvisSettings({
         {selectedAvailability !== true && (
           <div className="mt-1 text-[11.5px]" style={{ color: "#fbbf24" }} title={String(selectedAvailability)}>
             {String(selectedAvailability)}
+          </div>
+        )}
+        {provider === "parakeet" && (
+          <div className="mt-2 space-y-1.5">
+            {pkHealth && "error" in pkHealth ? (
+              <div className="text-[11px]" style={{ color: "#f87171" }}>Parakeet: {pkHealth.error}. Start it with parakeet-start.ps1 (the launchers do).</div>
+            ) : pkHealth ? (
+              <div className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                Parakeet {pkHealth.loaded ? "model loaded" : "model not loaded yet (first dictation loads it, ~15 s)"} · {pkHealth.model} · {pkHealth.provider}
+              </div>
+            ) : null}
+            <input
+              className={field}
+              value={pkUrlDraft}
+              onChange={(e) => setPkUrlDraft(e.target.value)}
+              onBlur={() => { if (pkUrlDraft !== (stt.parakeetUrl ?? "")) save({ stt: { parakeetUrl: pkUrlDraft } } as unknown as Partial<Settings>); }}
+              placeholder="http://127.0.0.1:8881"
+              spellCheck={false}
+              disabled={saving}
+              title="Parakeet STT server URL. Loopback only; a remote host is refused."
+            />
           </div>
         )}
       </div>

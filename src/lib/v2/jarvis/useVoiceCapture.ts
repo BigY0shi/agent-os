@@ -20,7 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { transcribeRecording } from "./transcribeClient";
 
 export type VoiceCaptureStatus = "idle" | "recording" | "error";
-export type VoiceProviderId = "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox";
+export type VoiceProviderId = "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox" | "parakeet";
 
 export interface VoiceProviderInfo {
   id: VoiceProviderId;
@@ -101,8 +101,11 @@ function mediaRecorderAvailability(): true | string {
 }
 
 export const VOICE_PROVIDERS: VoiceProviderInfo[] = [
-  // Local Whisper via Voicebox. Listed first because it is the one that works
-  // in the owner's browser (Opera) and keeps audio on this machine.
+  // Local Parakeet-TDT (NVIDIA, ONNX Runtime) at 127.0.0.1:8881. Listed first
+  // because it is the default: works in the owner's browser (Opera), keeps audio
+  // on this machine, and does not depend on Voicebox (retired 2026-09-08).
+  { id: "parakeet", label: "Parakeet (local, port 8881)", isLocal: true, available: mediaRecorderAvailability },
+  // Local Whisper via Voicebox. Kept selectable; no longer the default.
   { id: "voicebox", label: "Voicebox (local Whisper)", isLocal: true, available: mediaRecorderAvailability },
   { id: "webspeech", label: "Browser (Web Speech)", isLocal: false, available: webSpeechAvailability },
   // Kimi's existing capture plumbing (JarvisKimiVoice) is browser STT feeding
@@ -126,6 +129,11 @@ export const VOICE_PROVIDERS: VoiceProviderInfo[] = [
     available: () => "Gemini Live capture not wired yet (lands with the C3 brain chunk).",
   },
 ];
+
+/** Providers that record a clip with MediaRecorder and transcribe it through a local server. */
+export function usesRecorder(info: VoiceProviderInfo): boolean {
+  return info.id === "parakeet" || info.id === "voicebox";
+}
 
 export function providerInfo(id: string | undefined): VoiceProviderInfo {
   // Unknown/unset falls back to Web Speech (the historical default), not to
@@ -208,7 +216,7 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
 
   useEffect(() => () => teardown(), [teardown]);
 
-  /** Voicebox lane: record, then transcribe on stop. The transcript is a FINAL chunk, never sent here. */
+  /** Recorder lanes (Parakeet, Voicebox): record, then transcribe on stop. The transcript is a FINAL chunk, never sent here. */
   const startRecorder = useCallback(async () => {
     if (runningRef.current) return;
     cancelledRef.current = false;
@@ -245,20 +253,20 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
         // Transcription lives in transcribeClient.ts: this hook stays capture-only
         // (its smoke asserts no fetch here). The text is a FINAL chunk for the
         // caller; nothing is dispatched to the brain from this file.
-        const text = await transcribeRecording(blob);
+        const text = await transcribeRecording(blob, info.id);
         setPartial("");
         setStatus("idle");
         if (text) onFinalChunkRef.current?.(text);
       } catch (e) {
         setPartial("");
-        setError("Voicebox transcription failed: " + ((e as Error)?.message ?? e));
+        setError(`${info.label} transcription failed: ` + ((e as Error)?.message ?? e));
         setStatus("error");
       }
     };
     mr.start(250);
     runningRef.current = true;
     setStatus("recording");
-  }, [teardownRecorder]);
+  }, [teardownRecorder, info]);
 
   const start = useCallback(() => {
     const availability = info.available();
@@ -269,7 +277,7 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
       return;
     }
     if (runningRef.current) return; // never two recognizers
-    if (info.id === "voicebox") { void startRecorder(); return; }
+    if (usesRecorder(info)) { void startRecorder(); return; }
     const Ctor = getSRCtor();
     if (!Ctor) {
       setError("SpeechRecognition constructor vanished — cannot record.");
@@ -333,7 +341,7 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
   }, [info, startRecorder]);
 
   const stop = useCallback(() => {
-    if (info.id === "voicebox") {
+    if (usesRecorder(info)) {
       // The recorder's onstop posts the clip for transcription; the transcript
       // arrives as one final chunk. Nothing is sent from here.
       const mr = recorderRef.current;
