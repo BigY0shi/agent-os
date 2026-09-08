@@ -1,5 +1,47 @@
 # Agent OS — Dev Journal
 
+## 2026-09-08 - first live run: the curtain and the silent backup (v2.30.1)
+
+Owner, after rebuilding v2.30.0: "I can get one reply and then voicebox breaks. No
+fallback for some reason. Also the Jarvis modal takes over the screen, so if I asked
+him to pull something up or navigate somewhere, I wouldn't be able to use it."
+
+**The curtain** was a design fact, not a bug hunt: `ChatboxOverlay` was `fixed inset-0`
+with a dimmed, click-to-dismiss backdrop and `aria-modal`. Every page Jarvis navigated
+to rendered behind it. It is now a docked panel, bottom-right above the orb, no
+backdrop, the page stays visible and clickable, Esc still discards, the orb still
+toggles. The C2b capture contract (textarea focused on open, mic not hot,
+push-to-talk) is untouched; only the frame changed.
+
+**Voicebox** was reproduced with a direct probe (`POST /generate` with the owner's
+profile): `loading_model` for ~8 s, then `failed` with torch's "Cannot copy out of
+meta tensor; no data!". `/health` reports `model_loaded: false`. So the first reply
+spoke while the model was resident; once Voicebox dropped it, every reload fails
+inside Voicebox itself. Nothing in this repo can fix that; the owner restarts Voicebox.
+
+**"No fallback"** is the part that mattered. The server log had four lines of
+`[tts] Voicebox failed (...); falling back to ElevenLabs as configured for jarvis`,
+so the fallback was attempted, and probes showed the ElevenLabs leg healthy (key
+valid, creator tier, 3,853 of 374,235 characters used, the configured Alfred voice
+id resolves). Two things were wrong on our side regardless of what the browser did:
+- The overlay never showed the route's `fellBackFrom` / `fallbackReason` labels
+  (rule 20: a fallback the owner chose must say so where he is looking). The Oracle
+  footer does this; the overlay did not. Now an amber line: "voicebox failed (reason);
+  elevenlabs is speaking instead."
+- Every 500-char chunk of a reply re-asked Voicebox and paid the 8 s stall before
+  falling back, so a three-chunk reply was ~25 s of silence punctuated by speech.
+  `useReadAloud` now keeps the rest of the current reply on the provider the route
+  already chose. The client makes no provider decision of its own; it repeats the
+  server's labelled one, and the next reply asks Voicebox again.
+- The route logged the fallback attempt but not its outcome, which is why this
+  entry cannot say whether ElevenLabs audio reached the browser. It now logs
+  `ElevenLabs backup spoke` or `ALSO failed: <status>`, so the next report carries
+  the missing line.
+
+Evidence: smoke-jarvis-screen-control 40 → 43 (labelled fallback continues the reply
+on the chosen voice; the label reaches the client; the overlay source has no modal
+curtain). smoke-jarvis-ui and smoke-jarvis-conversations still pass. Not seen live.
+
 ## 2026-09-08 - Jarvis can see and work the active tab (v2.30.0)
 
 The owner wants Jarvis as an accessibility stand-in: navigate pages, read sections,

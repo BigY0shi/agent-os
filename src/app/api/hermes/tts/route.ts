@@ -174,8 +174,10 @@ async function voiceboxTts(text: string, profileRef: string, module: string): Pr
   const r = await elevenTts(text, policy.voiceId);
   const j = (await r.json().catch(() => ({}))) as { audio?: string; error?: string; detail?: string };
   if (r.ok && j.audio) {
+    console.warn(`[tts] ElevenLabs backup spoke for ${module || "jarvis"} (${text.length} chars)`);
     return NextResponse.json({ audio: j.audio, provider: "elevenlabs", fellBackFrom: "voicebox", fallbackReason: reason });
   }
+  console.warn(`[tts] ElevenLabs backup ALSO failed for ${module || "jarvis"}: ${j.error ?? r.status} ${j.detail ?? ""}`.trim());
   return NextResponse.json(
     { error: `Voicebox failed (${reason}); ElevenLabs backup also failed (${j.error ?? r.status})`, provider: "voicebox", fallbackTried: "elevenlabs" },
     { status: 502 },

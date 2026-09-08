@@ -71,6 +71,7 @@ function Fixture() {
  const speech = useReadAloud("voicebox");
  window.readAloud = speech.read; window.stopReading = speech.stop;
  window.speechError = speech.error;
+ window.spokeVia = speech.spokeVia;
 
  const [notes, setNotes] = useState("Original notes");
  const [saved, setSaved] = useState("Original notes");
@@ -170,5 +171,25 @@ try {
  });
  await page.waitForTimeout(30);
  check((await page.evaluate(() => window.speechError)).includes("Voicebox offline"), "speech provider failures surface without fallback");
+ // Rule 20: the route labels its own fallback; the client shows it and keeps the
+ // rest of THIS reply on the voice the route chose instead of re-stalling per chunk.
+ await page.evaluate(() => {
+  window.ttsChunks = [];
+  window.fetch = async (_url, init) => {
+   const body = JSON.parse(init.body);
+   window.ttsChunks.push(body);
+   return { ok: true, json: async () => body.provider === "voicebox"
+    ? { audio: "fixture-audio", provider: "elevenlabs", fellBackFrom: "voicebox", fallbackReason: "meta tensor fixture" }
+    : { audio: "fixture-audio", provider: body.provider } };
+  };
+ });
+ await page.evaluate(text => window.readAloud(text), spoken);
+ await page.waitForTimeout(30);
+ const fb = await page.evaluate(() => window.ttsChunks);
+ check(fb.length > 2 && fb[0].provider === "voicebox" && fb.slice(1).every(c => c.provider === "elevenlabs"), "labelled fallback carries the rest of the reply without re-stalling");
+ const via = await page.evaluate(() => window.spokeVia);
+ check(via && via.fellBackFrom === "voicebox" && via.provider === "elevenlabs" && via.reason.includes("meta tensor"), "fallback label reaches the client");
+ const overlaySrc = fs.readFileSync("src/components/v2/jarvis/ChatboxOverlay.tsx", "utf8");
+ check(!overlaySrc.includes('aria-modal') && !overlaySrc.includes("bg-black/55") && overlaySrc.includes("spokeVia"), "overlay is docked, not a modal curtain, and shows who is speaking");
  console.log(`${checks} checks passed; offline browser fixture, speech seam and protocol only.`);
 } finally { await browser.close(); }

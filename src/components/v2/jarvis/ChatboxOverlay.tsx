@@ -476,9 +476,12 @@ export default function ChatboxOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[95] flex items-start justify-center pt-[12vh] px-4"
+          // Docked, not modal (owner 2026-09-08): Jarvis navigates and operates the
+          // page behind this panel, so the page must stay visible and clickable.
+          // No backdrop, not announced as modal; the orb (bottom-5 right-5) stays reachable.
+          className="fixed bottom-[5.25rem] right-5 z-[95] w-[min(460px,calc(100vw-2.5rem))]"
           role="dialog"
-          aria-modal="true"
+          aria-label="Jarvis"
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.stopPropagation();
@@ -486,13 +489,12 @@ export default function ChatboxOverlay({
             }
           }}
         >
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={discard} />
           <motion.div
-            initial={{ y: -14, opacity: 0, scale: 0.985 }}
+            initial={{ y: 14, opacity: 0, scale: 0.985 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -10, opacity: 0, scale: 0.985 }}
+            exit={{ y: 10, opacity: 0, scale: 0.985 }}
             transition={{ duration: 0.16 }}
-            className="relative w-full max-w-[640px] rounded-2xl shadow-2xl overflow-hidden"
+            className="relative w-full rounded-2xl shadow-2xl overflow-hidden"
             style={{ background: "var(--bg, #0b0713)", border: `1px solid ${ACCENT}44` }}
           >
             {/* header */}
@@ -549,6 +551,11 @@ export default function ChatboxOverlay({
               </div>
             )}
             {speech.error && <p role="alert" className="px-4 py-2 text-sm text-red-300">Read aloud failed: {speech.error}</p>}
+            {speech.spokeVia && (
+              <p role="status" className="px-4 py-1.5 text-[11.5px]" style={{ color: "#fbbf24" }}>
+                {speech.spokeVia.fellBackFrom} failed{speech.spokeVia.reason ? ` (${speech.spokeVia.reason.slice(0, 140)})` : ""}; {speech.spokeVia.provider} is speaking instead.
+              </p>
+            )}
 
             {/* C3.6 conversation drawer */}
             {showHistory && (
