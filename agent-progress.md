@@ -41,15 +41,22 @@ DEV-JOURNAL.md (hyphen, not underscore).
   Bonsai. He noted it is installed under his python311 folder inside KiCad.
 - UNCOMMITTED partial work from the killed pass-3 S7 cycle is still in the tree:
   `src/lib/v2/webmcp/wizard.ts` (untracked) plus a `resolveModel()` export in
-  `llm.ts` and hunks in `settings.ts` / `dbSchema.ts`. `wizard.ts` was ALSO untracked
-  before that cycle, so the session may have overwritten the owner's own draft; no
-  `.exile` copy exists. Ask him before the next S7 run.
+  `llm.ts` and hunks in `settings.ts` / `dbSchema.ts`. Confirmed with the owner
+  2026-09-03: `wizard.ts` is the S7 cycle's own generated work, not his draft
+  (he didn't write it) - no data loss, safe to build on for the next S7 run.
 
 ## Next
 - S7 webmcp-wizard, then S9 openmontage-module (top-down in features.json). Both wait on
   the marker above being retitled.
 
 ## Follow-ups seen, not done
+- Screen control (v2.30.0, 2026-09-08) owner-to-look, needs the rebuilt app: open the
+  overlay on /deals and say "open the first listing and read me the notes", then
+  "set its status to approved" (expect the select to change and the reply to cite
+  the status, not just "done"); "Voice off" / "Stop reading" / "Stop actions" in the
+  overlay header; a Hire Engine status change now shows "Save failed: ..." instead of
+  silently painting. Hands-free loop (re-arm mic after read-aloud) is proposed in
+  ROADMAP.md and waits on the owner because it touches the C2b mic-not-hot contract.
 - S4 owner-to-look (needs the rebuilt app): the verdict line + edge colour on cards, the
   Parked/Denied lane under the board, "Paste URLs" against a real upwork.com listing
   (`scripts/deals/intake-scrape.mjs` uses his Chrome + the actor's parse.js), "Enrich

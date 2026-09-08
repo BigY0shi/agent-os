@@ -52,6 +52,8 @@ function Card({ lead, onOpen }: { lead: HireLead; onOpen: (l: HireLead) => void 
   const enriched = !!lead.firmo && !lead.firmo.error;
   return (
     <div
+      role="button" tabIndex={0} aria-label={`Open ${lead.title}`} data-jarvis-record={lead.id}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(lead); } }}
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", lead.id)}
       onClick={() => onOpen(lead)}
@@ -176,8 +178,8 @@ function DraftRow({ lead, hasPitch, onSaved }: { lead: HireLead; hasPitch: boole
   );
 }
 
-function Drawer({ lead, onClose, onStatus, onSaved }: {
-  lead: HireLead; onClose: () => void;
+function Drawer({ lead, onClose, onStatus, onSaved, statusError }: {
+  lead: HireLead; onClose: () => void; statusError?: string | null;
   onStatus: (id: string, s: HireStatus) => void; onSaved: () => void;
 }) {
   const m = machineFor(lead.machineKey);
@@ -192,10 +194,16 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
   useEffect(() => { setPitch(lead.pitch || ""); setNotes(lead.notes || ""); }, [lead.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function act(action: string, value: string) {
-    await fetch("/api/hire/action", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, id: lead.id, value }),
-    }).catch(() => {});
+    setErr("");
+    try {
+      const response = await fetch("/api/hire/action", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, id: lead.id, value }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || "Save failed");
+      onSaved();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
   }
 
   async function writePitch() {
@@ -240,12 +248,12 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="w-full max-w-[640px] h-full overflow-y-auto p-6"
+      <div role="dialog" aria-label={lead.title} data-jarvis-record={lead.id} className="w-full max-w-[640px] h-full overflow-y-auto p-6"
         style={{ background: "var(--bg, #14101c)", borderLeft: "1px solid rgba(255,255,255,0.1)" }}
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <h2 className="text-lg font-semibold leading-snug">{lead.title}</h2>
-          <button onClick={onClose} className="text-white/50 hover:text-white shrink-0"><X size={18} /></button>
+          <button aria-label="Close listing" onClick={onClose} className="text-white/50 hover:text-white shrink-0"><X size={18} /></button>
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">
@@ -269,7 +277,7 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
 
         {/* Status */}
         <div className="flex items-center gap-2 mb-4">
-          <select value={lead.status} onChange={(e) => onStatus(lead.id, e.target.value as HireStatus)}
+          <select aria-label="Listing status" value={lead.status} onChange={(e) => onStatus(lead.id, e.target.value as HireStatus)}
             className="panel px-2 py-1 text-[12px] bg-transparent">
             {["new", "researching", "approved", "sent", "parked", "dismissed"].map((s) => (
               <option key={s} value={s} style={{ background: "#14101c" }}>{s}</option>
@@ -283,6 +291,7 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
           </button>
         </div>
 
+        {statusError?.startsWith("Save failed:") && <p role="alert" className="text-red-300 text-sm mb-3">{statusError}</p>}
         {err && <div className="text-[12px] mb-3" style={{ color: "#f87171" }}>{err}</div>}
 
         {/* Project summary — quick "what is this" read before the full posting */}
@@ -355,7 +364,7 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
             {busy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
             {busy ? "Writing…" : pitch ? "Rewrite pitch" : "Write pitch"}
           </button>
-          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => act("pitch", pitch)}
+          <textarea aria-label="Listing proposal" data-jarvis-saved-value={lead.pitch || ""} value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => act("pitch", pitch)}
             rows={8} placeholder="No outreach written yet."
             className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
           <DraftRow lead={lead} hasPitch={!!pitch.trim()} onSaved={onSaved} />
@@ -380,14 +389,14 @@ function Drawer({ lead, onClose, onStatus, onSaved }: {
         )}
 
         <Section title="Notes">
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => act("notes", notes)}
+          <textarea aria-label="Listing notes" data-jarvis-saved-value={lead.notes || ""} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => act("notes", notes)}
             rows={3} placeholder="Your questions / observations…"
             className="w-full panel bg-transparent p-2 text-[12.5px] resize-y" />
         </Section>
 
         <Section title="Ask AI about this posting">
           <div className="flex gap-2">
-            <input value={question} onChange={(e) => setQuestion(e.target.value)}
+            <input aria-label="Question about this listing" value={question} onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submitAsk()}
               placeholder="e.g. would the CS engine handle their Zendesk setup?"
               className="flex-1 panel bg-transparent px-2 py-1.5 text-[12.5px]" />
@@ -514,13 +523,17 @@ export default function HireEngine() {
   }
 
   async function setStatus(id: string, status: HireStatus) {
-    setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
-    await fetch("/api/hire/action", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "status", id, value: status }),
-    }).catch(() => {});
-    // "dismissed" removes it from the list server-side, so resync.
-    if (status === "dismissed") { setOpenId(null); load(); }
+    try {
+      const response = await fetch("/api/hire/action", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status", id, value: status }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || "Status save failed");
+      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)));
+      setNote(null);
+      if (status === "dismissed") { setOpenId(null); void load(); }
+    } catch (e) { setNote(`Save failed: ${e instanceof Error ? e.message : String(e)}`); }
   }
 
   const shown = useMemo(
@@ -640,7 +653,7 @@ export default function HireEngine() {
         })}
       </div>
 
-      {selected && <Drawer lead={selected} onClose={() => setOpenId(null)} onStatus={setStatus} onSaved={load} />}
+      {selected && <Drawer lead={selected} statusError={note} onClose={() => setOpenId(null)} onStatus={setStatus} onSaved={load} />}
     </div>
   );
 }

@@ -13,6 +13,14 @@ is one line; the journal carries the rest.
 
 ## Now
 
+- [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
+  Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
+  readbacks. Spec: `_design/jarvis-screen-control.md`. Not yet seen in a browser.
+- [ ] **Jarvis hands-free loop (proposed, owner's call).** The overlay needs a mic
+  press per turn (C2b contract: mic not hot on open). An opt-in "Hands-free" toggle
+  that re-arms capture when read-aloud ends, plus auto-send, would make Deal Desk
+  voice-only. Touches a contract Yoshi stated twice, so it waits for his yes.
+
 - [x] **S3. Pre-launch settings drawer + STOP.** Shipped 2026-09-02 (see Done). Decided by Yoshi 2026-09-02:
   configuration happens before launch in a drawer (skills applied, guardrails
   added/removed); the only mid-run control is STOP. Deal Desk is the reference
@@ -92,6 +100,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-08 · v2.30.0 · Jarvis user-directed screen control. `ui_control` tool (inspect / click / fill / select / navigate) over a per-turn SSE command with a one-use token; the browser executes against observed control IDs bound to a snapshot signature and POSTs evidence back to `/api/v2/jarvis/ui-result`. Deal Desk and Hire Engine cards and drawers carry names, `role="dialog"`, `data-jarvis-record` and `data-jarvis-saved-value` so "open the X listing, read the notes, approve it" resolves to named controls and reports saved only when the store acknowledged. Hire Engine's silent save failures (`.catch(() => {})`, optimistic status) replaced with real errors. Overlay reads replies aloud through the gear's reply voice, with Stop / Voice off / Stop actions. `router.push` replaces full reloads so the ask stream survives navigation. smoke-jarvis-screen-control, 40 checks, real Chromium via Playwright. Not yet seen in a browser.
 
 - 2026-09-03 · v2.26.1 · S5 fix: a zero-fact `derived` row no longer retires itself. Distinguished the model explicitly deciding an episode is empty (`NOTHING_TO_REMEMBER` -> outcome `nothing`, correctly final) from the model running the whole pipeline and extracting nothing anyway (`derived` with 0 statements, 0 voice aspects - a verdict about the pass, not the episode). `UNDRIVED_WHERE` now retires a `derived` log row only when it landed something; the "still undrived" arithmetic in both `backfill.ts` and the CLI is corrected to match, and both name the zero-yield count. Verified against the real DB (episode `0f7dea7e` from the first sample is back in the candidate set) and smoke-covered: 90 -> 108 checks (section M), which itself needed two fixture bugs fixed (the marker lost through a crude normalize regex; a manual override leaving the upstream extract call empty so the pipeline short-circuited before the branch it was meant to test).
 - 2026-09-03 · v2.26.0 · S5 follow-up: a thinking budget, because the first live sample was 96% monologue. Measured on the real server: overhead 0.1 s, 1200 prompt tokens 0.8 s, 76 tok/s, but 1978 completion tokens of which 1905 were reasoning, for a 51-token answer. LM Studio reports it in `message.reasoning_content`, not an inline `<think>` block, so the existing strip never fired. `reasoning_effort: "none"` is the only knob that works (`low` is slower than baseline; `chat_template_kwargs` are ignored): 26.6 s → 1.2 s with the same facts, and on one note thinking-off caught a fact thinking-on missed. Shipped as `settings.memory.openaiCompatReasoningEffort` (default `none`), "Thinking budget" in the Memory gear, `--reasoning-effort` on the CLI through the same env door as `--base-url` (writes nothing to disk), named in the preflight line and in `BackfillResult.reasoningEffort`; `""` omits the field rather than sending an empty string, and it never reaches the Ollama path. Live: 3 episodes in 63.8 s, down from 496.8 s. 20 episodes is now ~7 min, the full 332 about 2 h instead of 15. smoke-memory-backfill 79 → 90 checks.

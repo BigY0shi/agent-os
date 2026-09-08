@@ -1,5 +1,100 @@
 # Agent OS — Dev Journal
 
+## 2026-09-08 - Jarvis can see and work the active tab (v2.30.0)
+
+The owner wants Jarvis as an accessibility stand-in: navigate pages, read sections,
+write in fields, press buttons, by voice, with Deal Desk and Hire Engine first.
+Before this, the V2 brain could emit a `navigate` event and received a one-line page
+descriptor; it could not see a control, let alone press one, and the global overlay
+captured speech but never spoke back. Spec: `_design/jarvis-screen-control.md`.
+
+Two sessions. The first built everything below and was rate-limited before it could
+verify; its journal stub ended "Verification results follow here". This session
+re-read every hunk against the `.bak` copies in `task_notes/jarvis-screen-control-baseline`
+(both component baselines equal HEAD, so none of the owner's uncommitted work is
+mixed in), then ran the evidence: `smoke-jarvis-screen-control` 40 checks,
+`tsc --noEmit` clean, `./test.sh` 78 passed, 1 failed. The failure is
+`smoke-webmcp-ui`, two checks: one was ours (the home module's ask body had
+`uiControl` before `text` and the smoke greps for the original key order; reordered),
+the other is the killed S7 cycle's uncommitted `wizardProvider` hunk in
+`settings.ts`, which is not staged here and turns that smoke red until S7 lands or
+the regex is relaxed. Logged so the next gate run is not mistaken for a new break.
+Also seen: `smoke-engine` re-reads `OLLAMA_API_KEY` from `.env.local` after the gate
+unset it and ran a live Ollama Cloud leg for minutes inside the "offline" gate;
+flagged as its own fix, not touched here.
+
+**The shape.** One tool, `ui_control`, with five actions: inspect, click, fill,
+select, navigate. The model never sends a selector, a URL outside the app, or
+JavaScript; it sends a control ID it was handed by the last inspection. The bridge
+is a per-turn SSE event (`ui_request`) carrying a random one-use token; the browser
+executes, then POSTs the result to `/api/v2/jarvis/ui-result`, which resolves the
+waiting promise only if the token matches, and only once (`uiRequests.ts`). The
+model gets browser evidence back, not a dispatch receipt. The result endpoint sits
+behind the proxy gate like everything else; the token is defence in depth against a
+second tab or a replay, not the authentication.
+
+**Decisions, and what they replaced.**
+- Control references are `snapshot:index` and are bound to the element *and* a
+  signature (name, href, type, value, checked, record id). Any of: navigation,
+  the element leaving the DOM, a concurrent user edit changing its value, or a
+  drawer closing invalidates the reference with "Stale or unknown control. Inspect
+  the page again." A bare index or a CSS path would have let the model act on
+  whatever happened to be there now.
+- The inspection root is the topmost visible `role="dialog"` when one is open,
+  otherwise the body. Deal and Hire drawers now carry that role, the listing title
+  as their name, and `data-jarvis-record` with the deal/lead id; cards got
+  `role="button"` plus `aria-label="Open <title>"` (and became keyboard-openable in
+  passing). So "open the JobNimbus listing" is a click on a named control, and
+  "read the notes" reads the notes of the drawer that is open, not the board behind it.
+- React controlled inputs ignore `el.value = x`; the client writes through the
+  prototype's native value setter and dispatches `input` + `change`, then blurs
+  after a settle, because the Deal/Hire save handlers are `onBlur`. The existing
+  handlers stay the authority; the bridge only presses the keys.
+- Every textarea that persists on blur carries `data-jarvis-saved-value`, so an
+  inspection reports `saved: true/false` by comparing the live value to what the
+  store last acknowledged. The prompt tells the model a field is saved only when
+  that flag says so, or after reopening the card. Cost: the attribute is one more
+  thing to hand-maintain when a new saveable field is added.
+- Navigation switched from `window.location.href` to `router.push` in all three
+  callers (overlay, Jarvis page, home module). A full reload would have killed the
+  SSE stream mid-turn and left the pending UI request to time out at 30 s.
+- Hidden, `aria-hidden`, `data-jarvis-private`, password/secret/token fields and the
+  overlay's own chrome (`data-jarvis-chrome`) are excluded from text and controls.
+  Inspection refuses on `/login`, `/api/*`, `/logout`.
+- Mutating actions run through the same `gateTaint` as every other write, so a
+  turn poisoned by external content can still *look* but cannot click or fill.
+- The overlay speaks through `useReadAloud`: chunks of at most 500 chars to the
+  existing `/api/hermes/tts` with the gear's `jarvis.voice.ttsProvider`, played in
+  order, with a Stop, a Voice on/off toggle, and "Stop actions" aborting the ask
+  stream (which aborts any pending UI request server-side). A provider failure is
+  surfaced in red, never swapped for another voice (rule 20 still governs the
+  route's own labelled Voicebox -> ElevenLabs backup).
+
+**Found on the way.** `HireEngine` swallowed every save failure: `fetch(...).catch(() => {})`
+on status, pitch and notes, with an optimistic status update painted before the
+request left. A voice user would have been told "approved" by a UI that had not
+saved. Status now waits for `{ ok: true }`, surfaces `Save failed: ...`, and the
+Deal Desk drawer shows the store's error the same way. Cost: the Hire status change
+is no longer instant on screen.
+
+**Evidence.** `scripts/v2/smoke-jarvis-screen-control.mjs`, 40 checks: the protocol
+(wrong token, replay, timeout, cancel), the tool under taint, and a real Chromium
+(Playwright) driving an esbuild bundle of `uiClient.ts` against a fixture board:
+open card, read listing, private content excluded, controlled textarea commits on
+blur, stale write rejected, approve/deny/dismiss, Q&A round trip, disabled control,
+external link refused, concurrent edit invalidates, navigation invalidates, long
+page and long field pagination, speech chunking preserves every character. Not
+seen in a browser by the owner yet.
+
+**Not in this slice.** A hands-free loop. The overlay still needs a mic press per
+turn (C2b: mic not hot on open, push-to-talk default), so "voice only" today means
+press, speak, listen, press. Re-arming capture after read-aloud ends is a small
+opt-in toggle but it touches a contract the owner stated twice, so it is his call.
+Canvas pixels and cross-origin frames remain invisible, by design.
+
+Rollback: exile `uiProtocol.ts`, `uiRequests.ts`, `uiClient.ts`, `useReadAloud.ts`,
+`api/v2/jarvis/ui-result/`, and restore this task's hunks from the baseline copies.
+
 ## How to keep this file (read this before adding an entry)
 
 You are an agent working in this repo. The `commit-msg` hook in `.githooks/`
@@ -1994,4 +2089,3 @@ No `~/.agentic-os/loop` directory exists — the engine has never saved a build.
 - **Agent modules to keep standalone** (do NOT fold into a unified console): **Agent Council chat (`/room`)**, **The Oracle**, **News Radar**.
 - **Jarvis** — wanted working. Plan: drop the dead OpenAI Realtime default; decompose to mic → STT → hermes/Claude CLI → **ElevenLabs TTS** (key valid; `/api/hermes/tts` already supports it).
 - Exile-not-delete; never hard-delete files.
-

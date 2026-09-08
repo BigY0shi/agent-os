@@ -1,5 +1,7 @@
 "use client";
 
+import { handleUiEvent } from "@/lib/v2/jarvis/uiClient";
+
 // The homepage Jarvis module — the merged voice assistant, front and center.
 //
 // CR.1 (SPEC-C): talks to the V2 brain lane (POST /api/v2/jarvis/ask —
@@ -14,6 +16,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Mic, Send, Settings2, RotateCcw, Volume2, VolumeX, Maximize2 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 
@@ -54,6 +57,7 @@ const PHASE_HUE: Record<Phase, string> = {
 };
 
 export function JarvisModule() {
+  const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [input, setInput] = useState("");
   const [log, setLog] = useState<Msg[]>([]);
@@ -147,7 +151,7 @@ export function JarvisModule() {
     try {
       const r = await fetch("/api/v2/jarvis/ask", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: utterance, conversationId: conversationIdRef.current ?? undefined }),
+        body: JSON.stringify({ text: utterance, conversationId: conversationIdRef.current ?? undefined, uiControl: true }),
       });
       if (!r.ok || !r.body) throw new Error(`brain ${r.status}`);
       const reader = r.body.getReader();
@@ -168,6 +172,7 @@ export function JarvisModule() {
               type: string; text?: string; error?: string; message?: string;
               conversationId?: string; name?: string; state?: string; summary?: string; route?: string;
             };
+            if (await handleUiEvent(ev, (route) => router.push(route))) continue;
             if (ev.type === "meta" && ev.conversationId) {
               conversationIdRef.current = ev.conversationId;
             } else if (ev.type === "sentence" && ev.text) {
@@ -183,7 +188,7 @@ export function JarvisModule() {
             } else if (ev.type === "tool" && ev.name && ev.state !== "start") {
               setLog((l) => [...l, { role: "jarvis", tool: true, text: `⚙ ${ev.name}${ev.state === "error" ? " ✗" : ""}${ev.summary ? ` — ${ev.summary}` : ""}` }]);
             } else if (ev.type === "navigate" && ev.route && ev.route.startsWith("/")) {
-              window.location.href = ev.route;
+              router.push(ev.route);
             } else if (ev.type === "error") {
               setLog((l) => [...l, { role: "jarvis", text: `Brain error: ${ev.message ?? ev.error ?? "failure"}` }]);
             }

@@ -101,6 +101,8 @@ interface CardProps {
 function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
   return (
     <div
+      role="button" tabIndex={0} aria-label={`Open ${deal.title}`} data-jarvis-record={deal.id}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(deal); } }}
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", deal.id)}
       onClick={() => onOpen(deal)}
@@ -181,7 +183,7 @@ function ResearchLine({ research, answers }: { research: NonNullable<Deal["resea
 }
 
 function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
-  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research, fetchDeals } = useDesk();
+  const { error, move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research, fetchDeals } = useDesk();
   const [buildingDossier, setBuildingDossier] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
   const researching = deal.research?.status === "running";
@@ -239,10 +241,10 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="w-full max-w-[640px] h-full overflow-y-auto p-6" style={{ background: "var(--bg, #14101c)", borderLeft: "1px solid rgba(255,255,255,0.1)" }} onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-label={deal.title} data-jarvis-record={deal.id} className="w-full max-w-[640px] h-full overflow-y-auto p-6" style={{ background: "var(--bg, #14101c)", borderLeft: "1px solid rgba(255,255,255,0.1)" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <h2 className="text-lg font-semibold leading-snug">{deal.title}</h2>
-          <button onClick={onClose} className="text-white/50 hover:text-white"><X size={18} /></button>
+          <button aria-label="Close listing" onClick={onClose} className="text-white/50 hover:text-white"><X size={18} /></button>
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">
@@ -265,9 +267,10 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           Open on Upwork <ExternalLink size={13} />
         </a>
 
+        {error && <p role="alert" className="text-red-300 text-sm mb-3">Save failed: {error}</p>}
         {/* Status + need-info */}
         <div className="flex items-center gap-2 mb-4">
-          <select value={deal.status} onChange={(e) => move(deal.id, e.target.value as DealStatus)}
+          <select aria-label="Listing status" value={deal.status} onChange={(e) => move(deal.id, e.target.value as DealStatus)}
             className="panel px-2 py-1 text-[12px] bg-transparent">
             {["new", "reviewing", "approved", "ready", "sent", "parked", "denied"].map((s) => (
               <option key={s} value={s} style={{ background: "#14101c" }}>{s}</option>
@@ -385,7 +388,7 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
             title="Generate a full ~120-word proposal from the listing + your Notes below">
             {drafting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Draft full proposal (uses your Notes)
           </button>
-          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
+          <textarea aria-label="Listing proposal" data-jarvis-saved-value={deal.pitch || ""} value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
             rows={8} className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
         </Section>
 
@@ -419,14 +422,14 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
         )}
 
         <Section title="Notes">
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => saveNotes(deal.id, notes)}
+          <textarea aria-label="Listing notes" data-jarvis-saved-value={deal.notes || ""} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => saveNotes(deal.id, notes)}
             rows={3} placeholder="Your questions / observations…"
             className="w-full panel bg-transparent p-2 text-[12.5px] resize-y" />
         </Section>
 
         <Section title="Ask AI about this listing">
           <div className="flex gap-2">
-            <input value={question} onChange={(e) => setQuestion(e.target.value)}
+            <input aria-label="Question about this listing" value={question} onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submitAsk()}
               placeholder="e.g. how does JobNimbus' API auth work?"
               className="flex-1 panel bg-transparent px-2 py-1.5 text-[12.5px]" />

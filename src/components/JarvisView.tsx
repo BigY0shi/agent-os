@@ -1,5 +1,8 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { handleUiEvent } from "@/lib/v2/jarvis/uiClient";
+
 import { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, Send, Zap, Cpu, Radio, Maximize2, X, Newspaper, Target, ListChecks, Trophy, CheckCircle2, TrendingUp, Sparkles, FileText, Brain, Circle, Globe, History } from "lucide-react";
@@ -649,6 +652,7 @@ function BriefingPanel({ briefing, loading, range, history, showHistory, history
 }
 
 export default function JarvisView() {
+  const router = useRouter();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -994,6 +998,7 @@ export default function JarvisView() {
           text: p,
           conversationId: v2ConversationRef.current ?? undefined,
           pageContext: getEffectivePageContext() ?? undefined,
+          uiControl: true,
         }),
       });
       if (!r.ok || !r.body) throw new Error(`brain ${r.status}`);
@@ -1017,6 +1022,7 @@ export default function JarvisView() {
               type?: string; text?: string; message?: string; error?: string;
               conversationId?: string; name?: string; state?: string; summary?: string; route?: string;
             };
+            if (await handleUiEvent(ev, (route) => router.push(route))) continue;
             if (ev.type === "meta" && ev.conversationId) {
               v2ConversationRef.current = ev.conversationId;
             } else if (ev.type === "sentence" && ev.text) {
@@ -1038,7 +1044,7 @@ export default function JarvisView() {
       setStatus(errText ? `Brain error: ${errText}` : `Replied in ${((Date.now() - started) / 1000).toFixed(1)}s`);
       logTurn(p, finalReply, mode === "agent" ? "agent" : "chat");
       if (!errText && reply) speak(finalReply); else { setPhase("idle"); if (wakeOnRef.current) restartWake(); }
-      if (navRoute) window.location.href = navRoute;
+      if (navRoute) router.push(navRoute);
     } catch (e) {
       setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: "Error reaching Jarvis: " + String(e), working: false } : x));
       setStatus("Something went wrong reaching the agent."); setPhase("idle");
