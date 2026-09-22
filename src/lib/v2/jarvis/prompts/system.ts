@@ -127,6 +127,29 @@ export function activePageBlock(page: ActivePageInput | null | undefined): strin
   return lines.join("\n");
 }
 
+/** Per-request reply surface (e.g. the Even Realities G2 lens). Like
+ *  <active_page> it rides the turn, never the stable prompt, and never persists. */
+export interface ReplySurfaceInput {
+  name: string;
+  maxWords: number;
+}
+
+/**
+ * <reply_surface> — the answer is going to a display that is not the dashboard
+ * (G2 glasses: ~15 short lines of monochrome text). Shapes length and form only;
+ * tool use and honesty rules are unchanged.
+ */
+export function replySurfaceBlock(surface: ReplySurfaceInput | null | undefined): string {
+  if (!surface?.name) return "";
+  return [
+    `<reply_surface name="${surface.name}">`,
+    `This reply is shown on ${surface.name}, not read aloud and not in the dashboard.`,
+    `Answer in at most ${surface.maxWords} words of plain text: no markdown, no lists, no headings, no links, no emoji.`,
+    "Lead with the answer. If the full answer does not fit, give the essential part and say it continues in Agent OS.",
+    "</reply_surface>",
+  ].join("\n");
+}
+
 /** <user_persona> — the A6 memory-derived persona DOCUMENT (content, not code). */
 export function userPersonaBlock(personaDocContent: string | null | undefined): string {
   if (!personaDocContent?.trim()) return "";

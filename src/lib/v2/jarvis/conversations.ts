@@ -8,11 +8,14 @@ import { uuid, now } from "../ids";
  */
 
 export type JarvisChannel = "overlay" | "page";
+/** Where the conversation was started from (migration 035). null = the dashboard. */
+export type JarvisOrigin = "glasses";
 
 export interface JarvisConversation {
   id: string;
   title: string;
   channel: JarvisChannel;
+  origin: JarvisOrigin | null;
   createdAt: string;
   updatedAt: string;
   /** C3.6: non-null = archived (soft delete — rows are never destroyed). */
@@ -50,6 +53,7 @@ interface ConvRow {
   id: string;
   title: string;
   channel: JarvisChannel;
+  origin?: JarvisOrigin | null;
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
@@ -70,6 +74,7 @@ function mapConv(r: ConvRow): JarvisConversation {
     id: r.id,
     title: r.title,
     channel: r.channel,
+    origin: r.origin ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     archivedAt: r.archived_at ?? null,
@@ -107,20 +112,23 @@ function mapMsg(r: MsgRow): JarvisMessage {
   };
 }
 
-export function createConversation(input: { title?: string; channel?: JarvisChannel } = {}): JarvisConversation {
+export function createConversation(
+  input: { title?: string; channel?: JarvisChannel; origin?: JarvisOrigin } = {},
+): JarvisConversation {
   const ts = now();
   const row: ConvRow = {
     id: uuid(),
     title: (input.title ?? "").slice(0, TITLE_CAP),
     channel: input.channel ?? "overlay",
+    origin: input.origin ?? null,
     created_at: ts,
     updated_at: ts,
   };
   getDb()
     .prepare(
-      "INSERT INTO jarvis_conversations (id, title, channel, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO jarvis_conversations (id, title, channel, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(row.id, row.title, row.channel, row.created_at, row.updated_at);
+    .run(row.id, row.title, row.channel, row.origin, row.created_at, row.updated_at);
   return mapConv(row);
 }
 
@@ -173,7 +181,7 @@ export function archiveConversation(id: string): JarvisConversation | null {
  *  First user text seeds the title. */
 export function ensureConversation(
   id: string | undefined,
-  opts: { titleSeed?: string; channel?: JarvisChannel } = {},
+  opts: { titleSeed?: string; channel?: JarvisChannel; origin?: JarvisOrigin } = {},
 ): JarvisConversation {
   if (id) {
     const existing = getConversation(id);
@@ -182,7 +190,19 @@ export function ensureConversation(
   return createConversation({
     title: opts.titleSeed?.trim().slice(0, TITLE_CAP),
     channel: opts.channel,
+    origin: opts.origin,
   });
+}
+
+/** The newest live conversation started from `origin`, or null. The glasses
+ *  lane uses it to continue a thread (Even sends no history of its own). */
+export function latestConversationByOrigin(origin: JarvisOrigin): JarvisConversation | null {
+  const r = getDb()
+    .prepare(
+      "SELECT * FROM jarvis_conversations WHERE origin = ? AND archived_at IS NULL ORDER BY updated_at DESC LIMIT 1",
+    )
+    .get(origin) as ConvRow | undefined;
+  return r ? mapConv(r) : null;
 }
 
 export function appendJarvisMessage(input: {

@@ -193,6 +193,14 @@ export interface Settings {
       key?: string;          // in-app fallback keybind (default "F13")
       enabled?: boolean;     // in-app keydown listener on/off
     };
+    // Even Realities G2 custom-agent lane (/api/glasses — OpenAI chat-completions
+    // shape, bearer token in ~/.agentic-os/jarvis-glasses.token, never here).
+    glasses?: {
+      enabled?: boolean;        // default FALSE — the lane answers 403 until switched on
+      maxWords?: number;        // reply cap on the lens (~15 short lines)
+      idleMinutes?: number;     // silence longer than this starts a fresh conversation
+      timeoutSeconds?: number;  // give up (504) before the Even app gives up on us
+    };
   };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
   // The Oracle's voice (S8; rule 16: every field in the Oracle's own gear).
@@ -466,6 +474,7 @@ export const DEFAULT_SETTINGS: Settings = {
     cliAgent: "claude",
     voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs" },
     hotkey: { key: "F13", enabled: true },
+    glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
   oracle: { voice: { provider: "voicebox", voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
