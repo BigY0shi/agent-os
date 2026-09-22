@@ -17,7 +17,7 @@ import {
   buildTurnContextBlock,
   type PageContextPayload,
 } from "./context";
-import { CLI_ANSWER_ONLY_NOTE, wrapRecalledMemory } from "./prompts/system";
+import { CLI_ANSWER_ONLY_NOTE, wrapRecalledMemory, type ReplySurfaceInput } from "./prompts/system";
 import {
   buildJarvisSdkServer,
   newTurnState,
@@ -32,6 +32,7 @@ import {
   appendJarvisMessage,
   listMessages,
   type JarvisConversation,
+  type JarvisOrigin,
 } from "./conversations";
 
 /**
@@ -67,6 +68,10 @@ export interface JarvisAskInput {
   conversationId?: string;
   pageContext?: PageContextPayload | null;
   channel?: "overlay" | "page";
+  /** Per-request reply surface (G2 glasses) — shapes the answer, never persisted. */
+  surface?: ReplySurfaceInput | null;
+  /** Conversation origin stamped on CREATE only (migration 035) — "glasses". */
+  origin?: JarvisOrigin;
 }
 
 type SessionState = {
@@ -330,7 +335,7 @@ async function askSdk(
   // Compose the turn message: per-turn context + (on resume) history + raw text.
   // The DB row for this turn is the RAW text only — pageContext never persists.
   const parts: string[] = [];
-  const turnCtx = buildTurnContextBlock({ pageContext: input.pageContext });
+  const turnCtx = buildTurnContextBlock({ pageContext: input.pageContext, surface: input.surface });
   if (turnCtx) parts.push(turnCtx);
   if (resumed) {
     // History EXCLUDES the just-persisted user turn (it rides as the live text).
@@ -425,7 +430,7 @@ async function askCli(
 
   const history = historyBlock(conv.id, input.text);
   const prompt = [
-    buildSystemPrompt({ pageContext: input.pageContext }),
+    buildSystemPrompt({ pageContext: input.pageContext, surface: input.surface }),
     CLI_ANSWER_ONLY_NOTE,
     history.block || null,
     recallBlock,
@@ -480,6 +485,7 @@ export async function askJarvisV2(
   const conv = ensureConversation(input.conversationId, {
     titleSeed: text,
     channel: input.channel ?? "overlay",
+    origin: input.origin,
   });
   s.busy = true;
   s.conversationId = conv.id;

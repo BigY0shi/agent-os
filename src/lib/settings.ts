@@ -154,6 +154,14 @@ export interface Settings {
       key?: string;          // in-app fallback keybind (default "F13")
       enabled?: boolean;     // in-app keydown listener on/off
     };
+    // Even Realities G2 custom-agent lane (/api/glasses — OpenAI chat-completions
+    // shape, bearer token in ~/.agentic-os/jarvis-glasses.token, never here).
+    glasses?: {
+      enabled?: boolean;        // default FALSE — the lane answers 403 until switched on
+      maxWords?: number;        // reply cap on the lens (~15 short lines)
+      idleMinutes?: number;     // silence longer than this starts a fresh conversation
+      timeoutSeconds?: number;  // give up (504) before the Even app gives up on us
+    };
   };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
   // The Agents module's intelligence dial → concrete claude model ids.
@@ -368,6 +376,7 @@ export const DEFAULT_SETTINGS: Settings = {
     cliAgent: "claude",
     voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID },
     hotkey: { key: "F13", enabled: true },
+    glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
