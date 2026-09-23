@@ -250,7 +250,8 @@ try {
     check("H1 proxy exempts /api/glasses only when Authorization is present",
       /pathname === "\/api\/glasses" \|\| pathname\.startsWith\("\/api\/glasses\/"\)\) &&\s*request\.headers\.has\("authorization"\)/.test(proxy));
     check("H2 exemption does not cover the settings route (/api/v2/jarvis/glasses)", !/startsWith\("\/api\/v2\/jarvis\/glasses/.test(proxy));
-    const ui = fs.readFileSync(path.join(process.cwd(), "src/components/v2/jarvis/JarvisSettings.tsx"), "utf8");
+    const ui = fs.readFileSync(path.join(process.cwd(), "src/components/v2/jarvis/GlassesSettings.tsx"), "utf8")
+      + fs.readFileSync(path.join(process.cwd(), "src/components/v2/jarvis/JarvisSettings.tsx"), "utf8");
     check("H3 Jarvis gear surfaces every glasses knob (rule 16)",
       ["enabled", "maxWords", "idleMinutes", "timeoutSeconds", "/api/v2/jarvis/glasses"].every((k) => ui.includes(k)));
   }
