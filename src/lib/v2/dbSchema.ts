@@ -1017,6 +1017,17 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 35,
+    name: "jarvis_conversation_origin",
+    up: (db) => {
+      // Where a conversation was started: NULL = the dashboard, 'glasses' = the
+      // Even Realities G2 custom-agent lane (/api/glasses). A plain column rather
+      // than widening the channel CHECK, which would need a table rebuild under
+      // jarvis_messages' ON DELETE CASCADE.
+      db.exec("ALTER TABLE jarvis_conversations ADD COLUMN origin TEXT");
+    },
+  },
+  {
     version: 40,
     name: "integrations_core",
     up: (db) => {

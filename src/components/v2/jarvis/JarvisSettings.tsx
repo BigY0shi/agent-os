@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { KeyRound, ExternalLink } from "lucide-react";
 import type { Settings } from "@/components/ConfigMenu";
 import { VOICE_PROVIDERS } from "@/lib/v2/jarvis/useVoiceCapture";
+import GlassesSettings from "./GlassesSettings";
 
 const ACCENT = "#22d3ee";
 
@@ -226,6 +227,7 @@ export default function JarvisSettings({
           </a>
         </div>
       </div>
+      <GlassesSettings settings={settings} save={save} saving={saving} />
     </div>
   );
 }

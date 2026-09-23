@@ -62,6 +62,18 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Even Realities G2 custom agent (/api/glasses): the Even app sends a Bearer
+  // token, never a cookie. Requests carrying an Authorization header pass
+  // through for the ROUTE to validate (sha256 + timing-safe compare, 401 on
+  // mismatch, 403 while the lane is switched off). /api/v2/jarvis/glasses (the
+  // settings side) is a different prefix and stays cookie-gated.
+  if (
+    (pathname === "/api/glasses" || pathname.startsWith("/api/glasses/")) &&
+    request.headers.has("authorization")
+  ) {
+    return NextResponse.next();
+  }
+
   const password = process.env.AGENTOS_PASSWORD || "";
   const isApi = pathname.startsWith("/api/");
 

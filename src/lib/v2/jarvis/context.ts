@@ -11,7 +11,9 @@ import {
   datetimeBlock,
   activePageBlock,
   userPersonaBlock,
+  replySurfaceBlock,
   type ActivePageInput,
+  type ReplySurfaceInput,
 } from "./prompts/system";
 
 /**
@@ -61,6 +63,8 @@ export function sanitizePageContext(raw: unknown): PageContextPayload | null {
 
 export interface BuildContextInput {
   pageContext?: PageContextPayload | null;
+  /** Per-request reply surface (glasses) — rendered after <active_page>, never persisted. */
+  surface?: ReplySurfaceInput | null;
   mode?: "text" | "voice";
   /** Test override — production reads getPersonaDocument()/settings itself. */
   personaDocContent?: string | null;
@@ -126,10 +130,10 @@ export function buildStableSystemPrompt(input: BuildContextInput = {}): string {
     .join("\n\n");
 }
 
-/** Per-turn half — datetime + active_page. Rides in the user message on the
+/** Per-turn half — datetime + active_page + reply_surface. Rides in the user message on the
  *  sdk lane. Returns "" when there is nothing to say. */
 export function buildTurnContextBlock(input: BuildContextInput = {}): string {
-  return [datetimeBlock(input.now), activePageBlock(input.pageContext)]
+  return [datetimeBlock(input.now), activePageBlock(input.pageContext), replySurfaceBlock(input.surface)]
     .filter(Boolean)
     .join("\n");
 }
@@ -147,6 +151,7 @@ export function buildSystemPrompt(input: BuildContextInput = {}): string {
     RECALLED_MEMORY_RULE,
     datetimeBlock(input.now),
     activePageBlock(input.pageContext),
+    replySurfaceBlock(input.surface),
     SPOKEN_MECHANICS_BLOCK,
   ]
     .filter(Boolean)
