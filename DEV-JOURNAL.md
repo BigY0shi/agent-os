@@ -1,5 +1,45 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Voice mode: pick who you are talking to on a dial, and talk (v2.49.0)
+
+S22 of `_design/jarvis-v3-plan.md` (the owner's NEXORA "Hand mode" dial, without the
+camera hand control). A Jarvis tab, **Voice** (`components/jarvis/VoiceTab.tsx`):
+
+- **The dial**: an elliptical rotating card carousel of everyone you can talk to:
+  Jarvis, the Oracle, every Mastermind specialist (`/api/room/status`) and every crew
+  agent (`/api/v2/crew`), each with its role and live status. Turn it with the arrows,
+  the arrow keys or a click, or say "talk to Hermes" / "switch over to the Oracle"
+  (switches instead of sending). No wheel binding, so the page keeps its scroll.
+- **The stage**: the chosen agent's face (Jarvis's constellation, the Oracle's galaxy,
+  the constellation for the rest), driven only by real signals: listening while the
+  mic records, thinking while a reply is awaited, speaking while the audio plays, with
+  the level read from that audio.
+- **Talking**: push-to-talk (hold Space or the mic button) through Parakeet
+  (`useVoiceCapture`, provider "parakeet", `/api/stt/transcribe`), or type. Each member
+  answers over its own lane: Jarvis over `/api/v2/jarvis/ask` (SSE sentences, keeping
+  the conversation), the Oracle over `/api/oracle`, a specialist alone over `/api/room`,
+  a crew agent with a real run over `/api/v2/crew/<id>/chat` polled to its end (10
+  minute deadline, said).
+- **Speaking**: replies through Kokoro (`/api/hermes/tts`, provider "local"). Jarvis
+  uses `bm_george`, the Kokoro voice already used for him in this codebase; everyone
+  else uses Kokoro's default (no voice ids were invented). A failed voice, an empty
+  reply, an unavailable mic are each said; typing still works without a mic.
+- Suggested prompts per kind of member; a conversation panel per member.
+
+Surveyed first (read-only): the capture hook, the TTS contract, the ask lanes and the
+voice settings. Found on the way: the Voice dial rendered broken because of the glass
+positioning bug, fixed separately in v2.48.1.
+
+**Verified.** New `smoke-voice-mode.mjs`, 23 checks: the roster sources, each lane's
+route, Parakeet in and Kokoro out, the named voice existing in the TTS route, the face
+honesty rules, the real "talk to" pattern run on phrases, the dial controls and no wheel
+trap. Visually checked in the browser pane with the real CSS after the glass fix: the
+dial spreads along its ellipse, the face and the prompts render. Not exercised here: a
+live microphone and a real spoken reply (needs the owner at the machine; over the
+tailnet the mic also needs HTTPS, per AGENTS.md). tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Glass cards no longer override absolute / fixed / sticky (v2.48.1)
 
 While checking the Voice dial in the browser pane, its cards piled up and its arrows sat

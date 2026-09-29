@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { gsap } from "gsap";
-import { Cpu, Moon, Radar, Mail, History, Plug, SlidersHorizontal, Target, Building2, FolderOpen, CalendarClock, Library } from "lucide-react";
+import { Cpu, Moon, Radar, Mail, History, Plug, SlidersHorizontal, Target, Building2, FolderOpen, CalendarClock, Library, AudioLines } from "lucide-react";
 import JarvisView from "@/components/JarvisView";
 import OracleView from "@/components/OracleView";
 import NewsView from "@/components/NewsView";
@@ -21,14 +21,16 @@ import CrewTab from "@/components/jarvis/CrewTab";
 import FilesTab from "@/components/jarvis/FilesTab";
 import StandingOrdersTab from "@/components/jarvis/StandingOrdersTab";
 import ArchiveTab from "@/components/jarvis/ArchiveTab";
+import VoiceTab from "@/components/jarvis/VoiceTab";
 
-export type JarvisTab = "console" | "oracle" | "radar" | "outreach" | "sessions" | "mcp" | "control" | "goals" | "crew" | "files" | "orders" | "archive";
+export type JarvisTab = "console" | "oracle" | "radar" | "outreach" | "sessions" | "mcp" | "control" | "goals" | "crew" | "files" | "orders" | "archive" | "voice";
 
 interface TabDef { key: JarvisTab; label: string; icon: ReactNode; render: () => ReactNode }
 
 /** Tabs register here as their slices land; nothing is listed before it works. */
 export const JARVIS_TABS: TabDef[] = [
   { key: "console", label: "Console", icon: <Cpu size={13} />, render: () => <JarvisView /> },
+  { key: "voice", label: "Voice", icon: <AudioLines size={13} />, render: () => <VoiceTab /> },
   { key: "oracle", label: "Oracle", icon: <Moon size={13} />, render: () => <OracleView /> },
   { key: "radar", label: "News Radar", icon: <Radar size={13} />, render: () => <NewsView /> },
   { key: "outreach", label: "Outreach", icon: <Mail size={13} />, render: () => <HermesOutreach /> },
