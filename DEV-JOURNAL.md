@@ -1,5 +1,55 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Mission Control: telemetry on first load, a System pulse view, the scratchpad moved down (v2.41.0)
+
+S18 of `_design/jarvis-v3-plan.md`. The owner: Mission Control had "no information on
+the initial load" and he had to "scroll past that gigantic scratch pad"; he liked how
+NEXORA presents telemetry.
+
+**Views.** `Overview.tsx` gains three views (remembered per browser, falls back to
+Cockpit): **Cockpit** (default) = greeting, a telemetry band, attention, the widget
+grid, and the scratchpad LAST; **System pulse** = the full machine view; **Scratchpad**
+= the pad on its own.
+
+**Telemetry band** (`components/v2/home/Cockpit.tsx`), four glass cards:
+System pulse (status word, N of M checks clear, CPU / memory / disk bars), Runs (a ring
+of runs with the success rate, running now, the average run, a strip of the last 24
+outcomes, "Counted over every running run plus the last 50 finished"), Missions
+(queued / running / review / parked, waiting on you, delivered, a link to Missions),
+Orchestration (Jarvis over each configured agent with its live status, plus mission
+seats running per CLI, with load bars).
+
+**System pulse view:** processor / memory / disk rings, per-core bars, "What is holding
+the machine" (top processes by CPU over a 0.7 s window and by memory), the diagnostics
+checklist and the local services.
+
+**Endpoint** `GET /api/v2/home/pulse` aggregates the sources, each fenced so one broken
+source lands in `errors` and the rest still answers: `hostHealth.healthReport`, the
+module-run registry (window stated; success rate null with no runs, never 0 or 100),
+the S17 mission records, the agent status feed, running seats per CLI.
+`?processes=1` adds `hostHealth.topProcesses()`.
+
+**Process sampling, measured before choosing** (2026-09-29, this machine, 947
+processes): reading CPU time through Get-Process for every process took 9.2 s (the
+protected session-0 services fail slowly), a foreach variant 19 s, the perf-counter CIM
+class 6.3 s, while name/id/memory took 0.33 s and CPU for the owner's own session 1.0 s.
+So CPU is sampled for the owner's Windows session (two samples, about 2.4 s total) and
+memory for every process; unsampled CPU is -1 ("not measured"), filtered out of the CPU
+list, and the scope is printed under it. Cached 5 s; only called while that view is
+open.
+
+**Verified.** New `smoke-home-cockpit.mjs`, 29 checks (temp stores, fetch stubbed):
+measured host, stated window, success rate from real outcomes, null with no runs,
+missions by stage, seat load, a broken mission record never hiding the rest, the
+sampler's honesty rules, the view order. Visually checked in the browser pane with the
+real compiled CSS: the first pass drew the per-core bars as floating pills, fixed to
+baseline bars before commit. home-ui 77, widgets 59, control-room 42, missions 69 pass;
+tsc clean. Noted, not changed: booting V2 foundations inside a smoke (as the Control
+Room insights route already does) tries to open the browser live-view port 3738 and
+logs a port conflict while the app is running; harmless, pre-existing.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Missions: a dedicated Goal Mode with a crew, a desk and a timeline (v2.40.0)
 
 S17 of `_design/jarvis-v3-plan.md`, from the owner's NEXORA screenshots ("essentially a

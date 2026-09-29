@@ -138,3 +138,53 @@ export async function healthReport(): Promise<{ host: HostSnapshot; services: Se
   const status = failing === 0 ? "optimal" : failing <= 1 ? "strain" : "needs-a-look";
   return { host, services, checks, clear, total: checks.length, status };
 }
+
+// S18 System pulse: what is holding the machine. Two samples 0.7 s apart, so CPU is
+// the share of the WHOLE machine each process used over that window (not a lifetime
+// total); memory is the working set / RSS now. Only called while the System pulse
+// view is open, and cached for 5 s so a fast poll never stacks process scans.
+export interface ProcessRow { pid: number; name: string; cpuPercent: number; memBytes: number }
+export interface TopProcesses { byCpu: ProcessRow[]; byMemory: ProcessRow[]; windowMs: number; cpuScope: string; sampledAt: string }
+
+let topCache: { at: number; value: TopProcesses } | null = null;
+
+export async function topProcesses(limit = 6): Promise<TopProcesses> {
+  if (topCache && Date.now() - topCache.at < 5000) return topCache.value;
+  const { execFile } = await import("node:child_process");
+  const run = (cmd: string, args: string[]) => new Promise<string>((resolve, reject) => {
+    execFile(cmd, args, { timeout: 10_000, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
+  });
+  let rows: ProcessRow[];
+  if (process.platform === "win32") {
+    // CPU is read for processes in the owner's own session only: reading CPU time of
+    // protected session-0 services fails slowly (9 s for ~950 processes on this
+    // machine, measured 2026-09-29) where the owner's session takes about 1 s. Memory
+    // is read for every process. cpu = -1 marks "not measured", never 0.
+    const script = [
+      "$s=(Get-Process -Id $PID).SessionId; $n=[Environment]::ProcessorCount;",
+      "$a=@{}; foreach($x in (Get-Process | Where-Object { $_.SessionId -eq $s })){ $a[$x.Id]=$x.CPU };",
+      "Start-Sleep -Milliseconds 700;",
+      "$rows=New-Object System.Collections.ArrayList;",
+      "foreach($x in Get-Process){ $d=-1; if($x.SessionId -eq $s){ $c0=$a[$x.Id]; $c1=$x.CPU; if($c0 -ne $null -and $c1 -ne $null){ $d=[math]::Round(($c1-$c0)/0.7/$n*100,1) } };",
+      "[void]$rows.Add(@($x.Id,$x.ProcessName,$d,$x.WorkingSet64)) };",
+      "ConvertTo-Json -Compress -InputObject $rows",
+    ].join(" ");
+    const out = await run("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script]);
+    const j = JSON.parse(out) as [number, string, number, number][];
+    rows = j.map(([pid, name, cpu, mem]) => ({ pid, name, cpuPercent: cpu, memBytes: mem ?? 0 }));
+  } else {
+    const out = await run("ps", ["-eo", "pid=,comm=,%cpu=,rss="]);
+    rows = out.split("\n").map((l) => l.trim().split(/\s+/)).filter((p) => p.length >= 4)
+      .map((p) => ({ pid: Number(p[0]), name: p[1], cpuPercent: Number(p[2]) / os.cpus().length, memBytes: Number(p[3]) * 1024 }));
+  }
+  rows = rows.filter((r) => r.pid > 0 && r.name !== "Idle" && r.name !== "System Idle Process");
+  const value: TopProcesses = {
+    byCpu: rows.filter((r) => r.cpuPercent >= 0).sort((a, b) => b.cpuPercent - a.cpuPercent).slice(0, limit),
+    byMemory: [...rows].sort((a, b) => b.memBytes - a.memBytes).slice(0, limit),
+    windowMs: 700,
+    cpuScope: process.platform === "win32" ? "processes in your Windows session (services are not sampled)" : "every process",
+    sampledAt: new Date().toISOString(),
+  };
+  topCache = { at: Date.now(), value };
+  return value;
+}
