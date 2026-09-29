@@ -2,10 +2,12 @@
 
 // AgentFace: the animated "face" of an agent (S11, _design/jarvis-v3-plan.md).
 //
-//   constellation  Jarvis. A plexus star-cloud (nodes + nearest-neighbour edges) that
-//                  shifts violet (idle) -> electric blue (speaking), with signal pulses
-//                  running along the edges while it thinks or works.
-//   galaxy         The Oracle. A white spiral galaxy with differential rotation.
+//   constellation  Jarvis. A three-shell plexus (heart, body, outer shell) with short
+//                  bright links and long faint ones, two counter-turning orbit rings and
+//                  a dust halo; shifts violet (idle) -> electric blue (speaking), with
+//                  signal pulses that multiply along the links while it thinks or works.
+//   galaxy         The Oracle. A white five-arm spiral galaxy with inner filaments, dust
+//                  lanes, a bulge and a halo, turning with differential rotation.
 //   radar          News Radar. Concentric particle rings under a rotating sweep that
 //                  lights up what it passes.
 //
@@ -277,82 +279,134 @@ function pointsMaterial(THREE: Three, extra: Record<string, ThreeNS.IUniform> = 
 }
 
 // --- Jarvis: constellation / plexus ------------------------------------------
+// Owner, 2026-09-29: "much more robust". Three shells (a dense heart, the plexus body,
+// a sparse outer shell) with short bright links and long faint ones, two tilted orbit
+// rings, a dust halo, and signal pulses that multiply while he thinks or works.
 
-function buildConstellation(THREE: Three): Built {
-  const group = new THREE.Group();
-  const N = 560;
+function shellPoints(N: number, rMin: number, rMax: number, bias: number) {
   const pos = new Float32Array(N * 3);
-  const size = new Float32Array(N);
-  const seed = new Float32Array(N);
   const golden = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < N; i++) {
-    // Fibonacci sphere, pushed into a shell-weighted volume so it reads as a cloud.
-    const y = 1 - (i / (N - 1)) * 2;
+    const y = 1 - (i / Math.max(1, N - 1)) * 2;
     const rr = Math.sqrt(1 - y * y);
-    const th = golden * i;
-    const r = 0.45 + 0.55 * Math.pow(Math.random(), 0.45);
-    const j = 0.08;
+    const th = golden * i + Math.random() * 0.3;
+    const r = rMin + (rMax - rMin) * Math.pow(Math.random(), bias);
+    const j = 0.1;
     pos[i * 3] = (Math.cos(th) * rr + (Math.random() - 0.5) * j) * r;
     pos[i * 3 + 1] = (y + (Math.random() - 0.5) * j) * r;
     pos[i * 3 + 2] = (Math.sin(th) * rr + (Math.random() - 0.5) * j) * r;
-    size[i] = 2.2 + Math.pow(Math.random(), 3) * 7;
-    seed[i] = Math.random();
   }
-  // Edges: each node to up to 3 nearest neighbours inside a radius.
-  const edges: number[] = [];
+  return pos;
+}
+
+function pointCloud(THREE: Three, pos: Float32Array, sizeOf: (i: number) => number) {
+  const n = pos.length / 3;
+  const size = new Float32Array(n), seed = new Float32Array(n);
+  for (let i = 0; i < n; i++) { size[i] = sizeOf(i); seed[i] = Math.random(); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+  const mat = pointsMaterial(THREE);
+  return { geo, mat, points: new THREE.Points(geo, mat) };
+}
+
+function buildConstellation(THREE: Three): Built {
+  const group = new THREE.Group();
+  // Shells: heart (dense, small), body (the plexus), outer (sparse, large).
+  const heart = shellPoints(260, 0.05, 0.36, 0.8);
+  const body = shellPoints(900, 0.42, 0.92, 0.5);
+  const outer = shellPoints(260, 0.98, 1.22, 1.2);
+  const N = (heart.length + body.length + outer.length) / 3;
+  const pos = new Float32Array(N * 3);
+  pos.set(heart, 0); pos.set(body, heart.length); pos.set(outer, heart.length + body.length);
+  const nHeart = heart.length / 3, nBody = body.length / 3;
+  const nodes = pointCloud(THREE, pos, (i) =>
+    i < nHeart ? 2.6 + Math.pow(Math.random(), 3) * 6 : i < nHeart + nBody ? 2 + Math.pow(Math.random(), 3) * 7.5 : 1.6 + Math.pow(Math.random(), 4) * 5,
+  );
+
+  // Links: up to 3 nearest inside a short radius (bright), plus 1 longer link per node
+  // inside a wider radius (faint), which is what makes it read as a web, not a cloud.
+  const short: number[] = [], long: number[] = [];
   const pairs: Array<[number, number]> = [];
-  const MAXD2 = 0.26 * 0.26;
+  const S2 = 0.2 * 0.2, L2lo = 0.3 * 0.3, L2hi = 0.46 * 0.46;
   for (let i = 0; i < N; i++) {
     const near: Array<[number, number]> = [];
+    let farPick = -1, farBest = Infinity;
     for (let k = 0; k < N; k++) {
       if (k === i) continue;
       const dx = pos[i * 3] - pos[k * 3], dy = pos[i * 3 + 1] - pos[k * 3 + 1], dz = pos[i * 3 + 2] - pos[k * 3 + 2];
       const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < MAXD2) near.push([d2, k]);
+      if (d2 < S2) near.push([d2, k]);
+      else if (d2 > L2lo && d2 < L2hi && k > i) {
+        const score = d2 + Math.random() * 0.02;
+        if (score < farBest) { farBest = score; farPick = k; }
+      }
     }
     near.sort((a, b) => a[0] - b[0]);
     for (const [, k] of near.slice(0, 3)) {
-      if (k < i) continue; // each edge once
+      if (k < i) continue;
       pairs.push([i, k]);
-      edges.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2], pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]);
+      short.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2], pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]);
+    }
+    if (farPick >= 0 && i % 3 === 0) {
+      long.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2], pos[farPick * 3], pos[farPick * 3 + 1], pos[farPick * 3 + 2]);
     }
   }
+  const lineSet = (arr: number[], opacity: number) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(arr), 3));
+    const mat = new THREE.LineBasicMaterial({ transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+    return { geo, mat, lines: new THREE.LineSegments(geo, mat) };
+  };
+  const shortL = lineSet(short, 0.22);
+  const longL = lineSet(long, 0.06);
 
-  const pGeo = new THREE.BufferGeometry();
-  pGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  pGeo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
-  pGeo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
-  const pMat = pointsMaterial(THREE);
-  const points = new THREE.Points(pGeo, pMat);
-
-  const lGeo = new THREE.BufferGeometry();
-  lGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(edges), 3));
-  const lMat = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending });
-  const lines = new THREE.LineSegments(lGeo, lMat);
-
-  // Signal pulses travelling along edges (thinking / working).
-  const S = 48;
+  // Signal pulses along the short links (thinking / working multiply them).
+  const S = 160;
   const sPos = new Float32Array(S * 3);
-  const sSize = new Float32Array(S).fill(9);
+  const sig = pointCloud(THREE, sPos, () => 8 + Math.random() * 5);
   const sSeed = new Float32Array(S).map(() => Math.random());
   const sEdge = new Int32Array(S).map(() => Math.floor(Math.random() * Math.max(1, pairs.length)));
   const sT = new Float32Array(S).map(() => Math.random());
-  const sGeo = new THREE.BufferGeometry();
-  sGeo.setAttribute("position", new THREE.BufferAttribute(sPos, 3));
-  sGeo.setAttribute("aSize", new THREE.BufferAttribute(sSize, 1));
-  sGeo.setAttribute("aSeed", new THREE.BufferAttribute(sSeed, 1));
-  const sMat = pointsMaterial(THREE);
-  const signals = new THREE.Points(sGeo, sMat);
+
+  // Orbit rings: two tilted particle rings that turn against the cloud.
+  const ring = (count: number, radius: number) => {
+    const p = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      const wob = 1 + (Math.random() - 0.5) * 0.03;
+      p[i * 3] = Math.cos(a) * radius * wob; p[i * 3 + 1] = (Math.random() - 0.5) * 0.015; p[i * 3 + 2] = Math.sin(a) * radius * wob;
+    }
+    return pointCloud(THREE, p, (i) => (i % 17 === 0 ? 6 : 1.5 + Math.random()));
+  };
+  const ringA = ring(360, 1.32), ringB = ring(300, 1.18);
+  const ringGA = new THREE.Group(); ringGA.add(ringA.points); ringGA.rotation.set(1.15, 0, 0.35);
+  const ringGB = new THREE.Group(); ringGB.add(ringB.points); ringGB.rotation.set(-0.7, 0, -0.9);
+
+  // Dust halo: faint, slow, big.
+  const dust = pointCloud(THREE, shellPoints(700, 0.6, 1.7, 0.7), () => 0.9 + Math.random() * 1.6);
 
   const WHITE = new THREE.Color(1, 1, 1);
   const tex = glowTexture(THREE);
   const coreMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const core = new THREE.Sprite(coreMat);
-  core.scale.setScalar(1.6);
+  const auraMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const aura = new THREE.Sprite(auraMat);
+  aura.scale.setScalar(3.4);
 
   const cloud = new THREE.Group();
-  cloud.add(lines, points, signals);
-  group.add(core, cloud);
+  cloud.add(longL.lines, shortL.lines, nodes.points, sig.points);
+  group.add(aura, core, dust.points, ringGA, ringGB, cloud);
+  group.scale.setScalar(0.8); // the orbit rings reach 1.32; the camera shows ~1.17
+
+  const tint = (mat: ThreeNS.ShaderMaterial, t: number, c: ThreeNS.Color, glow: number, tw: number) => {
+    mat.uniforms.uTime.value = t;
+    mat.uniforms.uTwinkle.value = tw;
+    (mat.uniforms.uColor.value as ThreeNS.Color).copy(c);
+    mat.uniforms.uGlow.value = glow;
+  };
+  const soft = new THREE.Color();
 
   return {
     group,
@@ -361,15 +415,23 @@ function buildConstellation(THREE: Three): Built {
       cloud.rotation.x = Math.sin(phase * 0.6) * 0.25;
       const breath = 1 + m.pulse * Math.sin(t * 2.1) + level * 0.14;
       cloud.scale.setScalar(breath);
-      pMat.uniforms.uTime.value = t;
-      pMat.uniforms.uTwinkle.value = m.twinkle;
-      (pMat.uniforms.uColor.value as ThreeNS.Color).copy(color);
-      pMat.uniforms.uGlow.value = m.glow;
-      lMat.color.copy(color);
-      lMat.opacity = 0.1 + 0.16 * m.glow + level * 0.12;
-      // Pulses advance along their edge; a finished pulse hops to a new edge.
+      ringGA.rotation.y = -phase * 2.2;
+      ringGB.rotation.y = phase * 1.7;
+      dust.points.rotation.y = phase * 0.5;
+      dust.points.rotation.z = Math.sin(t * 0.07) * 0.2;
+      tint(nodes.mat, t, color, m.glow, m.twinkle);
+      soft.copy(color).lerp(WHITE, 0.15);
+      tint(ringA.mat, t, soft, 0.5 + 0.5 * m.glow, m.twinkle * 0.5);
+      tint(ringB.mat, t, soft, 0.4 + 0.5 * m.glow, m.twinkle * 0.5);
+      tint(dust.mat, t, color, 0.35 + 0.25 * m.glow, 0.6);
+      shortL.mat.color.copy(color);
+      shortL.mat.opacity = 0.12 + 0.18 * m.glow + level * 0.14;
+      longL.mat.color.copy(color);
+      longL.mat.opacity = 0.03 + 0.06 * m.glow + m.signals * 0.05;
+      const active = Math.round(S * (0.25 + 0.75 * m.signals));
       for (let i = 0; i < S; i++) {
-        sT[i] += dt * (0.6 + sSeed[i] * 0.9) * (0.3 + m.signals * 1.4);
+        if (i >= active) { sPos[i * 3] = 0; sPos[i * 3 + 1] = 0; sPos[i * 3 + 2] = 99; continue; }
+        sT[i] += dt * (0.6 + sSeed[i] * 0.9) * (0.3 + m.signals * 1.6);
         if (sT[i] >= 1) { sT[i] = 0; sEdge[i] = Math.floor(Math.random() * Math.max(1, pairs.length)); }
         const pr = pairs[sEdge[i]];
         if (!pr) continue;
@@ -379,19 +441,27 @@ function buildConstellation(THREE: Three): Built {
         sPos[i * 3 + 1] = pos[a * 3 + 1] + (pos[b * 3 + 1] - pos[a * 3 + 1]) * u;
         sPos[i * 3 + 2] = pos[a * 3 + 2] + (pos[b * 3 + 2] - pos[a * 3 + 2]) * u;
       }
-      sGeo.attributes.position.needsUpdate = true;
-      sMat.uniforms.uTime.value = t;
-      (sMat.uniforms.uColor.value as ThreeNS.Color).copy(color).lerp(WHITE, 0.35);
-      sMat.uniforms.uGlow.value = m.signals * 1.2;
-      coreMat.color.copy(color);
-      coreMat.opacity = 0.12 + 0.18 * m.glow + level * 0.3;
-      core.scale.setScalar(1.3 + m.pulse * 4 * Math.sin(t * 2.1) + level * 0.6);
+      sig.geo.attributes.position.needsUpdate = true;
+      soft.copy(color).lerp(WHITE, 0.4);
+      tint(sig.mat, t, soft, 0.25 + m.signals * 1.1, 0.4);
+      coreMat.color.copy(color).lerp(WHITE, 0.2);
+      coreMat.opacity = 0.2 + 0.22 * m.glow + level * 0.35;
+      core.scale.setScalar(1.1 + m.pulse * 4 * Math.sin(t * 2.1) + level * 0.7);
+      auraMat.color.copy(color);
+      auraMat.opacity = 0.05 + 0.08 * m.glow + level * 0.1;
     },
-    dispose: () => { pGeo.dispose(); pMat.dispose(); lGeo.dispose(); lMat.dispose(); sGeo.dispose(); sMat.dispose(); coreMat.dispose(); tex.dispose(); },
+    dispose: () => {
+      for (const x of [nodes, sig, ringA, ringB, dust]) { x.geo.dispose(); x.mat.dispose(); }
+      for (const x of [shortL, longL]) { x.geo.dispose(); x.mat.dispose(); }
+      coreMat.dispose(); auraMat.dispose(); tex.dispose();
+    },
   };
 }
 
 // --- Oracle: spiral galaxy ----------------------------------------------------
+// Owner, 2026-09-29: "needs to have more swirls ... much more robust". Five tightly
+// wound arms over two inner filaments, dust lanes riding the arms, a bright bulge and
+// a faint halo, all turning with differential rotation (the core outpaces the rim).
 
 const GALAXY_VERT = `
   attribute float aSize;
@@ -399,76 +469,110 @@ const GALAXY_VERT = `
   attribute float aR;
   attribute float aAng;
   attribute float aY;
+  attribute float aAlpha;
   uniform float uTime;
   uniform float uTwinkle;
   uniform float uPx;
   uniform float uPhase;
   varying float vA;
   void main() {
-    // Differential rotation: the core turns faster than the rim.
-    float ang = aAng + uPhase * (1.6 / (0.25 + aR));
+    float ang = aAng + uPhase * (1.6 / (0.22 + aR));
     vec3 p = vec3(cos(ang) * aR, sin(ang) * aR, aY);
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float tw = 1.0 + uTwinkle * 0.5 * sin(uTime * (1.2 + aSeed * 2.0) + aSeed * 50.0);
     gl_PointSize = aSize * uPx * tw * (3.4 / -mv.z);
-    vA = clamp(tw * (1.15 - aR * 0.55), 0.2, 1.6);
+    vA = clamp(tw * (1.2 - aR * 0.55), 0.15, 1.7) * aAlpha;
     gl_Position = projectionMatrix * mv;
   }
 `;
 
 function buildGalaxy(THREE: Three): Built {
   const group = new THREE.Group();
-  const N = 9000;
-  const ARMS = 3;
-  const r = new Float32Array(N), ang = new Float32Array(N), y = new Float32Array(N);
-  const size = new Float32Array(N), seed = new Float32Array(N);
-  const pos = new Float32Array(N * 3); // required attribute; the shader computes real positions
   const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
-  for (let i = 0; i < N; i++) {
-    const rr = Math.pow(Math.random(), 0.6) * 1.15;
-    const arm = (i % ARMS) * ((Math.PI * 2) / ARMS);
-    const spread = 0.12 + (1 - rr) * 0.08;
-    r[i] = rr;
-    ang[i] = arm + rr * 3.4 + gauss() * spread * (2.4 - rr);
-    y[i] = gauss() * 0.05 * (1.2 - rr);
-    size[i] = 1.4 + Math.pow(Math.random(), 4) * 6 + (rr < 0.15 ? 2 : 0);
-    seed[i] = Math.random();
+  const ARMS = 5, WIND = 6.4;
+  const layers = { arms: 15000, filaments: 3600, dust: 1100, bulge: 3000, halo: 1400 };
+  const N = Object.values(layers).reduce((a, b) => a + b, 0);
+  const r = new Float32Array(N), ang = new Float32Array(N), y = new Float32Array(N);
+  const size = new Float32Array(N), seed = new Float32Array(N), alpha = new Float32Array(N);
+  let i = 0;
+  const put = (rr: number, a: number, yy: number, s: number, al: number) => {
+    r[i] = rr; ang[i] = a; y[i] = yy; size[i] = s; alpha[i] = al; seed[i] = Math.random(); i++;
+  };
+  // Arms: log-spiral-ish winding, tighter near the core, spread widening outward.
+  for (let k = 0; k < layers.arms; k++) {
+    const rr = 0.08 + Math.pow(Math.random(), 0.7) * 1.12;
+    const arm = (k % ARMS) * ((Math.PI * 2) / ARMS);
+    const spread = 0.06 + rr * 0.07;
+    put(rr, arm + Math.log(1 + rr * 4) * WIND * 0.55 + gauss() * spread, gauss() * 0.045 * (1.2 - rr),
+      1.2 + Math.pow(Math.random(), 5) * 6.5, 1);
   }
+  // Inner filaments: two very tightly wound threads inside the arms.
+  for (let k = 0; k < layers.filaments; k++) {
+    const rr = 0.05 + Math.pow(Math.random(), 0.9) * 0.55;
+    const arm = (k % 2) * Math.PI + 0.6;
+    put(rr, arm + rr * 11 + gauss() * 0.05, gauss() * 0.02, 1 + Math.random() * 2.2, 0.9);
+  }
+  // Dust lanes: large, dim points riding just inside each arm.
+  for (let k = 0; k < layers.dust; k++) {
+    const rr = 0.18 + Math.pow(Math.random(), 0.8) * 1.0;
+    const arm = (k % ARMS) * ((Math.PI * 2) / ARMS);
+    put(rr, arm + Math.log(1 + rr * 4) * WIND * 0.55 - 0.16 + gauss() * 0.05, gauss() * 0.03, 4 + Math.random() * 7, 0.07);
+  }
+  // Bulge: a dense, slightly puffy core.
+  for (let k = 0; k < layers.bulge; k++) {
+    const rr = Math.abs(gauss()) * 0.2;
+    put(rr, Math.random() * Math.PI * 2, gauss() * 0.07 * (1 - rr * 2), 1.4 + Math.pow(Math.random(), 3) * 4.5, 1.1);
+  }
+  // Halo: faint stars around everything.
+  for (let k = 0; k < layers.halo; k++) {
+    const rr = 0.3 + Math.random() * 1.2;
+    put(rr, Math.random() * Math.PI * 2, gauss() * 0.35, 0.8 + Math.random() * 1.6, 0.4);
+  }
+
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3)); // real positions live in the shader
   geo.setAttribute("aR", new THREE.BufferAttribute(r, 1));
   geo.setAttribute("aAng", new THREE.BufferAttribute(ang, 1));
   geo.setAttribute("aY", new THREE.BufferAttribute(y, 1));
   geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
   geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.5); // positions live in the shader
+  geo.setAttribute("aAlpha", new THREE.BufferAttribute(alpha, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.6);
   const mat = pointsMaterial(THREE, { uPhase: { value: 0 } }, GALAXY_VERT);
   const stars = new THREE.Points(geo, mat);
 
   const tex = glowTexture(THREE);
   const coreMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
   const core = new THREE.Sprite(coreMat);
+  const haloMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const halo = new THREE.Sprite(haloMat);
+  halo.scale.setScalar(2.9);
   const disc = new THREE.Group();
   disc.add(stars);
-  disc.rotation.x = -0.42;
-  group.add(disc, core);
+  disc.rotation.x = -0.46;
+  group.add(halo, disc, core);
+  group.scale.setScalar(0.78); // the disc reaches 1.2; the camera shows ~1.17
 
   return {
     group,
     update: ({ t, phase, color, m, level }) => {
       mat.uniforms.uTime.value = t;
-      mat.uniforms.uPhase.value = phase;
+      mat.uniforms.uPhase.value = phase * 1.25;
       mat.uniforms.uTwinkle.value = m.twinkle;
       (mat.uniforms.uColor.value as ThreeNS.Color).copy(color);
-      mat.uniforms.uGlow.value = 0.55 + 0.45 * m.glow;
+      mat.uniforms.uGlow.value = 0.6 + 0.45 * m.glow;
+      disc.rotation.y = Math.sin(t * 0.11) * 0.08; // a slow precession so the disc feels 3-D
       disc.scale.setScalar(1 + m.pulse * 0.6 * Math.sin(t * 1.8) + level * 0.08);
       coreMat.color.copy(color);
-      coreMat.opacity = 0.35 + 0.3 * m.glow + level * 0.35;
-      core.scale.setScalar(0.55 + m.pulse * 3 * Math.sin(t * 1.8) + level * 0.5);
+      coreMat.opacity = 0.45 + 0.3 * m.glow + level * 0.35;
+      core.scale.setScalar(0.6 + m.pulse * 3 * Math.sin(t * 1.8) + level * 0.5);
+      haloMat.color.copy(color);
+      haloMat.opacity = 0.06 + 0.06 * m.glow + level * 0.08;
     },
-    dispose: () => { geo.dispose(); mat.dispose(); coreMat.dispose(); tex.dispose(); },
+    dispose: () => { geo.dispose(); mat.dispose(); coreMat.dispose(); haloMat.dispose(); tex.dispose(); },
   };
 }
+
 
 // --- News Radar: rings under a sweep -----------------------------------------
 

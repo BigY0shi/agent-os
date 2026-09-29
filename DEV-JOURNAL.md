@@ -1,5 +1,30 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Faces: a fuller Jarvis plexus, a many-armed Oracle (v2.39.1)
+
+Owner, 2026-09-28: News Radar's face is loved; "The Oracle's needs to have more swirls,
+and both the Oracle and Jarvis just need to be much more robust." Only
+`src/components/faces/AgentFace.tsx` changed; News Radar is untouched.
+
+- **Jarvis (constellation):** three shells (a dense heart, the plexus body, a sparse
+  outer shell; 1,420 nodes, was 560), short bright links plus one long faint link on
+  every third node, two tilted orbit rings turning against the cloud, a dust halo, an
+  outer aura, and up to 160 signal pulses whose active count follows the state (a
+  quarter while idle, all of them while working). Palette unchanged (violet idle to
+  electric blue replying).
+- **Oracle (galaxy):** five arms wound log-spiral style (was three, loosely wound), two
+  tightly wound inner filaments, dim dust lanes riding inside each arm, a puffy bulge, a
+  faint halo, a slow precession so the disc reads as 3-D, and an outer glow. 24,100
+  points, drawn in one call.
+- Both groups are scaled to fit the camera (it shows a radius of about 1.17; the new
+  rings and disc reach 1.2 to 1.32).
+
+Verified visually: an esbuild harness rendered all three faces in the browser pane in
+idle, working and speaking; the first pass showed the Oracle's dust lanes as white
+blobs and both faces cropped, fixed before commit. smoke-jarvis-v3-ui 43 pass; tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-28 - Skills & Workflows pop-up: every skill library, and an opaque panel (v2.39.0)
 
 Owner, 2026-09-28, with screenshots: the pop-up on Mission Control was see-through
