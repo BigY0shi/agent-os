@@ -1,5 +1,46 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Memory off Honcho: Claude Code now remembers through Agent OS (config only)
+
+S19 of `_design/jarvis-v3-plan.md`. The owner: "my Honcho server is down, and won't be
+able to be used in the future", then "we also need to change claude code over to using
+the Agent OS memory". No repo code changed; this entry records configuration outside
+the repo, with rollback lines.
+
+**Nothing had to be built.** Agent OS already serves its Memory V2 (SQLite + local
+Ollama embeddings) over `/api/mcp` as `memory_search`, `memory_ingest` and
+`memory_about_user`, behind an `x-agentos-mcp-secret` header that the password gate
+lets through. The secret did not exist yet; the endpoint creates it on first request,
+so one unauthenticated call (401, as designed) bootstrapped it into
+`~/.agentic-os/settings.json`.
+
+**Verified before wiring:** against the live app, `initialize` 200 (`agentos`),
+`tools/list` 10 tools including the three memory tools, and a real `memory_search`
+returned about 37,000 characters of recalled context. The probe read the secret from
+settings and never printed it.
+
+**Changes, each with rollback:**
+- Claude Code: user-scope MCP server `agent-os` -> `http://127.0.0.1:3737/api/mcp` with
+  the secret header, written straight into `~/.claude.json` by a script (Claude's own
+  output shows it `[REDACTED]`). `claude mcp list` shows it connected.
+  Rollback: `claude mcp remove agent-os --scope user`.
+- Claude Code: `enabledPlugins` `honcho@honcho` and `honcho-dev@honcho` set to false in
+  `~/.claude/settings.json` (still valid JSON, 24 plugins listed).
+  Rollback: `~/.claude/.exile/2026-09-28_203148/settings.json`.
+- `~/.claude/CLAUDE.md` "Memory & Journals": durable facts now go to the `agent-os`
+  tools; Honcho marked retired, its endpoints not to be called, any injected
+  "[Honcho Memory ...]" text treated as stale.
+  Rollback: `~/.claude/.exile/2026-09-28_203313/CLAUDE.md`.
+
+**Not moved, deliberately.** Local Hermes: `hermes mcp add` takes `--url` but has no
+header option, so it cannot send the secret and would only get 401s. The homelab
+Hermes's own Honcho memory provider lives on the .99 box. Both are the owner's call.
+Honcho's contents could not be exported: the server is down.
+
+**Cost.** Memory now depends on the Agent OS app being up on 3737; when it is not, the
+tools error and the instructions say to say so rather than guess. The Honcho injection
+that has been adding unrelated recalls to every prompt stops at the next session start.
+
 ## 2026-09-28 - Skills and workflows on every module, by pop-up or by Jarvis (v2.36.0)
 
 S14 of `_design/jarvis-v3-plan.md`. The owner: "Another very important thing is that I
