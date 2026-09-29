@@ -84,7 +84,7 @@ check("a hotkey's key name is not a secret", !red.isSecretPath("jarvis.hotkey.ke
 const setRoute = await import("../../src/app/api/control/settings/route.ts");
 let r = await setRoute.GET();
 let j = await r.json();
-check("GET masks set secrets with the placeholder", j.settings.mcp.secret === red.SECRET_PLACEHOLDER && j.settings.leads.apifyToken === red.SECRET_PLACEHOLDER && j.settings.music.sunoCookie === red.SECRET_PLACEHOLDER);
+check("GET masks set secrets (first 5 characters of a long one)", j.settings.mcp.secret === "amcp_" + red.SECRET_PLACEHOLDER &&j.settings.leads.apifyToken === red.SECRET_PLACEHOLDER && j.settings.music.sunoCookie === red.SECRET_PLACEHOLDER);
 check("GET shows an unset secret as empty, not as set", j.settings.leads.tavilyKey === "");
 check("no key material anywhere in the response", !JSON.stringify(j).includes("REAL_SECRET") && !JSON.stringify(j).includes("apify_real") && !JSON.stringify(j).includes("cookie_real"));
 check("non-secret values pass through", j.settings.jarvis.hotkey.key === "F13");

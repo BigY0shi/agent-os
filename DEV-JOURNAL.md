@@ -1,5 +1,36 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - /api/settings stops returning key material (v2.38.4)
+
+GET /api/settings (and the PATCH reply) returned `readSettings()` whole, so the MCP
+endpoint's secret and any saved Leads/Music/Pipeline keys reached the browser, against
+AGENTS.md "Credentials leave through exactly one door".
+
+- Both replies now go through `redactSettings`. The owner asked (2026-09-28) to see the
+  first 5 letters, so the mask is the first 5 characters + "********" for secrets of 16+
+  characters and "********" alone for shorter ones (`maskSecret`, `isMaskedSecret` in
+  `lib/settingsRedact.ts`; the Control Room door uses the same mask).
+- PATCH runs `stripPlaceholders`, which now drops any masked value on a secret path, so
+  a form that saves back what it loaded keeps the stored key; a typed key replaces it and
+  "" clears it, as before.
+- New cookie-only door `POST /api/v2/memory/mcp-secret/reveal` for the Memory gear's
+  "Copy secret": proxy.ts only lets the MCP header through `/api/mcp`, and the route also
+  refuses any request carrying the MCP header or a bearer (403). Each reveal and refusal
+  is logged without the value. The gear now shows the masked prefix next to
+  "configured".
+- Leads (4) and Music (2) key fields show a mask as plain text (so the prefix is
+  visible) and switch to a password field once a new key is typed.
+- Checked every client read of a secret from /api/settings first: only the Memory gear's
+  copy button used one.
+
+New `smoke-settings-secrets.mjs` (24 checks: no key material in GET or PATCH bodies,
+masked round trip keeps keys, new key replaces, "" clears, reveal refuses the MCP header
+and a bearer, logs carry no value, wiring). `smoke-control-room` updated for the new mask
+(42 pass). tsc clean; memory-ui 69, agentmail 30, hermes3d-ui 36, home-ui 77,
+jarvis-screen-control 43, voicebox 48, widgets 59 pass.
+
+Rollback: revert the commit.
+
 ## 2026-09-28 - Gate fix: smoke-browser no longer depends on example.com (v2.38.3)
 
 `smoke-browser` D2 "snapshot contains 'Example Domain'" failed whenever example.com was

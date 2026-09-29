@@ -10,8 +10,9 @@ import { MEMORY_ACCENT, fmtDate, inputStyle } from "./shared";
 // ── MemorySettings (SPEC-A A8.6 + F3.4 + System section) ─────────────────────
 // Rendered as ConfigMenu children. Every knob maps to settings.memory /
 // settings.capability / settings.mcp via /api/settings deep-merge (rule 16 —
-// nothing is config-file-only). The MCP secret is NEVER rendered: it shows as
-// "configured ✓" and the copy button fetches the value only on click.
+// nothing is config-file-only). The MCP secret is never rendered in full: /api/settings
+// returns its mask (first 5 characters + "********") and the copy button fetches the
+// whole value on click from the cookie-only /api/v2/memory/mcp-secret/reveal.
 
 interface MemoryDraft {
   provider: string;
@@ -197,9 +198,10 @@ export default function MemorySettings() {
   async function copySecret() {
     setSecretErr(false);
     try {
-      const r = await fetch("/api/settings", { cache: "no-store" });
+      // GET /api/settings masks secrets; this cookie-only route is the one door out.
+      const r = await fetch("/api/v2/memory/mcp-secret/reveal", { method: "POST", cache: "no-store" });
       const j = await r.json();
-      const secret = j?.settings?.mcp?.secret;
+      const secret = r.ok ? j?.secret : null;
       if (typeof secret !== "string" || !secret) { setSecretErr(true); return; }
       await navigator.clipboard.writeText(secret);
       setSecretCopied(true);
@@ -382,6 +384,7 @@ export default function MemorySettings() {
             <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: "#34d399" }}>
               <Check size={13} /> configured ✓
             </span>
+            <code className="font-mono text-[11.5px]" style={{ color: "var(--fg-dim, #9aa)" }} title="First characters only; Copy secret copies the whole value">{mcp.secret}</code>
             <button onClick={copySecret}
               className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11.5px] font-medium"
               style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
@@ -396,7 +399,7 @@ export default function MemorySettings() {
         )}
       </div>
       <p className="text-[10.5px] leading-relaxed mb-1" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
-        The secret is never displayed. Agents connect with header <code className="font-mono">x-agentos-mcp-secret</code> at{" "}
+        Only its first characters are shown; Copy secret copies the whole value. Agents connect with header <code className="font-mono">x-agentos-mcp-secret</code> at{" "}
         <code className="font-mono">/api/mcp?source=&lt;name&gt;</code>.
         {secretErr && <span style={{ color: "#f87171" }}> Couldn&apos;t copy — clipboard unavailable.</span>}
       </p>
