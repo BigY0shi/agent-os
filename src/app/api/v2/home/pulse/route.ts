@@ -1,4 +1,5 @@
-import { healthReport, topProcesses } from "@/lib/hostHealth";
+import { allDisks, healthReport, topProcesses } from "@/lib/hostHealth";
+import { readHistory } from "@/lib/hostSampler";
 import { listModuleRuns } from "@/lib/moduleRuns";
 import { listMissions, missionStats, recoverAfterRestart } from "@/lib/v2/missions/runtime";
 import { getStatusSnapshot } from "@/lib/v2/agents/statusFeed";
@@ -8,7 +9,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET /api/v2/home/pulse            -> the Mission Control cockpit (S18), measured now
-// GET /api/v2/home/pulse?processes=1 -> plus what is holding the machine (System pulse view)
+// GET /api/v2/home/pulse?processes=1 -> plus what is holding the machine (Health view)
+// GET /api/v2/home/pulse?history=1   -> plus the last minutes of samples with shape words, and every drive (S27)
 //   host/checks: lib/hostHealth (a 400 ms CPU sample, loopback-only service probes)
 //   runs:        the module-run registry, which keeps every running run plus the LAST 50
 //                finished; `window` says so, so the ring is never read as an all-time total
@@ -18,7 +20,9 @@ export const dynamic = "force-dynamic";
 const noStore = { headers: { "Cache-Control": "no-store" } };
 
 export async function GET(req: Request) {
-  const wantProcesses = new URL(req.url).searchParams.get("processes") === "1";
+  const q = new URL(req.url).searchParams;
+  const wantProcesses = q.get("processes") === "1";
+  const wantHistory = q.get("history") === "1";
   const errors: Record<string, string> = {};
   const safe = async <T,>(key: string, fn: () => Promise<T> | T): Promise<T | null> => {
     try { return await fn(); } catch (e) { errors[key] = String((e as Error)?.message ?? e).slice(0, 300); return null; }
@@ -44,7 +48,9 @@ export async function GET(req: Request) {
   }
 
   const agents = await safe("agents", async () => { ensureV2(); return getStatusSnapshot(); });
-  const processes = wantProcesses ? await safe("processes", () => topProcesses()) : undefined;
+  const processes = wantProcesses ? await safe("processes", () => topProcesses(12)) : undefined;
+  const history = wantHistory ? await safe("history", () => readHistory()) : undefined;
+  const drives = wantHistory ? await safe("drives", () => allDisks()) : undefined;
 
   return Response.json({
     sampledAt: new Date().toISOString(),
@@ -76,6 +82,7 @@ export async function GET(req: Request) {
     agents: (agents ?? []).map((a) => ({ id: a.agentId, name: a.name, status: a.status, detail: a.detail ?? null, since: a.since })),
     seatLoad: [...seatLoad.entries()].map(([agent, running]) => ({ agent, running })),
     ...(wantProcesses ? { processes } : {}),
+    ...(wantHistory ? { history, drives } : {}),
     errors,
   }, noStore);
 }

@@ -5,7 +5,7 @@
 // [0, 0, 0] there and would read as an idle machine.
 
 import os from "node:os";
-import { statfsSync } from "node:fs";
+import { existsSync, statfsSync } from "node:fs";
 import path from "node:path";
 import { readSettings } from "@/lib/settings";
 
@@ -187,4 +187,21 @@ export async function topProcesses(limit = 6): Promise<TopProcesses> {
   };
   topCache = { at: Date.now(), value };
   return value;
+}
+
+// S27 Health: storage per partition. On Windows every drive letter that exists (fixed,
+// removable and network drives the OS can stat); elsewhere the home and app roots.
+export function allDisks(): DiskUsage[] {
+  if (process.platform === "win32") {
+    const out: DiskUsage[] = [];
+    for (let c = 67; c <= 90; c++) { // C..Z; A and B are floppy letters
+      const root = `${String.fromCharCode(c)}:${String.fromCharCode(92)}`; // "C:\" (built so no tool can eat the backslash)
+      if (!existsSync(root)) continue;
+      const d = diskFor(root);
+      if (d) out.push(d);
+    }
+    return out;
+  }
+  const roots = [...new Set([os.homedir(), process.cwd(), "/"].map((p) => path.parse(path.resolve(p)).root))];
+  return roots.map(diskFor).filter((d): d is DiskUsage => d !== null);
 }

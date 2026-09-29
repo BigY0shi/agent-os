@@ -1,5 +1,43 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Health: the machine in plain words, with a live history (v2.44.0)
+
+S27 of `_design/jarvis-v3-plan.md` (NEXORA "Health"). It shares its endpoint with the
+S18 System pulse, so rather than a second overlapping page, the Mission Control
+"System pulse" view grew into **Health** (same view key; the label is now Health).
+
+- **Headline in plain words**: "The machine is quiet and well" only when every check
+  passes; otherwise "N things need a look: <which>", with an N-of-M checks ring.
+- **This machine**: host, system, kernel, processor, uptime, drive count.
+- **Load 1 / 5 / 15 min**: bars on systems that keep a load average; on Windows it says
+  plainly that there is none and points at the live processor line.
+- **Memory** in use vs free.
+- **Four sparklines** (processor, memory, system-drive use, network) over the last
+  minutes, each labelled by a SHAPE word computed from the samples (`hostSampler.shapeOf`:
+  flat / spiky / bursty / steady, "gathering" with fewer than 4 samples).
+- **Per-core** bars, **storage per partition** (every drive letter that exists:
+  `hostHealth.allDisks`; on this machine C: 89%, E: 83%, F: 74%, G: 81%, I: 81% used),
+  **busiest processes** as tiles with Everything / Agents only (processes named after an
+  agent CLI, said so), **diagnostics** and **local services**.
+
+**Sampler** (`src/lib/hostSampler.ts`): in memory, every 5 s, ONLY while someone reads
+it (starts on the first read, stops 2 minutes after the last), at most 120 samples. CPU
+from `os.cpus()` deltas, memory from `os`, system-drive use from `statfs`, network bytes
+per second from the OS counters (`netstat -e` on Windows, verified against this machine's
+output; `/proc/net/dev` elsewhere); an unreadable counter is null ("unknown"), never 0.
+`GET /api/v2/home/pulse?history=1` adds the history and every drive.
+
+Tooling note: an appended block through a Git Bash heredoc lost one backslash in
+`"C:\\"` (rule 28, again; the grep check passed because grep -F also saw one). tsc caught
+it; the string is now built with `String.fromCharCode(92)`.
+
+**Verified.** New `smoke-health.mjs`, 22 checks (shape words on known series, the
+netstat parser, the sampler's cap and self-stop, the endpoint with and without history,
+the view's honesty rules). Visually checked in the browser pane with the real CSS.
+home-cockpit and home-ui pass; tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Files: read and edit the files that shape each agent, safely (v2.43.0)
 
 S28 of `_design/jarvis-v3-plan.md` (owner: "a Files tab to view and EDIT files right in

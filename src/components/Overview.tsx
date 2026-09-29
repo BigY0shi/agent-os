@@ -21,10 +21,10 @@ import { CockpitBand, SystemPulse } from "./v2/home/Cockpit";
 // S18 (2026-09-29, owner: "no information on the initial load", "scroll past that
 // gigantic scratch pad"): three views. Cockpit (default) puts measured telemetry
 // right under the greeting, then attention, the widget grid, and the scratchpad LAST;
-// System pulse is the full machine view; Scratchpad is the pad on its own. The chosen
+// Health (S27, grown from the S18 System pulse view) is the full machine view; Scratchpad is the pad on its own. The chosen
 // view is remembered per browser (a convenience; it falls back to Cockpit).
 type View = "cockpit" | "pulse" | "scratchpad";
-const VIEWS: [View, string][] = [["cockpit", "Cockpit"], ["pulse", "System pulse"], ["scratchpad", "Scratchpad"]];
+const VIEWS: [View, string][] = [["cockpit", "Cockpit"], ["pulse", "Health"], ["scratchpad", "Scratchpad"]];
 const KEY = "agentos.home.view";
 
 export default function Overview() {
