@@ -9,7 +9,7 @@
 export interface PageMeta { numeral: string; label: string; title: string; sub: string; }
 
 // Roman numeral + chapter label per route (Midnight Aubergine design system).
-// numeral renders in Caveat gold, label in small-caps Manrope. See globals.css `.eyebrow`.
+// numeral renders in Caveat gold, label in small-caps UI face (--font-sans). See globals.css `.eyebrow`.
 export const TITLES: Record<string, PageMeta> = {
   "/":            { numeral: "I.",    label: "Mission Control",    title: "Mission Control",         sub: "Status of every agent, every memory, every signal." },
   "/claude":      { numeral: "II.",   label: "Agent · Claude",     title: "Claude",                  sub: "Direct streaming channel to your Claude Code CLI. Voice in, auto-logged to Obsidian." },

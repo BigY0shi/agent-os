@@ -411,7 +411,7 @@ export default function CodexView() {
                 borderColor: tab === t.key ? ACCENT : "var(--line-soft)",
                 background: tab === t.key ? `${ACCENT}1e` : "transparent",
                 color: tab === t.key ? ACCENT : "var(--cream-dim)",
-                fontFamily: "'Manrope', sans-serif",
+                fontFamily: "var(--font-sans), sans-serif",
                 fontWeight: 600,
               }}>
               {t.icon}{t.label}

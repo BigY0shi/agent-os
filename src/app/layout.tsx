@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import "./globals.css";
 import Shell from "@/components/Shell";
 import { HydrateFleet } from "@/components/layout/HydrateFleet";
@@ -10,6 +10,9 @@ import { ParticleField } from "@/components/layout/ParticleField";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// Display face (2026-09-28 type redesign, _design/jarvis-v3-plan.md): wide geometric,
+// deliberately unlike NEXORA's high-contrast serif. Self-hosted by next/font.
+const unbounded = Unbounded({ variable: "--font-unbounded", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Agentic OS — Mission Control",
@@ -18,18 +21,18 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}>
       <head>
         {/*
-          Midnight Aubergine design system — three voices:
-          Bricolage Grotesque (display) · Manrope (body) · Caveat (hand-script
-          numerals/emphasis) · JetBrains Mono (code).
+          Type system (redesigned 2026-09-28): Unbounded (display) · Geist (UI and
+          body) · Geist Mono (data and code), all self-hosted by next/font above.
+          Caveat (hand-script numerals) is the one face still loaded from Google.
         */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Caveat:wght@400;500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600&display=swap"
         />
       </head>
       <body className="min-h-screen overflow-hidden font-sans antialiased bg-black text-white">

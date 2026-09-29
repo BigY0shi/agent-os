@@ -175,7 +175,7 @@ export default function OracleView() {
     <div className="orc">
       <style>{`
         .orc{ --gold:#e6b866; --gold-soft:#f0d9a8; --violet:#a78bfa; --ink:#efe6d6; --dim:#9a8f7d;
-          color:var(--ink); font-family:'Manrope',system-ui,sans-serif; }
+          color:var(--ink); font-family:var(--font-sans),system-ui,sans-serif; }
         .orc-grid{ display:grid; grid-template-columns:1fr 260px; gap:22px; align-items:start; }
         @media(max-width:1040px){ .orc-grid{ grid-template-columns:1fr; } }
 
@@ -184,18 +184,18 @@ export default function OracleView() {
           background:radial-gradient(circle at 50% 0%, rgba(230,184,102,.10), rgba(20,15,28,0) 60%), linear-gradient(180deg,#160f22,#100a19); padding:22px; }
         .orc-ask::after{ content:""; position:absolute; inset:0; pointer-events:none; border-radius:18px;
           box-shadow:inset 0 0 90px rgba(167,139,250,.06); }
-        .orc-eyebrow{ display:flex; align-items:center; gap:9px; font-family:'JetBrains Mono',monospace; font-size:.6rem;
+        .orc-eyebrow{ display:flex; align-items:center; gap:9px; font-family:var(--font-mono),monospace; font-size:.6rem;
           letter-spacing:.28em; text-transform:uppercase; color:var(--gold); margin-bottom:12px; }
         .orc-eyebrow .moon{ filter:drop-shadow(0 0 6px rgba(230,184,102,.6)); }
         .orc-q{ width:100%; min-height:96px; resize:vertical; background:rgba(8,5,14,.6); color:var(--ink);
           border:1px solid rgba(230,184,102,.2); border-radius:13px; padding:14px 16px; font-size:1rem; line-height:1.5;
-          font-family:'Manrope',sans-serif; outline:none; transition:border-color .15s, box-shadow .15s; }
+          font-family:var(--font-sans),sans-serif; outline:none; transition:border-color .15s, box-shadow .15s; }
         .orc-q:focus{ border-color:rgba(230,184,102,.55); box-shadow:0 0 0 3px rgba(230,184,102,.1); }
         .orc-q::placeholder{ color:#6f6656; }
         .orc-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:14px; }
-        .orc-hint{ font-family:'JetBrains Mono',monospace; font-size:.64rem; color:var(--dim); }
+        .orc-hint{ font-family:var(--font-mono),monospace; font-size:.64rem; color:var(--dim); }
         .orc-ask-btn{ margin-left:auto; display:inline-flex; align-items:center; gap:9px; cursor:pointer; border:0;
-          font-family:'Bricolage Grotesque',sans-serif; font-weight:800; font-size:.92rem; color:#1c1206;
+          font-family:var(--font-display),sans-serif; font-weight:800; font-size:.92rem; color:#1c1206;
           background:linear-gradient(180deg,#f0d9a8,#e6b866); padding:11px 24px; border-radius:999px;
           box-shadow:0 0 26px rgba(230,184,102,.4); transition:transform .15s, box-shadow .2s, opacity .2s; }
         .orc-ask-btn:hover{ transform:translateY(-1px); box-shadow:0 0 38px rgba(230,184,102,.62); }
@@ -216,29 +216,29 @@ export default function OracleView() {
           border:1px solid rgba(230,184,102,.3); animation:orc-ring 3.6s ease-out infinite; }
         @keyframes orc-breathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
         @keyframes orc-ring{ 0%{ transform:scale(.9); opacity:.7 } 100%{ transform:scale(1.5); opacity:0 } }
-        .orc-think .line{ font-family:'JetBrains Mono',monospace; font-size:.82rem; color:var(--gold); letter-spacing:.02em; }
+        .orc-think .line{ font-family:var(--font-mono),monospace; font-size:.82rem; color:var(--gold); letter-spacing:.02em; }
 
         /* THE ANSWER */
         .orc-answer{ margin-top:22px; position:relative; border:1px solid rgba(230,184,102,.26); border-radius:18px;
           padding:26px 30px; background:linear-gradient(180deg, rgba(230,184,102,.05), rgba(16,10,25,.4));
           box-shadow:0 20px 60px -30px rgba(230,184,102,.4); animation:orc-rise .5s cubic-bezier(.16,1,.3,1); }
         @keyframes orc-rise{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
-        .orc-answer .cap{ display:flex; align-items:center; gap:9px; font-family:'JetBrains Mono',monospace; font-size:.6rem;
+        .orc-answer .cap{ display:flex; align-items:center; gap:9px; font-family:var(--font-mono),monospace; font-size:.6rem;
           letter-spacing:.24em; text-transform:uppercase; color:var(--gold); margin-bottom:4px; }
         .orc-asked{ font-size:.9rem; color:var(--dim); font-style:italic; margin:0 0 16px; padding-bottom:14px;
           border-bottom:1px solid rgba(230,184,102,.14); }
-        .orc-prose p{ font-family:'Manrope',sans-serif; font-size:1.06rem; line-height:1.72; color:#efe6d6; margin:0 0 14px; }
+        .orc-prose p{ font-family:var(--font-sans),sans-serif; font-size:1.06rem; line-height:1.72; color:#efe6d6; margin:0 0 14px; }
         .orc-prose p:last-child{ margin-bottom:0; }
         .orc-aphorism{ margin-top:20px; padding:16px 20px; border-left:3px solid var(--gold);
           background:rgba(230,184,102,.06); border-radius:0 12px 12px 0;
-          font-family:'Bricolage Grotesque',serif; font-size:1.16rem; font-style:italic; color:var(--gold-soft); line-height:1.4; }
-        .orc-foot{ margin-top:18px; display:flex; align-items:center; gap:12px; font-family:'JetBrains Mono',monospace;
+          font-family:var(--font-display),serif; font-size:1.16rem; font-style:italic; color:var(--gold-soft); line-height:1.4; }
+        .orc-foot{ margin-top:18px; display:flex; align-items:center; gap:12px; font-family:var(--font-mono),monospace;
           font-size:.66rem; color:var(--dim); }
         .orc-foot .again{ margin-left:auto; background:none; border:1px solid rgba(230,184,102,.3); color:var(--gold);
-          border-radius:999px; padding:5px 13px; font-size:.68rem; cursor:pointer; font-family:'JetBrains Mono',monospace; }
+          border-radius:999px; padding:5px 13px; font-size:.68rem; cursor:pointer; font-family:var(--font-mono),monospace; }
         .orc-foot .again:hover{ border-color:var(--gold); }
         .orc-foot .when{ display:inline-flex; align-items:center; gap:5px; }
-        .orc-foot .speak{ display:inline-flex; align-items:center; gap:6px; background:rgba(230,184,102,.1); border:1px solid rgba(230,184,102,.35); color:var(--gold); border-radius:999px; padding:5px 13px; font-size:.68rem; cursor:pointer; font-family:'JetBrains Mono',monospace; transition:border-color .15s, background .15s; }
+        .orc-foot .speak{ display:inline-flex; align-items:center; gap:6px; background:rgba(230,184,102,.1); border:1px solid rgba(230,184,102,.35); color:var(--gold); border-radius:999px; padding:5px 13px; font-size:.68rem; cursor:pointer; font-family:var(--font-mono),monospace; transition:border-color .15s, background .15s; }
         .orc-foot .speak:hover{ border-color:var(--gold); background:rgba(230,184,102,.16); }
         .orc-foot .speak:disabled{ opacity:.7; cursor:default; }
         .orc-foot .via{ font-size:.62rem; color:#fbbf24; }
@@ -248,11 +248,11 @@ export default function OracleView() {
           padding:4px 6px; cursor:pointer; display:inline-flex; align-items:center; transition:border-color .15s, background .15s; }
         .orc-gear-btn:hover, .orc-gear-btn.on{ border-color:var(--gold); background:rgba(230,184,102,.1); }
         .orc-gear{ margin:0 0 14px; padding:12px 14px; border:1px solid rgba(230,184,102,.2); border-radius:12px; background:rgba(8,5,14,.5);
-          display:grid; gap:9px; font-family:'JetBrains Mono',monospace; font-size:.66rem; color:var(--dim); }
+          display:grid; gap:9px; font-family:var(--font-mono),monospace; font-size:.66rem; color:var(--dim); }
         .orc-gear label{ display:grid; gap:4px; }
         .orc-gear .lab{ letter-spacing:.18em; text-transform:uppercase; font-size:.58rem; color:var(--gold); }
         .orc-gear select{ background:rgba(8,5,14,.7); color:var(--ink); border:1px solid rgba(230,184,102,.28); border-radius:8px; padding:6px 8px;
-          font-family:'JetBrains Mono',monospace; font-size:.66rem; cursor:pointer; }
+          font-family:var(--font-mono),monospace; font-size:.66rem; cursor:pointer; }
         .orc-gear select:disabled{ opacity:.6; cursor:default; }
         .orc-gear .warn{ color:#fbbf24; }
 
@@ -261,7 +261,7 @@ export default function OracleView() {
 
         /* HISTORY RAIL */
         .orc-hist{ border:1px solid rgba(167,139,250,.2); border-radius:16px; padding:16px; background:rgba(16,10,25,.5); }
-        .orc-hist h4{ display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:.6rem;
+        .orc-hist h4{ display:flex; align-items:center; gap:8px; font-family:var(--font-mono),monospace; font-size:.6rem;
           letter-spacing:.22em; text-transform:uppercase; color:var(--violet); margin:0 0 12px; }
         .orc-hist-empty{ font-size:.82rem; color:var(--dim); line-height:1.5; }
         .orc-hist-item{ display:block; width:100%; text-align:left; background:rgba(167,139,250,.05);
@@ -270,7 +270,7 @@ export default function OracleView() {
         .orc-hist-item:hover{ border-color:var(--violet); background:rgba(167,139,250,.1); }
         .orc-hist-item .q{ font-size:.84rem; color:var(--ink); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2;
           -webkit-box-orient:vertical; overflow:hidden; }
-        .orc-hist-item .m{ margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:.6rem; color:var(--dim); }
+        .orc-hist-item .m{ margin-top:6px; font-family:var(--font-mono),monospace; font-size:.6rem; color:var(--dim); }
       `}</style>
 
       <FaceStage

@@ -87,8 +87,7 @@ export default function JarvisHub() {
           <h1
             ref={titleRef}
             aria-label="Jarvis"
-            className="mt-1 overflow-hidden text-[40px] leading-none font-light uppercase tracking-[0.22em]"
-            style={{ fontFamily: '"Bricolage Grotesque", var(--font-sans)' }}
+            className="type-display mt-1 overflow-hidden text-[34px] leading-none uppercase tracking-[0.04em]"
           >
             <span aria-hidden className="inline-flex">
               {"Jarvis".split("").map((ch, i) => (

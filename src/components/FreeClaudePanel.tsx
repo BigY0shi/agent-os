@@ -307,7 +307,7 @@ export default function FreeClaudePanel() {
                 borderColor: tab === t.key ? ACCENT : "var(--line-soft)",
                 background: tab === t.key ? `${ACCENT}1e` : "transparent",
                 color: tab === t.key ? ACCENT : "var(--cream-dim)",
-                fontFamily: "'Manrope', sans-serif", fontWeight: 600,
+                fontFamily: "var(--font-sans), sans-serif", fontWeight: 600,
               }}>
               {t.icon}{t.label}
               {t.count !== undefined && (

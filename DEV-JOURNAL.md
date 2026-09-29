@@ -1,5 +1,37 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Type redesign: stop looking like NEXORA (v2.34.0)
+
+Owner, after walking through the NEXORA screenshots: "seeing how eerily similar his OS
+is to ours, we need to redesign all of our typography". The shared signature was the
+wide-tracked uppercase mono micro-label over a large light display line. NEXORA's own
+display face is a high-contrast serif (the pack names Press Baskerville), so the new
+system goes the other way.
+
+**The system.** Display = Unbounded (wide geometric; run light and nearly untracked,
+because it is already wide). UI and body = Geist. Data and code = Geist Mono with
+tabular figures. All three are self-hosted by next/font, so Bricolage Grotesque,
+Manrope and JetBrains Mono no longer load from fonts.googleapis.com at runtime; only
+Caveat (hand-script numerals) still does. Tokens `--font-display`, `--font-sans`,
+`--font-mono`; classes `.type-display`, `.type-figure`; every h1 is display. Eyebrows
+move to semibold UI face at 0.07em tracking.
+
+**How it was applied.** Tailwind's `font-mono` / `font-sans` read the tokens, so the
+~480 class uses changed with two lines. 103 hardcoded family names in 13 app-rendered
+files were rewritten to the tokens mechanically, after listing every distinct form they
+took. Excluded on purpose: `src/lib/claudeArtifacts.ts`, which emits standalone HTML
+where app CSS variables do not resolve (and which carries the owner's uncommitted
+edits). Checked that `Unbounded` is exported by this Next's `next/font/google` before
+relying on it, since the owner's production build is the first place it would fail.
+
+**Evidence.** `smoke-jarvis-v3-ui` gained the type checks (self-hosted Unbounded, no old
+families in the Google link, tokens, no hardcoded old family in any app-rendered file,
+eyebrow not wide-tracked mono): 43 checks, green. `tsc` clean. Not yet seen in a
+browser: Unbounded is much wider than Bricolage, so any hard-sized title elsewhere may
+wrap; the owner's first look is the real test.
+
+Rollback: revert this commit; the old families return with the Google link.
+
 ## 2026-09-28 - Jarvis v3, first two slices: glass, faces, and a tabbed Jarvis (v2.33.0)
 
 The owner asked, over one evening, for a Jarvis rebuild plus a long list around it

@@ -239,7 +239,7 @@ function ShowPanel({ kind, onPlay }: { kind: ShowKind; onPlay: (f: string) => vo
     return (
       <div className="w-full text-center">
         <div className="text-[10px] font-mono tracking-[0.3em] mb-1" style={{ color: CYAN }}>» BUILD ACTIVITY · LAST 7 DAYS</div>
-        <div className="text-[40px] font-bold leading-none" style={{ color: TEAL, fontFamily: "'Bricolage Grotesque',sans-serif" }}>{week}<span className="text-[15px] font-normal" style={{ color: "var(--fg-dim)" }}> this week</span></div>
+        <div className="text-[40px] font-bold leading-none" style={{ color: TEAL, fontFamily: "var(--font-display),sans-serif" }}>{week}<span className="text-[15px] font-normal" style={{ color: "var(--fg-dim)" }}> this week</span></div>
         <div className="flex items-end justify-center gap-2.5 h-[150px] mt-3">
           {buckets.map((b, i) => (
             <div key={i} className="flex flex-col items-center justify-end h-full">
@@ -409,14 +409,14 @@ function BriefingPanel({ briefing, loading, range, history, showHistory, history
         <div className="p-4 space-y-3.5 max-h-[460px] overflow-y-auto">
           <div>
             <div className="text-[11px] font-mono mb-1" style={{ color: TEAL }}>{b.greeting}</div>
-            <div className="text-[16px] leading-snug" style={{ color: "var(--fg)", fontFamily: "'Bricolage Grotesque',sans-serif" }}>{b.headline}</div>
+            <div className="text-[16px] leading-snug" style={{ color: "var(--fg)", fontFamily: "var(--font-display),sans-serif" }}>{b.headline}</div>
           </div>
 
           {b.stats?.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {b.stats.map((s) => (
                 <div key={s.label} className="rounded-lg border p-2.5 text-center" style={{ borderColor: `${CYAN}26`, background: "rgba(34,211,238,0.05)" }}>
-                  <div className="text-[22px] font-bold leading-none" style={{ color: TEAL, fontFamily: "'Bricolage Grotesque',sans-serif" }}>{s.value}</div>
+                  <div className="text-[22px] font-bold leading-none" style={{ color: TEAL, fontFamily: "var(--font-display),sans-serif" }}>{s.value}</div>
                   <div className="text-[9.5px] mt-1" style={{ color: "var(--fg-dim)" }}>{s.label}</div>
                 </div>
               ))}

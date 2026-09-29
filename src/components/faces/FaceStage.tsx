@@ -44,8 +44,7 @@ export function FaceStage({
       />
       <div className="-mt-6 flex flex-col items-center gap-1.5 text-center">
         <div
-          className="text-[30px] leading-none font-light uppercase tracking-[0.3em]"
-          style={{ fontFamily: '"Bricolage Grotesque", var(--font-sans)' }}
+          className="type-display text-[26px] leading-none uppercase tracking-[0.06em]"
         >
           {name}
         </div>

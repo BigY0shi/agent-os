@@ -331,7 +331,7 @@ export default function TodoPanel() {
             ) : heading ? (
               <span className="flex-1 leading-snug cursor-text select-text font-semibold"
                 onDoubleClick={() => startEdit(t)} title="double-click to rename"
-                style={{ fontFamily: "'Bricolage Grotesque', var(--font-sans, sans-serif)", fontSize: 18, color: "var(--gold-soft, #e6c69a)", letterSpacing: "0.01em", userSelect: "text", WebkitUserSelect: "text" }}>
+                style={{ fontFamily: "var(--font-display), var(--font-sans, sans-serif)", fontSize: 18, color: "var(--gold-soft, #e6c69a)", letterSpacing: "0.01em", userSelect: "text", WebkitUserSelect: "text" }}>
                 <TaskText text={t.text} />
               </span>
             ) : (

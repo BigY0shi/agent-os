@@ -53,6 +53,19 @@ check("face handles WebGL context loss", face.includes("webglcontextlost"));
 check("face caps DPR at 2", face.includes("Math.min(window.devicePixelRatio, 2)"));
 check("constellation allocates no Color per frame", !/update:[\s\S]*new THREE\.Color\(1, 1, 1\)\)/.test(face.split("function buildConstellation")[1].split("function buildGalaxy")[0].split("update:")[1] ?? ""));
 
+// ── A2. type system (redesigned 2026-09-28) ────────────────────────────────────
+const layout = read("src/app/layout.tsx");
+check("display face Unbounded is self-hosted via next/font", /Unbounded\(\{ variable: "--font-unbounded"/.test(layout) && layout.includes("${unbounded.variable}"));
+check("Bricolage / Manrope / JetBrains Mono no longer fetched from Google", !/Bricolage|Manrope|JetBrains/.test(layout));
+check("tokens: --font-sans Geist, --font-mono Geist Mono, --font-display Unbounded", css.includes("--font-sans: var(--font-geist-sans)") && css.includes("--font-mono: var(--font-geist-mono)") && css.includes("--font-display: var(--font-unbounded)"));
+{
+  const offenders = [];
+  const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(tsx?|css)$/.test(e.name) && !p.endsWith("claudeArtifacts.ts")) { if (/['"](Bricolage Grotesque|Manrope|JetBrains Mono)['"]/.test(fs.readFileSync(p, "utf8"))) offenders.push(p); } } };
+  walk("src");
+  check("no app-rendered file hardcodes the old families (claudeArtifacts emits standalone HTML, exempt)", offenders.length === 0, offenders.join(", "));
+}
+check("eyebrows are UI face, not wide-tracked mono", /\.glass-eyebrow \{[^}]*font-family: var\(--font-sans\)/.test(css) && !/\.glass-eyebrow \{[^}]*0\.14em/.test(css));
+
 // ── B. browser: the face renders the state it is given ─────────────────────────
 let chromium, build;
 try { ({ chromium } = await import("playwright")); ({ build } = await import("esbuild")); } catch (e) { check("playwright + esbuild available", false, e); }

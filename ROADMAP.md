@@ -107,6 +107,8 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-09-28 · v2.34.0 · Type redesign (owner: NEXORA looks "eerily similar"). Unbounded display, Geist UI/body, Geist Mono data, all self-hosted via next/font; old Google-loaded families dropped; 103 hardcoded family names moved to tokens; eyebrows off wide-tracked mono. smoke-jarvis-v3-ui 43 checks.
+
 - 2026-09-28 · v2.33.0 · Jarvis v3 S11 + S12. Glass-neumorphism classes defined (GlassCard had referenced undefined classes since it was written); `AgentFace` three.js faces (Jarvis constellation violet to electric blue, Oracle galaxy, News Radar sweep) driven only by real state; `/jarvis` is a tabbed hub (Console, Oracle, News Radar, Outreach), the last three moved from Hermes with redirects; Wall mode's random-walk telemetry replaced by measured readouts. smoke-jarvis-v3-ui 38 checks incl. real Chromium WebGL + no-WebGL poster.
 
 - 2026-09-08 · v2.31.1 · Jarvis "(no reply)" after one message: the SDK read loop's `break` out of `for await` called the query's `return()`, which the Agent SDK implements as `cleanup()`, so every warm session died at the end of its first turn and turn two read a closed stream in 1 ms (11 such rows in the store). Now explicit `next()`; a closed stream or an error result is a thrown, visible error. Brain smoke live leg gained a same-conversation second turn. This, not Voicebox, was the morning's "one reply then it breaks".

@@ -91,8 +91,9 @@
   --color-danger: #ff5a6b;
   --color-info: #6fb8ff;
 
-  --font-sans: "Inter", var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "Cascadia Mono", monospace;
+  --font-display: var(--font-unbounded), var(--font-geist-sans), ui-sans-serif, sans-serif;
 
   --radius-xs: 6px;
   --radius-sm: 10px;
@@ -171,14 +172,14 @@ main, header, aside, nav, .surface { position: relative; z-index: 2; }
    ───────────────────────────────────────────────────────────────────── */
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 500;
   letter-spacing: -0.025em;
   color: var(--cream);
 }
 
 code, pre, kbd, samp, .mono {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
 }
 
 /* Hand-script accent for numerals, roman numerals, emphasis */
@@ -219,19 +220,19 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
   width: 32px; height: 1px; background: var(--gold); opacity: 0.6;
 }
 .eyebrow .label {
-  font-family: 'Manrope', sans-serif; font-weight: 600;
+  font-family: var(--font-sans), sans-serif; font-weight: 600;
   font-size: 0.72rem; letter-spacing: 0.22em; text-transform: uppercase;
   color: var(--cream-dim);
 }
 
 .page-title {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 500; font-size: clamp(2.2rem, 4.5vw, 3.4rem);
   line-height: 1.05; letter-spacing: -0.03em; color: var(--cream);
   margin: 0;
 }
 .page-subtitle {
-  font-family: 'Manrope', sans-serif; font-weight: 400;
+  font-family: var(--font-sans), sans-serif; font-weight: 400;
   font-size: 1rem; color: var(--cream-dim); margin-top: 12px; line-height: 1.55;
   max-width: 720px;
 }
@@ -241,7 +242,7 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
    ───────────────────────────────────────────────────────────────────── */
 .status-pill {
   display: inline-flex; align-items: center; gap: 8px;
-  font-family: 'Manrope', sans-serif; font-weight: 600;
+  font-family: var(--font-sans), sans-serif; font-weight: 600;
   font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--emerald);
 }
@@ -250,7 +251,7 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
   text-shadow: 0 0 8px var(--emerald);
 }
 .status-meta {
-  font-family: 'Manrope', sans-serif; font-weight: 500;
+  font-family: var(--font-sans), sans-serif; font-weight: 500;
   font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--cream-dim);
 }
@@ -310,13 +311,13 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
   font-size: 2.4rem; color: var(--gold); line-height: 0.9;
 }
 .action-tag {
-  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-family: var(--font-sans), sans-serif; font-weight: 700;
   font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--cream-mute);
 }
 .action-tag.up-next { color: var(--gold); }
 .action-title {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 500; font-size: 1.25rem;
   letter-spacing: -0.015em; color: var(--cream);
 }
@@ -326,7 +327,7 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
 .copy-btn {
   background: var(--gold);
   color: var(--bg-deep);
-  font-family: 'Manrope', sans-serif;
+  font-family: var(--font-sans), sans-serif;
   font-weight: 700; font-size: 0.78rem;
   letter-spacing: 0.16em; text-transform: uppercase;
   padding: 10px 22px;
@@ -345,12 +346,12 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
    Sidebar
    ───────────────────────────────────────────────────────────────────── */
 .sidebar-section-label {
-  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-family: var(--font-sans), sans-serif; font-weight: 700;
   font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--cream-mute);
 }
 .sidebar-item {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 500; font-size: 0.95rem;
   color: var(--cream-soft);
   border-left: 2px solid transparent;
@@ -389,12 +390,12 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
     0 0 24px -12px rgba(111, 255, 155, 0.12);
 }
 .vital-tile .k {
-  font-family: 'Manrope', sans-serif; font-weight: 700;
+  font-family: var(--font-sans), sans-serif; font-weight: 700;
   font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--cream-mute);
 }
 .vital-tile .v {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 500; font-size: 1.05rem;
   letter-spacing: -0.01em; color: var(--cream);
 }
@@ -403,7 +404,7 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
   color: var(--gold); font-size: 1.4em; font-weight: 500;
 }
 .vital-tile .sub {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  font-family: var(--font-mono), monospace; font-size: 0.7rem;
   color: var(--cream-dim);
 }
 
@@ -422,14 +423,14 @@ h1 em, h2 em, h3 em, h4 em, h5 em, h6 em,
 blockquote {
   margin: 48px 0; padding: 0 0 0 28px;
   border-left: 2px solid var(--gold);
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 300; font-size: 1.55rem;
   line-height: 1.42; color: var(--cream);
   letter-spacing: -0.018em;
 }
 blockquote cite {
   display: block; margin-top: 18px;
-  font-family: 'Manrope', sans-serif; font-weight: 600;
+  font-family: var(--font-sans), sans-serif; font-weight: 600;
   font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--gold); font-style: normal;
 }
@@ -557,7 +558,7 @@ blockquote cite {
   font-size: 10.5px; letter-spacing: 0.16em;
   background: rgba(243,235,218,0.04);
   border: 1px solid var(--line-soft);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
   text-transform: uppercase;
   color: var(--cream-dim);
 }
@@ -580,7 +581,7 @@ blockquote cite {
 }
 
 .metric {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
@@ -609,7 +610,7 @@ main::-webkit-scrollbar-track { background: transparent; }
 .heading-strip {
   position: relative;
   padding-left: 12px;
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: var(--font-display), sans-serif;
   font-weight: 500;
   letter-spacing: -0.015em;
 }
@@ -627,7 +628,7 @@ main::-webkit-scrollbar-track { background: transparent; }
 .cmdk-input {
   background: transparent; outline: none; border: none;
   width: 100%; padding: 16px 18px; color: var(--cream);
-  font-family: 'Manrope', sans-serif; font-size: 15px;
+  font-family: var(--font-sans), sans-serif; font-size: 15px;
 }
 .cmdk-item {
   display: flex; align-items: center; gap: 10px;
@@ -765,7 +766,14 @@ main::-webkit-scrollbar-track { background: transparent; }
 .hud-corners .hud-c1 { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
 .hud-corners .hud-c2 { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
 /* small uppercase eyebrow used on glass cards */
-.glass-eyebrow { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-dimmer); font-family: var(--font-mono, ui-monospace, monospace); }
+/* Eyebrows are UI-face, semibold, lightly tracked: the wide-tracked mono label is
+   NEXORA's signature, so it is not ours (type redesign 2026-09-28). */
+.glass-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--fg-dimmer); font-family: var(--font-sans); }
+/* Display: Unbounded is wide, so it runs light and nearly untracked. Numbers are
+   Geist Mono with tabular figures so readouts do not jitter as they change. */
+.type-display { font-family: var(--font-display); font-weight: 300; letter-spacing: -0.01em; }
+.type-figure { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+h1 { font-family: var(--font-display); font-weight: 300; letter-spacing: -0.015em; }
 /* segmented tab bar in the same material */
 .glass-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.4); flex-wrap: wrap; }
 .glass-tab { padding: 6px 12px; border-radius: 10px; font-size: 12px; letter-spacing: 0.04em; color: var(--fg-dim); transition: background .2s, color .2s, box-shadow .2s; }

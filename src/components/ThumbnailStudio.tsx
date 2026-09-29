@@ -173,7 +173,7 @@ export default function ThumbnailStudio() {
           {busy ? (
             <div className="h-full grid place-items-center py-14 text-center">
               <div>
-                <div className="text-[44px] font-bold tabular-nums leading-none" style={{ color: ACCENT, fontFamily: "'Bricolage Grotesque', sans-serif" }}>{fmtTime(elapsed)}</div>
+                <div className="text-[44px] font-bold tabular-nums leading-none" style={{ color: ACCENT, fontFamily: "var(--font-display), sans-serif" }}>{fmtTime(elapsed)}</div>
                 <div className="text-[13px] mt-2 flex items-center justify-center gap-1.5" style={{ color: "var(--fg-dim)" }}>
                   <Loader2 size={13} className="animate-spin" /> Making {count} version{count > 1 ? "s" : ""} with gpt-image-2…
                 </div>

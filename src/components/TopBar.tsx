@@ -55,7 +55,7 @@ export default function TopBar() {
             <span className="tick live" style={{ color: "var(--emerald)", animationDelay: ".3s" }} />
             <span className="tick live" style={{ color: "var(--rust)", animationDelay: ".45s" }} />
           </span>
-          <span className="uppercase tracking-widest" style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 600 }}>
+          <span className="uppercase tracking-widest" style={{ fontFamily: "var(--font-sans), sans-serif", fontWeight: 600 }}>
             All systems
           </span>
         </div>
