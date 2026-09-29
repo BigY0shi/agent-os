@@ -1,5 +1,65 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Missions: a dedicated Goal Mode with a crew, a desk and a timeline (v2.40.0)
+
+S17 of `_design/jarvis-v3-plan.md`, from the owner's NEXORA screenshots ("essentially a
+dedicated Goal Mode", "make sure it has the history of the agents' work").
+
+**Flow.** Brief -> Jarvis plans -> the owner approves -> seats run -> Jarvis reports ->
+review (accept, or send back with a note) or straight to delivered, as the owner chose.
+Nothing runs before approval; a plan or result sent back re-plans with the note (and the
+last report) in the planner's prompt.
+
+**Library** `src/lib/v2/missions/`:
+- `store.ts`: files, not a DB migration (so no migration-number race with other work):
+  `~/.agentic-os/missions/<id>/mission.json` (atomic), `events.jsonl` (append-only,
+  WHAT HAPPENED, IN ORDER), per-step `.log` (raw output) and `.md` (answer), and one
+  scratch dir per step (`seats/<step>/`, the seat's cwd). Ids and step ids are
+  pattern-checked, so no path walks out. `AGENTIC_OS_MISSIONS_DIR` for smokes.
+- `runtime.ts`: the planner (claude, one-shot, strict JSON: a plan that cannot be read
+  is an error, never a guessed plan; steps capped at the mission's maximum, every
+  dependency must be an earlier step, every seat must be on the crew); the scheduler
+  (independent steps run in parallel; a step starts when its dependencies are done and
+  gets their answers in `./inputs/`; a failed dependency stops its dependants); the time
+  limit as a real timer that kills running seats and reports with what finished; STOP
+  (the whole process tree on Windows via taskkill /T); the report (claude, length as
+  chosen, told not to invent results); restart recovery (a step still marked running
+  with no live process is marked lost, never shown as running); measured stats.
+- Seats: `claude -p --model <m> --max-turns 50 --permission-mode acceptEdits
+  --allowedTools Read,Write,Edit,Glob,Grep,WebSearch,WebFetch` (no shell), prompt on
+  stdin; `hermes chat -q ... --max-turns 50` (flags as in Hermes Goal Mode); `codex exec
+  -s workspace-write -C <seat dir> -` and `agy -p`, which have no turn flag and are
+  bounded by the time limit, said so in the wizard and in each hand-off event. Spawned
+  through `runner.spawnStream`, so npm `.cmd` shims resolve on Windows.
+- Every hand-off event carries the exact brief the seat was sent; "last heard" is the
+  time of the seat's last real output line.
+
+**Routes** `/api/v2/missions` (GET list + stats + crew, POST create) and
+`/api/v2/missions/[id]` (GET mission + events, `?step=&kind=md|log` for a seat's answer
+or raw output, POST approve / send-back / replan / accept / stop).
+
+**Tab** Jarvis > Missions (`components/jarvis/MissionsTab.tsx`): a headline count of
+decisions waiting on you; stats (waiting on you, median cycle time, on-time % over
+missions with a target date, agents at work), each with its basis stated; IN FOCUS
+(steps with a LIVE marker, "waits for", last heard, answers and raw output, crew
+rationale, guardrails, a time-limit ring, the report); YOUR DESK (approve plan / accept
+result / send back with a note / STOP / plan again); four stage columns; the timeline
+with expandable briefs; the 3-step create wizard (brief; Jarvis picks the team or you
+choose each crew member's CLI, model and role; time limit 15 min to 8 h, maximum steps,
+report length, review first or deliver).
+
+**Verified.** New `smoke-missions.mjs`, 68 checks, offline with fake drivers (no CLI
+ever starts): validation, strict planning, parallel start, hand-off briefs, dependency
+waits, inputs handed on, report and review, a failure cascade, STOP, the time limit,
+restart recovery, send back with a note, per-CLI flags and turn caps, stats, routes
+(including path-walking ids refused), UI wiring. Visually checked in the browser pane
+with the real compiled CSS and fake data: a first pass showed the stage columns as
+light panels on the dark page, fixed before commit. tsc clean; jarvis-v3-ui 43,
+jarvis-mcp 51 pass. Not yet run against real CLIs (that spends the owner's
+subscriptions): the first live mission is the owner's.
+
+Rollback: revert the commit; `~/.agentic-os/missions/` is only read by this code.
+
 ## 2026-09-29 - Jarvis keeps his warm session when memory updates the persona (v2.39.2)
 
 `smoke-jarvis-brain` "sdk turn 2 reused the warm session" failed intermittently (2 of 3

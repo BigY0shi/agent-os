@@ -16,6 +16,7 @@ import HermesOutreach from "@/components/HermesOutreach";
 import SessionsTab from "@/components/jarvis/SessionsTab";
 import ControlRoomTab from "@/components/jarvis/ControlRoomTab";
 import McpTab from "@/components/jarvis/McpTab";
+import MissionsTab from "@/components/jarvis/MissionsTab";
 
 export type JarvisTab = "console" | "oracle" | "radar" | "outreach" | "sessions" | "mcp" | "control" | "goals";
 
@@ -28,13 +29,13 @@ export const JARVIS_TABS: TabDef[] = [
   { key: "radar", label: "News Radar", icon: <Radar size={13} />, render: () => <NewsView /> },
   { key: "outreach", label: "Outreach", icon: <Mail size={13} />, render: () => <HermesOutreach /> },
   { key: "sessions", label: "Sessions", icon: <History size={13} />, render: () => <SessionsTab /> },
+  { key: "goals", label: "Missions", icon: <Target size={13} />, render: () => <MissionsTab /> },
   { key: "mcp", label: "MCP", icon: <Plug size={13} />, render: () => <McpTab /> },
   { key: "control", label: "Control Room", icon: <SlidersHorizontal size={13} />, render: () => <ControlRoomTab /> },
 ];
 
 // Icons for tabs that later slices add; kept here so the bar stays visually consistent.
 export const FUTURE_TAB_ICONS: Partial<Record<JarvisTab, ReactNode>> = {
-  goals: <Target size={13} />,
 };
 
 function isTab(v: string | null): v is JarvisTab {

@@ -18,8 +18,8 @@ is one line; the journal carries the rest.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
-  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0).
-  Next: S17 Missions.
+  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0).
+  Next: S18 Mission Control home + System pulse.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -108,6 +108,13 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-29 · v2.40.0 · Jarvis v3 S17 Missions: brief -> Jarvis plans -> you approve -> each seat's CLI runs in its own scratch folder (claude and hermes capped at 50 turns, codex and agy bounded by the time limit) -> report -> review or deliver. Desk, stage columns, time-limit ring, measured stats, and a WHAT HAPPENED, IN ORDER timeline carrying each brief sent. smoke-missions 68 checks.
+- 2026-09-29 · v2.39.2 · Jarvis keeps his warm session when memory updates the persona mid-conversation (the intermittent turn-2 rebuild); sessionRebuilt on the done event.
+- 2026-09-29 · v2.39.1 · Faces: a three-shell Jarvis plexus with orbit rings; a five-arm Oracle galaxy with filaments, dust lanes and a bulge.
+- 2026-09-28 · v2.39.0 · Skills & Workflows pop-up offers every library (Agent OS, Claude Code, SkillDB: 676 skills) with source filters; opaque panel.
+- 2026-09-28 · v2.38.4 · /api/settings masks key material (first 5 characters shown); MCP secret copies through a cookie-only reveal route.
+- 2026-09-28 · v2.38.1-3 · Test gate green again: V1 MemoryPanel exiled, smoke-search facet window pinned, smoke-browser offline-only in the gate.
 
 - 2026-09-28 · v2.38.0 · Jarvis v3 S16 MCP tab: Jarvis's own external MCP servers (HTTP or stdio, added switched off, retire/restore), install wizard with write-only secrets and Hermes-catalogue prefill, Claude Code and Hermes servers listed read-only (names only, URL query stripped). External tools bypass Jarvis's gates, so SDK hooks deny them on tainted turns and taint the turn after they run. smoke-jarvis-mcp 51 checks.
 
