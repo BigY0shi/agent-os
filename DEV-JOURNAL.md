@@ -1,5 +1,58 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Guide: every module, tab and control, written from the code (v2.50.0)
+
+S29 of `_design/jarvis-v3-plan.md` (owner: "every module, every tab, and every action
+inside of each needs to be documented in a wiki", and "we'll use that to update the
+Github with real docs"). Written last, after the other slices, so it documents what
+shipped.
+
+**The docs** (`docs/modules/`, 50 files, one per sidebar module): each has a Route / UI /
+Backend line, what the module is for, a **Tabs and controls** table (every tab and
+control named exactly as it appears on screen, with what it does) and **How it works**
+(where its data lives, what runs, what it needs, limits). Written by five parallel
+writer agents under one brief ("from the code, never from guesswork"; real paths only;
+no em dashes), then checked. `deal-desk.md` kept every existing line and gained its
+controls table. Plus `docs/guide/start-here.md`, `around-every-page.md` and
+`how-it-works.md`, written from facts verified in this session. The module index
+(`docs/modules/README.md`) lists all 50; the root README links it.
+
+**The page** (`/guide`, reached from a new **Guide** link in the top bar): a hero with a
+tile per module, a sticky contents rail (Start here, Around every page, the modules, How
+it works), search across everything, each doc rendered with its tables
+(`react-markdown` + `remark-gfm`, already dependencies) and an **Open <module>** link.
+It reads the markdown at request time (`src/lib/guide.ts`), so a doc edit shows without a
+rebuild. The previous /guide content (BUILD-YOUR-OWN.md via `/api/guide`) is kept as the
+last section; the old page file is kept under `.exile/`.
+
+**Found while writing (the writers read every module's code):**
+- `docs/modules/claude.md` and `agents.md` are the same file names as `CLAUDE.md` and
+  `AGENTS.md` on Windows (case-insensitive), so an agent CLI working in that folder
+  would load a module doc as its instructions (global rule 20's trap). Renamed to
+  `claude-cli.md` and `agents-page.md`; the smoke fails if such a name returns.
+- Code that says one thing and does another, reported per module and NOT changed here:
+  Fusion and Sakana Fugu show timer-driven progress (queued as a task); the Agent Room,
+  Idea Engine, Video b-roll and Hermes Talk switch providers without it being chosen
+  (Agent Room queued as a task); Agent Kanban shows a "Reviewer" step that is a 950 ms
+  pause; Pipeline's Remove posts to a route that does not exist; Video renders through a
+  `hyperframes` path that does not exist on this machine; Agent Kanban, Music, Content
+  Engine, Local builds and the Room history hard-delete files; saved-but-unused settings
+  in Kanban, Notebook, SEO and Open Design; stale macOS setup text and hardcoded
+  upstream names/paths in Kanban, Antigravity and SEO; the Oracle voice gear still
+  defaults to the retired Voicebox; the Skills gear points at a section that no longer
+  exists. The docs describe the real behaviour, so they are accurate today and will need
+  a touch when these are fixed.
+
+**Verified.** New `smoke-guide.mjs`, 16 checks: every sidebar module (50) has a doc whose
+route matches it, every documented route is a real page, every doc has its controls
+table and How it works, every Jarvis tab (13) has its own section, no instruction-file
+names, no dashes in the docs' own prose (verbatim UI labels in code spans excepted),
+the loader, the page wiring, both indexes. Visually checked in the browser pane with the
+real docs and CSS: the tile hero, the rail, search, the rendered tables. tsc clean.
+
+Rollback: revert the commit (and restore `src/app/guide/page.tsx` from `.exile/` if
+needed).
+
 ## 2026-09-29 - Voice mode: pick who you are talking to on a dial, and talk (v2.49.0)
 
 S22 of `_design/jarvis-v3-plan.md` (the owner's NEXORA "Hand mode" dial, without the

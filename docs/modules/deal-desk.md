@@ -4,6 +4,66 @@ Route: `/deals` · Backend: `src/lib/upworkDesk.ts`, `src/lib/dealBrief.ts` · U
 
 A triage board for inbound job leads. It reads scraped listings, asks an agent to assess each one, and gives you a Kanban to move them through without re-reading the same posting three times.
 
+## Tabs and controls
+
+### Header
+
+| Control | What it does |
+|---|---|
+| **Enrich approved** | Posts to `/api/deals/enrichment` to pull real proposal counts on Approved cards through your Upwork session. Disabled when nothing is approved. |
+| **cookie** / **set cookie** | Opens the Upwork session cookie box. Reads "set cookie" in amber when none is saved. |
+| **Configure** | The Deal Desk settings gear: **Max listing age (days)**, **Screen model**, **Screen after a feed pull** (**Screen automatically**), **Dossier model**, then **Save**. Saving reloads the board. |
+| **Screen NA leads** | Posts to `/api/deals/screen`: a quick pass/pursue check on every lead showing NA. Leads it cannot judge stay NA. |
+| **Clear passed & refill** | Posts to `/api/deals/refill` with a target of 20: dismisses leads you did not approve, pitches the next best into New, and briefs unanalysed feed leads. |
+| **Paste URLs** | Opens a box for Upwork job URLs, one per line (max 20). **Take them in** posts them to `/api/deals/intake`. |
+| **Pull feeds** | Posts to `/api/deals/feeds` to pull RemoteOK and We Work Remotely into the desk. |
+| **Re-scrape Upwork** | Posts to `/api/deals/scrape`. Opens a browser and takes 10 to 20 minutes; a reload re-attaches to a scrape in flight. |
+| **Reload** | Re-reads the board from `/api/deals/list`. |
+| **Open Upwork login** / **Update cookie** | Shown in the red banner when cards are flagged `needs login`. |
+| **Show them anyway** / **Hide the old ones** | Shown when leads are hidden by the age gate. Toggles `?stale=1` on the list call. |
+
+### Board
+
+| Control | What it does |
+|---|---|
+| **New**, **Reviewing**, **Approved**, **Ready to Send**, **Sent** | The pipeline columns. Drag a card onto a column to move it. |
+| **All** / **Upwork** / **RemoteOK** / **WWR** | Source tabs on the New column, shown when more than one source is present. |
+| **Select all N** / **Clear** | Ticks every card shown in New (respecting the source tab). Denying a whole column this way is recorded as a sweep with no memory episodes. |
+| Card tick box ("Select for bulk deny") | Adds the card to the bulk-deny selection. |
+| Card cross ("Deny") | Denies the card without opening it. |
+| **Deny N selected** / **Clear selection** | The red bar that appears while cards are ticked. One `bulkStatus` write. |
+| **Parked** / **Denied** | The lane under the board. Each half is a drop target. |
+| Clicking a card | Opens the listing drawer. |
+
+### Listing drawer
+
+| Control | What it does |
+|---|---|
+| **Open on Upwork** | Opens the listing URL in a new tab. |
+| Status select ("Listing status") | new, reviewing, approved, ready, sent, parked, denied. |
+| **Need more info** | Toggles the flag. Turning it on starts the research pass. |
+| **Get more info** | Runs the research pass (`/api/deals/research`) without touching the flag. |
+| **Generate brief** | Shown when the lead has no analysis. Posts to `/api/deals/brief`. |
+| **Build dossier** / **Rebuild** | Posts to `/api/deals/dossier` with `force: true`. A **stale** tag shows when notes, Q&A or the listing changed after it was built. |
+| **Draft full proposal (uses your Notes)** | Saves your notes, then posts to `/api/deals/proposal` and drops the text into the proposal box. |
+| **Proposal (editable)** | The pitch text. Saved when the box loses focus. |
+| **Show the full listing** / **Collapse the listing** | Expands a description longer than 600 characters. |
+| **Notes** | Your notes. Saved when the box loses focus. |
+| **Ask** | Posts your question to `/api/deals/ask`; answers stack under the box. |
+
+### Upwork session cookie box
+
+| Control | What it does |
+|---|---|
+| **Save cookie** | Posts the pasted cookie string to `/api/deals/cookie`. Needs at least 20 characters. Shows the saved hint or "No cookie saved yet". |
+
+## How it works
+
+- The board is served by `/api/deals/list`, which merges the scraper files in the leads directory with your state in `~/.agentic-os/upwork-desk.json` (details below).
+- Briefs, dossiers, proposals, screening and Q&A shell out to your Claude CLI. The screen and dossier models come from the gear; blank uses the configured Claude model.
+- Enrichment and intake use your saved Upwork cookie and stop at the login wall.
+- Long jobs (scrape, brief pass, screen) keep running on the server; the page polls them and re-attaches after a reload.
+
 ## What it actually does
 
 Leads arrive as files, not from an API inside this app. The scraper pipeline writes three files into the leads directory:
@@ -26,10 +86,10 @@ Deal Desk merges those with your own per-deal state and renders the board.
 
 `dealBrief.ts` generates four fields per deal through your Claude CLI:
 
-- `summary` — what the client actually wants, in plain language
-- `why` — why you are a credible fit, **or honestly why you are not**
-- `approach` — 3 to 5 bullets on how you would deliver it
-- `crashCourse` — any unfamiliar tool or API named in the listing, and the single biggest gotcha
+- `summary`: what the client actually wants, in plain language
+- `why`: why you are a credible fit, **or honestly why you are not**
+- `approach`: 3 to 5 bullets on how you would deliver it
+- `crashCourse`: any unfamiliar tool or API named in the listing, and the single biggest gotcha
 
 Upwork leads already get these in bulk from the offline pitch pass. RemoteOK and WeWorkRemotely leads never go through it, so without the batch route they stay blank forever. That is why `brief-batch` exists and matters more than the single-card route: clicking 248 cards individually is not a workflow.
 
@@ -77,7 +137,7 @@ Open `/deals`. An empty board means the leads directory has no `board.json`, not
 |---|---|
 | `GET /api/deals/list` | the board, listings merged with your state |
 | `POST /api/deals/brief` | brief one deal |
-| `POST /api/deals/brief-batch` | brief every deal missing one — the one you actually use |
+| `POST /api/deals/brief-batch` | brief every deal missing one (the one you actually use) |
 | `POST /api/deals/proposal` | draft a proposal for a deal |
 | `POST /api/deals/ask` | ask a question about a specific listing |
 | `POST /api/deals/action` | move a card, set status, save notes; `action: "bulkStatus"` with `ids[]` moves many in one write (bulk deny) |
@@ -147,5 +207,5 @@ Turning it off is the global memory switch, `memory.ingestEnabled`. There is no 
 
 ## Related
 
-- `docs/modules/hire-engine.md` — the same triage shape aimed at candidates rather than clients
-- `docs/modules/leads.md` — finding leads, as opposed to triaging them
+- `docs/modules/hire.md`: the same triage shape aimed at candidates rather than clients
+- `docs/modules/leads.md`: finding leads, as opposed to triaging them

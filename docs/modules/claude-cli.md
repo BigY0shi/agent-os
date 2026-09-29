@@ -1,0 +1,88 @@
+# Claude
+
+Route: `/claude` · UI: `src/app/claude/page.tsx`, `src/components/UnifiedChat.tsx`, `src/components/ClaudeWorkspace.tsx`, `src/components/ClaudeArtifacts.tsx`, `src/components/UltracodeView.tsx`, `src/components/ClaudeAnt.tsx`, `src/components/AntAgents.tsx` · Backend: `src/app/api/claude/` (`chat`, `workspace`, `preview`, `artifacts`, `ultracode`, `ant`), `src/lib/claudeWorkspace.ts`, `src/lib/claudeArtifacts.ts`, `src/lib/ultracodeRuns.ts`, `src/lib/antAgents.ts`
+
+The Claude module drives your local `claude` CLI (Claude Code) from the dashboard. You can chat with it, browse the files it writes, publish HTML it built to a public link, run large "Ultracode" jobs and watch the subagents, and use the separate Claude Platform CLI (`ant`) for Managed Agents.
+
+## Tabs and controls
+
+The row of pill buttons at the top switches between six tabs: **Chat**, **Workspace**, **Artifacts**, **Ultracode**, **Ant CLI**, **Agents**.
+
+### Chat
+
+| Control | What it does |
+|---|---|
+| **Ultracode** | Toggle. When on, the next message runs the CLI with `--effort xhigh`, and the run is captured so it shows up in the Ultracode tab. An orange warning box explains the extra token use while it is on. |
+| **Logged · <time>** | Appears after a reply is saved to your Obsidian vault. Links to `/memory`. |
+| **Clear** | Asks for confirmation, then empties this chat thread. |
+| Mic button | Voice input (`VoiceButton`). Interim speech shows in the box with a `[voice]` marker, the final transcript replaces it. |
+| Message box | Type a message. Ctrl/Cmd+Enter sends, Esc stops a running reply. |
+| **Send** / **Stop** | Sends the message, or aborts the stream while Claude is replying. |
+
+### Workspace
+
+| Control | What it does |
+|---|---|
+| **Projects** list | One entry per folder in `~/.agentic-os/claude-projects/`, with file count and age. Polls every 8 seconds while the page is visible. |
+| Refresh icon | Reloads the project list. |
+| **Files** list | Files in the selected project. Click one to open it. |
+| **preview** / **source** | Shown for `.html` files: render the page in a sandboxed iframe, or show its source. |
+| Open-in-new-tab icon | Opens the file through `/api/claude/preview/<project>/<path>`. |
+| **download** | Shown for binary files that cannot be previewed. |
+
+Images, video and audio play inline. Other text files show as source.
+
+### Artifacts
+
+| Control | What it does |
+|---|---|
+| **Gallery** | Opens the base URL of your artifacts site (only shown when a site is configured). |
+| **Built by your agents** | Every `.html` file in `~/.agentic-os/loop-builds/` and under `~/.agentic-os/claude-projects/` (up to 4 folders deep). Refresh icon reloads it. |
+| **Publish** / **Update** | Copies the HTML into `~/.agentic-os/published/<slug>/index.html`, rebuilds the gallery page and runs `netlify deploy --prod`. The label reads **Update** when that source is already live. |
+| **Live links** | Everything in `~/.agentic-os/published/manifest.json`. |
+| **Copy** / **Open** | Copies the public URL, or opens it. |
+| Trash icon ("Take offline") | Asks for confirmation, removes the slug folder and manifest entry, then redeploys. |
+
+### Ultracode
+
+| Control | What it does |
+|---|---|
+| **Security audit**, **Find dead code**, **Build a showcase page**, **Stress-test a plan** | Preset missions. Each posts a fixed prompt to `/api/claude/chat` with Ultracode on, in its own project folder (`ultracode-security`, `ultracode-deadcode`, `ultracode-showcase`, `ultracode-plan`). Hover shows the full prompt. |
+| Custom mission box + **Launch** | Runs your own prompt the same way, in `ultracode-custom`. Enter also launches. |
+| **Runs** list | Saved runs, newest first, with subagent count, cost, duration and age. Click to open. Refresh icon reloads, trash icon deletes a run after confirmation. |
+| **Stop** | Shown on a running run. Kills the CLI process and marks the run stopped. |
+| Swarm map | One node per subagent the run spawned, coloured by status (running, done, failed). While Claude is still planning with no subagents yet, a live text panel with an elapsed timer shows instead. |
+| **Verdict trail**, **Your replies**, **Final answer** | The run's captured verdicts, your follow-up turns, and the result text (or streaming text while running). |
+| Reply box + **Reply** | Continues the same Claude session with `--resume` and appends the turn to the same run. Disabled while a turn is running. Ctrl/Cmd+Enter sends. |
+
+### Ant CLI
+
+| Control | What it does |
+|---|---|
+| Status pill | **connected** (with version), **wrong 'ant' found** (Apache Ant is on the PATH instead), or **not connected**. |
+| `ant` command box + **Run** | Runs an `ant` subcommand on the server and shows the output (pretty JSON when it parses). `--format json` is added unless you set a format. `auth login` and anything containing `delete`, `destroy` or `rm` is refused. |
+| **Quick**: **Auth status**, **Models**, **Managed Agents**, **Sessions**, **Files** | Run `auth status`, `models list`, `beta:agents list`, `beta:sessions list`, `beta:files list`. |
+| **What this unlocks** | Static description cards. Not controls. |
+
+When not connected, the tab shows the install and `ant auth login` steps instead of the console.
+
+### Agents
+
+| Control | What it does |
+|---|---|
+| **Managed Agents** list | Agents from `ant beta:agents list`. Click one to select it. |
+| **system** | Expands the selected agent's system prompt. |
+| Task box + **Run** | Creates a session in a cloud environment named "Agent OS Cockpit" (created on first use), sends your prompt, then polls the trace every 2.5 seconds. |
+| **Live trace** | Your message, thinking, tool calls, agent replies and the end state. |
+
+If `ant` is not installed, this tab only shows a note pointing to the Ant CLI tab.
+
+## How it works
+
+- **Chat** posts to `/api/claude/chat`, which spawns `claude -p --model <model> --output-format=stream-json --include-partial-messages --verbose` and streams the NDJSON back. The model is `claude-opus-4-8` unless `AGENTIC_OS_CLAUDE_MODEL` or `claudeModel` in `~/.agentic-os/config.json` says otherwise. The CLI is found via `AGENTIC_OS_CLAUDE_BIN`, the config file, or `claude` on the PATH, and uses your own Claude login.
+- `claude -p` has no memory between calls, so the route packs the last 24 turns (up to about 8,000 characters) into each prompt. Prompts over 16,000 characters are rejected.
+- The chat thread lives in your browser's localStorage (key `agentic-os-chat-v2:claude`, last 50 messages). Each reply is also appended to `Agentic OS/Memories/<date>.md` in your Obsidian vault via `/api/memory/log`, when a vault is found.
+- Chat runs in `~/.agentic-os/claude-projects/claude-default/` (override the root with `AGENTIC_OS_CLAUDE_SCRATCH`), which is why files Claude writes appear in Workspace.
+- Ultracode runs are saved as JSON in `~/.agentic-os/ultracode-runs/` (override with `AGENTIC_OS_ULTRACODE_RUNS`). Token use and cost are also logged for the dashboard.
+- Artifacts needs the `netlify` CLI and a site file at `~/.agentic-os/artifacts-site.json` (`siteId`, `name`, `baseUrl`). Without it, Publish returns "Artifacts site not configured".
+- Ant CLI and Agents need Anthropic's Platform CLI `ant`, found via `AGENTIC_OS_ANT_BIN`, the config file, or the PATH, and logged in with `ant auth login` in your own terminal.

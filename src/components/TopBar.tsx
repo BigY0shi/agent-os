@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import CommandPalette from "./CommandPalette";
 import ModuleKit from "./ModuleKit";
+import Link from "next/link";
+import { BookOpen } from "lucide-react";
 import { metaFor } from "@/lib/pageMeta";
 
 export default function TopBar() {
@@ -47,6 +49,8 @@ export default function TopBar() {
       </motion.div>
 
       <div className="flex items-center gap-3 pt-2 shrink-0">
+        {/* S29: the Guide (every module, tab and control), one click from any page. */}
+        <Link href="/guide" className="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[12px] glass" title="Guide: every module, tab and control"><BookOpen size={13} aria-hidden /> Guide</Link>
         <ModuleKit />
         <CommandPalette />
         <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-md border border-[var(--line-soft)] text-[11px]"

@@ -18,8 +18,8 @@ is one line; the journal carries the rest.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
-  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0), S27 Health (v2.44.0), S26 Standing orders (v2.45.0), S23 Mission board (v2.46.0), S24 Crew archive (v2.47.0), S25 Mastermind (v2.48.0), S22 Voice mode (v2.49.0).
-  Next: S29 Guide (docs for every module).
+  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0), S27 Health (v2.44.0), S26 Standing orders (v2.45.0), S23 Mission board (v2.46.0), S24 Crew archive (v2.47.0), S25 Mastermind (v2.48.0), S22 Voice mode (v2.49.0), S29 Guide (v2.50.0).
+  Jarvis v3 plan complete. Next: the fixes the Guide writers found (see DEV-JOURNAL 2026-09-29, v2.50.0).
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -108,6 +108,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-29 · v2.50.0 · Jarvis v3 S29 Guide: all 50 modules documented from the code (every tab and control, how it works), the in-app wiki at /guide with search and a link from every page, the same docs as the repo's GitHub docs with an index. smoke-guide 16 checks.
 
 - 2026-09-29 · v2.49.0 · Jarvis v3 S22 Voice mode: a rotating dial of Jarvis, the Oracle, every specialist and crew agent (arrows, keys, click or "talk to <name>"), the chosen face on stage driven by real mic/reply/audio state, push-to-talk through Parakeet, replies spoken through Kokoro. smoke-voice-mode 23 checks.
 - 2026-09-29 · v2.48.1 · Glass cards no longer override absolute / fixed / sticky (the unlayered position rule moved into the components layer).

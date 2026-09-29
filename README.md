@@ -26,6 +26,10 @@ Current state: 360 API routes, 21 schema migrations, 68 offline smoke suites.
 
 **Tasks, WebMCP, integrations, newsletter, marketing.** Approval-gated task workflow; a tool-package exporter and hub; Gmail, Calendar, Notion, GitHub and Slack connectors driving an automations engine; a newsletter engine that dedupes across sources; a marketing command center with an approval gate before anything deploys.
 
+## Module docs
+
+Every module, every tab and every control is documented, written from the code: see the index at [docs/modules/README.md](docs/modules/README.md), plus [Start here](docs/guide/start-here.md), [Around every page](docs/guide/around-every-page.md) and [How it works](docs/guide/how-it-works.md). The same pages are the app's in-app Guide at `/guide`.
+
 ## Running it
 
 Requires Node and a local agent CLI. It runs on Windows natively.
