@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FaceStage } from "@/components/faces/FaceStage";
+import type { FaceState } from "@/components/faces/AgentFace";
 import { Sparkles, Loader2, Clock, X, Moon, ScrollText, Volume2, Square, Settings2 } from "lucide-react";
 import AgentPicker from "@/components/AgentPicker";
 import { useSettings, type Settings } from "@/components/ConfigMenu";
@@ -76,6 +78,8 @@ export default function OracleView() {
   const [vbProfiles, setVbProfiles] = useState<{ id: string; name: string; engine: string | null }[]>([]);
   const [vbError, setVbError] = useState<string | null>(null);
   const [elevenVoices, setElevenVoices] = useState<{ voice_id: string; name: string }[]>([]);
+  // The face reflects only what is really happening (AGENTS.md "Never fabricate state").
+  const oracleFace: FaceState = err ? "error" : busy ? "thinking" : tts === "playing" ? "speaking" : tts === "loading" ? "working" : "idle";
   const patchVoice = (p: Partial<OracleVoice>) => save({ oracle: { voice: p } } as Partial<Settings>);
 
   const loadHistory = useCallback(() => {
@@ -269,6 +273,13 @@ export default function OracleView() {
         .orc-hist-item .m{ margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:.6rem; color:var(--dim); }
       `}</style>
 
+      <FaceStage
+        variant="galaxy"
+        name="Oracle"
+        subtitle="Counsel and foresight"
+        state={oracleFace}
+        detail={busy ? CONTEMPLATIONS[statusIdx] : tts === "loading" ? "Finding the voice" : err ? err : undefined}
+      />
       <div className="orc-grid">
         <div>
           {/* ASK */}
@@ -358,7 +369,6 @@ export default function OracleView() {
           {/* CONTEMPLATION */}
           {busy && (
             <div className="orc-think">
-              <div className="orc-orb" />
               <div className="line">{CONTEMPLATIONS[statusIdx]}</div>
             </div>
           )}

@@ -1,5 +1,74 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Jarvis v3, first two slices: glass, faces, and a tabbed Jarvis (v2.33.0)
+
+The owner asked, over one evening, for a Jarvis rebuild plus a long list around it
+(Mission Control, per-module skills, MCP, Control Room, Goal Mode as missions, memory
+off Honcho, NEXORA adoptions). The whole request, the decisions taken without asking,
+and the slice order live in `_design/jarvis-v3-plan.md`; the NEXORA prompt pack diff
+is `_design/nexora-diff.md`. This entry is S11 + S12 only.
+
+**Art direction first, because the owner named the skill.** He asked for the
+awwwards skill (`build-awwwards-quality-sites`); it demands a written direction before
+code and a compatible style skill, so `blue-laser-clean-glass-layout` is the second
+reference. Two deliberate deviations are recorded in the plan: no smooth-scroll engine
+(this is an app shell with independently scrolling panels, and Lenis would fight them
+and Jarvis's screen-control bridge), and lucide icons stay (Iconify Solar would mean a
+second icon language across 48 modules and a runtime call to an external API).
+
+**S11: glass that actually exists.** `GlassCard` had been applying `glass`,
+`glass-strong`, `hud-corners` and `neon-ring` since it was written, and none of those
+classes was defined anywhere in `src/`: every GlassCard in the app was an unstyled div
+with a fade-in. They are defined now in `globals.css` as glass neumorphism (frosted
+fill, light rim top-left, dark rim bottom-right, two-sided drop shadow), plus
+`.glass-frost` (the owner's pale KPI tiles, used there only), `.glass-inset`, and a
+`.glass-tabs` segmented bar. Defining them upgraded the nine existing GlassCard users
+without touching them.
+
+`AgentFace` is one three.js component with three variants driven by a `state` prop:
+the constellation plexus for Jarvis (violet `#8b5cf6` idle through to electric blue
+`#22d3ff` replying, with signal pulses along the edges while thinking or working), a
+spiral galaxy with differential rotation for the Oracle, and concentric rings under a
+sweep for News Radar. Per the skill's WebGL rules: DPR capped at 2, paused when the tab
+is hidden AND when the face is scrolled offscreen (IntersectionObserver), context loss
+handled, a CSS radial poster underneath that is the whole face when WebGL is missing,
+one static frame under reduced motion, and no per-frame allocation (the first draft
+built a `new THREE.Color` every frame in the pulse loop; caught on review).
+
+**S12: Jarvis gets tabs; three move in from Hermes.** `/jarvis` is now `JarvisHub`:
+Console (the old JarvisView), Oracle, News Radar, Outreach. The tab lives in `?tab=`,
+so Jarvis's own screen control can deep-link, and old `/hermes?tab=oracle|radar|outreach`
+bookmarks redirect. The moved components and their APIs are unchanged; only their
+mount point moved. Tabs register as their slices land, so nothing unfinished is listed.
+
+**Faces show only real state.** Console: the same signals the phase label already used
+(building -> working, busy -> thinking or working in agent mode, listening, speaking,
+"Brain error" -> error). Oracle: `busy` -> thinking, TTS loading -> working, playing ->
+speaking, `err` -> error. News Radar: working only while a briefing is actually in flight.
+
+**Found and removed: invented telemetry.** Wall mode showed NEURAL THROUGHPUT, CORE
+LOAD, SIGNAL and LATENCY, all random walks from `Math.random()` on a 1.5 s timer, and a
+hardcoded "DANIEL · EN-GB" voice that stopped being true when the voice moved to
+Kokoro. Replaced with measured values: the last reply's duration, turns this session,
+and the configured TTS provider. The old `ArcReactor` canvas (104 lines) is gone.
+
+**Evidence.** `smoke-jarvis-v3-ui`, 38 checks: the source contract (hub tabs, Hermes
+redirects, honest face mapping, no random telemetry, the glass classes), and a real
+headless Chromium rendering an esbuild bundle of `AgentFace`: all three variants go
+live on SwiftShader WebGL, each reports the state it was given, a state change reaches
+the rendered face, no page errors; and with WebGL disabled each face falls back to its
+poster. `tsc` clean. Not yet seen by the owner in his browser.
+
+**Also found, not fixed here (queued in the plan):** the NEXORA diff agent flagged
+`src/app/api/activity/route.ts:23` synthesising log timestamps (file mtime minus
+200 ms per line) and `src/lib/agentRoom.ts:21` falling back to a local model when no
+cloud key is set, possibly unlabelled.
+
+Rollback: exile `src/components/faces/`, `src/components/jarvis/JarvisHub.tsx`, restore
+`src/app/jarvis/page.tsx`, `src/app/hermes/page.tsx`, `JarvisView.tsx`, `OracleView.tsx`,
+`NewsView.tsx` from `4ddede3`, and drop the S11 block at the end of
+`globals.css`.
+
 ## 2026-09-08 - "(no reply)" after one message was the brain, not the voice (v2.31.1)
 
 Owner: "Still immediately fails with (no reply) after 1 message." That string is the

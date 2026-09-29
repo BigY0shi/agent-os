@@ -12,6 +12,7 @@ import JarvisRealtime from "./JarvisRealtime";
 import JarvisGeminiLive from "./JarvisGeminiLive";
 import JarvisKimiVoice from "./JarvisKimiVoice";
 import ModelSettings from "./ModelSettings";
+import { AgentFace, FACE_PALETTE, type FaceState } from "./faces/AgentFace";
 
 const CYAN = "#22d3ee";
 const TEAL = "#34d399";
@@ -48,7 +49,6 @@ function getSR(): { new (): SR } | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-const phaseColor = (p: Phase) => (p === "thinking" ? AMBER : p === "listening" ? CYAN : p === "speaking" ? TEAL : CYAN);
 
 // ── Synthesized sound design (no audio files — pure Web Audio oscillators) ──
 // Sound effects disabled — Jarvis runs silent (no boot sound, no blips or chimes).
@@ -73,109 +73,6 @@ function looksLikeBuild(p: string): boolean {
 const BUILD_PROJECT = "free-claude-code"; // shared with the Agent Factory gallery
 function jPreviewUrl(file: string): string {
   return `/api/freeclaude/preview/${encodeURIComponent(BUILD_PROJECT)}/${file.split("/").map(encodeURIComponent).join("/")}`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ARC REACTOR — a self-contained, audio-reactive canvas core. Reads live phase
-// + level from refs so it never forces React re-renders (smooth 60fps).
-// ─────────────────────────────────────────────────────────────────────────────
-function ArcReactor({ phaseRef, levelRef, size }: { phaseRef: React.MutableRefObject<Phase>; levelRef: React.MutableRefObject<number>; size: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const cv = ref.current; if (!cv) return;
-    const ctx = cv.getContext("2d"); if (!ctx) return;
-    const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
-    cv.width = size * dpr; cv.height = size * dpr; ctx.scale(dpr, dpr);
-    let raf = 0; let t = 0;
-
-    const hexToRgb = (h: string) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
-
-    const draw = () => {
-      t += 0.016;
-      const phase = phaseRef.current;
-      const lvl = levelRef.current;
-      const c = phaseColor(phase);
-      const [r, g, b] = hexToRgb(c);
-      const rgba = (a: number) => `rgba(${r},${g},${b},${a})`;
-      const cx = size / 2, cy = size / 2;
-      const R = size * 0.34;
-
-      ctx.clearRect(0, 0, size, size);
-
-      // ambient radial glow
-      const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.5);
-      bg.addColorStop(0, rgba(0.10 + lvl * 0.10));
-      bg.addColorStop(0.6, rgba(0.03));
-      bg.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
-
-      // outer tick ring (slow rotate)
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.15);
-      ctx.strokeStyle = rgba(0.5); ctx.lineWidth = 1;
-      for (let i = 0; i < 72; i++) {
-        const a = (i / 72) * Math.PI * 2;
-        const long = i % 6 === 0;
-        const r0 = R * 1.32, r1 = R * (long ? 1.42 : 1.37);
-        ctx.globalAlpha = long ? 0.7 : 0.3;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.stroke();
-      }
-      ctx.restore(); ctx.globalAlpha = 1;
-
-      // two HUD arcs counter-rotating
-      ctx.lineWidth = 2;
-      for (let k = 0; k < 2; k++) {
-        const dir = k === 0 ? 1 : -1;
-        const rr = R * (1.12 + k * 0.1);
-        const start = t * (0.6 + k * 0.5) * dir;
-        ctx.strokeStyle = rgba(0.55 - k * 0.2);
-        ctx.beginPath(); ctx.arc(cx, cy, rr, start, start + Math.PI * (0.6 - k * 0.15)); ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, rr, start + Math.PI, start + Math.PI + Math.PI * (0.6 - k * 0.15)); ctx.stroke();
-      }
-
-      // reactive corona — spikes driven by level
-      const spikes = 96;
-      ctx.save(); ctx.translate(cx, cy);
-      ctx.shadowBlur = 12; ctx.shadowColor = rgba(0.6);
-      for (let i = 0; i < spikes; i++) {
-        const a = (i / spikes) * Math.PI * 2;
-        const n = 0.5 + 0.5 * Math.sin(i * 1.7 + t * 4);
-        const len = R * (0.06 + (lvl * 0.5 + 0.08) * n);
-        ctx.strokeStyle = rgba(0.25 + n * 0.5 * (0.3 + lvl));
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R); ctx.lineTo(Math.cos(a) * (R + len), Math.sin(a) * (R + len)); ctx.stroke();
-      }
-      ctx.restore();
-
-      // core ring
-      ctx.shadowBlur = 18; ctx.shadowColor = rgba(0.7);
-      ctx.strokeStyle = rgba(0.85); ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, R * 0.62, 0, Math.PI * 2); ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // pulsing core
-      const coreR = R * (0.30 + lvl * 0.22 + 0.03 * Math.sin(t * 3));
-      const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-      cg.addColorStop(0, "rgba(255,255,255,0.95)");
-      cg.addColorStop(0.4, rgba(0.85));
-      cg.addColorStop(1, rgba(0));
-      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill();
-
-      // triangular reactor vanes inside the core ring
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(-t * 0.4);
-      ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1.5;
-      for (let i = 0; i < 6; i++) {
-        ctx.rotate(Math.PI / 3);
-        ctx.beginPath(); ctx.moveTo(0, -R * 0.34); ctx.lineTo(R * 0.10, -R * 0.50); ctx.lineTo(-R * 0.10, -R * 0.50); ctx.closePath(); ctx.stroke();
-      }
-      ctx.restore();
-
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-    return () => cancelAnimationFrame(raf);
-  }, [size, phaseRef, levelRef]);
-
-  return <canvas ref={ref} style={{ width: size, height: size }} />;
 }
 
 // Animated wall backdrop — drifting particle field, perspective floor grid, and a
@@ -697,7 +594,10 @@ export default function JarvisView() {
   const [briefHistory, setBriefHistory] = useState<Briefing[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [telem, setTelem] = useState({ throughput: 87, latency: 0.4, load: 32, signal: 98 });
+  // Wall-mode readouts are measured, never invented: the last reply time and the
+  // count of turns this page session (AGENTS.md "Never fabricate state").
+  const [lastReplySec, setLastReplySec] = useState<number | null>(null);
+  const [turnCount, setTurnCount] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const recRef = useRef<SR | null>(null);
@@ -1042,6 +942,7 @@ export default function JarvisView() {
       const finalReply = reply || errText || "(no response)";
       setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: finalReply, working: false } : x));
       setStatus(errText ? `Brain error: ${errText}` : `Replied in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+      if (!errText) { setLastReplySec((Date.now() - started) / 1000); setTurnCount((n) => n + 1); }
       logTurn(p, finalReply, mode === "agent" ? "agent" : "chat");
       if (!errText && reply) speak(finalReply); else { setPhase("idle"); if (wakeOnRef.current) restartWake(); }
       if (navRoute) router.push(navRoute);
@@ -1177,19 +1078,10 @@ export default function JarvisView() {
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
   }, [wall]);
 
-  // Live-looking telemetry (random-walk) — only ticks while wall mode is open.
-  useEffect(() => {
-    if (!wall) return;
-    const cl = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
-    const id = setInterval(() => setTelem((t) => ({
-      throughput: cl(t.throughput + (Math.random() * 6 - 3), 72, 99),
-      latency: cl(t.latency + (Math.random() * 0.12 - 0.06), 0.2, 0.9),
-      load: cl(t.load + (Math.random() * 10 - 5), 8, 74),
-      signal: cl(t.signal + (Math.random() * 3 - 1.5), 90, 100),
-    })), 1500);
-    return () => clearInterval(id);
-  }, [wall]);
 
+  const faceState: FaceState = status.startsWith("Brain error") ? "error"
+    : building ? "working" : busy ? (mode === "agent" ? "working" : "thinking")
+    : listening || armedRef.current ? "listening" : phaseState === "speaking" ? "speaking" : "idle";
   const phaseLabel = building ? "BUILDING" : busy ? (mode === "agent" ? "ACTING" : "THINKING") : listening || armedRef.current ? "LISTENING" : phaseState === "speaking" ? "SPEAKING" : "ONLINE";
   const coreTap = () => { if (busy || realtime) return; listening ? stopListening() : startListening(); };
 
@@ -1285,8 +1177,8 @@ export default function JarvisView() {
         ))}
         <div className="relative flex flex-col items-center py-8">
           <button onClick={coreTap} disabled={supported === false} className="relative grid place-items-center disabled:opacity-50" title="Tap to talk" style={{ width: 300, height: 300 }}>
-            <ArcReactor phaseRef={phaseRef} levelRef={levelRef} size={300} />
-            <span className="absolute text-[10px] font-mono tracking-[0.3em]" style={{ color: phaseColor(phaseState), bottom: 26 }}>{phaseLabel}</span>
+            <AgentFace variant="constellation" state={faceState} getLevel={() => levelRef.current} label={`Jarvis, ${phaseLabel.toLowerCase()}`} style={{ width: 300, height: 300 }} />
+            <span className="absolute text-[10px] font-mono tracking-[0.3em]" style={{ color: FACE_PALETTE.constellation[faceState], bottom: 26 }}>{phaseLabel}</span>
           </button>
           {/* Don't claim the realtime link is live — it only reports the toggle, not
               the connection. When Realtime is on, its own panel below shows the real state. */}
@@ -1444,25 +1336,23 @@ export default function JarvisView() {
             <div className="relative flex-1 grid grid-cols-[1fr_auto_1fr] items-center px-8 min-h-0">
               {/* left readouts — live status + animated telemetry bars */}
               <div className="font-mono text-[11.5px] space-y-2.5 justify-self-start max-w-[280px] w-full">
-                {([["STATUS", phaseLabel], ["MODE", mode.toUpperCase()], ["WAKE WORD", wake ? "ARMED" : "OFF"], ["VOICE", "DANIEL · EN-GB"]] as [string, string][]).map(([k, v]) => (
+                {([
+                  ["STATUS", phaseLabel],
+                  ["MODE", mode.toUpperCase()],
+                  ["WAKE WORD", wake ? "ARMED" : "OFF"],
+                  ["VOICE", (ttsProviderRef.current || "unknown").toUpperCase()],
+                  ["LAST REPLY", lastReplySec == null ? "NONE YET" : `${lastReplySec.toFixed(1)}s`],
+                  ["TURNS THIS SESSION", String(turnCount)],
+                ] as [string, string][]).map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-6 border-b border-[var(--line-soft)] pb-1.5" style={{ color: "var(--fg-dim)" }}>
                     <span className="tracking-widest">{k}</span><span style={{ color: CYAN }}>{v}</span>
                   </div>
                 ))}
-                {([["NEURAL THROUGHPUT", telem.throughput, 99], ["CORE LOAD", telem.load, 100], ["SIGNAL", telem.signal, 100]] as [string, number, number][]).map(([k, v, max]) => (
-                  <div key={k}>
-                    <div className="flex justify-between mb-1" style={{ color: "var(--fg-dim)" }}><span className="tracking-widest">{k}</span><span style={{ color: CYAN }}>{v.toFixed(1)}%</span></div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--line-soft)" }}>
-                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(v / max) * 100}%`, background: `linear-gradient(90deg, ${TEAL}, ${CYAN})` }} />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between gap-6 pt-1" style={{ color: "var(--fg-dim)" }}><span className="tracking-widest">LATENCY</span><span style={{ color: CYAN }}>{telem.latency.toFixed(2)}s</span></div>
               </div>
               {/* reactor */}
               <button onClick={coreTap} className="relative grid place-items-center justify-self-center" title="Tap to talk" style={{ width: 460, height: 460 }}>
-                <ArcReactor phaseRef={phaseRef} levelRef={levelRef} size={460} />
-                <span className="absolute text-[12px] font-mono tracking-[0.4em]" style={{ color: phaseColor(phaseState), bottom: 56 }}>{phaseLabel}</span>
+                <AgentFace variant="constellation" state={faceState} getLevel={() => levelRef.current} label={`Jarvis, ${phaseLabel.toLowerCase()}`} style={{ width: 460, height: 460 }} />
+                <span className="absolute text-[12px] font-mono tracking-[0.4em]" style={{ color: FACE_PALETTE.constellation[faceState], bottom: 56 }}>{phaseLabel}</span>
               </button>
               {/* right: live preview when there's a build, else transcript */}
               <div className="justify-self-end w-full max-w-[440px]">

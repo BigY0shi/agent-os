@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { FaceStage } from "@/components/faces/FaceStage";
 import { Newspaper, Search, Loader2, Clock, X, ArrowUpRight, Globe, History as HistoryIcon } from "lucide-react";
 
 // NEWS DIGEST — ask "what's new in <anything>" and get a briefing: your CLI agents fan out
@@ -158,6 +159,14 @@ export default function NewsView() {
         .nws-hist-item .m{ margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:.6rem; color:var(--dim); }
       `}</style>
 
+      <FaceStage
+        variant="radar"
+        name="News Radar"
+        subtitle="What's new in anything"
+        state={err ? "error" : busy ? "working" : "idle"}
+        detail={busy ? "Scouts are out gathering; the merger writes the digest when they return" : err ?? undefined}
+        height={260}
+      />
       <div className="nws-grid">
         <div>
           <div className="nws-ask">

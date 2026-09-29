@@ -13,6 +13,12 @@ is one line; the journal carries the rest.
 
 ## Now
 
+- [ ] **Jarvis v3 + Mission Control + per-module skills + memory off Honcho (in progress, 2026-09-28).**
+  Owner's request of 2026-09-28 with reference screenshots and the NEXORA prompt pack.
+  Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
+  `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0).
+  Next: S13 Sessions, S14 per-module Skills + Workflows.
+
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
   readbacks. Spec: `_design/jarvis-screen-control.md`. Not yet seen in a browser.
@@ -100,6 +106,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-28 · v2.33.0 · Jarvis v3 S11 + S12. Glass-neumorphism classes defined (GlassCard had referenced undefined classes since it was written); `AgentFace` three.js faces (Jarvis constellation violet to electric blue, Oracle galaxy, News Radar sweep) driven only by real state; `/jarvis` is a tabbed hub (Console, Oracle, News Radar, Outreach), the last three moved from Hermes with redirects; Wall mode's random-walk telemetry replaced by measured readouts. smoke-jarvis-v3-ui 38 checks incl. real Chromium WebGL + no-WebGL poster.
 
 - 2026-09-08 · v2.31.1 · Jarvis "(no reply)" after one message: the SDK read loop's `break` out of `for await` called the query's `return()`, which the Agent SDK implements as `cleanup()`, so every warm session died at the end of its first turn and turn two read a closed stream in 1 ms (11 such rows in the store). Now explicit `next()`; a closed stream or an error result is a thrown, visible error. Brain smoke live leg gained a same-conversation second turn. This, not Voicebox, was the morning's "one reply then it breaks".
 

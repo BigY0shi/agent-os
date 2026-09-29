@@ -701,3 +701,73 @@ main::-webkit-scrollbar-track { background: transparent; }
 .chat-md table { border-collapse: collapse; margin: 0.5em 0; font-size: 0.95em; }
 .chat-md th, .chat-md td { border: 1px solid var(--panel-border, rgba(255,255,255,0.12)); padding: 4px 9px; }
 .chat-md hr { border: 0; border-top: 1px solid var(--panel-border, rgba(255,255,255,0.12)); margin: 0.7em 0; }
+
+/* ── S11 glass neumorphism (2026-09-28, _design/jarvis-v3-plan.md) ─────────────
+   Frosted glass over the particle field, with neumorphic depth: a light rim on the
+   top-left edge, a dark rim bottom-right, and a soft two-sided drop shadow so the
+   card reads as raised out of the background. GlassCard used these class names
+   before they existed; defining them here upgrades every GlassCard at once.
+   .glass         default card
+   .glass-strong  heavier surface for hero / primary cards
+   .glass-frost   pale frosted tile (dark ink), for KPI stats like the reference
+   .glass-inset   pressed-in well for inputs and nested lists                    */
+.glass, .glass-strong, .glass-frost, .glass-inset {
+  position: relative;
+  border-radius: 18px;
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+.glass {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.075) 0%, rgba(255, 255, 255, 0.025) 42%, rgba(120, 140, 200, 0.03) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.09),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.32),
+    10px 14px 34px -12px rgba(0, 0, 0, 0.72),
+    -8px -8px 26px -16px rgba(170, 160, 255, 0.10);
+}
+.glass-strong {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.04) 45%, rgba(120, 110, 220, 0.05) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.13),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.38),
+    14px 18px 44px -14px rgba(0, 0, 0, 0.78),
+    -10px -10px 32px -18px rgba(170, 160, 255, 0.14);
+}
+.glass-frost {
+  background: linear-gradient(150deg, rgba(236, 240, 250, 0.86) 0%, rgba(214, 222, 238, 0.74) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #111827;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.9),
+    inset -1px -1px 0 rgba(120, 130, 160, 0.25),
+    10px 14px 34px -12px rgba(0, 0, 0, 0.7);
+}
+.glass-frost .glass-muted { color: rgba(17, 24, 39, 0.55); }
+.glass-inset {
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.45), inset -2px -2px 6px rgba(255, 255, 255, 0.035);
+}
+/* top-edge sheen, the glass's "catch light" */
+.glass::after, .glass-strong::after {
+  content: "";
+  position: absolute; left: 12%; right: 12%; top: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  pointer-events: none;
+}
+.neon-ring { box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.35), 0 0 32px -6px rgba(139, 92, 246, 0.35) !important; }
+.hud-corners .hud-c1, .hud-corners .hud-c2 {
+  position: absolute; width: 14px; height: 14px; pointer-events: none;
+  border-color: rgba(200, 190, 255, 0.45); border-style: solid;
+}
+.hud-corners .hud-c1 { top: 8px; left: 8px; border-width: 1px 0 0 1px; }
+.hud-corners .hud-c2 { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
+/* small uppercase eyebrow used on glass cards */
+.glass-eyebrow { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-dimmer); font-family: var(--font-mono, ui-monospace, monospace); }
+/* segmented tab bar in the same material */
+.glass-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: inset 2px 2px 6px rgba(0, 0, 0, 0.4); flex-wrap: wrap; }
+.glass-tab { padding: 6px 12px; border-radius: 10px; font-size: 12px; letter-spacing: 0.04em; color: var(--fg-dim); transition: background .2s, color .2s, box-shadow .2s; }
+.glass-tab:hover { color: var(--fg); background: rgba(255, 255, 255, 0.04); }
+.glass-tab[aria-selected="true"] { color: #f3f0ff; background: linear-gradient(150deg, rgba(139, 92, 246, 0.35), rgba(59, 149, 255, 0.18)); box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.14), 0 6px 18px -8px rgba(139, 92, 246, 0.6); }
