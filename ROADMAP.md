@@ -18,8 +18,8 @@ is one line; the journal carries the rest.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
-  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0).
-  Next: S28 Files, S27 Health, S26 Standing orders.
+  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0).
+  Next: S27 Health, S26 Standing orders, S24 Crew archive.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -108,6 +108,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-29 · v2.43.0 · Jarvis v3 S28 Files: read and edit the files that shape Jarvis, Hermes, each agent and each skill where they live; allow-list + real-path containment, credential files never shown, secrets masked and restored, a gate for files that shape an agent, every save keeps the previous version, a 409 when the file changed since it was opened. smoke-files 35 checks.
 
 - 2026-09-29 · v2.42.0 · Jarvis v3 S21 Crew: Agent City (tower + a seeded building per agent, pulsing by real status, roads lit only while running, click to chat), the Talk-to-the-crew ring, a messenger per agent backed by real runs, roster, a when-the-crew-speaks heatmap from run times, recent activity, and a 4-step Deploy agent wizard with prepared roles. smoke-crew 33 checks.
 - 2026-09-29 · v2.41.1 · Activity feed shows the time a log line carries, or none (was an invented mtime-minus-200 ms per line).

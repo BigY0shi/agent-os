@@ -1,5 +1,46 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Files: read and edit the files that shape each agent, safely (v2.43.0)
+
+S28 of `_design/jarvis-v3-plan.md` (owner: "a Files tab to view and EDIT files right in
+the OS", "more importantly"). A Jarvis tab, **Files**: agents on the left, their files
+grouped Identity / Memory / Configuration / Skills in the middle, an editor on the right.
+
+**Where the files really are** (checked on this machine before building, not assumed):
+Jarvis `~/.agentic-os/jarvis-persona.json` (what `jarvisPersona.ts` reads; absent here,
+so the tab says Jarvis runs on his built-in persona); Hermes at `$HERMES_HOME`, which is
+`%LOCALAPPDATA%\hermes` on this machine (SOUL.md, memories/USER.md, memories/MEMORY.md,
+config.yaml; `~/.hermes/profiles/Main` holds only `.env` files and is not a source;
+without HERMES_HOME the Windows install folder is tried before `~/.hermes`); each Agent
+OS agent's `system.md`, `agent.json` and other top-level notes; each Agent OS skill's
+`SKILL.md`. Read-only check against the real folders: Hermes 4 files, 3 agents, 5
+skills.
+
+**Safety, in `lib/v2/files/agentFiles.ts`:** an allow-list re-derived on every request
+(an id is only a source + a relative path found in that listing); `..`, absolute paths
+and malformed ids refused; the resolved REAL path must sit inside the source's real root
+(a symlink escaping its folder is a 403); `.env*`, `auth*`, `*token*`, `*secret*`,
+`*credential*`, `*.pem`, `*.key` and lock files are never listed or served (Hermes's
+`auth.json` and `.env` included); secret-looking values in yaml/json configs come back
+as `********` and a save that keeps a mask gets the original line back (a mask with no
+original is refused); files that shape an agent need an explicit confirm (the UI's
+gate: "I understand, let me edit" / "Just read it"); every save first copies the
+previous version to `~/.agentic-os/file-versions/<source>/<path>/<timestamp>` (a no-op
+keeps none); a save is refused with 409 and the current text when the file's sha256
+changed since it was opened, and the editor keeps the owner's text to copy; JSON must
+parse and YAML must load before anything is written; writes are atomic.
+
+**Routes** `GET /api/v2/files` (sources + counts: agents, editable files, last changed,
+versions kept) and `/api/v2/files/file` (GET read with versions, POST save).
+
+**Verified.** New `smoke-files.mjs`, 35 checks on temp fixtures (with decoy `.env`,
+`auth.json`, lock files and real-looking keys): listing, every refusal including the
+symlink escape, masking on read, restore on save with the real keys still on disk,
+invalid JSON/YAML untouched, versions kept, the 409 path, routes, UI wiring. Visually
+checked in the browser pane with the real CSS. tsc clean.
+
+Rollback: revert the commit. Saved versions stay under `~/.agentic-os/file-versions/`.
+
 ## 2026-09-29 - Crew: Agent City, the crew ring, a messenger per agent, Deploy agent (v2.42.0)
 
 S21 of `_design/jarvis-v3-plan.md`, from the owner's NEXORA "Agent City" screenshots
