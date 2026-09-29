@@ -1,5 +1,16 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Gate fix: V1 MemoryPanel exiled again (v2.38.1)
+
+`smoke-memory-ui` failed "old MemoryPanel removed from src/components (moved, not
+copied)": `src/components/MemoryPanel.tsx` (the V1 vault-grep panel) was back in the
+tree. Nothing imports it; `src/app/memory/page.tsx:4` already records its exile on
+2026-08-27. The owner confirmed V1 memory pieces can go. Moved to
+`.exile/<2026-09-28 stamp>/src/components/MemoryPanel.tsx`; the 2026-08-27 exile copy
+differs from it (from line 1), so both are kept. smoke-memory-ui 69 checks pass.
+
+Rollback: move the file back from `.exile/`.
+
 ## 2026-09-28 - MCP tab: Jarvis's own MCP servers, install wizard, taint-gated (v2.38.0)
 
 S16 of `_design/jarvis-v3-plan.md`. The owner asked for an MCP tab showing what is
