@@ -1,5 +1,31 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Glass cards no longer override absolute / fixed / sticky (v2.48.1)
+
+While checking the Voice dial in the browser pane, its cards piled up and its arrows sat
+mid-row. Measured in the page: every card and arrow computed `position: relative`
+despite an `absolute` class. Cause, `src/app/globals.css:715-716` (my S11 rule):
+`.glass, .glass-strong, .glass-frost, .glass-inset { position: relative; }` was
+UNLAYERED, and Tailwind v4 puts its utilities in a cascade layer; unlayered CSS beats
+every layer, so the rule silently won over `absolute`, `fixed` and `sticky` on any glass
+element. Also affected (found by a search for the combination): the Agent City hover
+card (absolute), the Archive reader (sticky) and the Mastermind rail (lg:sticky).
+
+Fix: that one declaration moves into `@layer components`, below utilities. Glass
+elements stay relative by default (checked: a plain `.glass-strong` still computes
+`relative`); a positioning utility now wins, as intended. After the fix the dial's cards
+compute `absolute` and spread along the ellipse, and the arrows sit at the edges.
+
+New `smoke-glass-layer.mjs` (2 checks): the layered rule exists, and no unlayered glass
+rule sets `position`. Proven to catch the old CSS (it reports exactly the old rule as an
+offender) and to pass the new. jarvis-v3-ui 43 pass.
+
+Not touched: the design hook flagged two pre-existing lines elsewhere in globals.css (a
+one-sided accent border at line 699 and a width/height transition at line 272); they
+are not part of this fix.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - AI Agent Mastermind: a line to every specialist (v2.48.0)
 
 S25 of `_design/jarvis-v3-plan.md` (NEXORA "Chat"). A restyle around the existing

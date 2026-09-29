@@ -712,8 +712,15 @@ main::-webkit-scrollbar-track { background: transparent; }
    .glass-strong  heavier surface for hero / primary cards
    .glass-frost   pale frosted tile (dark ink), for KPI stats like the reference
    .glass-inset   pressed-in well for inputs and nested lists                    */
+/* position lives in the components layer so Tailwind's absolute / fixed / sticky
+   utilities (the utilities layer, which comes later) win when a glass element needs
+   them. Unlayered, this one line silently made every "absolute glass" or "sticky glass"
+   element relative (found 2026-09-29: the Voice dial, the Agent City hover card, the
+   Archive reader and the Mastermind rail). */
+@layer components {
+  .glass, .glass-strong, .glass-frost, .glass-inset { position: relative; }
+}
 .glass, .glass-strong, .glass-frost, .glass-inset {
-  position: relative;
   border-radius: 18px;
   backdrop-filter: blur(22px) saturate(150%);
   -webkit-backdrop-filter: blur(22px) saturate(150%);
