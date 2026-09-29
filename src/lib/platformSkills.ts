@@ -17,42 +17,106 @@ import { readSettings } from "@/lib/settings";
 // AGENTIC_OS_SKILLS_DIR redirects it for smokes, so a test never writes the owner's skills.
 export const SKILLS_DIR = process.env.AGENTIC_OS_SKILLS_DIR || path.join(os.homedir(), ".agentic-os", "skills");
 
-// Cache skill bodies by mtime so request-time reads stay cheap.
+// Skill SOURCES (owner, 2026-09-28: "all the skills in Claude, and ~/.skilldb/skills
+// available for me to choose from"). Agent OS's own folder is the only writable one;
+// Claude Code's user skills and the SkillDB library are read in place, never copied.
+// On a name clash the earlier source wins (agentos > claude > skilldb). A smoke that
+// redirects AGENTIC_OS_SKILLS_DIR gets NO extra sources unless it names them
+// (AGENTIC_OS_CLAUDE_SKILLS_DIR / AGENTIC_OS_SKILLDB_DIR), so tests never read the
+// owner's real libraries.
+export type SkillSourceId = "agentos" | "claude" | "skilldb";
+export interface SkillSource { id: SkillSourceId; label: string; dir: string; writable: boolean }
+export function skillSources(): SkillSource[] {
+  const smoke = !!process.env.AGENTIC_OS_SKILLS_DIR;
+  const claudeDir = process.env.AGENTIC_OS_CLAUDE_SKILLS_DIR ?? (smoke ? "" : path.join(os.homedir(), ".claude", "skills"));
+  const skilldbDir = process.env.AGENTIC_OS_SKILLDB_DIR ?? (smoke ? "" : path.join(os.homedir(), ".skilldb", "skills"));
+  const out: SkillSource[] = [{ id: "agentos", label: "Agent OS", dir: SKILLS_DIR, writable: true }];
+  if (claudeDir) out.push({ id: "claude", label: "Claude Code", dir: claudeDir, writable: false });
+  if (skilldbDir) out.push({ id: "skilldb", label: "SkillDB", dir: skilldbDir, writable: false });
+  return out;
+}
+
+// A skill name is its folder name. Letters, digits, spaces, _ and - only: no dots or
+// separators, so a name can never walk out of its source folder.
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 _-]{0,80}$/;
+
+function skillFile(name: string): { file: string; source: SkillSource } | null {
+  if (!NAME_RE.test(name)) return null;
+  for (const source of skillSources()) {
+    const file = path.join(source.dir, name, "SKILL.md");
+    if (existsSync(file)) return { file, source };
+  }
+  return null;
+}
+
+// Cache skill bodies and descriptions by file + mtime so request-time reads stay cheap.
 const cache = new Map<string, { mtimeMs: number; body: string }>();
+const descCache = new Map<string, { mtimeMs: number; description: string }>();
 
 function stripFrontmatter(raw: string): string {
   const m = raw.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
   return (m ? raw.slice(m[0].length) : raw).trim();
 }
 
+/** The frontmatter description, including YAML folded/literal blocks (`description: >`). */
+export function parseDescription(raw: string): string {
+  const fm = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const head = fm ? fm[1] : raw.slice(0, 2000);
+  const lines = head.split(/\r?\n/);
+  const i = lines.findIndex((l) => /^description:/.test(l));
+  if (i < 0) return "";
+  let v = lines[i].replace(/^description:\s*/, "").trim();
+  if (v === "" || /^[>|][-+]?$/.test(v)) {
+    const more: string[] = [];
+    for (const l of lines.slice(i + 1)) {
+      if (/^\s+\S/.test(l)) more.push(l.trim());
+      else if (l.trim() === "") continue;
+      else break;
+    }
+    v = more.join(" ");
+  }
+  return v.replace(/^(["'])([\s\S]*)\1$/, "$2").slice(0, 300);
+}
+
 // The markdown body of one installed skill ("" if not installed / unreadable).
 export function readSkillBody(name: string): string {
-  if (!/^[a-z0-9-]+$/.test(name)) return "";
-  const file = path.join(SKILLS_DIR, name, "SKILL.md");
+  const hitFile = skillFile(name);
+  if (!hitFile) return "";
   try {
-    const mtimeMs = statSync(file).mtimeMs;
-    const hit = cache.get(name);
+    const mtimeMs = statSync(hitFile.file).mtimeMs;
+    const hit = cache.get(hitFile.file);
     if (hit && hit.mtimeMs === mtimeMs) return hit.body;
-    const body = stripFrontmatter(readFileSync(file, "utf8")).slice(0, 24_000);
-    cache.set(name, { mtimeMs, body });
+    const body = stripFrontmatter(readFileSync(hitFile.file, "utf8")).slice(0, 24_000);
+    cache.set(hitFile.file, { mtimeMs, body });
     return body;
   } catch { return ""; }
 }
 
-// All installed skills (for the Config menu toggles).
-export function listInstalledSkills(): { name: string; description: string }[] {
-  try {
-    return readdirSync(SKILLS_DIR)
-      .filter((n) => existsSync(path.join(SKILLS_DIR, n, "SKILL.md")))
-      .map((name) => {
-        let description = "";
-        try {
-          const m = readFileSync(path.join(SKILLS_DIR, name, "SKILL.md"), "utf8").match(/^description:\s*(.+)$/m);
-          description = (m?.[1] || "").slice(0, 300);
-        } catch { /* listable anyway */ }
-        return { name, description };
-      });
-  } catch { return []; }
+// All installed skills across every source (for the pop-up and Config menu toggles).
+export function listInstalledSkills(): { name: string; description: string; source: SkillSourceId }[] {
+  const seen = new Set<string>();
+  const out: { name: string; description: string; source: SkillSourceId }[] = [];
+  for (const source of skillSources()) {
+    let names: string[];
+    try { names = readdirSync(source.dir); } catch { continue; }
+    for (const name of names.sort((a, b) => a.localeCompare(b))) {
+      if (seen.has(name) || !NAME_RE.test(name)) continue;
+      const file = path.join(source.dir, name, "SKILL.md");
+      let description = "";
+      try {
+        const mtimeMs = statSync(file).mtimeMs; // also follows symlinked skill folders
+        const hit = descCache.get(file);
+        if (hit && hit.mtimeMs === mtimeMs) description = hit.description;
+        else {
+          description = parseDescription(readFileSync(file, "utf8"));
+          descCache.set(file, { mtimeMs, description });
+        }
+      } catch { continue; } // no SKILL.md: not a skill
+      seen.add(name);
+      out.push({ name, description, source: source.id });
+    }
+  }
+  return out;
 }
 
 // Which skill names apply for a module ("" / undefined = global-only).
@@ -137,7 +201,8 @@ export function createSkill(input: { name?: unknown; description?: unknown; body
   const body = typeof input.body === "string" ? input.body.trim() : "";
   if (!body || body.length > 24_000) throw new SkillError("body is required, up to 24000 characters");
   const dir = path.join(SKILLS_DIR, name);
-  if (existsSync(path.join(dir, "SKILL.md"))) throw new SkillError(`a skill named ${name} already exists`, 409);
+  const clash = skillFile(name);
+  if (clash) throw new SkillError(`a skill named ${name} already exists (${clash.source.label})`, 409);
   mkdirSync(dir, { recursive: true });
   const safeDescription = description.replace(/\r?\n/g, " ");
   writeFileSync(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${safeDescription}\n---\n\n${body}\n`, "utf8");

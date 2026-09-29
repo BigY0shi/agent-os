@@ -1,5 +1,42 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Skills & Workflows pop-up: every skill library, and an opaque panel (v2.39.0)
+
+Owner, 2026-09-28, with screenshots: the pop-up on Mission Control was see-through
+(page text read through it; the same pop-up on Agents looked fine), and it only offered
+5 skills: "I would like to have all the skills in Claude, and ~/.skilldb/skills available
+for me to choose from".
+
+**Sources.** `lib/platformSkills.ts` now reads three sources in precedence order:
+Agent OS (`~/.agentic-os/skills`, the only writable one), Claude Code
+(`~/.claude/skills`) and SkillDB (`~/.skilldb/skills`), in place, never copied. On a
+name clash the earlier source wins. Measured on this machine: 676 skills (5 / 249 / 422),
+every one with a description, a re-list in 21 ms (descriptions cached by mtime).
+- Names: letters, digits, spaces, `_` and `-` (folders such as `Content Creation` and
+  `Yoshi_UE_Skills` now count), never dots or separators, so a name cannot walk out of
+  its folder.
+- Descriptions: YAML folded/literal blocks (`description: >`, used by 104 of them) and
+  quoted values are read properly.
+- A smoke that redirects `AGENTIC_OS_SKILLS_DIR` gets no extra sources unless it names
+  them (`AGENTIC_OS_CLAUDE_SKILLS_DIR`, `AGENTIC_OS_SKILLDB_DIR`), so no test reads the
+  real libraries. `createSkill` still writes only the Agent OS folder and refuses a name
+  another source holds.
+- Switched-on skills from any source reach agents through the same `withSkills` path.
+
+**Pop-up.** Each skill shows its source; filter buttons All / On / Agent OS / Claude
+Code / SkillDB with counts. The panel is near-opaque (0.97) over a darker, stronger
+blurred backdrop, so page content no longer reads through it.
+
+New `smoke-skill-sources.mjs`, 22 checks. tsc clean; module-kit 73, control-room 42,
+skills 42, launch-drawer 70 pass.
+
+Open: `smoke-jarvis-brain` "sdk turn 2 reused the warm session" failed again (2 of the
+last 3 runs; the first failure was before this change). The second turn of a
+conversation sometimes boots a fresh SDK session. Cause not found yet. Note the live SDK
+leg runs even with AGENTIC_SMOKE_OFFLINE=1 and costs about $0.40-0.55 per run.
+
+Rollback: revert the commit.
+
 ## 2026-09-28 - /api/settings stops returning key material (v2.38.4)
 
 GET /api/settings (and the PATCH reply) returned `readSettings()` whole, so the MCP

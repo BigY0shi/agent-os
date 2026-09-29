@@ -12,7 +12,9 @@ import { usePathname } from "next/navigation";
 import { Sparkles, X, Search, Play, Loader2, Plus, Globe, Copy, Check } from "lucide-react";
 import { moduleForPath, SKILL_WIRED, type ModuleEntry } from "@/lib/moduleRegistry";
 
-interface KitSkill { name: string; description: string; activeHere: boolean; activeGlobal: boolean }
+type SkillSource = "agentos" | "claude" | "skilldb";
+const SOURCE_LABEL: Record<SkillSource, string> = { agentos: "Agent OS", claude: "Claude Code", skilldb: "SkillDB" };
+interface KitSkill { name: string; description: string; source?: SkillSource; activeHere: boolean; activeGlobal: boolean }
 interface KitWorkflow { id: string; name: string; description: string; inputLabel?: string; agent: string; activeHere: boolean; activeGlobal: boolean }
 interface Kit { module: ModuleEntry; skills: KitSkill[]; workflows: KitWorkflow[] }
 type Tab = "workflows" | "skills" | "new";
@@ -51,6 +53,7 @@ export default function ModuleKit() {
   const [runInput, setRunInput] = useState("");
   const [runState, setRunState] = useState<{ id: string; status: "running" | "done" | "error"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [src, setSrc] = useState<SkillSource | "all" | "on">("all");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -112,7 +115,14 @@ export default function ModuleKit() {
   const needle = q.trim().toLowerCase();
   const match = (a: string, b: string) => !needle || a.toLowerCase().includes(needle) || b.toLowerCase().includes(needle);
   const workflows = useMemo(() => (kit?.workflows ?? []).filter((w) => match(w.name, w.description)), [kit, needle]); // eslint-disable-line react-hooks/exhaustive-deps
-  const skills = useMemo(() => (kit?.skills ?? []).filter((s) => match(s.name, s.description)), [kit, needle]); // eslint-disable-line react-hooks/exhaustive-deps
+  const skills = useMemo(() => (kit?.skills ?? []).filter((s) =>
+    match(s.name, s.description) && (src === "all" || (src === "on" ? s.activeHere || s.activeGlobal : (s.source ?? "agentos") === src)),
+  ), [kit, needle, src]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sourceCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const s of kit?.skills ?? []) { const k = s.source ?? "agentos"; c[k] = (c[k] ?? 0) + 1; }
+    return c;
+  }, [kit]);
   const onHere = (kit?.workflows.filter((w) => w.activeHere || w.activeGlobal).length ?? 0) + (kit?.skills.filter((s) => s.activeHere || s.activeGlobal).length ?? 0);
 
   if (!mod) return null;
@@ -136,8 +146,8 @@ export default function ModuleKit() {
 
       {open && (
         <div className="fixed inset-0 z-[96] grid place-items-center p-4">
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={close} aria-hidden />
-          <div role="dialog" aria-modal="true" aria-label={`Skills and workflows for ${mod.label}`} className="glass-strong relative flex max-h-[86vh] w-full max-w-[780px] flex-col overflow-hidden">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={close} aria-hidden />
+          <div role="dialog" aria-modal="true" aria-label={`Skills and workflows for ${mod.label}`} className="glass-strong relative flex max-h-[86vh] w-full max-w-[780px] flex-col overflow-hidden" style={{ background: "linear-gradient(160deg, rgba(22,19,34,0.97), rgba(10,9,18,0.97))" }}>
             <header className="flex items-start justify-between gap-3 px-6 pt-5">
               <div>
                 <div className="glass-eyebrow">Skills &amp; workflows</div>
@@ -225,12 +235,26 @@ export default function ModuleKit() {
               )}
 
               {kit && tab === "skills" && (
+                <div role="group" aria-label="Filter skills by source" className="mb-3 flex flex-wrap gap-1.5">
+                  {(["all", "on", "agentos", "claude", "skilldb"] as const).filter((k) => k === "all" || k === "on" || sourceCounts[k]).map((k) => (
+                    <button key={k} type="button" aria-pressed={src === k} onClick={() => setSrc(k)}
+                      className={`rounded-lg px-2.5 py-1 text-[11.5px] ${src === k ? "glass neon-ring" : "glass-inset text-[var(--fg-dim)]"}`}>
+                      {k === "all" ? "All" : k === "on" ? "On" : SOURCE_LABEL[k]}
+                      <span className="ml-1 opacity-60">{k === "all" ? kit.skills.length : k === "on" ? kit.skills.filter((s) => s.activeHere || s.activeGlobal).length : sourceCounts[k]}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {kit && tab === "skills" && (
                 <ul className="space-y-2" aria-label="Skills">
                   {skills.length === 0 && <li className="text-[13px] text-[var(--fg-dimmer)]">{q ? "No skill matches." : "No skills installed. Add one under New."}</li>}
                   {skills.map((s) => (
                     <li key={s.name} className="glass flex items-start gap-3 px-4 py-3">
                       <div className="min-w-0 flex-1">
-                        <div className="type-figure text-[13px]">{s.name}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="type-figure text-[13px]">{s.name}</span>
+                          <span className="rounded px-1.5 text-[10px] glass-inset text-[var(--fg-dimmer)]">{SOURCE_LABEL[s.source ?? "agentos"]}</span>
+                        </div>
                         {s.description && <div className="mt-0.5 text-[12px] text-[var(--fg-dim)]">{s.description}</div>}
                       </div>
                       <div className="flex flex-col items-end gap-1.5">
