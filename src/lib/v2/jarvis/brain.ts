@@ -11,6 +11,7 @@ import type { RecallResult } from "../memory/types";
 import { ingestFromModule } from "../memory/queue";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
+import { sdkServers, isExternalMcpTool } from "./mcpServers";
 import {
   buildStableSystemPrompt,
   buildSystemPrompt,
@@ -248,6 +249,9 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
   const server = buildJarvisSdkServer({ emit: (ev) => emitRef.current(ev), state: toolState });
 
   const model = CLAUDE_MODEL || "claude-sonnet-5";
+  // S16: the owner's own external MCP servers, enabled in the Jarvis MCP tab. An
+  // unreadable config throws here (named file), rather than silently dropping them.
+  const external = sdkServers();
   const q = query({
     prompt: input,
     options: {
@@ -260,13 +264,35 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
       // preset's native Bash/Write/Edit would bypass every capability gate,
       // the Human-Gate, and the §9.4 taint rule (review finding 2026-08-27).
       // Belt and braces: allowlist the MCP server AND deny the native suite.
-      allowedTools: ["mcp__agentos"],
+      allowedTools: ["mcp__agentos", ...Object.keys(external).map((n) => `mcp__${n}`)],
       disallowedTools: [
         "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "Task",
         "WebFetch", "WebSearch", "Read", "Glob", "Grep", "TodoWrite",
         "KillShell", "BashOutput",
       ],
-      mcpServers: { agentos: server },
+      mcpServers: { agentos: server, ...external },
+      // S16 taint rule for external MCP tools (they bypass Jarvis's own gates):
+      // on a turn tainted by integration content they are denied, and anything an
+      // external tool returns is itself outside content, so it taints the turn and
+      // Jarvis's own writes are gated after it (the §9.4 rule, extended).
+      hooks: {
+        PreToolUse: [{
+          hooks: [async (hookInput) => {
+            const name = (hookInput as { tool_name?: string }).tool_name ?? "";
+            if (isExternalMcpTool(name) && toolState.integrationTainted) {
+              return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `${name} refused: this turn carries integration content, and external MCP tools are not allowed to act on it` } };
+            }
+            return {};
+          }],
+        }],
+        PostToolUse: [{
+          hooks: [async (hookInput) => {
+            const name = (hookInput as { tool_name?: string }).tool_name ?? "";
+            if (isExternalMcpTool(name)) toolState.integrationTainted = true;
+            return {};
+          }],
+        }],
+      },
       env: Object.fromEntries(
         Object.entries(sanitizeSpawnEnv({ ...process.env, NO_COLOR: "1" })).filter(
           ([k, v]) =>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getModuleKit, setKitItem } from "../../moduleKit";
+import { externalSignature } from "./mcpServers";
 import { runWorkflow } from "../../workflowRun";
 import { safeAppRoute, type UiCommand, type UiRequestEvent, type UiResult } from "./uiProtocol";
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
@@ -204,14 +205,19 @@ function shapeFromJsonSchema(schema: Record<string, unknown>): z.ZodRawShape {
   return shape;
 }
 
-/** Warm-session invalidation key: published packages + versions. A republish
- *  changes it, forcing a session rebuild with the fresh tool list. */
+/** Warm-session invalidation key: published packages + versions, plus (S16) the
+ *  owner's enabled external MCP servers. Either changing forces a session rebuild
+ *  with the fresh tool list. */
 export function toolsSignature(): string {
+  let hub: string;
   try {
-    return JSON.stringify(listPublishedPackages().map((p) => [p.slug, p.version]));
+    hub = JSON.stringify(listPublishedPackages().map((p) => [p.slug, p.version]));
   } catch {
-    return "hub-unavailable";
+    hub = "hub-unavailable";
   }
+  let ext: string;
+  try { ext = externalSignature(); } catch { ext = "ext-unreadable"; }
+  return `${hub}|ext:${ext}`;
 }
 
 export function buildJarvisToolHandlers(opts: {

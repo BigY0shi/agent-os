@@ -1,5 +1,57 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - MCP tab: Jarvis's own MCP servers, install wizard, taint-gated (v2.38.0)
+
+S16 of `_design/jarvis-v3-plan.md`. The owner asked for an MCP tab showing what is
+installed, what is available, and an install wizard / click-through.
+
+**Store.** `lib/v2/jarvis/mcpServers.ts` keeps Jarvis's external servers in
+`~/.agentic-os/jarvis/mcp-servers.json` (mode 600 where honoured;
+`AGENTIC_OS_JARVIS_DIR` for smokes). HTTP (URL + headers) or stdio (program + args +
+env; a shell line is refused). Servers are added switched OFF. Retiring moves a record
+to `retired`; restore brings it back switched off. A corrupt file throws a 500 rather
+than reading as empty.
+
+**Credentials, one door.** The public view carries header and env NAMES only. The only
+reader of values is `sdkServers()`, which the brain calls when it boots a session, and
+only for enabled servers. `externalSignature()` hashes the enabled set (no values) and
+is folded into `toolsSignature()`, so switching a server on or off starts a fresh
+session on the next turn.
+
+**Brain.** `bootSession` mounts the enabled servers next to `agentos` and allows only
+their tools. External tools do not pass through Jarvis's capability gates or the
+Human-Gate, so the taint rule is enforced by SDK hooks: PreToolUse denies any external
+tool on a turn that carries integration content, and PostToolUse taints the turn after
+any external tool returns (its output is outside content too). The tab says this in
+plain words and asks before a server is turned on.
+
+**Route** `/api/v2/jarvis/mcp`: GET overview (Jarvis servers + retired, the built-in
+`agentos` tool list, Claude Code's user-scope servers from `~/.claude.json` with
+header/env names only and the URL query stripped via new `lib/claudeMcpServers.ts`,
+Hermes's installed servers); `?catalog=1` the Hermes catalogue; `?manifest=<name>`
+prefill for the wizard; POST add/enable/disable/retire/restore.
+
+**Tab** `components/jarvis/McpTab.tsx`, registered in `JarvisHub` (Plug icon). Sections:
+Installed, Claude Code & Hermes (read-only), Available. Wizard: source and transport,
+connection with write-only password fields for secrets, review; "Add to Jarvis" from
+the catalogue prefills name, transport, description and the manifest's env var names,
+and shows its upstream and bootstrap lines.
+
+**Smokes.** New `smoke-jarvis-mcp.mjs`, 51 checks: validation, no secret in any public
+view or route body (Jarvis and Claude Code, including a URL query token), enable/retire/
+restore and the signature, the hook wiring in brain.ts, the route's export list, the
+built-in tool list matched against `tools.ts` handlers, tab registration. Home, the
+Jarvis dir and `~/.claude.json` are redirected to a temp dir. `smoke-jarvis-brain` and
+`smoke-jarvis-glasses` now also redirect `AGENTIC_OS_JARVIS_DIR`, since the brain reads
+it. tsc clean; jarvis-v3-ui 43, jarvis-sessions 33, module-kit 73, control-room 42,
+jarvis-screen-control 43, jarvis-ui 63, jarvis-conversations 24, jarvis-glasses 43,
+agentmail 30, jarvis-brain 77 all pass. One jarvis-brain run failed "turn 2 reused the
+warm session" (turn 2 booted fresh) and passed 77/77 on the immediate rerun; noted as a
+flake in the live SDK leg, cause not found.
+
+Rollback: revert the commit; `~/.agentic-os/jarvis/mcp-servers.json` is only read by
+this code and can be moved aside.
+
 ## 2026-09-28 - Control Room: status, every module's skills and workflows, plugins, insights, settings (v2.37.0)
 
 S15 of `_design/jarvis-v3-plan.md`. The owner asked for a Jarvis tab "where I can

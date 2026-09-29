@@ -30,6 +30,7 @@ const settingsFile = path.join(settingsDir, "settings.json");
 process.env.AGENTIC_OS_SETTINGS = settingsFile;
 const webmcpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-jbrain-sec-"));
 process.env.AGENTIC_OS_WEBMCP_DIR = webmcpDir;
+process.env.AGENTIC_OS_JARVIS_DIR = path.join(webmcpDir, "jarvis"); // S16: brain reads Jarvis's MCP servers
 process.env.AGENTOS_MOCK_LLM = "1";
 
 // Mirror Next's .env loading (OLLAMA_API_KEY for the online half's cloud LLM)
