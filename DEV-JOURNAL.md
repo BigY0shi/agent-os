@@ -1,5 +1,46 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Standing orders: every recurring job on one page (v2.45.0)
+
+S26 of `_design/jarvis-v3-plan.md` (NEXORA "Schedule": nothing runs behind your back).
+A Jarvis tab, **Standing orders**, over the three places recurring work actually lives
+(`lib/v2/standing/orders.ts`, `GET/POST /api/v2/standing`):
+
+- **Scheduled tasks** (v2 tasks with an RRULE, live or held): owner and "delivered by"
+  (the task's agent, else the task runner), cadence in words, what it is told, runs so
+  far, last run and its result or error, next run. Actions go through
+  `tasks/recurrence.applySchedule` (hold / let run flip `isActive` and re-arm or drop the
+  wake job) and `scheduler.enqueueTask` (run it now). **Take it off** clears the schedule;
+  the task itself stays.
+- **Agents' `schedule` triggers**: cadence as the cron croner actually runs (the same
+  `normalizeSchedule` + `Cron.nextRun` as `agentsTriggers.ts`, so the "next" time is the
+  real one), the first part of the agent's system.md, its tier's model, scheduled runs
+  among its last 100 runs. Hold / let run switch the whole agent (said on the card);
+  take it off removes only that trigger after keeping `agent.json` as a version under
+  `~/.agentic-os/file-versions/`.
+- **System jobs** (v2 scheduler jobs with an rrule that are not task wake-ups, e.g. the
+  nightly DB backup): hold / let run via the scheduler; never taken off (Agent OS re-creates
+  them at boot, said on the card).
+
+Header counts: on the books, live, next one. Filters: all / live / held. A field no
+source records (a task's model when it has no agent) reads "not recorded". Take it off
+always asks first.
+
+**Found and flagged, not changed here:** the `db.backup` job (`lib/v2/boot.ts`) writes to
+the real `~/.agentic-os/backups` regardless of `AGENTIC_OS_DB`, so a smoke that ever ran
+it would snapshot a temp database into the owner's real backups (and could overwrite that
+day's file). `smoke-standing` redirects HOME/USERPROFILE and never runs a system job;
+the fix is queued as its own task.
+
+**Verified.** New `smoke-standing.mjs`, 30 checks (all three sources, counts, every
+task action including that the wake job is armed and dropped, agent hold / resume /
+take-off with the version kept, system hold and the refused take-off, routes, UI). The
+agent and system "run it now" paths are not exercised offline (they start a real agent
+run or a real backup). tasks 78, tasks-api 54, tasks-ui 55, jarvis-v3-ui 43 pass; tsc
+clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Health: the machine in plain words, with a live history (v2.44.0)
 
 S27 of `_design/jarvis-v3-plan.md` (NEXORA "Health"). It shares its endpoint with the

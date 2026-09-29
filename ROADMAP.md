@@ -18,8 +18,8 @@ is one line; the journal carries the rest.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
-  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0), S27 Health (v2.44.0).
-  Next: S26 Standing orders, S24 Crew archive, S23 Mission board.
+  S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0), S27 Health (v2.44.0), S26 Standing orders (v2.45.0).
+  Next: S24 Crew archive, S23 Mission board, S25 Mastermind, S22 Voice mode, S29 Guide.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -108,6 +108,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-29 · v2.45.0 · Jarvis v3 S26 Standing orders: every recurring job (scheduled tasks, agents' cron triggers, system jobs) with owner, cadence, prompt, model, last run and result; Run it now / Hold it / Let it run / Take it off through each system's own path; take-off never deletes. smoke-standing 30 checks.
 
 - 2026-09-29 · v2.44.0 · Jarvis v3 S27 Health (Mission Control view, grown from System pulse): a plain-words headline, machine facts, load (said plainly when Windows has none), memory, four live sparklines labelled by computed shape, per-core, every drive, busiest processes with an agents-only filter, diagnostics. Sampled only while watched. smoke-health 22 checks.
 
