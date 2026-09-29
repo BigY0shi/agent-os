@@ -10,7 +10,7 @@ import os from "node:os";
 import { searchNotes, recentNotes, searchOmi, readNote, VAULT_AVAILABLE } from "@/lib/vault";
 import { AGENTIC_DIR } from "@/lib/vaultWriter";
 import { uniqueSlug, writeItem, type PipelineItem } from "@/lib/pipeline";
-import { config } from "@/lib/config";
+import { config, isAgentInstalled } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { personaPrompt, type Persona } from "@/lib/personas";
 
@@ -403,4 +403,40 @@ export function mentionedIds(message: string): string[] {
   const ids = roomAgents().map((a) => a.id);
   const found = (message.toLowerCase().match(/@([a-z]+)/g) || []).map((m) => m.slice(1));
   return ids.filter((id) => found.includes(id));
+}
+
+// ── S25 Mastermind: live status per specialist ───────────────────────────────
+// working now  = a reply from this agent is in flight in this server process
+// unreachable  = what it needs to answer is missing (CLI not installed, no key)
+// active today = it spoke in a room or one-on-one conversation saved today
+// ready        = none of the above
+const g25 = globalThis as unknown as { __agentosRoomWorking?: Map<string, number> };
+const working = () => (g25.__agentosRoomWorking ??= new Map());
+export function markWorking(id: string, delta: 1 | -1): void {
+  const n = Math.max(0, (working().get(id) ?? 0) + delta);
+  if (n) working().set(id, n); else working().delete(id);
+}
+export function isWorking(id: string): boolean { return (working().get(id) ?? 0) > 0; }
+
+export function agentReachability(a: RoomAgent): { ok: boolean; why: string } {
+  if (a.provider === "cli") {
+    const key = a.id === "antigravity" ? "antigravity" : a.id;
+    const known = ["claude", "codex", "cursor", "pi", "hermes", "antigravity", "openclaw", "kimi"] as const;
+    const k = known.find((x) => x === key);
+    if (!k) return { ok: false, why: `no CLI mapping for ${a.id}` };
+    return isAgentInstalled(k) ? { ok: true, why: `${a.id} CLI installed` } : { ok: false, why: `the ${a.id} CLI is not installed` };
+  }
+  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: true, why: `no Ollama Cloud key: uses the local daemon at ${OLLAMA_LOCAL}` };
+  if (a.provider === "openai") { const env = a.apiKeyEnv || "OPENAI_API_KEY"; return profileEnvKey(env) ? { ok: true, why: `${env} set` } : { ok: false, why: `${env} is not set` }; }
+  return openRouterKey() ? { ok: true, why: "OpenRouter key set" } : { ok: false, why: "no OpenRouter key in the active Hermes profile" };
+}
+
+export async function activeTodayIds(): Promise<Set<string>> {
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const ids = new Set<string>();
+  for (const c of await listConversations()) {
+    if ((c.ts || 0) < start.getTime()) continue;
+    for (const m of c.msgs) if (m.who && m.who !== "you" && m.who !== "system") ids.add(m.who);
+  }
+  return ids;
 }

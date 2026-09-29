@@ -1,5 +1,40 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - AI Agent Mastermind: a line to every specialist (v2.48.0)
+
+S25 of `_design/jarvis-v3-plan.md` (NEXORA "Chat"). A restyle around the existing
+module, not a new one: `/room` now renders `MastermindView`, which puts a
+**Specialists** rail beside the existing group chat.
+
+- **Rail**: every room specialist with ONE status word from a real signal
+  (`GET /api/room/status`), in this order: *working now* (a reply from it is in flight:
+  an in-memory counter the room route raises before `roomReply` and releases in a
+  `finally`, so a failed or aborted reply can never leave it stuck), *unreachable* (what
+  it needs is missing: its CLI not installed, or its key not set, named on hover),
+  *active today* (it spoke in a conversation saved today), *ready*. Header: N
+  specialists, M working now.
+- **The whole room** is the existing group chat, unchanged (its history list now leaves
+  out the one-on-one threads, which share its store).
+- **One-on-one**: choosing a specialist opens a persistent private thread with it. It
+  posts to the same `/api/room` endpoint targeted at that one agent and saves through
+  the same vault-backed store as `dm-<agent>`, so it survives reloads and shows on any
+  device.
+
+**Flagged, not changed:** `roomReply` (`lib/agentRoom.ts`) quietly retries an OpenRouter
+agent on Hermes's default model when its own model fails, and the reply does not say
+which model answered. That is the silent-fallback pattern AGENTS.md rule 20 rules out;
+raised with the owner rather than decided here.
+
+**Verified.** New `smoke-mastermind.mjs`, 15 checks with HOME, the config file and the
+vault in temp dirs (the conversations are proven to land in the temp vault): the
+working counter, every specialist's status matching its signals (derived from this
+machine's real CLI presence rather than hard-coded), the finally-release in the room
+route, the dm- threads and their exclusion from the group list, the page wiring.
+Visually checked in the browser pane with the real CSS: the rail, the unchanged room,
+and a persisted one-on-one thread. tsc clean.
+
+Rollback: revert the commit (the page goes back to `GroupChatView`).
+
 ## 2026-09-29 - Crew archive: everything the agents produced, read where it lives (v2.47.0)
 
 S24 of `_design/jarvis-v3-plan.md` (NEXORA "Crew archive"). A Jarvis tab, **Archive**:
