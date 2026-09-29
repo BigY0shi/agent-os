@@ -9,12 +9,13 @@
 // every agent platform-wide), launchworks-agent-os (deals/hire),
 // ecommerce-growth-agent + strategic-narrative-positioning (marketing).
 
-import { readFileSync, statSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, statSync, readdirSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { readSettings } from "@/lib/settings";
 
-export const SKILLS_DIR = path.join(os.homedir(), ".agentic-os", "skills");
+// AGENTIC_OS_SKILLS_DIR redirects it for smokes, so a test never writes the owner's skills.
+export const SKILLS_DIR = process.env.AGENTIC_OS_SKILLS_DIR || path.join(os.homedir(), ".agentic-os", "skills");
 
 // Cache skill bodies by mtime so request-time reads stay cheap.
 const cache = new Map<string, { mtimeMs: number; body: string }>();
@@ -63,8 +64,10 @@ export function activeSkillNames(module?: string): string[] {
 }
 
 // First line of the injected block — used to detect a prompt that was already
-// wrapped upstream (e.g. a deals/hire route wrapped with module skills before the
-// prompt reaches cliComplete's global wrap), so skills are never injected twice.
+// wrapped upstream, so skills are never injected twice. (Until 2026-09-28 this
+// comment described a "global wrap" inside cliComplete that never existed; skills
+// reach only call sites that pass a module: withSkills(prompt, module), or
+// cliComplete(..., { module }) since S14.)
 export const SKILLS_HEADER = "══ OPERATING SKILLS";
 
 // Safe cap for call sites that send the prompt as a CLI ARGUMENT (not stdin): the
@@ -102,4 +105,41 @@ export function withSkills(prompt: string, module?: string, maxChars?: number, e
   if (prompt.startsWith(SKILLS_HEADER)) return prompt;
   const block = skillBlock(module, maxChars, extra);
   return block ? `${block}\n${prompt}` : prompt;
+}
+
+
+// S14: only the skills switched on for THIS module (no global ones), as a block.
+// Jarvis uses this: its stable prompt already names the global skills, and pulling
+// every global body into a warm session on every page would bloat it.
+export function moduleSkillBlock(module: string, maxChars?: number): string {
+  const s = readSettings().skills || {};
+  const names = [...new Set(s.modules?.[module] ?? [])];
+  if (!names.length) return "";
+  const bodies = names.map((n) => ({ n, body: readSkillBody(n) })).filter((x) => x.body);
+  if (!bodies.length) return "";
+  let body = bodies.map((x) => `### Operating skill: ${x.n}\n${x.body}`).join("\n\n");
+  if (maxChars !== undefined && body.length > maxChars) body = body.slice(0, Math.max(0, maxChars - 24)) + "\n…[skill trimmed to fit]";
+  return `<module_skills module="${module}">\n${body}\n</module_skills>`;
+}
+
+// S14: create a new file skill from the Skills & Workflows pop-up. Refuses to
+// overwrite an existing skill (edit those in the Files page, where versions are kept).
+export class SkillError extends Error {
+  constructor(message: string, public status = 400) { super(message); }
+}
+export function createSkill(input: { name?: unknown; description?: unknown; body?: unknown }): { name: string; description: string } {
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name) || name.length > 64) {
+    throw new SkillError("name must be lowercase words joined by hyphens, e.g. brand-voice (up to 64 characters)");
+  }
+  const description = typeof input.description === "string" ? input.description.trim() : "";
+  if (!description || description.length > 300) throw new SkillError("description is required, up to 300 characters: say what the skill does and when it applies");
+  const body = typeof input.body === "string" ? input.body.trim() : "";
+  if (!body || body.length > 24_000) throw new SkillError("body is required, up to 24000 characters");
+  const dir = path.join(SKILLS_DIR, name);
+  if (existsSync(path.join(dir, "SKILL.md"))) throw new SkillError(`a skill named ${name} already exists`, 409);
+  mkdirSync(dir, { recursive: true });
+  const safeDescription = description.replace(/\r?\n/g, " ");
+  writeFileSync(path.join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${safeDescription}\n---\n\n${body}\n`, "utf8");
+  return { name, description: safeDescription };
 }

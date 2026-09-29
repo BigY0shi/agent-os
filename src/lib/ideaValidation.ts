@@ -261,7 +261,7 @@ async function execute(runObj: ValidationRun): Promise<void> {
       return await seatComplete("kimi", sizingPrompt(idea, evidencePack), kimiModel);
     } catch {
       seatsUsed.sizingAnalyst = "codex (kimi unreachable)";
-      return await cliComplete("codex", sizingPrompt(idea, evidencePack), { timeoutMs: 240_000 });
+      return await cliComplete("codex", sizingPrompt(idea, evidencePack), { timeoutMs: 240_000, module: "idea-engine" });
     }
   });
   if (!sizingRaw) degraded.push("sizingAnalyst");
@@ -271,7 +271,7 @@ async function execute(runObj: ValidationRun): Promise<void> {
 
   // Kill pass — codex, MUST be a different lineage (spec invariant #5).
   const killCase = await seatWrap(runObj, "killPass", () =>
-    cliComplete("codex", killPrompt(idea, evidencePack + `\n\nSIZING:\n${JSON.stringify(sizing)}`), { timeoutMs: 300_000 }));
+    cliComplete("codex", killPrompt(idea, evidencePack + `\n\nSIZING:\n${JSON.stringify(sizing)}`), { timeoutMs: 300_000, module: "idea-engine" }));
   seatsUsed.killPass = "codex";
   if (!killCase) degraded.push("killPass");
 

@@ -8,6 +8,7 @@ import os from "node:os";
 import { run, type AgentName } from "./runner";
 import { CLAUDE_MODEL } from "./config";
 import { ORCHESTRATION_DIRECTIVE, claudeBuilderArgs } from "./agentPowers";
+import { withSkills } from "@/lib/platformSkills";
 
 const OR = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -70,6 +71,10 @@ export async function cliComplete(
     orchestrate?: boolean;
     /** Root the agent somewhere real, so it can read the files it reasons about. */
     cwd?: string;
+    /** S14: the calling module's key. Its skills (global + module, from settings.skills)
+     *  are prepended, so per-module toggles in the Skills & Workflows pop-up take effect.
+     *  Omitted = no skills (JSON extractors stay clean). Ignored when incognito. */
+    module?: string;
   },
 ): Promise<string> {
   const timeoutMs = opts?.timeoutMs ?? 240_000;
@@ -82,8 +87,8 @@ export async function cliComplete(
   // claude takes the directive as a system-prompt APPEND, which keeps it out of the
   // visible conversation. No other CLI here has a verified equivalent flag, so they
   // get it inlined ahead of the prompt.
-  let text = prompt;
-  if (orchestrate && agent !== "claude") text = `${ORCHESTRATION_DIRECTIVE}\n\n---\n\n${prompt}`;
+  let text = opts?.module && !incog ? withSkills(prompt, opts.module) : prompt;
+  if (orchestrate && agent !== "claude") text = `${ORCHESTRATION_DIRECTIVE}\n\n---\n\n${text}`;
 
   // The loop embeds the previous artifact in the prompt, so by iteration 2 this is
   // routinely >30k chars — stdin is the only safe channel.

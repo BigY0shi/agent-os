@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { getModuleKit, setKitItem } from "../../moduleKit";
+import { runWorkflow } from "../../workflowRun";
 import { safeAppRoute, type UiCommand, type UiRequestEvent, type UiResult } from "./uiProtocol";
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { searchV2 } from "../memory/search";
@@ -308,6 +310,55 @@ export function buildJarvisToolHandlers(opts: {
         record("ui_control", result.ok, summary);
         emit({ type: "tool", name: "ui_control", state: result.ok ? "done" : "error", summary });
         return text(JSON.stringify(result), !result.ok);
+      },
+    },
+    module_kit: {
+      description:
+        "The Skills & workflows of any Agent OS module (the pop-up on every page). action 'list' {module}: every skill and workflow with activeHere / activeGlobal, " +
+        "and whether that module's agent calls read skills at all. action 'set' {module, kind: 'skill'|'workflow', name, active, scope?: 'module'|'global'}: switch one on or off " +
+        "for that module (or every module). action 'run' {module, name: workflow id, input?}: run a workflow; it shows in the runs tray. " +
+        "Module ids include deals, hire, marketing, jarvis, oracle, news-radar, outreach, brainstorm, idea-engine, pipeline, mission-control. " +
+        "Only act on the user's request; confirm the change by reading the returned state.",
+      shape: {
+        action: z.enum(["list", "set", "run"]),
+        module: z.string().describe("Module id, e.g. deals"),
+        kind: z.enum(["skill", "workflow"]).optional(),
+        name: z.string().optional().describe("Skill name or workflow id"),
+        active: z.boolean().optional(),
+        scope: z.enum(["module", "global"]).optional(),
+        input: z.string().max(40000).optional(),
+      },
+      run: async (args) => {
+        const a = args as { action: "list" | "set" | "run"; module: string; kind?: "skill" | "workflow"; name?: string; active?: boolean; scope?: "module" | "global"; input?: string };
+        try {
+          if (a.action === "list") {
+            const kit = getModuleKit(a.module);
+            record("module_kit", true, `list ${a.module}`);
+            return text(JSON.stringify(kit));
+          }
+          const refused = gateTaint("module_kit");
+          if (refused) return refused;
+          if (a.action === "set") {
+            if (!a.kind || !a.name || typeof a.active !== "boolean") return text("set needs kind, name and active", true);
+            const kit = setKitItem({ module: a.module, kind: a.kind, name: a.name, active: a.active, scope: a.scope });
+            const summary = `${a.active ? "on" : "off"}: ${a.kind} ${a.name} for ${a.scope === "global" ? "every module" : a.module}`;
+            record("module_kit", true, summary);
+            emit({ type: "tool", name: "module_kit", state: "done", summary });
+            return text(JSON.stringify(kit));
+          }
+          if (!a.name) return text("run needs name (the workflow id)", true);
+          emit({ type: "tool", name: "module_kit", state: "start", summary: `running workflow ${a.name}` });
+          const run = runWorkflow(a.name, { module: a.module, input: a.input });
+          const output = await run.promise;
+          record("module_kit", true, `ran workflow ${a.name} (${output.length} chars)`);
+          emit({ type: "tool", name: "module_kit", state: "done", summary: `workflow ${a.name} finished` });
+          return text(JSON.stringify({ ok: true, runId: run.runId, agent: run.agent, output }));
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          record("module_kit", false, msg);
+          emit({ type: "tool", name: "module_kit", state: "error", summary: msg.slice(0, 200) });
+          return text(msg, true);
+        }
       },
     },
     memory_search: {

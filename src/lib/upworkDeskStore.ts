@@ -62,12 +62,22 @@ interface DeskStore {
   intake: (text: string) => Promise<boolean>;
 }
 
-async function post(action: string, id: string, value?: unknown): Promise<void> {
-  await fetch("/api/deals/action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, action, value }),
-  });
+// A write reports whether the server kept it. Until 2026-09-28 this ignored the reply,
+// and the callers painted the new value first, so a rejected save looked saved (and
+// Jarvis, reading the store, would have told the owner "saved").
+async function post(action: string, id: string, value?: unknown): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch("/api/deals/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, value }),
+    });
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!r.ok || j.ok === false) return { ok: false, error: j.error || `save rejected (${r.status})` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 export const useDesk = create<DeskStore>((set, get) => ({
@@ -145,9 +155,11 @@ export const useDesk = create<DeskStore>((set, get) => ({
     }
   },
 
+  // Status, notes and pitch change in the store only after the server kept them.
   move: async (id, status) => {
-    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, status } : d)) }));
-    await post("status", id, status);
+    const res = await post("status", id, status);
+    if (!res.ok) { set({ error: `Status not saved: ${res.error}` }); return; }
+    set((s) => ({ error: null, deals: s.deals.map((d) => (d.id === id ? { ...d, status } : d)) }));
   },
 
   moveMany: async (ids, status, opts) => {
@@ -169,8 +181,9 @@ export const useDesk = create<DeskStore>((set, get) => ({
   },
 
   saveNotes: async (id, notes) => {
-    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, notes } : d)) }));
-    await post("notes", id, notes);
+    const res = await post("notes", id, notes);
+    if (!res.ok) { set({ error: `Notes not saved: ${res.error}` }); return; }
+    set((s) => ({ error: null, deals: s.deals.map((d) => (d.id === id ? { ...d, notes } : d)) }));
   },
 
   toggleNeedsInfo: async (id) => {
@@ -182,7 +195,12 @@ export const useDesk = create<DeskStore>((set, get) => ({
         return { ...d, needsInfo: next };
       }),
     }));
-    await post("needsInfo", id, next);
+    const res = await post("needsInfo", id, next);
+    if (!res.ok) {
+      // Put the flag back: the server did not keep it, and the research pass must not start.
+      set((s) => ({ error: `"Need more info" not saved: ${res.error}`, deals: s.deals.map((d) => (d.id === id ? { ...d, needsInfo: !next } : d)) }));
+      return;
+    }
     // S4 (e): the flag fires work. Turning it ON starts the research pass;
     // turning it off leaves whatever ran on the card.
     if (next) await get().research(id);
@@ -224,8 +242,9 @@ export const useDesk = create<DeskStore>((set, get) => ({
   },
 
   savePitch: async (id, pitch) => {
-    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, pitch, editedPitch: pitch } : d)) }));
-    await post("editPitch", id, pitch);
+    const res = await post("editPitch", id, pitch);
+    if (!res.ok) { set({ error: `Proposal not saved: ${res.error}` }); return; }
+    set((s) => ({ error: null, deals: s.deals.map((d) => (d.id === id ? { ...d, pitch, editedPitch: pitch } : d)) }));
   },
 
   draftProposal: async (id) => {

@@ -17,7 +17,8 @@ is one line; the journal carries the rest.
   Owner's request of 2026-09-28 with reference screenshots and the NEXORA prompt pack.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
-  S13 Sessions (v2.35.0). Next: S14 per-module Skills + Workflows.
+  S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0).
+  Next: S15 Control Room.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -106,6 +107,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-28 · v2.36.0 · Jarvis v3 S14: skills and workflows on every module. A "Skills & workflows" pop-up in the TopBar (every page; Jarvis tabs are their own modules) switches each skill and workflow on per module or everywhere, runs workflows in place (module runs: runs tray, STOP) and creates new ones; Jarvis's `module_kit` tool does the same by voice (writes gated). Skills now reach 14 modules (cliComplete `module` option + Oracle + Jarvis's own); `moduleRegistry` says which, and the smoke proves it against the code. Workflows are new (`~/.agentic-os/workflows`, retire never deletes). `/api/skills` finally exists (the launch drawer's picker was always empty). Also fixed: Deal Desk saves painted success before the server answered. smoke-module-kit 73 checks.
 
 - 2026-09-28 · v2.35.0 · Jarvis v3 S13 Sessions tab: search titles and message bodies (literal wildcards), Live/Archived/All, measured counts, transcript reader, Resume in Console (`/jarvis?c=`) or overlay (window event), rename, archive, restore (new). smoke-jarvis-sessions 33 checks.
 

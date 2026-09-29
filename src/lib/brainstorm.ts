@@ -149,7 +149,7 @@ export async function seatComplete(seat: CouncilSeat, prompt: string, kimiModel:
   if (seat === "kimi") return kimiComplete(prompt, kimiModel, opts);
   // claude + codex go through the shared CLI helper (subscription auth, no keys).
   // opts.signal is STOP (moduleRuns ctx.signal): runner.ts kills the child tree on abort.
-  const text = await cliComplete(seat, prompt, { timeoutMs: opts?.timeoutMs ?? 240_000, signal: opts?.signal });
+  const text = await cliComplete(seat, prompt, { timeoutMs: opts?.timeoutMs ?? 240_000, signal: opts?.signal, module: "brainstorm" });
   const t = text.trim();
   if (!t) throw new Error(`${seat} returned nothing`);
   return t;

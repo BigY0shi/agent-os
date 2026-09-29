@@ -168,7 +168,7 @@ export async function gatherDigest(topic: string, merger: string = "claude"): Pr
   const user = summaryUser(topic, stories, today);
   const raw = merger === "ollama"
     ? await ollamaMerge(SUMMARY_SYS, user)
-    : await cliComplete("claude", `${SUMMARY_SYS}\n\n${user}`, { timeoutMs: 150_000 });
+    : await cliComplete("claude", `${SUMMARY_SYS}\n\n${user}`, { timeoutMs: 150_000, module: "news-radar" });
 
   const parsed = parseObj(raw) || { overview: raw.slice(0, 1200), items: [] };
   // If the manager gave prose but no structured items, fall back to the scouts' raw stories.

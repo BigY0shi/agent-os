@@ -279,7 +279,7 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
 async function roomCli(id: string, sys: string, user: string, incognito?: boolean): Promise<string> {
   const prompt = `${sys}\n\n${user}`;
   if ((LOOP_CLI_AGENTS as readonly string[]).includes(id)) {
-    return cliComplete(id, prompt, { timeoutMs: 90_000, incognito });
+    return cliComplete(id, prompt, { timeoutMs: 90_000, incognito, module: "room" });
   }
   throw new Error(`No room CLI runner for ${id}`);
 }

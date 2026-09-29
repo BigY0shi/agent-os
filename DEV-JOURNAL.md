@@ -1,5 +1,93 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Skills and workflows on every module, by pop-up or by Jarvis (v2.36.0)
+
+S14 of `_design/jarvis-v3-plan.md`. The owner: "Another very important thing is that I
+need to be able to activate/deactivate Skills and Workflows on every module
+individually. Either by a pop-up on each module tab, or via Jarvis."
+
+**What was actually true before.** Skills were SKILL.md files with per-module
+activation in `settings.skills`, but they reached an agent only where code passed a
+module key to `withSkills`: deals, hire, marketing, content-engine and agent-kanban.
+The comment in `platformSkills.ts` described a "global wrap" inside `cliComplete` that
+never existed, and `browser` only mentioned `withSkills` in a doc comment. The launch
+drawer had been fetching `/api/skills` since S3 and getting a 404, so its skills picker
+was always empty. There was no workflow concept at all.
+
+**Skills now reach 14 modules.** `cliComplete` takes an optional `module` and prepends
+that module's skills (global + module); omitted means no skills, so the JSON-extraction
+callers (memory, newsletter parse) stay clean, and incognito calls (the Mastermind's
+clean-room seat) never get them. Wired: news-radar, brainstorm, idea-engine, pipeline,
+leads, games, room, the Oracle (arg-capped, since some CLIs take the prompt as an
+argument), and Jarvis itself, which gets only its own module skills with bodies in the
+stable prompt (the global ones it already names; pulling every global body into a warm
+session would bloat it). `src/lib/moduleRegistry.ts` is the one list of modules and
+says which read skills; the smoke scans the code (comments stripped) and fails if that
+claim and the code ever disagree in either direction.
+
+**Workflows are new.** A workflow is data: name, prompt template with `{{input}}`,
+optional input label, agent. `~/.agentic-os/workflows/workflows.json`, atomic writes,
+three honest starters (summarize, draft a reply, research brief) that use only what
+they are handed, so none pretends to read an inbox it cannot see. Activation global or
+per module. Nothing is ever deleted: retire moves a workflow to `retired`, restore
+brings it back. A corrupt file is an error, not an empty store that the next save would
+write over the owner's workflows with. Runs go through `runWorkflow` (shared by the
+route and Jarvis), as a module run: it shows in the runs tray, STOP reaches the CLI
+child, and the calling module's skills apply.
+
+**The pop-up** is a "Skills & workflows" button in the TopBar, so every page has it
+without 48 edits (Sidebar.tsx carries someone else's uncommitted work and was not
+touched). It resolves the module from the URL when opened (Jarvis tabs are their own
+modules: Oracle, News Radar, Outreach), shows every workflow and skill with on-here and
+on-everywhere switches (`role="switch"`), runs a workflow in place, and creates new
+skills and workflows. A module whose agent calls do not read skills says so rather than
+showing a switch that silently does nothing. Setting a skill reads settings back after
+writing, because `writeSettings` swallows disk errors; a write that did not land is a
+500, not a false "on".
+
+**Jarvis** gets `module_kit` (list / set / run); set and run sit behind the same taint
+gate as every other write, list does not.
+
+**Got wrong on the way.**
+- A Python heredoc through Git Bash turned `\n` escapes into real newlines (a syntax
+  error inside `.join("...")`) and mangled the search pattern of the next edit. Caught
+  by reading the bytes back; all later edits went through script files written with the
+  file tool. Rule 28 covers Python heredocs too, not just sed/node.
+- The honesty scan first counted `browser` as wired because it matched the doc comment
+  in `skillSeed.ts`; the scan now strips comments, and browser stays unwired.
+- Retire left an empty module entry that switching off would have deleted; aligned.
+
+**The full gate found a bug of mine from v2.30.0.** `smoke-jarvis-screen-control`
+failed "failed status write never paints approval". The Deal Desk store's `post()`
+ignored the server's reply entirely, and `move` / `saveNotes` / `savePitch` /
+`toggleNeedsInfo` painted the new value before the request left, so a rejected save
+looked saved; Jarvis reads "saved" from that store, so by voice it would have said
+"saved" for a write that never happened. The v2.30.0 journal said the Deal Desk side
+of this was fixed. The previous agent had fixed it in the working copy of
+`upworkDeskStore.ts`; I left that file out of the v2.30.0 commit because it was on the
+session-start dirty list and I took it for the owner's in-progress work, even though
+the screen-control baseline folder held a `.bak` of it (the tell). The working copy has
+since been reverted, and `task_notes/` (the rollback copies the v2.30.0 entry points to)
+no longer exists; git history is the rollback now. Fixed here: `post()` returns
+`{ ok, error }` and the four writes change the store only after the server keeps them
+(needsInfo is put back and the research pass does not start on a rejected save).
+Screen-control and all six Deal Desk smokes pass.
+
+**Evidence.** `smoke-module-kit`, 73 checks, temp dirs for settings, skills, workflows
+and DB (a smoke never writes the owner's skills: `AGENTIC_OS_SKILLS_DIR` is new for
+that). The run route's success path needs a real CLI and is the owner's to see; its
+guards (unknown workflow 404, unknown module 400, missing required input 400) are
+tested. Full offline gate, `./test.sh` then every smoke after its first stop: 84 of 87
+green after the store fix. The three red are not from this slice, each checked:
+`smoke-browser` D2 fails identically on the previous commit in a clean worktree (its
+live example.com leg); `smoke-memory-ui` asserts `MemoryPanel.tsx` was removed, and that
+file, deleted in the owner's working set at session start, has since been restored;
+`smoke-search` imports only memory modules, none touched here. Not yet seen in a
+browser.
+
+**Not done here:** `settings.skills` is still written through `writeSettings`, whose
+silent disk-error swallow affects every module; worth its own fix.
+
 ## 2026-09-28 - Jarvis Sessions tab: find any conversation and pick it back up (v2.35.0)
 
 S13 of `_design/jarvis-v3-plan.md`. The overlay already had a small history drawer;

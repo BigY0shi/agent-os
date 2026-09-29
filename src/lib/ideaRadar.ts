@@ -375,7 +375,7 @@ export async function startScan(): Promise<{ started: boolean; reason?: string }
           const km = await resolveKimiModel(s.kimiModel);
           raw = await seatComplete("kimi", prompt, km);
         } catch {
-          raw = await cliComplete("codex", prompt, { timeoutMs: 240_000 });
+          raw = await cliComplete("codex", prompt, { timeoutMs: 240_000, module: "idea-engine" });
         }
         interface ClusterOut { assign?: { candidateId?: string; signalIds?: string[] }[]; create?: { topic?: string; thesis?: string; signalIds?: string[] }[] }
         let plan: ClusterOut = {};

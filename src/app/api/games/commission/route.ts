@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   const cliId = typeof body.agent === "string" ? body.agent.replace(/^cli:/, "") : "";
   if (cliId && cliId !== "game-dev" && (LOOP_CLI_AGENTS as readonly string[]).includes(cliId)) {
     try {
-      const out = await cliComplete(cliId, `${prompt}\n\n${buildSpec}\n\nOutput ONLY the complete HTML file — no preamble, no markdown fences.`, { timeoutMs: 280_000 });
+      const out = await cliComplete(cliId, `${prompt}\n\n${buildSpec}\n\nOutput ONLY the complete HTML file — no preamble, no markdown fences.`, { timeoutMs: 280_000, module: "games" });
       const html = extractGameHtml(out);
       if (!/<(html|canvas|body|svg|script)/i.test(html) || html.length < 120) {
         return NextResponse.json({ ok: false, error: `${cliId} didn't return a playable HTML game.` }, { status: 502 });
