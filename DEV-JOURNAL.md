@@ -1,5 +1,30 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Activity feed: real log times or none, never invented (v2.41.1)
+
+From the NEXORA diff (`_design/nexora-diff.md`), which flagged
+`src/app/api/activity/route.ts:23`: every tailed log line got a made-up time (the log
+file's mtime minus 200 ms per line), and both the Activity stream and the home
+MiniTimeline showed it as when the line happened (AGENTS.md "Never fabricate state").
+
+Fix: new `src/lib/logTime.ts` `lineTime()` reads the time a line carries (ISO,
+space-separated, comma or dot millis, Z or offset) and returns null when there is none.
+The route returns `ts: number | null`; lines still sort by their own time where known,
+else by their file's mtime and position, but that key is stripped before the response.
+`ActivityStream` and `MiniTimeline` show an unknown time as `--:--:--` with a title
+saying the line carries no time.
+
+The same diff flagged `src/lib/agentRoom.ts:21` as a possible unlabelled fallback.
+Read, not changed: with no Ollama Cloud key set, the Agent Room sends Ollama agents to
+the local daemon, by configuration rather than after a failure, and its error messages
+say so. It does not label a successful local answer, and it runs against the owner's
+"everything through Ollama Cloud" policy when the key is missing; that is his call and
+is raised with him, not decided here.
+
+New `smoke-activity-times.mjs` (11 checks); home-ui 77 pass; tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Mission Control: telemetry on first load, a System pulse view, the scratchpad moved down (v2.41.0)
 
 S18 of `_design/jarvis-v3-plan.md`. The owner: Mission Control had "no information on

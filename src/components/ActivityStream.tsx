@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Radio } from "lucide-react";
 import Panel from "./Panel";
 
-interface Entry { ts: number; agent: string; text: string; level?: string; }
+interface Entry { ts: number | null; agent: string; text: string; level?: string; }
 
 export default function ActivityStream() {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -57,8 +57,8 @@ export default function ActivityStream() {
               className="flex gap-2 py-1.5 text-[11.5px] font-[var(--font-geist-mono)] border-b border-[rgba(255,255,255,0.04)] last:border-0"
             >
               <span className={`${dot(e.agent)} shrink-0`}>●</span>
-              <span className="text-[var(--fg-dimmer)] shrink-0">
-                {new Date(e.ts).toLocaleTimeString("en-GB", { hour12: false })}
+              <span className="text-[var(--fg-dimmer)] shrink-0" title={e.ts == null ? "this log line carries no time" : undefined}>
+                {e.ts == null ? "--:--:--" : new Date(e.ts).toLocaleTimeString("en-GB", { hour12: false })}
               </span>
               <span className="text-[var(--fg-dim)] uppercase shrink-0 w-16 truncate">{e.agent}</span>
               <span className={`${
