@@ -1,5 +1,39 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Crew archive: everything the agents produced, read where it lives (v2.47.0)
+
+S24 of `_design/jarvis-v3-plan.md` (NEXORA "Crew archive"). A Jarvis tab, **Archive**:
+one searchable, filterable wall of every document the crew produced, each card with its
+source, author, word count and date, and a reader with the document's metadata and a
+link to open it where it lives. Nothing is copied: `lib/v2/archive/archive.ts` builds
+an index at read time (cached 30 s) from the stores that already hold each thing
+(mapped by a read-only survey of the codebase first):
+
+- **Mission reports** and each **seat's answer** (`~/.agentic-os/missions/`), the seat's
+  CLI and model as the author;
+- **Oracle** consultations (`lib/oracle.readConsultations`), the question as the title;
+- **News Radar** briefings (`~/.agentic-os/news/log.json`), with their items;
+- **Deal Desk** and **Hire Engine** pitches (`listDeals`, `listHireLeads`, the text the
+  owner would send);
+- **Jarvis** conversations (whole transcripts, system lines left out; the link resumes
+  the conversation);
+- **Brainstorm** council briefs.
+
+Search reaches titles, authors and the text itself; filter by source. Each store is
+fenced: one that cannot be read is named on the page ("Could not read: news (...)") and
+the rest still show. `GET /api/v2/archive` (list, `?q=`, `?source=`, `?fresh=1`) and
+`?id=` for one whole document; lists never carry bodies.
+
+**Verified.** New `smoke-archive.mjs`, 21 checks with HOME and every store in a temp
+dir: all fixture sources indexed with the right labels, authors, real word counts and
+newest-first order, search into the body, the source filter, the reader with metadata,
+404 for unknown ids, a broken store reported while the others show, and a before/after
+snapshot proving no store file is written. Deal and Hire pitches follow the same reader
+pattern but have no fixture here (their scraper folders are empty in the smoke). tsc
+clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Mission board: everything waiting on you, and missions by state (v2.46.0)
 
 S23 of `_design/jarvis-v3-plan.md` (NEXORA "N decisions need you"). Missions now has two
