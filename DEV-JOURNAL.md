@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Gate fix: smoke-browser no longer depends on example.com (v2.38.3)
+
+`smoke-browser` D2 "snapshot contains 'Example Domain'" failed whenever example.com was
+reachable, while D1 and D3 (both on the page title) passed. Evidence: D2 now prints the
+snapshot on failure, and the live snapshot is a list of multilingual paragraphs ("This
+domain is for use in documentation examples ... avoid relying on it for testing"); a
+fetch of the page shows `<title>Example Domain</title>` and no `<h1>` at all. The site
+changed; the snapshot was right and the assertion was stale.
+
+Fix, smoke only: with `AGENTIC_SMOKE_OFFLINE=1` (test.sh exports it) example.com is not
+probed and the local fixture is the only target, so the gate never depends on a
+third-party site. A manual live run keeps the example.com leg, where D2 asserts the
+snapshot has real content; the "Example Domain" text check stays on the fixture we
+control. Both modes pass all checks (offline and live runs, 2026-09-28).
+
+Rollback: revert the commit.
+
 ## 2026-09-28 - Gate fix: smoke-search facet window went stale again (v2.38.2)
 
 `smoke-search` temporal_facets failed "entities include Sarah", "graph aspects counted
