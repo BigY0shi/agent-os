@@ -1,5 +1,58 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Crew: Agent City, the crew ring, a messenger per agent, Deploy agent (v2.42.0)
+
+S21 of `_design/jarvis-v3-plan.md`, from the owner's NEXORA "Agent City" screenshots
+and his description (2026-09-28): the orchestrator is a tower in the centre, every
+agent gets its own procedurally generated building that pulses by state, clicking a
+building opens a messenger-style chat, and a GitHub-style tracker sits below. Placed
+as a new Jarvis tab, **Crew**, since Jarvis is the orchestrator; the existing Agents
+page is untouched.
+
+**Numbers, all from the agents' recorded runs** (`lib/agentsStore.listRuns`, up to 500
+per agent), via `lib/v2/crew/crew.ts` `buildCrewSnapshot` (pure) and `GET /api/v2/crew`:
+agents, working now (live status feed), messages in 7 days (one run = one message and one
+reply), average reply (run end minus start), agent time this month. Per agent: runs, reply
+time, tokens, runs recorded, last seen. **When the crew speaks**: a 7-day by 24-hour
+heatmap (and a 24-hour strip), owner messages at the START of runs the owner sent
+(manual, crew chat), agent replies at run ENDS, with a both / you / agents toggle. **Recent
+activity** in words. The basis is printed on the page.
+
+**Agent City** (`components/jarvis/AgentCity.tsx`, three.js, lazy): the violet tower;
+one building per agent, tiers and footprints seeded from the agent id (stable across
+visits, nothing random); neon edges and a beacon in the agent's live status colour
+(blue working, warm ready, violet waiting on you, red error, dark off), pulsing at a
+rate set by that status; a road to the tower that carries moving pulses only while the
+agent is running. Agent-to-agent hand-offs are not recorded anywhere yet, so none are
+drawn. Hover card: runs, tokens, reply time. Click: opens the chat. Pauses when hidden
+or off screen; still under reduced motion; a plain wheel scrolls the PAGE (Ctrl/Cmd +
+wheel zooms) after the first visual pass showed the canvas trapping page scroll.
+
+**Talk to the crew ring**: Jarvis in the centre, each agent an outer segment in its
+status colour, keyboard-selectable. **Chat** (messenger drawer): each message starts a
+real run of that agent (`startRun`, trigger `crew-chat`); the log
+(`~/.agentic-os/crew/<agent>.jsonl`, `AGENTIC_OS_CREW_DIR` for smokes) keeps only the
+owner's words and the run id, and every reply is read from that run's own record (its
+result, "Working…" while it runs, the reason when it could not start or failed, "record
+missing" when it is). Polls only while a reply is pending.
+
+**Deploy agent** (4 steps): pick a prepared role (`lib/v2/crew/roles.ts`: Researcher,
+Writer, Inbox triage, Deal scout, Code reviewer, Social listener; instructions written
+as plain editable data, rule 17) or write your own; name + one-line role + the
+instructions, editable; the model tier with the model it actually runs on today
+(`agentsRuntime.modelFor`, now exported); review and confirm through the existing
+`POST /api/agents`. A degraded creation shows its warning instead of pretending.
+
+**Verified.** New `smoke-crew.mjs`, 33 checks (known-time runs through the pure
+snapshot, the chat assembly, routes from an empty temp agents dir, UI wiring). Visually
+checked in the browser pane with the real CSS and fake crew data: city, ring,
+messenger, roster, heatmap, recent. agents-forge 56, agents-questions 49,
+agents-status 35, agents-ui 87, jarvis-v3-ui 43, missions 69, jarvis-mcp 51 pass;
+tsc clean. Not yet exercised against the owner's real agents (a chat message starts a
+real, billed run).
+
+Rollback: revert the commit; `~/.agentic-os/crew/` is only read by this code.
+
 ## 2026-09-29 - Activity feed: real log times or none, never invented (v2.41.1)
 
 From the NEXORA diff (`_design/nexora-diff.md`), which flagged

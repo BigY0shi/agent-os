@@ -41,7 +41,7 @@ import { evaluateSpend, limitsFrom, tokensFrom } from "@/lib/v2/agents/spendCap"
 // (settings.agentsModels); the fallbacks are the ids verified live on the CLI
 // 2026-07-28 ("Reply OK" probes). Read at run start, so a settings change
 // applies to the next run without a restart.
-function modelFor(intel: AgentIntelligence): string {
+export function modelFor(intel: AgentIntelligence): string {
   const s = readSettings().agentsModels;
   const fallback: Record<AgentIntelligence, string> = {
     fast: "claude-haiku-4-5",

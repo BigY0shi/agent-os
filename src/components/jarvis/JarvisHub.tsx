@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { gsap } from "gsap";
-import { Cpu, Moon, Radar, Mail, History, Plug, SlidersHorizontal, Target } from "lucide-react";
+import { Cpu, Moon, Radar, Mail, History, Plug, SlidersHorizontal, Target, Building2 } from "lucide-react";
 import JarvisView from "@/components/JarvisView";
 import OracleView from "@/components/OracleView";
 import NewsView from "@/components/NewsView";
@@ -17,8 +17,9 @@ import SessionsTab from "@/components/jarvis/SessionsTab";
 import ControlRoomTab from "@/components/jarvis/ControlRoomTab";
 import McpTab from "@/components/jarvis/McpTab";
 import MissionsTab from "@/components/jarvis/MissionsTab";
+import CrewTab from "@/components/jarvis/CrewTab";
 
-export type JarvisTab = "console" | "oracle" | "radar" | "outreach" | "sessions" | "mcp" | "control" | "goals";
+export type JarvisTab = "console" | "oracle" | "radar" | "outreach" | "sessions" | "mcp" | "control" | "goals" | "crew";
 
 interface TabDef { key: JarvisTab; label: string; icon: ReactNode; render: () => ReactNode }
 
@@ -30,6 +31,7 @@ export const JARVIS_TABS: TabDef[] = [
   { key: "outreach", label: "Outreach", icon: <Mail size={13} />, render: () => <HermesOutreach /> },
   { key: "sessions", label: "Sessions", icon: <History size={13} />, render: () => <SessionsTab /> },
   { key: "goals", label: "Missions", icon: <Target size={13} />, render: () => <MissionsTab /> },
+  { key: "crew", label: "Crew", icon: <Building2 size={13} />, render: () => <CrewTab /> },
   { key: "mcp", label: "MCP", icon: <Plug size={13} />, render: () => <McpTab /> },
   { key: "control", label: "Control Room", icon: <SlidersHorizontal size={13} />, render: () => <ControlRoomTab /> },
 ];
