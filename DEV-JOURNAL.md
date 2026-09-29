@@ -1,5 +1,16 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - smoke-widgets no longer fails between 11:00 and 12:00 UTC (v2.50.2)
+
+The gate's second run stopped at `smoke-widgets` "scope=upcoming ... soonest first": the
+check required the smoke's own "due in 1h" task to be first in the WHOLE upcoming list,
+but the boot-seeded tasks carry real next-run times, and at 11:05 UTC the seeded Morning
+Brief (next run 12:00 UTC, 7:00 America/Chicago) legitimately sorted ahead of a task due
+at 12:05. Pre-existing and time-of-day dependent; neither the widgets store nor the smoke
+had changed. The order is now judged among the smoke's own tasks only. Passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - smoke-standing isolates principals (v2.50.1)
 
 The full gate stopped at `smoke-browser-ownership` F4: the isolation guard follows imports
