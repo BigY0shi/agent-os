@@ -1,5 +1,20 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Gate fix: smoke-search facet window went stale again (v2.38.2)
+
+`smoke-search` temporal_facets failed "entities include Sarah", "graph aspects counted
+(Decision)" and "voice aspects counted separately (Preference)" with empty lists. Cause:
+the query window started "30 days ago" (rolling), while the seeded triples and voice
+facts carry fixed August 2026 `valid_at` dates (Sarah 08-26, Decisions 08-10..08-21,
+Preference 08-19), and the facet handler filters `s.valid_at >= startTime`
+(`src/lib/v2/memory/search/handlers.ts:747`). From 2026-09-18 on, those facts slid out of
+the window. Not the uncommitted `dbSchema.ts` hunks and not a memory commit: the fix is
+in the smoke only. The window now starts at a pinned 2026-08-01 and ends tomorrow, so
+both the fixed-date facts and the labels created at run time stay in. smoke-search ALL
+PASS offline (the Ollama leg skips as before).
+
+Rollback: revert the commit.
+
 ## 2026-09-28 - Gate fix: V1 MemoryPanel exiled again (v2.38.1)
 
 `smoke-memory-ui` failed "old MemoryPanel removed from src/components (moved, not

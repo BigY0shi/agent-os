@@ -389,9 +389,11 @@ const r12 = await search.executeSearch(
   ro({
     queryType: "temporal_facets",
     facets: ["topics", "entities", "aspects"],
-    // A relative window: the literal "2026-08-01".."2026-08-31" this used to carry
-    // went stale on 2026-09-01 and failed the topics/stats facets for every run after.
-    temporal: { type: "range", days: null, startDate: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10), endDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) },
+    // Start pinned before the seeded facts (fixed August 2026 valid_at dates), end at
+    // tomorrow so the labels created "now" stay in. A literal "2026-08-01".."2026-08-31"
+    // went stale on 2026-09-01 (topics/stats); a rolling 30-day start went stale on
+    // 2026-09-18, when the Sarah/Decision/Preference facts slid out of it.
+    temporal: { type: "range", days: null, startDate: "2026-08-01", endDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) },
   }),
   {},
 );
