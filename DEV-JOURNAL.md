@@ -1,5 +1,47 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Jarvis Sessions tab: find any conversation and pick it back up (v2.35.0)
+
+S13 of `_design/jarvis-v3-plan.md`. The overlay already had a small history drawer;
+the owner wanted a real place to see past sessions and resume them.
+
+**What it is.** A Sessions tab in the Jarvis hub: measured header counts (live,
+archived, messages kept), a search box that matches titles AND everything said, a
+Live / Archived / All filter, a list with message count, channel, last activity and a
+snippet around the hit, and a reader pane with the full transcript (tool calls shown
+as "ran X" / "failed X"). Actions: Resume in Console, Resume in overlay, Rename,
+Archive, Restore.
+
+**Resume goes through the path that already existed.** Both resume actions just bind
+the conversation id; the next ask carries it and the SDK brain treats a different
+conversation as stale, rebuilds the session and replays the last 20 turns
+(`historyBlock`). Console: `/jarvis?c=<id>`, which JarvisView reads on mount; the hub
+now treats a URL without `?tab=` as Console, otherwise the link from the Sessions tab
+would have changed the URL and left you on Sessions. Overlay: a
+`jarvis:open-conversation` window event that JarvisOmnipresence turns into "open the
+overlay on this id", so it works from any page.
+
+**Restore.** Archive was always a soft flag (`archived_at`); there was no way back.
+`restoreConversation` + `PATCH {archived:false}`. Archived sessions cannot be resumed
+until restored, so a hidden thread never silently comes back to life.
+
+**Got wrong on the way (rule 28 again).** The store's search SQL was appended with a
+bash heredoc, and Git Bash turned every `ESCAPE '\'` into `ESCAPE '\'`, which in a JS
+string is an escaped quote: the SQL would have read `ESCAPE ''` and thrown on the
+first search. The wildcard-escaping regex lost its backslash the same way, so a typed
+`%` would have matched everything. Caught by reading the bytes back, fixed with the
+backslash built from `chr(92)`, verified with Python `repr`, and pinned by smoke checks
+(a literal `%` matches only the title containing it; `_` matches nothing; a query with
+a backslash does not break the SQL). The Sessions UI and its smoke were then written
+with the file tool, not a heredoc.
+
+**Evidence.** `smoke-jarvis-sessions`, 33 checks against a temp DB: title and body
+search, snippets, literal wildcards, scopes, measured counts, restore (idempotent,
+unknown id), the list route's new `?q=&scope=` contract with the ORIGINAL C3.6 reply
+shape unchanged when neither is given, 400 on a bad scope, PATCH restore/rename, and
+the resume wiring end to end in source. smoke-jarvis-conversations, smoke-jarvis-ui
+and smoke-jarvis-v3-ui still pass; `tsc` clean. Not yet seen in a browser.
+
 ## 2026-09-28 - Type redesign: stop looking like NEXORA (v2.34.0)
 
 Owner, after walking through the NEXORA screenshots: "seeing how eerily similar his OS

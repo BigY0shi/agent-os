@@ -16,8 +16,8 @@ is one line; the journal carries the rest.
 - [ ] **Jarvis v3 + Mission Control + per-module skills + memory off Honcho (in progress, 2026-09-28).**
   Owner's request of 2026-09-28 with reference screenshots and the NEXORA prompt pack.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
-  `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0).
-  Next: S13 Sessions, S14 per-module Skills + Workflows.
+  `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
+  S13 Sessions (v2.35.0). Next: S14 per-module Skills + Workflows.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -106,6 +106,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-28 · v2.35.0 · Jarvis v3 S13 Sessions tab: search titles and message bodies (literal wildcards), Live/Archived/All, measured counts, transcript reader, Resume in Console (`/jarvis?c=`) or overlay (window event), rename, archive, restore (new). smoke-jarvis-sessions 33 checks.
 
 - 2026-09-28 · v2.34.0 · Type redesign (owner: NEXORA looks "eerily similar"). Unbounded display, Geist UI/body, Geist Mono data, all self-hosted via next/font; old Google-loaded families dropped; 103 hardcoded family names moved to tokens; eyebrows off wide-tracked mono. smoke-jarvis-v3-ui 43 checks.
 

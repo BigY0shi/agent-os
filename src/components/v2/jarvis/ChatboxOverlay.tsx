@@ -73,12 +73,17 @@ export default function ChatboxOverlay({
   settings,
   save,
   saving,
+  resumeId,
+  onResumed,
 }: {
   open: boolean;
   onClose: () => void;
   settings: Settings | null;
   save: (patch: Partial<Settings>) => Promise<Settings | null>;
   saving: boolean;
+  /** S13: conversation to open (from the Sessions tab). Cleared via onResumed. */
+  resumeId?: string | null;
+  onResumed?: () => void;
 }) {
   const jarvis = (settings?.jarvis ?? {}) as {
     voice?: { provider?: string; autoSend?: boolean; pushToTalk?: boolean; ttsProvider?: string };
@@ -387,6 +392,12 @@ export default function ChatboxOverlay({
       /* drawer stays open on failure */
     }
   }, []);
+
+  // S13: resume a conversation picked in the Sessions tab.
+  useEffect(() => {
+    if (!open || !resumeId) return;
+    void openConversation(resumeId).finally(() => onResumed?.());
+  }, [open, resumeId, openConversation, onResumed]);
 
   const newConversation = useCallback(() => {
     conversationIdRef.current = null;

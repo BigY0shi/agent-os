@@ -19,6 +19,7 @@ import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import { useSettings } from "@/components/ConfigMenu";
 import { setBaselinePageContext } from "@/lib/v2/jarvis/pageContext";
 import ChatboxOverlay from "./ChatboxOverlay";
+import { RESUME_EVENT, type ResumeDetail } from "@/lib/v2/jarvis/resume";
 
 const ACCENT = "#22d3ee";
 const DEDUPE_MS = 400;
@@ -28,6 +29,16 @@ export default function JarvisOmnipresence() {
   const pathname = usePathname();
   const { settings, save, saving } = useSettings();
   const [open, setOpen] = useState(false);
+  // S13: a Sessions-tab "resume in overlay" names the conversation to open.
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  useEffect(() => {
+    const onResume = (e: Event) => {
+      const id = (e as CustomEvent<ResumeDetail>).detail?.id;
+      if (typeof id === "string" && id) { setResumeId(id); setOpen(true); }
+    };
+    window.addEventListener(RESUME_EVENT, onResume);
+    return () => window.removeEventListener(RESUME_EVENT, onResume);
+  }, []);
   const [brainBusy, setBrainBusy] = useState(false);
   const openRef = useRef(false);
   openRef.current = open;
@@ -199,7 +210,7 @@ export default function JarvisOmnipresence() {
         />
       </motion.button>
 
-      <ChatboxOverlay open={open} onClose={() => setOpen(false)} settings={settings} save={save} saving={saving} />
+      <ChatboxOverlay open={open} onClose={() => setOpen(false)} settings={settings} save={save} saving={saving} resumeId={resumeId} onResumed={() => setResumeId(null)} />
     </>
   );
 }

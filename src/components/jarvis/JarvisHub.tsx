@@ -13,6 +13,7 @@ import JarvisView from "@/components/JarvisView";
 import OracleView from "@/components/OracleView";
 import NewsView from "@/components/NewsView";
 import HermesOutreach from "@/components/HermesOutreach";
+import SessionsTab from "@/components/jarvis/SessionsTab";
 
 export type JarvisTab = "console" | "oracle" | "radar" | "outreach" | "sessions" | "mcp" | "control" | "goals";
 
@@ -24,11 +25,12 @@ export const JARVIS_TABS: TabDef[] = [
   { key: "oracle", label: "Oracle", icon: <Moon size={13} />, render: () => <OracleView /> },
   { key: "radar", label: "News Radar", icon: <Radar size={13} />, render: () => <NewsView /> },
   { key: "outreach", label: "Outreach", icon: <Mail size={13} />, render: () => <HermesOutreach /> },
+  { key: "sessions", label: "Sessions", icon: <History size={13} />, render: () => <SessionsTab /> },
 ];
 
 // Icons for tabs that later slices add; kept here so the bar stays visually consistent.
 export const FUTURE_TAB_ICONS: Partial<Record<JarvisTab, ReactNode>> = {
-  sessions: <History size={13} />, mcp: <Plug size={13} />, control: <SlidersHorizontal size={13} />, goals: <Target size={13} />,
+  mcp: <Plug size={13} />, control: <SlidersHorizontal size={13} />, goals: <Target size={13} />,
 };
 
 function isTab(v: string | null): v is JarvisTab {
@@ -44,7 +46,8 @@ export default function JarvisHub() {
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   // URL -> state (back/forward, Jarvis navigating to /jarvis?tab=...)
-  useEffect(() => { if (isTab(fromUrl) && fromUrl !== tab) setTab(fromUrl); }, [fromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+  // No ?tab= means Console, so /jarvis?c=<id> (Sessions -> Resume in Console) lands there.
+  useEffect(() => { const want: JarvisTab = isTab(fromUrl) ? fromUrl : "console"; if (want !== tab) setTab(want); }, [fromUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = useCallback((next: JarvisTab) => {
     setTab(next);

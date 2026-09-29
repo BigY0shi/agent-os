@@ -837,6 +837,27 @@ export default function JarvisView() {
   // CR.1: chat lane repointed to the V2 brain (POST /api/v2/jarvis/ask, SSE).
   // The conversation id from the meta event threads follow-up turns.
   const v2ConversationRef = useRef<string | null>(null);
+  // S13: /jarvis?c=<id> resumes that conversation here (the Sessions tab links to it).
+  // The next ask carries the id, so the brain replays the thread's history.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("c");
+    if (!id) return;
+    let live = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/v2/jarvis/conversations/${encodeURIComponent(id)}`, { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (!live) return;
+        if (!r.ok) { setStatus(`Could not resume that session: ${j.error ?? r.status}`); return; }
+        v2ConversationRef.current = id;
+        const base = Date.now();
+        const msgs = (j.messages ?? []) as { role: string; content: string }[];
+        setTurns(msgs.filter((m) => m.role !== "system").map((m, i) => ({ id: base + i, who: m.role === "user" ? "you" : "hermes", text: m.content })));
+        setStatus(`Resumed "${j.conversation?.title || "untitled"}" (${msgs.length} messages). Your next message continues it.`);
+      } catch (e) { if (live) setStatus(`Could not resume that session: ${String(e)}`); }
+    })();
+    return () => { live = false; };
+  }, []);
 
   const ask = useCallback(async (prompt: string) => {
     const p = normalizeHeard((prompt || "").trim());
