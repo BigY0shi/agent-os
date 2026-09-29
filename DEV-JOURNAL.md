@@ -1,5 +1,38 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Jarvis keeps his warm session when memory updates the persona (v2.39.2)
+
+`smoke-jarvis-brain` "sdk turn 2 reused the warm session" failed intermittently (2 of 3
+runs on 2026-09-28): turn 2 answered correctly but on a freshly booted session
+(`turns: 1`). Diagnosis, read through the code rather than guessed:
+
+1. every turn is ingested into memory fire-and-forget (`brain.ts` `ingestExchange`);
+2. a finished ingest runs `personaTrigger` (`memory/queue.ts`, post-COMPLETED seam),
+   which generates the persona document when none exists (`persona.ts`
+   `checkPersonaUpdateThreshold`) and updates it incrementally after that;
+3. the persona document is part of Jarvis's stable system prompt (`context.ts`
+   `buildStableSystemPrompt` -> `userPersonaBlock`);
+4. a changed stable prompt rebuilds the warm session (`askSdk` stale check).
+
+So whenever the ingest finished before the next message, the session was thrown away
+mid-conversation and the history replayed. That is live-app behaviour, not only the
+smoke's: it cost a full re-prime on the next turn and broke session continuity. The
+smoke turns ingestion on with a real provider before its live leg, which is why it saw
+it; timing is why it was intermittent.
+
+Fix: the session pins the persona it booted with (`SessionState.personaDoc`); the same
+conversation keeps building its stable prompt from the pinned copy, and any rebuild (a
+new conversation, a skill or tool change) starts from the current persona. Also added:
+the done event now carries `sessionRebuilt` (`no-session` / `conversation` /
+`system-prompt` / `tools`), so a lost warm session says which key moved.
+
+New `smoke-jarvis-session-pin.mjs` (10 checks, offline: the mechanism, the code chain,
+the pin). jarvis-brain 77 (live leg ran, turn 2 reused the session), jarvis-glasses 43,
+jarvis-ui 63, jarvis-conversations 24, jarvis-mcp 51, jarvis-screen-control 43 pass;
+tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Faces: a fuller Jarvis plexus, a many-armed Oracle (v2.39.1)
 
 Owner, 2026-09-28: News Radar's face is loved; "The Oracle's needs to have more swirls,

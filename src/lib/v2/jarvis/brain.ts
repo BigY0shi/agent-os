@@ -9,6 +9,7 @@ import { searchV2 } from "../memory/search";
 import { formatRecallAsMarkdown } from "../memory/search/formatter";
 import type { RecallResult } from "../memory/types";
 import { ingestFromModule } from "../memory/queue";
+import { getPersonaDocument } from "../memory/persona";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
 import { sdkServers, isExternalMcpTool } from "./mcpServers";
@@ -61,7 +62,7 @@ export type JarvisAskEvent =
   | { type: "meta"; conversationId: string; engine: "sdk" | "cli"; note?: string }
   | { type: "sentence"; text: string }
   | JarvisToolEvent
-  | { type: "done"; costUsd?: number | null; turns?: number; durationMs: number }
+  | { type: "done"; costUsd?: number | null; turns?: number; sessionRebuilt?: string | null; durationMs: number }
   | { type: "error"; message: string };
 
 export interface JarvisAskInput {
@@ -85,6 +86,8 @@ type SessionState = {
   stableHash: string;
   toolsSig: string;
   conversationId: string;
+  /** The persona document this session was booted with, pinned for its lifetime. */
+  personaDoc: string | null;
   /** Session-sticky tool state (integration taint survives across turns). */
   toolState: JarvisTurnState;
   /** Per-turn emitter indirection — tools close over this ref, each ask swaps it. */
@@ -199,6 +202,15 @@ function* splitSentences(buf: { text: string }): Generator<string> {
   }
 }
 
+function currentPersonaDoc(): string | null {
+  try {
+    return getPersonaDocument()?.content ?? null;
+  } catch (err) {
+    console.warn("[v2/jarvis] persona document unavailable (continuing without):", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 function ingestExchange(
   conversationId: string,
   userText: string,
@@ -229,7 +241,7 @@ function ingestExchange(
 // SDK warm session
 // ---------------------------------------------------------------------------
 
-function bootSession(conversationId: string, stable: string, sig: string): SessionState {
+function bootSession(conversationId: string, stable: string, sig: string, personaDoc: string | null): SessionState {
   ensureCoreActions();
   ensureTaskActions();
 
@@ -314,6 +326,7 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
     model,
     stableHash: stable,
     toolsSig: sig,
+    personaDoc,
     conversationId,
     toolState,
     emitRef,
@@ -327,23 +340,40 @@ async function askSdk(
   input: JarvisAskInput,
   onEvent: (ev: JarvisAskEvent) => void,
   signal?: AbortSignal,
-): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number }> {
-  const stable = buildStableSystemPrompt();
+): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number; sessionRebuilt: string | null }> {
+  // The persona document is PINNED for the life of a warm session. Every turn is
+  // ingested into memory fire-and-forget, and a finished ingest can rewrite the
+  // persona (queue.ts post-COMPLETED personaTrigger: a full generation when none
+  // exists yet, incremental after). Read fresh each turn, that rewrite changed the
+  // stable prompt and threw the warm session away mid-conversation whenever the
+  // ingest happened to finish before the next message (smoke-jarvis-brain "turn 2
+  // reused the warm session", intermittent, 2026-09-28). A new conversation or any
+  // other rebuild picks up the current persona.
+  const prior = g.__jarvisBrainV2 ?? null;
+  const personaDoc = prior && prior.conversationId === conv.id ? prior.personaDoc : currentPersonaDoc();
+  const stable = buildStableSystemPrompt({ personaDocContent: personaDoc });
   const sig = toolsSignature();
 
-  let session = g.__jarvisBrainV2 ?? null;
-  const stale =
-    !session ||
-    session.stableHash !== stable ||
-    session.toolsSig !== sig ||
-    session.conversationId !== conv.id;
+  let session = prior;
+  // Why a warm session is rebuilt, reported on the done event (sessionRebuilt) so a
+  // turn that loses its warm session says which key moved instead of guessing.
+  const rebuildReason: string | null =
+    !session ? "no-session"
+    : session.conversationId !== conv.id ? "conversation"
+    : session.stableHash !== stable ? "system-prompt"
+    : session.toolsSig !== sig ? "tools"
+    : null;
+  const stale = rebuildReason !== null;
   let resumed = false;
   if (stale) {
     if (session) {
       resumed = session.conversationId !== conv.id; // conversation switch/resume
       await resetJarvisBrain();
     }
-    session = bootSession(conv.id, stable, sig);
+    // A rebuild for another reason re-reads the persona so the new session starts current.
+    const freshPersona = rebuildReason === "conversation" || rebuildReason === "no-session" ? personaDoc : currentPersonaDoc();
+    const freshStable = freshPersona === personaDoc ? stable : buildStableSystemPrompt({ personaDocContent: freshPersona });
+    session = bootSession(conv.id, freshStable, sig, freshPersona);
     resumed = true; // fresh session — replay any prior history for this conversation
   }
   const b = session!;
@@ -437,6 +467,7 @@ async function askSdk(
     tainted: b.toolState.integrationTainted,
     costUsd: cost,
     turns: b.turns,
+    sessionRebuilt: rebuildReason,
   };
 }
 
@@ -564,14 +595,15 @@ export async function askJarvisV2(
     });
     ingestExchange(conv.id, text, answer, run.tainted);
 
-    const done: { type: "done"; costUsd?: number | null; turns?: number; durationMs: number } = {
+    const done: { type: "done"; costUsd?: number | null; turns?: number; sessionRebuilt?: string | null; durationMs: number } = {
       type: "done",
       durationMs: Date.now() - started,
     };
     if (engine === "sdk") {
-      const sdkRun = run as { costUsd?: number | null; turns?: number };
+      const sdkRun = run as { costUsd?: number | null; turns?: number; sessionRebuilt?: string | null };
       if (typeof sdkRun.costUsd === "number") done.costUsd = sdkRun.costUsd;
       if (typeof sdkRun.turns === "number") done.turns = sdkRun.turns;
+      done.sessionRebuilt = sdkRun.sessionRebuilt ?? null;
     }
     onEvent(done);
     return { conversationId: conv.id };
