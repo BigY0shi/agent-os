@@ -1,5 +1,14 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - smoke-standing isolates principals (v2.50.1)
+
+The full gate stopped at `smoke-browser-ownership` F4: the isolation guard follows imports
+transitively and found that `smoke-standing.mjs` (S26) reaches `saveAgent`, which can
+register a browser principal, without redirecting `AGENTIC_OS_PRINCIPALS`. It now points
+that at its temp dir like every other store. browser-ownership and standing both pass.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Guide: every module, tab and control, written from the code (v2.50.0)
 
 S29 of `_design/jarvis-v3-plan.md` (owner: "every module, every tab, and every action

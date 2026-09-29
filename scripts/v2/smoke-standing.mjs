@@ -23,6 +23,7 @@ process.env.USERPROFILE = tmp;
 process.env.AGENTIC_OS_SETTINGS = path.join(tmp, "settings.json");
 process.env.AGENTIC_OS_DB = path.join(tmp, "test.db");
 process.env.AGENTIC_OS_AGENTS_DIR = path.join(tmp, "agents");
+process.env.AGENTIC_OS_PRINCIPALS = path.join(tmp, "principals"); // saveAgent can register a principal (isolationGuard)
 process.env.AGENTIC_OS_FILE_VERSIONS_DIR = path.join(tmp, "versions");
 process.env.AGENTIC_OS_RUNS_DIR = path.join(tmp, "runs");
 process.env.AGENTIC_OS_WEBMCP_DIR = path.join(tmp, "webmcp");
