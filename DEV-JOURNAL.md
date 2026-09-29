@@ -1,5 +1,31 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Mission board: everything waiting on you, and missions by state (v2.46.0)
+
+S23 of `_design/jarvis-v3-plan.md` (NEXORA "N decisions need you"). Missions now has two
+views, remembered per browser: **Desk** (the S17 layout) and **Board**:
+
+- **Waiting on you** (left): mission plans to approve and results to read, PLUS the
+  agents' own approval queue from the existing `GET /api/agents/approvals` (tool
+  approvals with Allow / Deny, parked questions with a reply box), answered in place
+  through the existing `POST /api/agents/approvals`. One list for every decision.
+- **The ring** (centre): missions by state with real counts, In flight / Review /
+  Blocked / Delivered, plus how many are queued in briefing. Blocked means failed,
+  stopped, or a plan that could not be made (said on hover). A segment, or its legend
+  button, lists its missions.
+- **Delivered** (right), and the chosen mission's full detail and desk below.
+
+No new endpoint: the board reads `/api/v2/missions` and the agents' approvals route.
+
+**Verified.** `smoke-missions.mjs` gains 3 checks (now 71): the view toggle, the
+approvals wired to allow / deny / answer, the four ring states and the Blocked
+definition. Visually checked in the browser pane with the real CSS and fake data (a
+mission to read, a Gmail-send approval, an agent's question). The first render was
+stacked because the harness CSS had not been recompiled after the edit; with it
+recompiled the three columns render as designed. tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Standing orders: every recurring job on one page (v2.45.0)
 
 S26 of `_design/jarvis-v3-plan.md` (NEXORA "Schedule": nothing runs behind your back).

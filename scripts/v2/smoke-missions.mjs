@@ -259,6 +259,10 @@ check("M4 the desk offers approve, send back, accept and stop", ["\"approve\"", 
 check("M5 stats come from the API, not the page", ui.includes("stats.waitingOnYou") && ui.includes("stats.cycleTimeMin") && !/Math\.random/.test(ui));
 check("M6 the wizard says nothing runs before approval", ui.includes("nothing runs until you approve the plan"));
 check("M7 polling pauses while the tab is hidden", ui.includes("document.hidden"));
+// S23 board
+check("M8 Desk / Board views, remembered per browser", ui.includes('localStorage.getItem("agentos.missions.view")') && ui.includes('view === "board"'));
+check("M9 waiting-on-you includes the agents' approval queue, answerable in place", ui.includes('api<{ approvals: Approval[] }>("/api/agents/approvals")') && ui.includes('decide(a, { decision: "allow" })') && ui.includes('decide(a, { answer: reply[a.id] })'));
+check("M10 the ring has four states with real counts, and says what blocked means", ["In flight", "Review", "Blocked", "Delivered"].every((l) => ui.includes(`label: "${l}"`)) && ui.includes("failed, stopped, or a plan that could not be made"));
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

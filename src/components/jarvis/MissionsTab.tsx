@@ -53,6 +53,10 @@ export default function MissionsTab() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [wizard, setWizard] = useState(false);
   const [now, setNow] = useState(Date.now());
+  // S23: Desk (focus + desk + stage columns) or Board (waiting on you | ring | delivered).
+  const [view, setView] = useState<"desk" | "board">("desk");
+  useEffect(() => { try { const v = localStorage.getItem("agentos.missions.view"); if (v === "board" || v === "desk") setView(v); } catch { /* storage blocked */ } }, []);
+  const pickView = (v: "desk" | "board") => { setView(v); try { localStorage.setItem("agentos.missions.view", v); } catch { /* storage blocked */ } };
 
   const load = useCallback(async () => {
     try {
@@ -87,7 +91,12 @@ export default function MissionsTab() {
           </h2>
           <p className="mt-1 text-[12.5px] text-[var(--fg-dim)]">Write a brief, Jarvis plans it and picks the crew, you approve, the crew works in their own folders.</p>
         </div>
-        <button type="button" onClick={() => setWizard(true)} className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12.5px] glass neon-ring"><Plus size={14} /> New mission</button>
+        <div className="flex items-center gap-2">
+          <div role="tablist" aria-label="Missions view" className="glass-tabs">
+            {(["desk", "board"] as const).map((v) => <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => pickView(v)} className="glass-tab">{v === "desk" ? "Desk" : "Board"}</button>)}
+          </div>
+          <button type="button" onClick={() => setWizard(true)} className="inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12.5px] glass neon-ring"><Plus size={14} /> New mission</button>
+        </div>
       </section>
       {err && <p role="alert" className="text-[13px] text-red-300">{err}</p>}
 
@@ -106,14 +115,16 @@ export default function MissionsTab() {
         </section>
       )}
 
-      {focus && (
+      {view === "board" && missions && missions.length > 0 && <Board missions={missions} focus={focus} onPick={setFocusId} onChanged={load} now={now} />}
+
+      {view === "desk" && focus && (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_360px]">
           <InFocus m={focus} now={now} />
           <Desk m={focus} waiting={waiting} onPick={setFocusId} onChanged={load} />
         </div>
       )}
 
-      {missions && missions.length > 0 && (
+      {view === "desk" && missions && missions.length > 0 && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4" aria-label="Mission stages">
           {columns.map(([label, stages]) => {
             const list = missions.filter((m) => stages.includes(m.stage));
@@ -344,6 +355,137 @@ function Desk({ m, waiting, onPick, onChanged }: { m: Mission; waiting: Mission[
     </section>
   );
 }
+
+// ── S23 Mission board ────────────────────────────────────────────────────────
+// Left: WAITING ON YOU (mission plans to approve and results to read, plus the agents'
+// own approval queue from /api/agents/approvals, answerable here). Centre: a ring of the
+// missions by state with real counts; a segment lists its missions. Right: delivered.
+// Below: the chosen mission in detail. BLOCKED = failed or stopped, or a plan that could
+// not be made; it says so on hover.
+interface Approval { id: string; runId: string; agentId: string; agentName: string; kind?: "approval" | "question"; toolName: string; inputPreview: string; question?: string; createdAt: number }
+type Seg = "flight" | "review" | "blocked" | "delivered";
+const SEG: Record<Seg, { label: string; tint: string; of: (m: Mission) => boolean; hint: string }> = {
+  flight: { label: "In flight", tint: "#3b95ff", of: (m) => m.stage === "in-progress", hint: "crew at work" },
+  review: { label: "Review", tint: "#fbbf24", of: (m) => m.stage === "review", hint: "results waiting for you" },
+  blocked: { label: "Blocked", tint: "#f87171", of: (m) => m.stage === "failed" || m.stage === "stopped" || (m.stage === "briefing" && !!m.error && !m.working), hint: "failed, stopped, or a plan that could not be made" },
+  delivered: { label: "Delivered", tint: "#34d399", of: (m) => m.stage === "delivered", hint: "accepted or delivered" },
+};
+
+function Board({ missions, focus, onPick, onChanged, now }: { missions: Mission[]; focus: Mission | null; onPick: (id: string) => void; onChanged: () => void; now: number }) {
+  const [approvals, setApprovals] = useState<Approval[] | null>(null);
+  const [apErr, setApErr] = useState<string | null>(null);
+  const [seg, setSeg] = useState<Seg>("flight");
+  const [reply, setReply] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const loadApprovals = useCallback(async () => {
+    try { const j = await api<{ approvals: Approval[] }>("/api/agents/approvals"); setApprovals(j.approvals); setApErr(null); }
+    catch (e) { setApErr((e as Error).message); }
+  }, []);
+  useEffect(() => {
+    void loadApprovals();
+    const t = setInterval(() => { if (!document.hidden) void loadApprovals(); }, 10_000);
+    return () => clearInterval(t);
+  }, [loadApprovals]);
+  const decide = async (a: Approval, body: Record<string, unknown>) => {
+    setBusy(a.id);
+    try { await api("/api/agents/approvals", { method: "POST", body: JSON.stringify({ id: a.id, ...body }) }); await loadApprovals(); }
+    catch (e) { setApErr((e as Error).message); } finally { setBusy(null); }
+  };
+
+  const counts = (Object.keys(SEG) as Seg[]).map((k) => [k, missions.filter(SEG[k].of).length] as const);
+  const total = counts.reduce((n, [, c]) => n + c, 0);
+  const queued = missions.filter((m) => m.stage === "briefing" && !SEG.blocked.of(m)).length;
+  const R = 70, C = 2 * Math.PI * R;
+  let offset = 0;
+  const waitingMissions = missions.filter(needsYou);
+  const list = missions.filter(SEG[seg].of);
+
+  return (
+    <div className="space-y-3" data-mission-board>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_300px_1fr]">
+        <section className="glass px-5 py-4" aria-label="Waiting on you">
+          <div className="glass-eyebrow">Waiting on you <span className="type-figure opacity-70">{waitingMissions.length + (approvals?.length ?? 0)}</span></div>
+          <ul className="mt-2 space-y-2">
+            {waitingMissions.map((m) => (
+              <li key={m.id}><button type="button" onClick={() => onPick(m.id)} className={`w-full rounded-xl px-3 py-2 text-left glass-inset ${focus?.id === m.id ? "neon-ring" : ""}`}>
+                <div className="text-[13px]">{m.name}</div><div className="text-[11px]" style={{ color: STAGE_TINT[m.stage] }}>{m.stage === "review" ? "Result to read" : "Plan to approve"}</div>
+              </button></li>
+            ))}
+            {(approvals ?? []).map((a) => (
+              <li key={a.id} className="rounded-xl px-3 py-2 glass-inset">
+                <div className="text-[12.5px]">{a.agentName} <span className="text-[11px] text-[var(--fg-dimmer)]">{a.kind === "question" ? "asks" : `wants to use ${a.toolName}`}</span></div>
+                {a.kind === "question"
+                  ? (<>
+                      <p className="mt-1 whitespace-pre-wrap text-[12px] text-[var(--fg-dim)]">{a.question}</p>
+                      <div className="mt-1.5 flex gap-1.5">
+                        <input value={reply[a.id] ?? ""} onChange={(e) => setReply({ ...reply, [a.id]: e.target.value })} aria-label={`Reply to ${a.agentName}`} placeholder="Your reply" className="min-w-0 flex-1 rounded-lg px-2 py-1 text-[12px] outline-none glass" />
+                        <button type="button" disabled={busy === a.id || !(reply[a.id] ?? "").trim()} onClick={() => void decide(a, { answer: reply[a.id] })} className="rounded-lg px-2 py-1 text-[11.5px] glass neon-ring disabled:opacity-40">Reply</button>
+                      </div>
+                    </>)
+                  : (<>
+                      <pre className="mt-1 max-h-[90px] overflow-auto whitespace-pre-wrap rounded-lg p-2 text-[10.5px] glass">{a.inputPreview}</pre>
+                      <div className="mt-1.5 flex gap-1.5">
+                        <button type="button" disabled={busy === a.id} onClick={() => void decide(a, { decision: "allow" })} className="rounded-lg px-2.5 py-1 text-[11.5px] glass neon-ring disabled:opacity-40">Allow</button>
+                        <button type="button" disabled={busy === a.id} onClick={() => void decide(a, { decision: "deny" })} className="rounded-lg px-2.5 py-1 text-[11.5px] glass disabled:opacity-40">Deny</button>
+                      </div>
+                    </>)}
+              </li>
+            ))}
+            {waitingMissions.length === 0 && (approvals?.length ?? 0) === 0 && <li className="text-[12px] text-[var(--fg-dimmer)]">Nothing needs you.</li>}
+          </ul>
+          {apErr && <p role="alert" className="mt-2 text-[11.5px] text-red-300">Agent approvals unavailable: {apErr}</p>}
+        </section>
+
+        <section className="glass flex flex-col items-center px-4 py-4" aria-label="Missions by state">
+          <svg viewBox="0 0 180 180" className="w-full max-w-[220px] -rotate-90">
+            <circle cx="90" cy="90" r={R} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="16" />
+            {total > 0 && counts.map(([k, c]) => {
+              if (!c) return null;
+              const len = (c / total) * C, dash = `${Math.max(0, len - 3)} ${C}`, off = -offset;
+              offset += len;
+              return <circle key={k} cx="90" cy="90" r={R} fill="none" stroke={SEG[k].tint} strokeOpacity={seg === k ? 1 : 0.55} strokeWidth={seg === k ? 18 : 14} strokeDasharray={dash} strokeDashoffset={off} onClick={() => setSeg(k)} className="cursor-pointer" />;
+            })}
+          </svg>
+          <div className="-mt-[132px] mb-[84px] text-center">
+            <div className="type-figure text-[26px] leading-none">{total}</div>
+            <div className="text-[10.5px] text-[var(--fg-dimmer)]">missions{queued ? `, ${queued} queued` : ""}</div>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-1.5">
+            {counts.map(([k, c]) => (
+              <button key={k} type="button" aria-pressed={seg === k} title={SEG[k].hint} onClick={() => setSeg(k)} className={`rounded-lg px-2 py-1 text-left text-[11.5px] ${seg === k ? "glass neon-ring" : "glass-inset"}`}>
+                <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: SEG[k].tint }} />{SEG[k].label} <span className="type-figure">{c}</span>
+              </button>
+            ))}
+          </div>
+          <ul className="mt-3 w-full space-y-1">
+            {list.length === 0 && <li className="text-center text-[11.5px] text-[var(--fg-dimmer)]">None {SEG[seg].label.toLowerCase()}.</li>}
+            {list.map((m) => <li key={m.id}><button type="button" onClick={() => onPick(m.id)} className={`w-full truncate rounded-lg px-2.5 py-1 text-left text-[12px] ${focus?.id === m.id ? "glass neon-ring" : "hover:bg-white/5"}`}>{m.name}</button></li>)}
+          </ul>
+        </section>
+
+        <section className="glass px-5 py-4" aria-label="Delivered">
+          <div className="glass-eyebrow">Delivered <span className="type-figure opacity-70">{missions.filter(SEG.delivered.of).length}</span></div>
+          <ul className="mt-2 space-y-2">
+            {missions.filter(SEG.delivered.of).length === 0 && <li className="text-[12px] text-[var(--fg-dimmer)]">Nothing delivered yet.</li>}
+            {missions.filter(SEG.delivered.of).map((m) => (
+              <li key={m.id}><button type="button" onClick={() => onPick(m.id)} className={`w-full rounded-xl px-3 py-2 text-left glass-inset ${focus?.id === m.id ? "neon-ring" : ""}`}>
+                <div className="truncate text-[13px]">{m.name}</div>
+                <div className="text-[11px] text-[var(--fg-dimmer)]">{m.deliveredAt ? `delivered ${ago(m.deliveredAt, now)}` : "delivered"}{m.plan ? ` · ${m.plan.steps.length} step${m.plan.steps.length === 1 ? "" : "s"}` : ""}</div>
+              </button></li>
+            ))}
+          </ul>
+        </section>
+      </div>
+      {focus && (
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_360px]">
+          <InFocus m={focus} now={now} />
+          <Desk m={focus} waiting={missions.filter(needsYou)} onPick={onPick} onChanged={onChanged} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function Timeline({ id, live }: { id: string; live: boolean }) {
   const [events, setEvents] = useState<MissionEvent[] | null>(null);
