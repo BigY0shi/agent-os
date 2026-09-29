@@ -18,7 +18,8 @@ is one line; the journal carries the rest.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
-  S19 memory off Honcho (config). Next: S15 Control Room.
+  S19 memory off Honcho (config), S15 Control Room (v2.37.0).
+  Next: S16 MCP tab, S17 Missions.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -107,6 +108,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-28 · v2.37.0 · Jarvis v3 S15 Control Room tab: measured host and local-service status with plain-words checks (Windows load average reported as unavailable, loopback-only probes), one skills/workflows matrix across every module, Claude Code plugins (global, next session, backup per change), insights from the run registry with its window stated, and every module's settings behind a new masked door (`/api/control/settings`). Found and queued: GET /api/settings returns key material. smoke-control-room 42 checks.
 
 - 2026-09-28 · config · Jarvis v3 S19: memory off Honcho. Claude Code uses Agent OS Memory V2 through the user-scope MCP server `agent-os` (memory_search / memory_ingest / memory_about_user, verified live); Honcho plugins disabled; global CLAUDE.md updated. Hermes not moved (its `mcp add` cannot send the auth header). No repo code changed.
 

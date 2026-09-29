@@ -1,5 +1,58 @@
 # Agent OS — Dev Journal
 
+## 2026-09-28 - Control Room: status, every module's skills and workflows, plugins, insights, settings (v2.37.0)
+
+S15 of `_design/jarvis-v3-plan.md`. The owner asked for a Jarvis tab "where I can
+monitor and manage Statuses, Workflows, Skills, Plugins, Insights, and ALL other
+settings for ALL the agents and modules."
+
+**Five sections, each from a live source.**
+- Status: `lib/hostHealth.ts` measures the host at request time (CPU from two
+  `os.cpus()` samples 400 ms apart, per-core bars, memory, disk via `fs.statfs` for the
+  home and app drives) and probes the local services (Kokoro, Parakeet, Ollama; LM
+  Studio and Voicebox marked optional), then turns it into plain-words checks and one
+  status word. Two honesty rules are in code: Windows has no load average and
+  `os.loadavg()` returns zeros there, so it is reported as "not available on Windows",
+  not as an idle machine; and only loopback URLs are probed (a remote LM Studio URL in
+  settings is reported, never called). This is the shared endpoint S18's System pulse
+  and S27's Health page will build on.
+- Skills & workflows: one matrix, modules down, skills or workflows across, every cell
+  a switch through the same `/api/modules/kit` door as the pop-up, plus an Everywhere
+  row. Modules whose code does not read skills are labelled "not wired".
+- Plugins: Claude Code's `enabledPlugins`, with the truth that they are global to
+  Claude Code (not per module) and take effect next session. Each toggle copies the
+  file into `~/.claude/.exile/<timestamp>/` first, changes one key, writes atomically
+  and reads back; invalid JSON is refused and left untouched.
+- Insights: counts from the module-run registry, with its window stated on the page
+  (it keeps running runs plus the last 50 finished, so these are recent activity, not
+  all-time totals), agent status, Jarvis session counts, skill and workflow coverage.
+- Settings: every top-level settings block as an expandable JSON editor through a new
+  door, `/api/control/settings`, that masks key material (the leaf-name rule catches
+  apifyToken, sunoCookie, mcp.secret and camelCase ...Key, case-insensitively; a
+  hotkey's key name is not a secret) and strips the placeholder from writes, so a
+  round-trip save can never write "********" over a key. Writes read back, because
+  `writeSettings` swallows disk errors.
+
+**Found: GET /api/settings returns key material to the browser**, including the MCP
+secret bootstrapped for S19 earlier today. Not changed here, because the Memory gear
+reads `mcp.secret` from that route on purpose to show it for pasting into an MCP
+client, so the fix is a small redesign (mask the general route, give the Memory gear a
+reveal-on-click door); queued for the owner as its own task with that proposal.
+
+**Got wrong on the way:** the first secret-name pattern was case-sensitive and would
+have shown `apifyToken` and `sunoCookie` in clear; caught on review before the smoke,
+which now pins both.
+
+**Evidence.** `smoke-control-room`, 42 checks, fetch stubbed so no live service is
+touched and Claude Code's settings redirected to a temp file: CPU sampling and host
+shape, Windows load average null, loopback-only probing (the remote URL was never
+called), optional services never fail the board, check counts and status word;
+masking on read and on the save reply, placeholder writes leave secrets alone, new
+values replace them, shape/key guards; plugin toggle with backup, rest of file kept,
+404/400/500 paths; insights counting one done and one failed run from a temp registry
+with a measured average. Sibling Jarvis smokes still pass; `tsc` clean. Not yet seen
+in a browser.
+
 ## 2026-09-28 - Memory off Honcho: Claude Code now remembers through Agent OS (config only)
 
 S19 of `_design/jarvis-v3-plan.md`. The owner: "my Honcho server is down, and won't be
