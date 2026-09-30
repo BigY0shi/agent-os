@@ -11,7 +11,7 @@ These are not the same as the file-based skills (`SKILL.md` folders) that the **
 | Control | What it does |
 |---|---|
 | **New skill** | Opens the editor with an empty policy. |
-| **Configure** (gear, tooltip "Skills settings") | Shows a note: policy skills live in the OS database and are injected into V2 task execution and Jarvis prompts (active ones only, in list order, capped at about 8k characters), while the file-based operating skills front the CLI-agent lanes. It has no settings of its own. |
+| **Configure** (gear, tooltip "Skills settings") | Shows a note: policy skills live in the OS database and are injected into V2 task execution and Jarvis prompts (active ones only, in list order, capped at about 8k characters), while the file-based operating skills that front the CLI-agent lanes are turned on per module (each module's **Skills & workflows** button) or in Jarvis, Control Room, **Skills & workflows**. It has no settings of its own. |
 | Power button on a row | "Active, click to deactivate" or "Inactive, click to activate". Only active policies are injected. |
 | **Move up** / **Move down** | Reorders the policy. Order is the injection order. |
 | **Edit** | Opens the editor for that policy. |

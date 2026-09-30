@@ -1,5 +1,26 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Stale copy: SEO site count, Local Engine model, Skills gear (v2.51.6)
+
+Guide-writer findings (v2.50.0), confirmed in the code:
+- **SEO**: the Generate heading, button, write warning and past-session lines said "5 articles
+  for all 5 sites" / "of 5 articles written" whatever number of sites was configured. They now
+  count `sites.length` (from `/api/seo/sites`), and past sessions just say how many were
+  written. (Still open: auto-deploy only recognises the five folders hardcoded in
+  `siteIdFromPath`; the Deploy tab works for any site.)
+- **Local Engine**: the header and page subtitle said "Gemma-4 12B Coder" and the route's
+  no-output hint said `llama3.1:8b`, while the model is whatever the Hermes `local` profile
+  sets. They now say that.
+- **Skills** gear said "the file-based operating skills below", but ConfigMenu no longer
+  appends that section. It now points at each module's Skills & workflows button and Jarvis,
+  Control Room, Skills & workflows.
+Docs updated: seo, engine, skills.
+
+Verified: `smoke-honest-labels.mjs` section E (3 checks, now 18 in all). tsc clean,
+smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Pipeline "Remove from board" works (it posted to a route that did not exist) (v2.51.5)
 
 `PipelineView.remove()` posts to `/api/pipeline/delete` and its confirm already promised

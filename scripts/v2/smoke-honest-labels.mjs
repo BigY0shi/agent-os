@@ -72,5 +72,13 @@ check("D1 Pi's header names no model it never read", !/Ollama glm-5\.2:cloud/.te
 const oc = read("src/components/OpenClawStudio.tsx");
 check("D2 OpenClaw claims no model version and no live status it never checks", !/Grok 4\.3/.test(oc) && !/xAI · live/.test(oc));
 
+// ── E. stale copy ─────────────────────────────────────────────────────────────
+const seo = read("src/components/SEOView.tsx");
+check("E1 SEO counts the configured sites, not a fixed five", !/all 5 sites|Generate 5 |of 5 articles/.test(seo) && /siteCount = sites\.length/.test(seo));
+const eng = read("src/components/LocalHermesEngine.tsx") + read("src/lib/pageMeta.ts") + read("src/app/api/local-hermes/run/route.ts");
+check("E2 Local Engine names no model it never reads", !/Gemma-4 12B Coder|llama3\.1:8b/.test(eng));
+const sk = read("src/components/v2/skills/SkillsView.tsx");
+check("E3 the Skills gear points at where file skills really are", !/operating skills below/.test(sk) && /Control Room/.test(sk));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

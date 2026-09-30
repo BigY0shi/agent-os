@@ -72,7 +72,7 @@ Renders the blog-post skill served by `/api/seo/skill`.
 
 ## Known gaps
 
-- The Generate heading and button still say "5 articles for all 5 sites", whatever number of sites you configured.
+- The Generate heading, button and write warning count your configured sites ("Generate N articles"); past sessions show how many articles were written.
 - Auto-deploy only recognises files written under five hard-coded site folders (`siteIdFromPath` in `SEOView.tsx`). For sites added in the gear, files are written but nothing is deployed automatically; use the Deploy tab.
 - The per-site **Deploy command** field in the gear is saved but the deploy route does not use it.
 - The live log and the written-file tracking parse Claude's stream-json output. With another generation agent its plain-text output is dropped by the page (only stderr and the exit code show), the History session lists no articles, and auto-deploy has nothing to act on.

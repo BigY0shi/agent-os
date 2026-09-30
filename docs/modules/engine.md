@@ -35,4 +35,4 @@ The page is two panels side by side: the agent log on the left and "What it buil
 - The file list walks the workspace up to 4 folders deep and at most 200 files, skipping dot files, `node_modules`, `.git`, `.venv`, `__pycache__`, `.next` and `dist`. Text files are read up to 800 KB.
 - The transcript lives only in your browser's localStorage (key `agentic-os/local-hermes/transcript/v1`, last 50 turns). It is not on the server.
 - Needs: the `hermes` CLI on the PATH with a `local` profile set up, and Ollama running with that profile's model pulled. If a run produces no output, the reply shows the exit code and the tail of stderr.
-- Which model answers is decided by the Hermes `local` profile, not by this page. The header text says "Gemma-4 12B Coder", while the route's comments and its no-output hint mention `llama3.1:8b`. Check the profile config if the label matters.
+- Which model answers is decided by the Hermes `local` profile, not by this page; the header and the no-output hint say so rather than naming a model.

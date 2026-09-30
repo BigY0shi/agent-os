@@ -99,7 +99,7 @@ export default function LocalHermesEngine() {
             The Local Hermes Engine
             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: `${ACCENT}1e`, color: ACCENT, border: `1px solid ${ACCENT}40` }}><WifiOff size={9} /> offline</span>
           </div>
-          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A real agent on your machine · Gemma-4 12B Coder · runs commands + builds files · free, private</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A real agent on your machine · the model your Hermes <code>local</code> profile sets · runs commands + builds files · free, private</div>
         </div>
       </div>
 
