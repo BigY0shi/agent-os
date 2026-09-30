@@ -118,5 +118,19 @@ check("J3 Music has the Refresh button its notice tells you to press", /hit Refr
 const gc = read("src/app/api/games/commission/route.ts");
 check("K1 commissioned games land in the shelf's root (FCC_SCRATCH_ROOT), not a fixed home path", /GAMES_DIR = path\.join\(FCC_SCRATCH_ROOT, "games"\)/.test(gc) && !/homedir\(\), "freeclaude-scratch"/.test(gc));
 
+// ── L. Open Design's project proxy uses the daemon URL from the gear ──────────
+{
+  fs.writeFileSync(process.env.AGENTIC_OS_SETTINGS, JSON.stringify({ opendesign: { daemonUrl: "http://127.0.0.1:9911/" } }), "utf8");
+  const od = await import("../../src/app/api/opendesign/projects/route.ts");
+  const hits = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { hits.push(`${init?.method || "GET"} ${String(url)}`); return new Response(JSON.stringify({ projects: [] }), { status: 200 }); };
+  await od.GET();
+  await od.DELETE(new Request("http://x/api/opendesign/projects?id=abc123", { method: "DELETE" }));
+  globalThis.fetch = realFetch;
+  check("L1 the project list and delete go to the daemon set in the gear", hits[0] === "GET http://127.0.0.1:9911/api/projects" && hits[1] === "DELETE http://127.0.0.1:9911/api/projects/abc123", hits);
+  fs.writeFileSync(process.env.AGENTIC_OS_SETTINGS, "{}", "utf8");
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

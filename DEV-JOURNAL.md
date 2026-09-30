@@ -1,5 +1,19 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Open Design's project gallery uses the daemon URL from the gear (v2.51.13)
+
+`/api/opendesign/status` read `settings.opendesign.daemonUrl`, but `/api/opendesign/projects`
+(the Workspace gallery's list and per-card delete) called a fixed `http://127.0.0.1:7455`, so a
+daemon on any other address showed healthy while its gallery stayed empty (Guide writers,
+v2.50.0: saved but not read by the proxy). The proxy now reads the same setting per request,
+trailing slash trimmed, default unchanged. `docs/modules/opendesign.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section L (temp settings with a custom daemon URL, fetch
+stubbed: the GET and the DELETE both go to it; 34 checks in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Game Studio writes games where its shelf reads (v2.51.12)
 
 `/api/games/commission` wrote CLI-built games to a fixed `~/freeclaude-scratch/games`, while

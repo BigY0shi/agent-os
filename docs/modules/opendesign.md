@@ -46,7 +46,7 @@ The header shows a status pill: "checking...", "running · <host:port>" or "offl
 
 - Health: the page calls `/api/opendesign/status` every 6 seconds, which probes the **Daemon URL** (default `http://127.0.0.1:7455`). Once running, it takes 4 missed checks in a row before the page flips to offline, so a slow check while Open Design is busy does not tear down the studio.
 - The studio iframe loads the **Web UI URL** (default `http://127.0.0.1:7456`).
-- The project list and delete are proxied through `/api/opendesign/projects` to the daemon's `/api/projects`, because the daemon sends no CORS headers.
+- The project list and delete are proxied through `/api/opendesign/projects` to the **Daemon URL**'s `/api/projects` (the same setting the health check uses), because the daemon sends no CORS headers.
 - Rendered designs are read from `~/open-design/.od/projects/<id>/index.html` and served through `/api/opendesign/preview/<id>`.
 - If no launch or stop command is set, the server falls back to `~/open-design/od-host-start.sh` and `od-host-stop.sh` when those exist (a macOS setup).
 - Open Design must be installed separately. The page text says it runs on Node 24 with no API keys, and that its own Settings > Execution picks which CLI agent it drives.
