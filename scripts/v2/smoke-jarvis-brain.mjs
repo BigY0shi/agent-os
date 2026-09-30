@@ -582,6 +582,10 @@ if (!ollamaUp) {
 console.log("--- H. sdk live leg ---");
 if (process.env.SMOKE_SKIP_SDK === "1") {
   console.log("SKIP  SMOKE_SKIP_SDK=1 — live sdk leg skipped by request.");
+} else if (process.env.AGENTIC_SMOKE_OFFLINE) {
+  // The gate (test.sh) exports this. Without the check, every gate run made one real,
+  // billed Claude SDK call here. Run the smoke without the flag to exercise this leg.
+  console.log("SKIP  live sdk leg: AGENTIC_SMOKE_OFFLINE=1 (run without it to exercise the real SDK)");
 } else {
   // Seed the hub in whichever DB is current (the sdk session builds tools from it).
   ensureTaskActions();

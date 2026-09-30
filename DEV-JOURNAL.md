@@ -1,5 +1,18 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - The gate no longer makes live model calls (v2.51.1)
+
+`test.sh` exports `AGENTIC_SMOKE_OFFLINE=1`, but two smokes ignored it for their live legs:
+- `smoke-jarvis-brain.mjs` section H checked only `SMOKE_SKIP_SDK`, so every gate run made
+  one real Claude SDK call (a tool-driving ask; billed to the subscription, roughly $0.50).
+- `smoke-engine.mjs` ran a live task through Ollama whenever a provider was reachable.
+
+Both now skip their live leg under `AGENTIC_SMOKE_OFFLINE` and say so; run either smoke
+without the flag to exercise the real model. Verified: both pass with the flag and print
+the SKIP line (jarvis-brain ALL PASS, engine ALL PASS).
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Loop runs on CLI agents only (v2.51.0)
 
 Owner, 2026-09-29: provider routing is CLI agents only ("openrouter isn't used", via
