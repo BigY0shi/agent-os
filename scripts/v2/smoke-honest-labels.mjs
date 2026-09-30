@@ -92,5 +92,15 @@ check("G1 a failed Grok b-roll clip is shown as failed, not quietly redone on Mi
 const vs = read("src/components/VideoStudio.tsx");
 check("G2 Workspace fetches HTML source, so Source can load", /k === "text" \|\| k === "json" \|\| k === "html"/.test(vs));
 
+// ── H. Codex session file preview on Windows ──────────────────────────────────
+const CV = await import("../../src/components/CodexView.tsx");
+const B = String.fromCharCode(92);
+const winHome = ["C:", "Users", "Yoshi"].join(B);
+check("H1 a Windows path under home becomes a preview URL", CV.sessionFileUrl(["C:", "Users", "Yoshi", "Documents", "shot one.png"].join(B), winHome) === "/api/codex/session-file/Documents/shot%20one.png");
+check("H2 drive-letter case and forward slashes are tolerated", CV.sessionFileUrl("c:/users/yoshi/a/b.html", winHome) === "/api/codex/session-file/a/b.html");
+check("H3 a path outside home is refused", CV.sessionFileUrl(["D:", "stuff", "x.png"].join(B), winHome) === null && CV.sessionFileUrl(["C:", "Users", "Yoshi2", "x.png"].join(B), winHome) === null);
+check("H4 POSIX paths still work", CV.sessionFileUrl("/Users/sam/Desktop/a.png", "/Users/sam") === "/api/codex/session-file/Desktop/a.png" && CV.sessionFileUrl("/Users/samuel/a.png", "/Users/sam") === null);
+check("H5 the session route reports the server's home", /home: os\.homedir\(\)/.test(read("src/app/api/codex/session/route.ts")) && /typeof j\.home === "string"/.test(read("src/components/CodexView.tsx")));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

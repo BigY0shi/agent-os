@@ -1,5 +1,23 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Codex session file previews work on Windows (v2.51.9)
+
+`CodexView` turned a session's absolute file paths into `/api/codex/session-file/...` URLs
+using a home folder it guessed from the session cwd with `/^(\/(?:Users|home)\/[^/]+)/`,
+and `sessionFileUrl` only split on `/`. On this Windows machine (`C:\Users\...`) the guess
+never matched, `homeDir` stayed empty, and clicking a file in a session did nothing (Guide
+writers, v2.50.0). Now `/api/codex/session` returns `home: os.homedir()`, the page uses it
+(falling back to the old POSIX guess for an older server), and `sessionFileUrl` normalises
+backslashes, compares drive paths case-insensitively and still refuses anything outside
+home. The file route itself already joined segments with `path.resolve`, so it needed no
+change. `docs/modules/codex.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section H (5 checks, 27 in all) calls the real
+`sessionFileUrl` with Windows and POSIX paths, inside and outside home. tsc clean,
+smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Video: no silent Grok-to-MiniMax retry; Workspace HTML Source loads (v2.51.8)
 
 Guide-writer findings (v2.50.0), confirmed in the code:

@@ -56,9 +56,15 @@ interface SessionDetail {
 
 // Convert an absolute path under $HOME into the path-segment list our session-file
 // endpoint expects. Returns null when the file isn't under HOME (we never serve those).
-function sessionFileUrl(absPath: string, home: string): string | null {
-  if (!absPath || !absPath.startsWith(home + "/")) return null;
-  const rel = absPath.slice(home.length + 1);
+// Works for POSIX and Windows paths (backslashes, drive letters, case-insensitive).
+export function sessionFileUrl(absPath: string, home: string): string | null {
+  const norm = (p: string) => p.split(String.fromCharCode(92)).join("/").replace(/\/+$/, "");
+  const a = norm(absPath || ""), h = norm(home || "");
+  if (!a || !h) return null;
+  const win = /^[A-Za-z]:\//.test(h);
+  const under = win ? a.toLowerCase().startsWith(h.toLowerCase() + "/") : a.startsWith(h + "/");
+  if (!under) return null;
+  const rel = a.slice(h.length + 1);
   return `/api/codex/session-file/${rel.split("/").map(encodeURIComponent).join("/")}`;
 }
 function kindFromExt(name: string): CdxFileKind {
@@ -188,8 +194,10 @@ export default function CodexView() {
       const j = await r.json();
       if (j.session) {
         setOpenSession(j.session);
-        // Infer $HOME from the cwd (first 3 segments: /Users/<user>)
-        if (j.session.cwd && !homeDir) {
+        // The server says where $HOME is; older servers didn't, so fall back to
+        // inferring it from a POSIX cwd (/Users/<user> or /home/<user>).
+        if (typeof j.home === "string" && j.home && !homeDir) setHomeDir(j.home);
+        else if (j.session.cwd && !homeDir) {
           const m = /^(\/(?:Users|home)\/[^/]+)(?:\/|$)/.exec(j.session.cwd);
           if (m) setHomeDir(m[1]);
         }
