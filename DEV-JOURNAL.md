@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - OpenClaw Talk reports the real model; SEO's unused Deploy command says so (v2.51.10)
+
+- `/api/openclaw/studio/chat-quick` (OpenClaw Studio Talk) answered every reply with
+  `model: "xai/grok-4.20-beta-latest-non-reasoning"`, a name written into the route while
+  OpenClaw picks the agent's default model. It now reports the model only when OpenClaw's
+  JSON names one (`j.model` or `outputs[0].model`), otherwise `null`.
+- SEO's per-site **Deploy command** field is saved but `/api/seo/deploy` always runs
+  `npx @11ty/eleventy` then `netlify deploy --prod`. Wiring it would run a settings string as
+  a shell command and bypass the route's wrong-site guard, so that is left for the owner; the
+  field's placeholder now says "saved, not used yet".
+Docs updated: openclaw, seo.
+
+Verified: `smoke-honest-labels.mjs` section I (2 checks, 29 in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Codex session file previews work on Windows (v2.51.9)
 
 `CodexView` turned a session's absolute file paths into `/api/codex/session-file/...` URLs

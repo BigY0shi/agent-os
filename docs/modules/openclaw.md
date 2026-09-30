@@ -56,7 +56,7 @@ Each action has an 8 second timeout.
 
 - **Chat** posts to `/api/openclaw/chat`, which runs `openclaw agent --local --agent <id> -m "<prompt>" --json --timeout 120`. The agent is `main` unless `AGENTIC_OS_OPENCLAW_AGENT` or `openclawAgent` in `~/.agentic-os/config.json` says otherwise. The last 24 turns are packed into the prompt. The thread lives in browser localStorage (`agentic-os-chat-v2:openclaw`, last 50 messages) and replies are appended to your Obsidian vault's `Agentic OS/Memories/<date>.md`.
 - **Studio** outputs are saved under `~/.openclaw/studio/` (`images/`, `videos/`, `audio/`), with saved searches in `searches/` and talks in `talks/`. Talk saves after every turn.
-- Talk's replies come from `openclaw infer model run --gateway` with a short "be brief" prompt and whatever default model the agent has. The route labels its answer `xai/grok-4.20-beta-latest-non-reasoning`, but that name is written into the code, not read from OpenClaw.
+- Talk's replies come from `openclaw infer model run --gateway` with a short "be brief" prompt and whatever default model the agent has. The route reports the model only when OpenClaw's JSON names one (otherwise `model` is null).
 - All Studio tools need the OpenClaw CLI signed in to xAI. Talk needs Chrome or Safari and microphone access.
 - The Gateway card treats OpenClaw's own "degraded" flag as **Busy** unless the event-loop numbers show real delay (max over 100 ms or p99 over 50 ms).
 - Needs the `openclaw` CLI, found via `AGENTIC_OS_OPENCLAW_BIN`, the config file, or the PATH.

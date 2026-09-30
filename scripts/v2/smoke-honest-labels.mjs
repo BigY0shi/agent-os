@@ -102,5 +102,10 @@ check("H3 a path outside home is refused", CV.sessionFileUrl(["D:", "stuff", "x.
 check("H4 POSIX paths still work", CV.sessionFileUrl("/Users/sam/Desktop/a.png", "/Users/sam") === "/api/codex/session-file/Desktop/a.png" && CV.sessionFileUrl("/Users/samuel/a.png", "/Users/sam") === null);
 check("H5 the session route reports the server's home", /home: os\.homedir\(\)/.test(read("src/app/api/codex/session/route.ts")) && /typeof j\.home === "string"/.test(read("src/components/CodexView.tsx")));
 
+// ── I. OpenClaw Talk model label, SEO deploy command ──────────────────────────
+const cq = read("src/app/api/openclaw/studio/chat-quick/route.ts");
+check("I1 OpenClaw Talk reports only the model OpenClaw names (else null)", !/model: "xai\/grok/.test(cq) && /let model: string \| null = null/.test(cq));
+check("I2 SEO's Deploy command field says it is not used yet", /Deploy command \(saved, not used yet/.test(read("src/components/SeoSettings.tsx")));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
