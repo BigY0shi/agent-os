@@ -13,13 +13,12 @@ Two tabs in the header: **Boardroom** and **Workspace** (with a file count once 
 | Control | What it does |
 |---|---|
 | Preset chips: **SEO content council**, **Title + thumbnail brain**, **Fact-check**, **Deep research**, **Red-team my offer** | Put a prompt template in the box, with a placeholder such as `[KEYWORD]` or `[TOPIC]` to fill in. |
-| **Ask the board** | A preset chip with an empty template, so clicking it does nothing. |
 | Message box | Enter sends, Shift+Enter adds a new line. |
 | **Convene** | Sends the prompt and the prior turns to `/api/sakana/chat` and streams the reply. |
 | **Stop** | Aborts the request. |
-| Trash icon ("Clear history") | Asks for confirmation (the dialog says "Clear Fusion history?"), then empties the thread in the browser and on disk. |
+| Trash icon ("Clear history") | Asks for confirmation (the dialog says "Clear Sakana history?"), then empties the thread in the browser and on disk. |
 
-While waiting, a status card shows an elapsed clock and a message that changes at 8, 28 and 55 seconds ("Sending your prompt to the panel", "deliberating", "Running web searches", "The judge is weighing it all"). These messages are timed by the page, not reported by Sakana. Once text starts arriving, the card switches to "Judge writing the verdict" and shows the reply as it streams.
+While waiting, a status card shows the real elapsed time and a status line that follows what the route reports: "Sending your question to Sakana" until Sakana answers, then "Sakana accepted it. Waiting for the answer to start" (the route sends `{"t":"status","s":"accepted"}` after the 200). Sakana does not report which models are on the panel or how far along they are, so the card does not show either. Once text arrives it streams under "Answer streaming".
 
 ### Workspace
 

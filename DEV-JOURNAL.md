@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Sakana Fugu shows only what the request reports (v2.51.3)
+
+`SakanaView.tsx` is a copy of the old FusionView and had the same invented waiting state
+(Guide writers, v2.50.0): pulsing chips "Sakana panel" / "+ vendor-agnostic", a status line
+chosen by `stageFor(elapsed)` at 8/28/55 s, a shimmer bar, a "Judge writing the verdict"
+label, and an "Ask the board" preset with an empty template. Its Clear button also asked
+"Clear Fusion history?". Same fix as Fusion (v2.50.4): the route sends
+`{"t":"status","s":"accepted"}` after Sakana's 200; the card shows that, the real elapsed
+time and a plain note that Sakana does not report panel members or progress; "Answer
+streaming"; the empty preset is gone; the dialog says "Clear Sakana history?".
+`docs/modules/sakana.md` updated.
+
+Verified: `smoke-fusion-honesty.mjs` now runs every check against both modules (35 checks,
+fetch stubbed, HOME in a temp dir so no real key is read). tsc clean, smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - "Delete" in four modules now exiles instead of destroying (v2.51.2)
 
 Found by the Guide writers (v2.50.0): Agent Kanban (`kanbanStore.deleteBuild`), Music
