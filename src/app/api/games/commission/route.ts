@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { run } from "@/lib/runner";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { writeFile, mkdir } from "node:fs/promises";
-import os from "node:os";
+import { FCC_SCRATCH_ROOT } from "@/lib/freeClaudeWorkspace";
 import path from "node:path";
 
 export const runtime = "nodejs";
@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const BOARD = "game-studio";
-const GAMES_DIR = path.join(os.homedir(), "freeclaude-scratch", "games");
+// Same root the shelf reads (FreeClaude workspace, which honours AGENTIC_OS_FCC_SCRATCH);
+// a fixed ~/freeclaude-scratch here meant games vanished from the shelf when it was set.
+const GAMES_DIR = path.join(FCC_SCRATCH_ROOT, "games");
 
 // Pull a complete HTML doc out of an agent's reply (strip ```html fences if present).
 function extractGameHtml(text: string): string {

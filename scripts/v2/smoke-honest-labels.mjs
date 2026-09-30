@@ -114,5 +114,9 @@ check("J2 Kanban's Dispatch agent field says it is not used yet", /Saved, not us
 const ms = read("src/components/MusicStudio.tsx");
 check("J3 Music has the Refresh button its notice tells you to press", /hit Refresh/.test(ms) && /onClick=\{\(\) => refresh\(\)\}/.test(ms));
 
+// ── K. Game Studio writes where its shelf reads ───────────────────────────────
+const gc = read("src/app/api/games/commission/route.ts");
+check("K1 commissioned games land in the shelf's root (FCC_SCRATCH_ROOT), not a fixed home path", /GAMES_DIR = path\.join\(FCC_SCRATCH_ROOT, "games"\)/.test(gc) && !/homedir\(\), "freeclaude-scratch"/.test(gc));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -1,5 +1,20 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Game Studio writes games where its shelf reads (v2.51.12)
+
+`/api/games/commission` wrote CLI-built games to a fixed `~/freeclaude-scratch/games`, while
+the shelf reads the `games` project through the FreeClaude workspace, whose root honours
+`AGENTIC_OS_FCC_SCRATCH`. With that variable set, a finished game never appeared on the
+shelf (Guide writers, v2.50.0). The route now uses `FCC_SCRATCH_ROOT` from
+`freeClaudeWorkspace.ts` (imported only; that file is the owner's uncommitted work and its
+committed version exports the same constant). Default behaviour is unchanged.
+`docs/modules/games.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section K (1 check, 33 in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Kanban setup advice for this machine; unused Dispatch agent says so; Music gets its Refresh button (v2.51.11)
 
 - **Kanban** (Hermes board) setup card told you to `brew install node@22` and to "restart

@@ -22,7 +22,7 @@ The page refreshes the shelf and the workshop list every 12 seconds.
 ## How it works
 
 - The output file name is a slug of your prompt, for example `neon-snake-that-grows.html`. A fixed build spec is added to every prompt: one playable HTML file, no external libraries or assets, keyboard and touch controls, score, difficulty ramp, start and game-over screens.
-- **CLI agent path** (Claude, Codex, Cursor, Pi, Hermes, Antigravity): the route calls the CLI directly with your own login, waits up to about 280 seconds, checks that real HTML came back, and writes it to `~/freeclaude-scratch/games/<slug>.html`. The game appears on the shelf when the request returns.
+- **CLI agent path** (Claude, Codex, Cursor, Pi, Hermes, Antigravity): the route calls the CLI directly with your own login, waits up to about 280 seconds, checks that real HTML came back, and writes it to `<FreeClaude scratch root>/games/<slug>.html` (`~/freeclaude-scratch` unless `AGENTIC_OS_FCC_SCRATCH` is set), the same folder the shelf reads. The game appears on the shelf when the request returns.
 - **Hermes game-dev (team) path**: the route creates a task on the Hermes `game-studio` board with `hermes kanban create ... --assignee game-dev --workspace dir:<games folder>`, then runs the dispatcher once. A Hermes worker on the `game-dev` profile builds the game in the background and writes the file itself. This needs Hermes installed with a `game-dev` profile.
 - The shelf reads the `games` project through the FreeClaude workspace routes, whose root is `~/freeclaude-scratch` (or `AGENTIC_OS_FCC_SCRATCH` if set). Games are served from `/api/freeclaude/preview/games/<file>`.
 - There is no delete or rename control on this page.
