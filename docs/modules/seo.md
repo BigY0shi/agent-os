@@ -73,7 +73,7 @@ Renders the blog-post skill served by `/api/seo/skill`.
 ## Known gaps
 
 - The Generate heading, button and write warning count your configured sites ("Generate N articles"); past sessions show how many articles were written.
-- Auto-deploy only recognises files written under five hard-coded site folders (`siteIdFromPath` in `SEOView.tsx`). For sites added in the gear, files are written but nothing is deployed automatically; use the Deploy tab.
+- Auto-deploy matches each file the agent writes to the configured site whose repo folder contains it (`siteIdForFile` in `src/lib/seoSiteMatch.ts`), so every site in the gear auto-deploys; a file outside all of them is not deployed.
 - The per-site **Deploy command** field in the gear is saved but the deploy route does not use it yet; its placeholder says so.
 - The live log and the written-file tracking parse Claude's stream-json output. With another generation agent its plain-text output is dropped by the page (only stderr and the exit code show), the History session lists no articles, and auto-deploy has nothing to act on.
 - The **Save & reuse** tooltip names a fixed `~/AIProfitBoardroom.com/.claude/transcripts/` path; the route saves to the transcripts folder described above.

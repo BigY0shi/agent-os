@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import MarkdownView from "./MarkdownView";
 import SeoSettings from "./SeoSettings";
+import { siteIdForFile } from "@/lib/seoSiteMatch";
 
 type Tab = "research" | "generate" | "deploy" | "history" | "transcripts" | "skill";
 
@@ -183,14 +184,11 @@ export default function SEOView() {
     }
   }
 
-  // Map an absolute file path written by Claude → which site it belongs to (so we can deploy that site)
+  // Map an absolute file path written by Claude → which configured site it belongs to (so we
+  // can deploy that site). It used to match five folder names hardcoded from upstream, so a
+  // site added in the gear was written to but never auto-deployed.
   function siteIdFromPath(filePath: string): string | null {
-    if (filePath.includes("/AIProfitBoardroom.com/"))    return "bestaiagentcommunity";
-    if (filePath.includes("/AIProfitBoardroom-main/"))   return "aiprofitboardroom";
-    if (filePath.includes("/juliangoldieaiautomation/")) return "juliangoldieautomation";
-    if (filePath.includes("/aisuccesslab/"))             return "aisuccesslab";
-    if (filePath.includes("/aimoneylab/"))               return "aimoneylab";
-    return null;
+    return siteIdForFile(filePath, sites.map((s) => ({ id: s.site.id, path: s.site.path })));
   }
 
   async function startGenerate() {

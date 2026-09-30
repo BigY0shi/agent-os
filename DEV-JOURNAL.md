@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - SEO auto-deploys every configured site, not five hardcoded upstream folders (v2.51.15)
+
+While a generation streams, `SEOView` watches the agent's Write calls to know which sites to
+deploy. `siteIdFromPath` matched five folder names from upstream (`AIProfitBoardroom.com`,
+`juliangoldieaiautomation`, ...), so articles written to a site added in the gear were never
+auto-deployed (Guide writers, v2.50.0). New client-safe `src/lib/seoSiteMatch.ts`:
+`siteIdForFile(file, sites)` maps a file to the configured site whose repo path
+(`settings.seo.sites[].dir`, served as `site.path`) contains it, normalising slashes,
+comparing drive paths case-insensitively and preferring the deepest repo. SEOView uses it.
+`docs/modules/seo.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section N (4 checks on the real function: Windows and
+POSIX paths, nesting, a same-prefix sibling folder; 39 in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Notebook opens its Default notebook ID (v2.51.14)
 
 The Notebook gear saves **Default notebook ID** (`settings.notebook.notebookId`), but nothing

@@ -136,5 +136,20 @@ check("K1 commissioned games land in the shelf's root (FCC_SCRATCH_ROOT), not a 
 const nbv = read("src/components/NotebookView.tsx");
 check("M1 with no ?nb= the page opens settings.notebook.notebookId (a pick made meanwhile wins)", /j\?\.settings\?\.notebook\?\.notebookId/.test(nbv) && /setActiveId\(\(cur\) => cur \?\? def\)/.test(nbv));
 
+// ── N. SEO auto-deploy matches configured sites, not five upstream folders ────
+{
+  const { siteIdForFile } = await import("../../src/lib/seoSiteMatch.ts");
+  const B = String.fromCharCode(92);
+  const sites = [
+    { id: "mine", path: ["D:", "sites", "my-blog"].join(B) },
+    { id: "nested", path: ["D:", "sites", "my-blog", "sub"].join(B) },
+    { id: "posix", path: "/srv/blog" },
+  ];
+  check("N1 a Windows file inside a configured repo maps to it", siteIdForFile(["D:", "sites", "my-blog", "src", "blog", "posts", "a.md"].join(B), sites) === "mine");
+  check("N2 case and slash style don't matter on drive paths; the deepest repo wins", siteIdForFile("d:/SITES/my-blog/sub/x.md", sites) === "nested");
+  check("N3 POSIX paths match; a sibling folder with the same prefix does not", siteIdForFile("/srv/blog/p.md", sites) === "posix" && siteIdForFile("/srv/blog2/p.md", sites) === null);
+  check("N4 SEOView no longer hardcodes upstream folders", !/AIProfitBoardroom\.com\/|juliangoldieaiautomation\//.test(read("src/components/SEOView.tsx")));
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
