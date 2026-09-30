@@ -1,5 +1,18 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Notebook opens its Default notebook ID (v2.51.14)
+
+The Notebook gear saves **Default notebook ID** (`settings.notebook.notebookId`), but nothing
+read it: `NotebookView` only took a notebook from `?nb=` in the URL (Guide writers, v2.50.0:
+saved but never read). With no `?nb=`, the page now fetches settings and opens that notebook;
+a URL `?nb=` still wins, and so does anything picked before settings arrive. No settings
+reachable means no default, as before. `docs/modules/notebook.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section M (1 check, 35 in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Open Design's project gallery uses the daemon URL from the gear (v2.51.13)
 
 `/api/opendesign/status` read `settings.opendesign.daemonUrl`, but `/api/opendesign/projects`

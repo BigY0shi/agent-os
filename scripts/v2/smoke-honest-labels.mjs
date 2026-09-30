@@ -132,5 +132,9 @@ check("K1 commissioned games land in the shelf's root (FCC_SCRATCH_ROOT), not a 
   fs.writeFileSync(process.env.AGENTIC_OS_SETTINGS, "{}", "utf8");
 }
 
+// ── M. Notebook opens the gear's Default notebook ID ──────────────────────────
+const nbv = read("src/components/NotebookView.tsx");
+check("M1 with no ?nb= the page opens settings.notebook.notebookId (a pick made meanwhile wins)", /j\?\.settings\?\.notebook\?\.notebookId/.test(nbv) && /setActiveId\(\(cur\) => cur \?\? def\)/.test(nbv));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

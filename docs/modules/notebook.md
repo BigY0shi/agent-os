@@ -13,7 +13,7 @@ A header strip shows the connection state, then five tabs: **Library**, **Resear
 | Control | What it does |
 |---|---|
 | Status line | "checking...", then either "Authenticated · N notebooks · N saved assets · active: <name>" or "Not connected" with a pointer to `install/15-NOTEBOOKLM.md`, `nlm login` and `nlm doctor`, plus the error text. |
-| **Configure** (gear) | Opens "Notebook settings": **notebooklm-mcp binary** (path override; the hint says it takes effect after a restart) and **Default notebook ID**. Saved to the `notebook` section of `~/.agentic-os/settings.json`. |
+| **Configure** (gear) | Opens "Notebook settings": **notebooklm-mcp binary** (path override; the hint says it takes effect after a restart) and **Default notebook ID** (the notebook the page opens on when the URL names none). Saved to the `notebook` section of `~/.agentic-os/settings.json`. |
 | **Refresh** | Rechecks the connection and reloads notebooks, saved assets and the active notebook's artifacts. |
 
 ### Library

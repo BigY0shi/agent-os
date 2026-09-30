@@ -119,7 +119,14 @@ export default function NotebookView() {
     const sp = new URLSearchParams(window.location.search);
     const t = sp.get("tab");
     if (t && ["library", "research", "chat", "studio", "assets"].includes(t)) setTab(t as Tab);
-    const nb = sp.get("nb"); if (nb) setActiveId(nb);
+    const nb = sp.get("nb");
+    if (nb) { setActiveId(nb); return; }
+    // No notebook in the URL: open the gear's Default notebook ID (settings.notebook.notebookId),
+    // which used to be saved and never read. Anything picked meanwhile wins.
+    fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      const def = String(j?.settings?.notebook?.notebookId ?? "").trim();
+      if (def) setActiveId((cur) => cur ?? def);
+    }).catch(() => { /* settings unreachable: no default, nothing selected */ });
   }, []);
 
   // Persist the Research tab: when a notebook is active, load its last research so the
