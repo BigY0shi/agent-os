@@ -33,12 +33,12 @@ Shown while a run is active: a spinning disc, the phase ("Composing... Suno usua
 | Pencil ("Rename") | Edit the title inline. Enter or the check saves, Escape or the X cancels. |
 | Star ("Save" / "Unsave") | Toggles the saved flag on the track. |
 | Download | Downloads the MP3 as `<title>.mp3`. |
-| Trash ("Delete") | Deletes the track's audio, cover and metadata files. There is no confirm. |
+| Trash ("Delete") | Removes the track: its audio, cover and metadata files move together to `~/.agentic-os/music/.exile/<timestamp>/`. There is no confirm. |
 
 ## How it works
 
 - **Generate** posts to `/api/music/generate`, which starts a Suno task and returns its id. The page then polls `/api/music/status` every 5 seconds. When the task finishes, the server downloads each clip's audio and cover into `~/.agentic-os/music/` as `<ts>-<i>-<slug>.mp3`, `.jpg` and a `.json` sidecar with the prompt, style, tags and saved flag.
 - History (`/api/music/list`) is built from those sidecars. Audio and covers are served from `/api/music/preview/<file>`, which only serves files inside the music folder.
-- Star, rename and delete go to `/api/music/save`. Delete removes the files for real.
+- Star, rename and delete go to `/api/music/save`. Delete exiles the files (recoverable from `music/.exile/`); a sidecar pointing outside the music folder is refused.
 - The Suno key is looked up in this order: the `SUNO_API_KEY` environment variable, `~/.agentic-os/suno.env` (`SUNO_API_KEY=`, optional `SUNO_API_BASE=`), then the settings gear. Without one, generation fails with "Suno API key not configured".
 - Generation calls the Suno API over the internet and uses your credits on that service.

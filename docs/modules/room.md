@@ -24,7 +24,7 @@ The specialists are Claude, Codex, Cursor, Pi, Hermes and Antigravity (run throu
 | **New chat with Personas** | New chat where every agent role-plays a random real-world persona (NVIDIA Nemotron Personas). Shows "Casting..." while it draws. |
 | **Cast** | Opens the Cast row: per agent, a dice button draws or re-draws a persona and an X drops it; **Clear all** drops every persona for this chat. |
 | **Incognito ON/OFF** | Clean-room mode: agents run with no CLAUDE.md or rules, no MCP, no session history and no vault context (full for Claude, Hermes and Codex; Cursor and Antigravity only get a neutral working folder). |
-| **History (N)** | Saved chats with age and message count. Click to reopen; the trash icon deletes one. "No saved chats yet." when empty. |
+| **History (N)** | Saved chats with age and message count. Click to reopen; the trash icon removes one (the thread file moves to `conversations/.exile/<timestamp>/` in the vault). "No saved chats yet." when empty. |
 | **In the room** chips | Click an agent to add it to or remove it from the room. Hover shows its model. |
 | Message box | "Message the room..." Tag `@claude` (or another agent) to ask only that one. With nobody in the room it asks you to add an agent first. |
 | **Send** / **Stop** | Sends the message, or stops a round in progress. |

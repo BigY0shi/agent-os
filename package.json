@@ -1,6 +1,6 @@
 {
   "name": "agentic-os",
-  "version": "2.51.1",
+  "version": "2.51.2",
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1",

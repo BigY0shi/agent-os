@@ -1,5 +1,34 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - "Delete" in four modules now exiles instead of destroying (v2.51.2)
+
+Found by the Guide writers (v2.50.0): Agent Kanban (`kanbanStore.deleteBuild`), Music
+(`musicStudio.deleteTrack`), Local builds (`localBuilds.deleteBuild`) and the Agent Room
+history (`agentRoom.deleteConversation`) called `unlink`, which breaks the house rule that
+nothing is ever hard-deleted. Agent Kanban's "Clear all" confirm even said "This can't be
+undone".
+
+New `src/lib/exileFile.ts`: `exileFile(file, root, stamp?)` moves a file to
+`<root>/.exile/<stamp>/<relative path>` (the pattern `exileAgent`/`exileDossier` already
+use), returns null when it is absent, and throws for a path outside the root. Each of the
+four modules now exiles into its own folder; Music moves audio, cover and sidecar together
+under one stamp. A side effect worth noting: Music used to `unlink(path.join(MUSIC_ROOT, f))`
+with `f` taken from the sidecar, so a sidecar naming `../../x` could delete outside the music
+folder; that is now refused. Every listing already filters to `.json`/manifest entries, so
+the `.exile` folders never show up. The Kanban confirm text and the four Guide docs say what
+really happens.
+
+Not changed here (they sit in the owner's uncommitted files): `studioHistory.ts`,
+`ultracodeRuns.ts`, `claudeArtifacts.ts` still hard-delete. Content Engine's Remove drops a
+record from its state file (no file is deleted), left as is.
+
+Verified: new `smoke-exile-deletes.mjs`, 20 checks (the helper; each module's delete leaves
+the file under `.exile` and out of its list; Music's batch; the traversal refusal; the Room
+leg runs only after asserting the vault resolves inside the temp dir; no `unlink` left in the
+four files). tsc clean, smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - The gate no longer makes live model calls (v2.51.1)
 
 `test.sh` exports `AGENTIC_SMOKE_OFFLINE=1`, but two smokes ignored it for their live legs:

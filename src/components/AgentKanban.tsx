@@ -68,7 +68,7 @@ export default function AgentKanban() {
   useEffect(() => { loadWorkspace(); }, [loadWorkspace]);
   async function delBuild(id: string) { setWs((w) => w.filter((b) => b.id !== id)); try { await fetch(`/api/agent-kanban/workspace?id=${id}`, { method: "DELETE" }); } catch {} }
   async function clearAllBuilds() {
-    if (!ws.length || !confirm(`Delete all ${ws.length} builds from the workspace? This can't be undone.`)) return;
+    if (!ws.length || !confirm(`Remove all ${ws.length} builds from the workspace? They are moved to agent-kanban/.exile, not deleted.`)) return;
     const ids = ws.map((b) => b.id); setWs([]);
     for (const id of ids) { try { await fetch(`/api/agent-kanban/workspace?id=${id}`, { method: "DELETE" }); } catch {} }
   }

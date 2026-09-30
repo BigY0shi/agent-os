@@ -41,7 +41,7 @@ One card per build, newest first, with its title, size and the prompt that made 
 | **Open** | Makes the build active and shows it in Preview. |
 | **Tab** | Opens the build in a new browser tab. |
 | **.html** | Downloads the build. |
-| **Delete** (trash icon) | Removes the build from the list, and sends `DELETE /api/local/builds?id=<id>` so a server-side copy does not sync back. |
+| **Delete** (trash icon) | Removes the build from the list, and sends `DELETE /api/local/builds?id=<id>` so a server-side copy does not sync back. The server copy is moved to `local-builds/.exile/<timestamp>/`, not deleted. |
 
 ## How it works
 

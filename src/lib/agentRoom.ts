@@ -4,7 +4,8 @@
 // each agent sees what was said before it, so they actually talk to each other.
 
 import { readFileSync, existsSync } from "node:fs";
-import { writeFile, mkdir, readFile, readdir, unlink } from "node:fs/promises";
+import { writeFile, mkdir, readFile, readdir } from "node:fs/promises";
+import { exileFile } from "@/lib/exileFile";
 import path from "node:path";
 import os from "node:os";
 import { searchNotes, recentNotes, searchOmi, readNote, VAULT_AVAILABLE } from "@/lib/vault";
@@ -59,7 +60,8 @@ export async function listConversations(): Promise<RoomConvo[]> {
 
 export async function deleteConversation(id: string): Promise<boolean> {
   if (!CONVOS_DIR) return false;
-  try { await unlink(path.join(CONVOS_DIR, `${safeConvoId(id)}.json`)); return true; } catch { return false; }
+  // Exiled, never deleted: the thread moves to <convos>/.exile/<stamp>/.
+  try { return !!(await exileFile(path.join(CONVOS_DIR, `${safeConvoId(id)}.json`), CONVOS_DIR)); } catch { return false; }
 }
 
 export interface RoomAgent {
