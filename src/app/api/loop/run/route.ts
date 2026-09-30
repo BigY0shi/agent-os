@@ -1,5 +1,5 @@
-import { orKey, nousToken, workerAct, verdict, DEFAULT_JUDGE } from "@/lib/loopEngine";
-import { minimaxToken } from "@/lib/hermesStudio";
+import { workerAct, verdict, DEFAULT_WORKER, DEFAULT_JUDGE } from "@/lib/loopEngine";
+import { isLoopBuilder, isLoopJudge } from "@/lib/loopModels";
 import { writeFile, mkdir, readdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -104,11 +104,8 @@ async function renderCheck(html: string, signal?: AbortSignal): Promise<{ ok: bo
 
 function judgeName(j: string): string {
   if (j === "local") return "Local (Ollama)";
-  if (j === "openrouter/fusion") return "Fusion council";
-  if (j.startsWith("minimax:")) return `MiniMax · ${j.slice(8)}`;
-  if (j.startsWith("nous:")) return `Nous · ${j.slice(5)}`;
-  if (/n2/i.test(j)) return "N2 (free)";
-  return j.split("/").pop() || j;
+  if (j.startsWith("cli:")) return `${j.slice(4)} CLI`;
+  return j;
 }
 
 // POST { goal, artifact?, worker?, judge?, maxIters? } → streams NDJSON of the loop cycle.
@@ -116,34 +113,27 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const goal = String(body.goal || "").trim();
   const startArtifact = String(body.artifact || "");
-  const worker = String(body.worker || "minimax:MiniMax-M3");
+  const worker = String(body.worker || DEFAULT_WORKER);
   const judge = String(body.judge || DEFAULT_JUDGE);
   const maxIters = Math.max(1, Math.min(8, Number(body.maxIters) || 4));
-  const key = orKey();
-  const creds = { orKey: key, nousToken: nousToken(), minimaxToken: minimaxToken() };
   const enc = new TextEncoder();
-
-  const usesOR = (id: string) => id !== "local" && !id.startsWith("nous:") && !id.startsWith("minimax:") && !id.startsWith("cli:");
-  const needsOR = usesOR(worker) || usesOR(judge);
-  const usesNous = worker.startsWith("nous:") || judge.startsWith("nous:");
-  const usesMinimax = worker.startsWith("minimax:") || judge.startsWith("minimax:");
   const jName = judgeName(judge);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const send = (o: unknown) => { try { controller.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { /* closed */ } };
       if (!goal) { send({ t: "error", m: "Define what 'done' looks like first." }); send({ t: "done", reason: "no goal" }); controller.close(); return; }
-      if (needsOR && !key) { send({ t: "error", m: "No OpenRouter key — pick the free Local judge + a free/MiniMax builder, or add a key." }); send({ t: "done", reason: "no key" }); controller.close(); return; }
-      if (usesNous && !creds.nousToken) { send({ t: "error", m: "Nous Portal isn't logged in. Run `hermes portal`, then rerun." }); send({ t: "done", reason: "nous not logged in" }); controller.close(); return; }
-      if (usesMinimax && !creds.minimaxToken) { send({ t: "error", m: "MiniMax isn't connected. Run `hermes auth add minimax-oauth`, then rerun." }); send({ t: "done", reason: "minimax not connected" }); controller.close(); return; }
+      // CLI only: refuse anything else before a single round runs.
+      if (!isLoopBuilder(worker)) { send({ t: "error", m: `The Loop runs CLI agents only, and "${worker}" is not one. Pick a CLI agent for the builder.` }); send({ t: "done", reason: "builder not a CLI agent" }); controller.close(); return; }
+      if (!isLoopJudge(judge)) { send({ t: "error", m: `The Loop runs CLI agents (or the local Ollama judge) only, and "${judge}" is not one. Pick a CLI agent for the judge.` }); send({ t: "done", reason: "judge not a CLI agent" }); controller.close(); return; }
 
       let cur = startArtifact, issues: string[] = [], lastScore = -1, stall = 0, done = false, passed = false, reason = "";
       send({ t: "start", goal, worker, judge, maxIters });
 
       for (let n = 1; n <= maxIters && !req.signal.aborted; n++) {
         send({ t: "iter", n, step: "state", detail: n === 1 ? "Reading the goal + starting point" : "Re-reading goal + last verdict" });
-        send({ t: "iter", n, step: "act", detail: `Builder (${worker.split("/").pop()}) working…` });
-        try { cur = await workerAct(goal, cur, issues, worker, creds, req.signal); }
+        send({ t: "iter", n, step: "act", detail: `Builder (${judgeName(worker)}) working…` });
+        try { cur = await workerAct(goal, cur, issues, worker, req.signal); }
         catch (e) { send({ t: "iter", n, step: "error", detail: `Builder failed — ${String(e).slice(0, 140)}` }); if (req.signal.aborted) break; continue; }
         send({ t: "artifact", n, artifact: cur });
 
@@ -165,7 +155,7 @@ export async function POST(req: Request) {
         // STEP — JUDGE the spec/quality (it already runs cleanly if it's HTML)
         send({ t: "iter", n, step: "verify", detail: `${jName} judging adversarially…` });
         let v;
-        try { v = await verdict(goal, cur, judge, creds, req.signal); }
+        try { v = await verdict(goal, cur, judge, req.signal); }
         catch (e) { send({ t: "iter", n, step: "error", detail: `Verifier failed — ${String(e).slice(0, 140)}` }); break; }
         send({ t: "verdict", n, pass: v.pass, score: v.score, issues: v.issues, summary: v.summary });
         if (v.pass) { done = true; passed = true; reason = `${jName} approved on round ${n} — it runs clean and meets the goal.`; break; }

@@ -1,5 +1,55 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Loop runs on CLI agents only (v2.51.0)
+
+Owner, 2026-09-29: provider routing is CLI agents only ("openrouter isn't used", via
+/agent-os-fix-provider-routing), then "Loop CLI Only". Loop was half there: both
+defaults were already the Claude CLI, but:
+- the Builder menu still offered N2 and GLM 5.2 via OpenRouter, the Judge menu N2 and
+  the Fusion council (`src/lib/loopModels.ts`), and both menus added Nous Portal models
+  from `/api/loop/nous-models`;
+- the engine sent any id that was not `cli:`/`local`/`nous:`/`minimax:` to OpenRouter
+  (`orComplete`, `orKey`), plus direct Nous Portal and MiniMax paths;
+- a request with no builder defaulted to `minimax:MiniMax-M3` in `/api/loop/run`, a
+  direct MiniMax API call;
+- the page still said the judge defaults to "free N2", and the round chips said
+  "Fusion verify".
+
+**Changed.**
+- `loopModels.ts`: the menus are the five wired CLI agents (Claude, Codex, Cursor, Pi,
+  Hermes) plus, for the judge only, the local Ollama model. New `LOOP_CLI`,
+  `isLoopBuilder`, `isLoopJudge`.
+- `loopEngine.ts`: `workerAct` and `verdict` refuse anything else with a clear error. The
+  OpenRouter, Nous Portal and MiniMax call paths (`orKey`, `orComplete`, `nousToken`,
+  `nousModels`, `minimaxComplete`, `fusionVerdict`) are removed, and the `creds` argument
+  with them. `MINIMAX_CHAT` stays exported because `v2/memory/llm.ts` uses it for its own
+  owner-chosen memory provider.
+- `/api/loop/run`: defaults the builder to `DEFAULT_WORKER` (Claude CLI) and refuses a
+  non-CLI builder or judge before a round runs.
+- `/api/loop/nous-models` is exiled to `.exile/2026-09-29_184632/`.
+- `LoopView.tsx`: CLI-only groups with no duplicate options, honest copy, and "verify"
+  on the round chips. The page subtitle (`pageMeta.ts`) and `docs/modules/loop.md` match.
+- Ran `next typegen` so `.next/types` no longer points at the exiled route (types only;
+  the build and `BUILD_ID` are untouched).
+
+**Left as is, for the owner:** when a CLI judge returns nothing parseable, the local
+Ollama judge still grades that round. It is labelled (`judgedBy`, `fellBackFrom`, a
+flagged first issue) but was never chosen in a setting (rule 20). Also, the Agent Room
+(`src/lib/agentRoom.ts`) still has an OpenRouter branch: any agent whose provider isn't
+ollama/openai/cli falls through to `orComplete`, with a fallback to Hermes's default
+model.
+
+**Verified.** New `smoke-loop-cli-only.mjs`, 18 checks, with `fetch` stubbed and asserted
+never called: the menus are CLI only and default to Claude; the engine and the route
+refuse N2, GLM, Fusion, Nous, MiniMax, `cli:antigravity` and `cli:rm` with a clear error
+before any round; the removed helpers are gone; the UI, subtitle and doc say CLI. The
+page was DOM-checked in the browser pane with a fake agent list: two groups per menu, no
+duplicate or non-CLI options, and both defaults are `cli:claude`. tsc clean; full gate
+green.
+
+Rollback: revert the commit and move `.exile/2026-09-29_184632/src/app/api/loop/nous-models/route.ts`
+back to `src/app/api/loop/nous-models/route.ts`.
+
 ## 2026-09-29 - Fusion shows only what the request reports: no invented panel or stages (v2.50.4)
 
 Found by the Guide writers (v2.50.0 entry) and confirmed in the code before changing it:
