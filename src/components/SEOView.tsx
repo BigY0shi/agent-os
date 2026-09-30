@@ -650,7 +650,7 @@ export default function SEOView() {
                           borderColor: "rgba(34,211,238,0.45)",
                           color: "#22d3ee",
                         }}
-                        title={`Saves to ~/AIProfitBoardroom.com/.claude/transcripts/${slug || "<slug>"}.txt`}
+                        title={`Saves ${slug || "<slug>"}.txt to your transcripts folder (the gear's transcripts dir, or <first site>/.claude/transcripts)`}
                       >
                         <Save size={11} /> {savingTranscript ? "Saving…" : "Save & reuse"}
                       </button>

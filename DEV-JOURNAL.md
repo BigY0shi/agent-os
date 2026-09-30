@@ -1,5 +1,19 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - SEO transcript tooltip names the real folder; v2.51.15 shipped with one smoke check red (v2.51.16)
+
+`smoke-honest-labels` check N4 failed when v2.51.15 was committed: I read the next smoke's
+"ALL PASS" as this one's and committed anyway. The code in v2.51.15 was right; N4 had caught
+one more upstream leftover, the **Save & reuse** tooltip claiming transcripts save to
+`~/AIProfitBoardroom.com/.claude/transcripts/<slug>.txt`. It now says they go to the gear's
+transcripts dir or `<first site>/.claude/transcripts` (what `TRANSCRIPTS_DIR` in
+`seoPipeline.ts` resolves). Process fix: each smoke's result is now checked on its own line
+before a commit.
+
+Verified: `smoke-honest-labels.mjs` ALL PASS (39 checks). tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - SEO auto-deploys every configured site, not five hardcoded upstream folders (v2.51.15)
 
 While a generation streams, `SEOView` watches the agent's Write calls to know which sites to
