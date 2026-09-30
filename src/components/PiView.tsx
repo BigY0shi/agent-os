@@ -67,7 +67,7 @@ export default function PiView() {
         <div className="w-8 h-8 rounded-lg grid place-items-center text-[#3a2606] font-bold text-[14px]" style={{ background: "linear-gradient(135deg,#fcd34d,#f59e0b)" }}>π</div>
         <div>
           <div className="text-[15px] font-semibold text-[var(--cream)] leading-none">Pi</div>
-          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">pi CLI · Ollama glm-5.2:cloud · no API key</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">pi CLI · the model set in Pi&apos;s own config (<code>pi --list-models</code>) · no API key</div>
         </div>
       </div>
 

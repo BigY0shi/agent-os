@@ -21,7 +21,7 @@ Errors show as a red note under the messages.
 
 - Each send spawns `pi -p "<prompt>" --mode text --no-session --no-context-files` in `~/.agentic-os/workspaces/pi/` (created on first use). Pi prints plain text, and the route forwards stdout as it arrives.
 - `--no-session` keeps every call separate, so the route packs up to the last 24 turns (about 8,000 characters) into each prompt. `--no-context-files` stops Pi from reading `AGENTS.md` or `CLAUDE.md` files in the folder. Prompts over 16,000 characters are rejected.
-- The model is whatever Pi itself is configured to use (check with `pi --list-models`). The header text names `glm-5.2:cloud`, but that label is fixed in the page, not read from Pi. The route accepts an optional `model` field; this page never sends one.
+- The model is whatever Pi itself is configured to use (check with `pi --list-models`). The header says so rather than naming a model it cannot see. The route accepts an optional `model` field; this page never sends one.
 - The thread is stored in browser localStorage under `agentic-os/pi/history/v1` (last 200 messages). It is not logged to the Obsidian vault.
 - Needs the `pi` CLI installed and able to reach its model (Ollama signed in). The binary is found via `AGENTIC_OS_PI_BIN`, `pi` in `~/.agentic-os/config.json`, `pi` on the PATH, or `~/AppData/Roaming/npm/pi.cmd` / `~/.local/bin/pi`. If none is found, the send fails with "pi is not installed or not configured". On Windows the npm `.cmd` shim is resolved to its Node entry file and run directly.
 - If Pi exits with no output and its error mentions an API key, provider, login or Ollama, the reply says "Pi couldn't reach its model" and shows the tail of the error.

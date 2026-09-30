@@ -16,7 +16,7 @@ The header has two tabs, **Board** and **Workspace**, and a team strip (**Planne
 | **Assemble board...** | Opens the launch drawer to plan. Reads **Planning... (Stop from the runs tray)** while running. Planning replaces the current cards. |
 | **Run the team...** | Shown when there are queued or rejected cards. Opens the launch drawer to build them. Reads **Building... (Stop from the runs tray)** while running. |
 | Trash icon ("Clear board") | After a confirm, empties the board and clears it from browser storage. Builds already saved in the Workspace are kept. |
-| Columns | **Backlog**, **Building**, **Review**, **Done** (Done also holds rejected cards), each with a count. |
+| Columns | **Backlog**, **Build + check**, **Done** (Done also holds rejected cards), each with a count. |
 | Done card | Shows the build in a sandboxed iframe, its size, "verified", and an **open** link that opens the page in a new tab. |
 | Rejected card | Shows the reason, for example "no real build landed". Rejected cards are retried on the next **Run the team...**. |
 
@@ -46,7 +46,7 @@ Opened by **Assemble board...** or **Run the team...**. Last-used values are rem
 
 - **Plan** posts `{ goal, launch }` to `/api/agent-kanban/plan`. The Planner must return strict JSON cards, capped at **Max cards per plan**. **Run** loops through queued and rejected cards in the browser, posting each to `/api/agent-kanban/build`. Every plan and every card build is its own run in the runs tray. Stopping a build ends the loop and puts the remaining cards back in the backlog.
 - Seats: "Local team (Ollama)" calls your local Ollama at `127.0.0.1:11434`, using `LOCAL_MODEL` if set, else the model already loaded, else a coder-like model from the installed list. The CLI seats go through `cliComplete()` with your own CLI logins.
-- The check happens inside the build route: a card is approved only when real HTML comes back, and with **No external scripts** on, a page that loads a script or stylesheet from off the page is rejected. The Reviewer step in the UI is a short pause before the result is shown; it is not a separate model call.
+- The check happens inside the build route: a card is approved only when real HTML comes back, and with **No external scripts** on, a page that loads a script or stylesheet from off the page is rejected. The board shows this as one **Build + check** column; there is no separate timed Review step, and the Reviewer is not a separate model call.
 - Builds are saved to `~/.agentic-os/agent-kanban/builds/<id>.html`, listed in `~/.agentic-os/agent-kanban/manifest.json`. Deleting a build moves its file to `~/.agentic-os/agent-kanban/.exile/<timestamp>/`; nothing is hard-deleted.
 - The board itself (cards, goal, model) lives only in browser localStorage under `agentic-os/agent-kanban/v1`, so it is per browser.
 - Previews are served with `sandbox="allow-scripts allow-popups"`.

@@ -39,4 +39,4 @@ The page is one panel, with no tabs.
 
 ## Known gaps
 
-- While generating, the page always says "Making N versions with gpt-image-2" and "saving to your Obsidian Thumbnails folder", and when done says "saved to your vault", even on the CLI backend, which does not save anything to the vault.
+- While generating, the page names the backend really in use ("gpt-image-2" or "your <agent> agent") and the elapsed time; there is no progress bar, because neither route reports progress. When done it says where the route saved the session ("saved to your vault (Thumbnails/<session>)") or "not saved to your vault", from the `savedTo` field in the reply.

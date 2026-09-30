@@ -44,4 +44,4 @@ Images, video, audio and PDF preview inline. Text files over 1 MB show only the 
 - The thread is stored in browser localStorage under `agentic-os-chat-v2:antigravity` (last 50 messages).
 - The Workspace tab only reads Antigravity's own folders under `~/.gemini/antigravity-cli/`. It shows work even when the chat reply was lost to an error mid-task.
 - Needs the `agy` CLI installed and signed in. It is found via `AGENTIC_OS_ANTIGRAVITY_BIN`, `antigravity` in `~/.agentic-os/config.json`, or `agy` on the PATH.
-- Obsidian logging does not actually happen for this agent: `/api/memory/log` only accepts `claude`, `openclaw`, `hermes`, `user` and `system`, so the request is rejected. The chat still shows **Logged** and "auto-saved to Obsidian" because it does not check the response.
+- Each reply is logged to the Obsidian vault through `/api/memory/log` (which accepts `antigravity`). The chat shows **Logged** only when that request succeeds; if it fails (for example no vault is configured, a 503), the footer says "Not logged to Obsidian" with the reason.

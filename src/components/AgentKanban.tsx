@@ -22,18 +22,19 @@ type Tab = "board" | "workspace";
 
 const COLS: { key: Stage | "done"; label: string; accent: string; stages: Stage[] }[] = [
   { key: "queued", label: "Backlog", accent: "#a59783", stages: ["queued"] },
-  { key: "building", label: "Building", accent: "#d4a574", stages: ["building"] },
-  { key: "reviewing", label: "Review", accent: "#38bdf8", stages: ["reviewing"] },
+  // The review (real HTML back, no off-page scripts when that guardrail is on) runs inside
+  // the same build request, so building and checking are one column. "reviewing" is kept
+  // only so a board saved by an older version still renders its cards.
+  { key: "building", label: "Build + check", accent: "#d4a574", stages: ["building", "reviewing"] },
   { key: "done", label: "Done", accent: "#5ab896", stages: ["done", "rejected"] },
 ];
 
 const TEAM = [
   { key: "planner", name: "Planner", icon: Compass, accent: "#38bdf8", does: "breaks the goal into cards" },
   { key: "builder", name: "Builder", icon: Hammer, accent: "#d4a574", does: "builds each card" },
-  { key: "reviewer", name: "Reviewer", icon: ShieldCheck, accent: "#5ab896", does: "checks it's really built" },
+  { key: "reviewer", name: "Reviewer", icon: ShieldCheck, accent: "#5ab896", does: "checks each build in the same request" },
 ] as const;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function AgentKanban() {
   const [goal, setGoal] = useState("");
@@ -108,9 +109,7 @@ export default function AgentKanban() {
         setErr("stopped from the runs tray — the remaining cards are still queued");
         break;
       }
-      // hand off to the Reviewer — let it visibly "check"
-      setActive("reviewer"); setCard(card.id, { stage: "reviewing" });
-      await sleep(950);
+      // The build route already checked it (see COLS); show its verdict as soon as it lands.
       setCard(card.id, { stage: res.ok ? "done" : "rejected", bytes: res.bytes, note: res.note });
     }
     setActive(null); setRunning(false);

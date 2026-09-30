@@ -1,5 +1,35 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Pages say only what they can know: chat logging, Thumbnails, Kanban, Pi, OpenClaw (v2.51.4)
+
+Guide-writer findings (v2.50.0), each confirmed in the code first:
+- **Chat logging** (UnifiedChat: Claude, Hermes, OpenClaw, Antigravity). `logToVault` fired
+  the request and ignored the answer, then showed **Logged** and "auto-saved to Obsidian".
+  `/api/memory/log` refused `antigravity` (400), so Antigravity chats were never logged while
+  saying they were. Now: the route accepts `antigravity` (and `appendMemory`'s type does),
+  answers 503 when no vault is configured and 500 when the write fails; the chat awaits the
+  result, shows **Logged** only on success, and otherwise shows "Not logged to Obsidian:
+  <reason>" in the footer.
+- **Thumbnails** always said "Making N versions with gpt-image-2 ... saving to your Obsidian
+  Thumbnails folder" and "saved to your vault", even on the CLI backend (which saves nothing
+  there), and drew a progress bar filled by `elapsed / 150`. Now it names the backend really
+  used, has no bar, and reports the route's `savedTo` ("saved to your vault
+  (Thumbnails/<session>)" or "not saved to your vault").
+- **Agent Kanban** showed a Reviewer step that was a `sleep(950)`; the check really runs inside
+  the build request. Now one **Build + check** column, no pause; cards saved in the old
+  "reviewing" stage still render.
+- **Pi** header named `glm-5.2:cloud` as fixed text; now it says the model is whatever Pi's
+  own config sets.
+- **OpenClaw Studio** header said "Grok 4.3" and showed a pulsing "xAI · live" badge that
+  checks nothing; now "Grok creative cockpit" and a plain "xAI tools via OpenClaw" label.
+Docs updated: pi, thumbnails, antigravity, agent-kanban.
+
+Verified: new `smoke-honest-labels.mjs`, 15 checks (the log route writes an Antigravity
+exchange into a temp vault and refuses an unknown agent; the rest static). tsc clean,
+smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Sakana Fugu shows only what the request reports (v2.51.3)
 
 `SakanaView.tsx` is a copy of the old FusionView and had the same invented waiting state
