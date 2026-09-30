@@ -19,7 +19,7 @@ is one line; the journal carries the rest.
   `_design/nexora-diff.md`. Landed: S11 glass + faces, S12 Jarvis tabs (v2.33.0), type redesign (v2.34.0),
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
   S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0), S27 Health (v2.44.0), S26 Standing orders (v2.45.0), S23 Mission board (v2.46.0), S24 Crew archive (v2.47.0), S25 Mastermind (v2.48.0), S22 Voice mode (v2.49.0), S29 Guide (v2.50.0).
-  Jarvis v3 plan complete. Next: the fixes the Guide writers found (see DEV-JOURNAL 2026-09-29, v2.50.0).
+  Jarvis v3 plan complete. Guide-writer fixes landed v2.50.3-v2.51.16 (see Done); the ones that need the owner's call are listed in DEV-JOURNAL 2026-09-29.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -108,6 +108,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-29 · v2.50.3-v2.51.16 · Guide-writer fixes: db.backup beside its DB; Fusion and Sakana show only real status; Loop is CLI agents only (v2.51.0); the gate makes no live model calls; Delete exiles in Kanban, Music, Local builds, Room history and Pipeline (whose Remove route was missing); chat Logged only when logged; honest labels in Thumbnails, Agent Kanban, Pi, OpenClaw, Local Engine, SEO, Skills; no silent provider switches in Hermes Talk and Video; Codex previews on Windows; Game Studio, Open Design and Notebook settings honoured; SEO auto-deploys every configured site. Smokes: db-backup-location, fusion-honesty, loop-cli-only, exile-deletes, honest-labels.
 
 - 2026-09-29 · v2.50.0 · Jarvis v3 S29 Guide: all 50 modules documented from the code (every tab and control, how it works), the in-app wiki at /guide with search and a link from every page, the same docs as the repo's GitHub docs with an index. smoke-guide 16 checks.
 

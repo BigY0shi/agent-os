@@ -1,5 +1,36 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Guide-writer backlog: what landed, what waits for the owner (v2.51.17)
+
+Autonomous run while the owner was away (v2.50.3 to v2.51.16, one commit per fix, each with
+its own entry below). **Waiting on the owner** (each needs a decision, or touches his
+uncommitted work):
+1. **Agent Room** (`src/lib/agentRoom.ts`): any agent whose provider isn't ollama/openai/cli
+   falls through to OpenRouter with a quiet switch to Hermes's default model; and an empty
+   Ollama reply is replaced by the made-up "I'm here, running locally and ready when you are."
+   Asked; no answer yet.
+2. **Loop judge fallback**: a CLI judge that returns nothing usable is graded by the local
+   Ollama model (labelled, but never chosen in a setting; rule 20). Asked.
+3. **Oracle voice**: the gear only offers Voicebox (retired 2026-09-08) and ElevenLabs, and
+   defaults to Voicebox. Adding Kokoro needs the Oracle voice type and default in
+   `src/lib/settings.ts`, which is the owner's uncommitted work.
+4. **Idea Engine**: the sizing seat and clustering fall back from Kimi to codex (the gear hint
+   says so and failed seats are recorded, but it is not a chosen setting); a setting would go
+   in `settings.ts`.
+5. **SEO Deploy command**: saved, not used (placeholder now says so). Wiring it runs a
+   settings string as a shell command and skips the wrong-Netlify-site guard.
+6. **Claude Ultracode presets** "Security audit" / "Find dead code" ask for `src/` but run in
+   an empty project folder; pointing them at the repo means editing the owner's dirty
+   `src/app/api/claude/chat/route.ts` or letting Claude read outside its scratch folder.
+7. **Still hard-deleting**, in the owner's uncommitted files: `studioHistory.ts`,
+   `ultracodeRuns.ts`, `claudeArtifacts.ts` (which also marks a failed deploy live).
+8. **Placeholders by design**, not fixed: Tasks `sdk` run mode, Marketing Calendar/Board/
+   Assets/Metrics tabs, Today's disabled Widgets button (its tooltip is honest).
+Also confirmed done: the YouTube transcript (Ytpp65paFpY, the Komputer Mechanic mission-control
+video) is at `C:\Users\Yoshi\Downloads\transcripts\Ytpp65paFpY.txt`.
+
+ROADMAP.md: the Jarvis v3 item points here, and one Done line covers the batch.
+
 ## 2026-09-29 - SEO transcript tooltip names the real folder; v2.51.15 shipped with one smoke check red (v2.51.16)
 
 `smoke-honest-labels` check N4 failed when v2.51.15 was committed: I read the next smoke's
