@@ -80,5 +80,11 @@ check("E2 Local Engine names no model it never reads", !/Gemma-4 12B Coder|llama
 const sk = read("src/components/v2/skills/SkillsView.tsx");
 check("E3 the Skills gear points at where file skills really are", !/operating skills below/.test(sk) && /Control Room/.test(sk));
 
+// ── F. Hermes Talk speech-to-text ─────────────────────────────────────────────
+const stt = read("src/app/api/openclaw/studio/stt/route.ts");
+check("F1 Talk STT no longer switches to OpenRouter Whisper", !/transcribeWith\(\s*"openrouter/.test(stt) && !/provider: "openrouter"/.test(stt) && /grok-stt returned no transcript/.test(stt));
+const mva = read("src/components/MiniMaxVoiceAgent.tsx");
+check("F2 Talk's header says who really transcribes", !/MiniMax transcribes/.test(mva) && /OpenClaw \(grok-stt\) transcribes/.test(mva));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

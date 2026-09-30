@@ -216,7 +216,7 @@ export default function MiniMaxVoiceAgent({ accent = "#60a5fa" }: { accent?: str
           <div className="grid place-items-center w-9 h-9 rounded-xl" style={{ background: `${accent}2e`, color: accent }}><Mic size={17} /></div>
           <div>
             <div className="text-sm font-medium" style={{ color: accent }}>MiniMax Voice Agent</div>
-            <div className="text-[11px] text-[var(--fg-dimmer)]">Your mic → MiniMax transcribes → M3 replies → MiniMax voice</div>
+            <div className="text-[11px] text-[var(--fg-dimmer)]">Your mic → OpenClaw (grok-stt) transcribes → M3 replies → MiniMax voice</div>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -236,7 +236,7 @@ export default function MiniMaxVoiceAgent({ accent = "#60a5fa" }: { accent?: str
             <div>
               <div className="mx-auto mb-4 mm-orb" data-on={active ? "1" : "0"} style={{ ["--a" as string]: accent }} />
               <p className="text-sm">Tap the orb, allow the mic, and just talk.</p>
-              <p className="text-[12px] text-[var(--fg-dimmer)] mt-1">It records, MiniMax transcribes &amp; replies out loud. Pause when you finish a sentence.</p>
+              <p className="text-[12px] text-[var(--fg-dimmer)] mt-1">It records, OpenClaw transcribes, MiniMax replies out loud. Pause when you finish a sentence.</p>
             </div>
           </div>
         )}

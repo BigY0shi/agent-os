@@ -93,7 +93,7 @@ Both open the same action panel; **Sessions** starts on the Sessions action, **C
 ## How it works
 
 - **Chat** runs `hermes [--profile <name>] -z "<prompt>" --yolo --accept-hooks` with a 6 minute timeout. The last 24 turns are packed into the prompt. Threads live in browser localStorage (`agentic-os-chat-v2:hermes` or `...:hermes:<profile>`) and replies are appended to the Obsidian vault.
-- **Talk** transcribes through `/api/openclaw/studio/stt`, which runs `openclaw infer audio transcribe` with `xai/grok-stt` and falls back to Whisper on OpenRouter; it needs `ffmpeg`. Replies come from MiniMax-M3 and are voiced with MiniMax speech-02-turbo. The header says "MiniMax transcribes", but transcription goes through OpenClaw, not MiniMax.
+- **Talk** transcribes through `/api/openclaw/studio/stt`, which runs `openclaw infer audio transcribe` with `xai/grok-stt` (no other provider is tried; an empty transcript is an error that says so); it needs `ffmpeg`. Replies come from MiniMax-M3 and are voiced with MiniMax speech-02-turbo, as the header says.
 - MiniMax features read the OAuth token from `~/.hermes/profiles/<active profile>/auth.json`; connect with `hermes auth add minimax-oauth`. Studio saves to `~/.hermes/images`, `~/.hermes/videos` and the active profile's `audio_cache`.
 - Goals are stored in `~/.agentic-os/hermes-goals.json`, logs in `~/.agentic-os/hermes-goal-logs/`, and each goal runs in `~/.hermes/goals/<id>/`.
 - The MCP catalogue is read from `~/.hermes/hermes-agent/optional-mcps/`. The header text still says install "lands in Phase 2", though the **Install** button works.

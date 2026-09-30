@@ -1,5 +1,20 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Hermes Talk: no silent switch to OpenRouter Whisper (v2.51.7)
+
+`/api/openclaw/studio/stt` (used by Hermes Talk, `MiniMaxVoiceAgent.tsx`) ran `xai/grok-stt`
+through OpenClaw and, when that returned nothing, quietly tried
+`openrouter/openai/whisper-large-v3-turbo`. Nobody chose that fallback (AGENTS.md rule 20),
+and the owner has said OpenRouter is not used anywhere (routing is CLI/local only). The
+Whisper step is removed: an empty grok-stt transcript is now an error that says so. Talk's
+header also said "MiniMax transcribes" while OpenClaw does; it now says "OpenClaw (grok-stt)
+transcribes". `docs/modules/hermes.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section F (2 checks, 20 in all). tsc clean, smoke-guide
+passes. Not exercised live (it needs the mic, ffmpeg and OpenClaw).
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Stale copy: SEO site count, Local Engine model, Skills gear (v2.51.6)
 
 Guide-writer findings (v2.50.0), confirmed in the code:
