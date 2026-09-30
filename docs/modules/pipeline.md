@@ -44,7 +44,7 @@ Four stages left to right: **Capture**, **Human Gate**, **Execute**, **Shipped &
 
 | Control | What it does |
 |---|---|
-| Archive icon ("Remove from board") | Asks for confirmation, then posts to `/api/pipeline/delete`. See the note under How it works. |
+| Archive icon ("Remove from board") | Asks for confirmation, then posts to `/api/pipeline/delete`, which moves the item to `Pipeline/.exile/<timestamp>/items/` in the vault. |
 | **Let the agents shape it** | Same as **Shape it**. |
 | **Tweak the proposal** box + **Agent** picker + **Revise plan** | Human Gate only. Posts your feedback and the chosen CLI agent to `/api/pipeline/revise`, which rewrites the plan. Repeat as often as you like. |
 | **Your notes** + **Save note** | Human Gate only. Posts to `/api/pipeline/note`. |
@@ -60,4 +60,4 @@ The drawer also shows the vault path, Idea, Classification, Proposed Plan, Execu
 - Classification, planning and building go to the provider in the gear. The CLI path runs the agent on your subscription with full access; MiniMax needs a Hermes `minimax-oauth` login; Ollama needs a model installed. A provider that is not available fails with a named error.
 - Builds are written into the `free-claude-code` project folder shared with the Agent Factory gallery and previewed through `/api/freeclaude/preview/free-claude-code/...`. The build step checks the HTML for dead controls and asks the model to fix what it finds.
 - **Stop** aborts the browser request; the shape and build routes pass that abort signal to the model call.
-- **Remove is broken right now.** The page posts to `/api/pipeline/delete`, but there is no such route under `src/app/api/pipeline/`, so the remove button shows an error and the item stays.
+- Remove never deletes: `/api/pipeline/delete` exiles the item's markdown to `Pipeline/.exile/<timestamp>/items/<slug>.md` in the vault (move it back to restore). With no vault configured it answers 503; an unknown item is a 404.

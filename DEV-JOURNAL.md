@@ -1,5 +1,21 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Pipeline "Remove from board" works (it posted to a route that did not exist) (v2.51.5)
+
+`PipelineView.remove()` posts to `/api/pipeline/delete` and its confirm already promised
+"Its file is exiled to Pipeline/.exile (recoverable), never deleted", but there was no such
+route under `src/app/api/pipeline/`, so Remove always failed and the item stayed (Guide
+writers, v2.50.0). New `src/app/api/pipeline/delete/route.ts`: validates the item through
+`readItem` (slug shape + file exists), exiles `items/<slug>.md` to
+`Pipeline/.exile/<timestamp>/items/` with `exileFile`, and answers `{ ok, exiledTo }`; 404 for
+an unknown item or bad slug, 503 with no vault. `docs/modules/pipeline.md` updated.
+
+Verified: `smoke-exile-deletes.mjs` section G (5 checks, temp vault): the route exiles the
+item, it is gone from the board and kept under `.exile`, a second remove is a 404, a
+traversal slug is refused. tsc clean, smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Pages say only what they can know: chat logging, Thumbnails, Kanban, Pi, OpenClaw (v2.51.4)
 
 Guide-writer findings (v2.50.0), each confirmed in the code first:

@@ -103,6 +103,24 @@ if (!VW.AGENTIC_DIR || !path.resolve(VW.AGENTIC_DIR).startsWith(path.resolve(tmp
   check("E4 deleting a thread that isn't there reports false", (await AR.deleteConversation("room-smoke-nope")) === false);
 }
 
+// ── G. Pipeline "Remove from board" (the route did not exist before) ──────────
+if (VW.AGENTIC_DIR && path.resolve(VW.AGENTIC_DIR).startsWith(path.resolve(tmp))) {
+  const PL = await import("../../src/lib/pipeline.ts");
+  const del = await import("../../src/app/api/pipeline/delete/route.ts");
+  const post = (body) => del.POST(new Request("http://x", { method: "POST", body: JSON.stringify(body) }));
+  const item = { slug: "smoke-idea", title: "Smoke idea", stage: "inbox", route: "idea", created: new Date().toISOString(), tags: [], body: "An idea." };
+  await PL.writeItem(item);
+  check("G0 the Pipeline item exists in the temp vault", !!(await PL.readItem("smoke-idea")));
+  let r = await post({ slug: "smoke-idea" });
+  let j = await r.json();
+  check("G1 /api/pipeline/delete exists and exiles the item", r.status === 200 && j.ok === true && /^\.exile\/[^/]+\/items\/smoke-idea\.md$/.test(j.exiledTo), j);
+  check("G2 the file is kept under Pipeline/.exile and gone from the board", fs.existsSync(path.join(PL.PIPELINE_DIR, j.exiledTo || "x")) && !(await PL.readItem("smoke-idea")) && !(await PL.listItems()).some((i) => i.slug === "smoke-idea"));
+  r = await post({ slug: "smoke-idea" });
+  check("G3 removing it again is a 404", r.status === 404);
+  r = await post({ slug: "../../etc/passwd" });
+  check("G4 a bad slug is refused (404), nothing moved", r.status === 404);
+}
+
 // ── F ─────────────────────────────────────────────────────────────────────────
 const srcs = ["src/lib/agentRoom.ts", "src/lib/kanbanStore.ts", "src/lib/localBuilds.ts", "src/lib/musicStudio.ts"];
 const still = srcs.filter((p) => /\bunlink\b/.test(fs.readFileSync(p, "utf8")));
