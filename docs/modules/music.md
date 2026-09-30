@@ -28,6 +28,7 @@ Shown while a run is active: a spinning disc, the phase ("Composing... Suno usua
 
 | Control | What it does |
 |---|---|
+| **Refresh** | Re-reads History from disk (for a take Suno finished after the page gave up waiting). |
 | **All** / **Saved** | Show every track, or only starred ones. |
 | Track row | Cover art (or a disc icon), title, duration, tags or style, age, and an audio player. |
 | Pencil ("Rename") | Edit the title inline. Enter or the check saves, Escape or the X cancels. |

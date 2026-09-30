@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Kanban setup advice for this machine; unused Dispatch agent says so; Music gets its Refresh button (v2.51.11)
+
+- **Kanban** (Hermes board) setup card told you to `brew install node@22` and to "restart
+  the dev server" with `npm run dev`. This install is Windows and production-only (AGENTS.md:
+  `npm run dev` is the trap); the steps now say `winget install OpenJS.NodeJS.LTS` and
+  "Restart Agent OS.bat".
+- **Kanban** gear's **Dispatch agent** was saved but never read, and cannot be: the Hermes
+  dispatcher spawns the workers. Its hint now says "Saved, not used yet".
+- **Music**'s "still cooking" notice says "hit Refresh in a minute", but History had no
+  Refresh button. It has one now (it calls the existing `refresh()`).
+Docs updated: kanban, music.
+
+Verified: `smoke-honest-labels.mjs` section J (3 checks, 32 in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - OpenClaw Talk reports the real model; SEO's unused Deploy command says so (v2.51.10)
 
 - `/api/openclaw/studio/chat-quick` (OpenClaw Studio Talk) answered every reply with

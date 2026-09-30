@@ -14,7 +14,7 @@ The page is one board: a toolbar, a create row, six columns, and a task drawer t
 |---|---|
 | Board picker | Shown when more than one Hermes board exists. Lists each as "<name> (<slug>)". The page opens on `?board=<slug>` if given, else the last board you viewed, else **Default board** from settings. |
 | **Search...** | Filters cards by title or task id. |
-| **Configure** (gear) | Opens "Kanban settings": **Default board** (a board slug) and **Dispatch agent** (a CLI agent picker). Saved to the `kanban` section of `~/.agentic-os/settings.json`. |
+| **Configure** (gear) | Opens "Kanban settings": **Default board** (a board slug) and **Dispatch agent** (a CLI agent picker; saved but not used yet, because Hermes's own dispatcher spawns the workers, and its hint says so). Saved to the `kanban` section of `~/.agentic-os/settings.json`. |
 | Assignee filter | **All assignees**, or one Hermes profile (with its task count). |
 | **Show archived** / **Hide archived** | Toggles archived tasks, which then get their own group. |
 | **Refresh** | Reloads the board now. The board also refreshes every 20 seconds. |

@@ -1071,8 +1071,8 @@ function KanbanSetupCard({ reason, setup }: {
     body = "The board reads its data via Node's built-in SQLite (node:sqlite), which only exists on Node 22+. You're on an older Node, so the board can't load.";
     steps = [
       { label: "Check your version", cmd: "node -v" },
-      { label: "Install Node 22 (Homebrew)", cmd: "brew install node@22" },
-      { label: "Then restart the dev server", cmd: "npm run dev" },
+      { label: "Install Node 22 or newer (Windows)", cmd: "winget install OpenJS.NodeJS.LTS" },
+      { label: "Then restart Agent OS (run Restart Agent OS.bat in the repo folder)" },
     ];
   } else if (!hermesInstalled) {
     title = "The Kanban is powered by Hermes — install it to use it";
@@ -1081,7 +1081,7 @@ function KanbanSetupCard({ reason, setup }: {
       { label: "Install Hermes", cmd: "npm i -g @nousresearch/hermes-agent" },
       { label: "Authenticate a provider", cmd: "hermes login" },
       { label: "Create your first task (initialises the board)", cmd: "hermes kanban create \"My first task\"" },
-      { label: "Restart, then reload this page", cmd: "npm run dev" },
+      { label: "Restart Agent OS (Restart Agent OS.bat), then reload this page" },
     ];
   } else {
     title = "No board yet — create your first task";

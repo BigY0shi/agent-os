@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Music2, Wand2, Loader2, Star, Download, Trash2, Disc3, Sparkles, Mic, MicOff, X, Pencil, Check,
+  Music2, Wand2, Loader2, Star, Download, Trash2, Disc3, Sparkles, Mic, MicOff, X, Pencil, Check, RefreshCw,
 } from "lucide-react";
 import MusicSettings from "./MusicSettings";
 import { MOD } from "@/lib/modKey";
@@ -241,6 +241,12 @@ export default function MusicStudio() {
           <span className="text-[13px] font-medium" style={{ color: "var(--fg)" }}>History</span>
           <span className="text-[11px]" style={{ color: "var(--fg-dimmer)" }}>· {shown.length} track{shown.length === 1 ? "" : "s"}</span>
           <div className="ml-auto flex items-center gap-1.5">
+            {/* The "still cooking" notice tells you to hit Refresh; this is that button. */}
+            <button onClick={() => refresh()} title="Refresh History" aria-label="Refresh History"
+              className="text-[11px] rounded-md px-2 py-1 transition inline-flex items-center gap-1"
+              style={{ border: "1px solid var(--panel-border)", color: "var(--fg-dimmer)" }}>
+              <RefreshCw size={11} /> Refresh
+            </button>
             {(["All", "Saved"] as const).map((f) => {
               const on = (f === "Saved") === savedOnly;
               return (

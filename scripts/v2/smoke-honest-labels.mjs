@@ -107,5 +107,12 @@ const cq = read("src/app/api/openclaw/studio/chat-quick/route.ts");
 check("I1 OpenClaw Talk reports only the model OpenClaw names (else null)", !/model: "xai\/grok/.test(cq) && /let model: string \| null = null/.test(cq));
 check("I2 SEO's Deploy command field says it is not used yet", /Deploy command \(saved, not used yet/.test(read("src/components/SeoSettings.tsx")));
 
+// ── J. Kanban setup advice + Dispatch agent, Music Refresh ────────────────────
+const kv = read("src/components/KanbanView.tsx");
+check("J1 Kanban's setup steps give no macOS / npm run dev advice", !/brew install|cmd: "npm run dev"/.test(kv) && /Restart Agent OS\.bat/.test(kv));
+check("J2 Kanban's Dispatch agent field says it is not used yet", /Saved, not used yet/.test(read("src/components/KanbanSettings.tsx")));
+const ms = read("src/components/MusicStudio.tsx");
+check("J3 Music has the Refresh button its notice tells you to press", /hit Refresh/.test(ms) && /onClick=\{\(\) => refresh\(\)\}/.test(ms));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
