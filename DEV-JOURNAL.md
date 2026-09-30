@@ -1,5 +1,32 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - db.backup writes beside the database it backs up, not into the home dir (v2.50.3)
+
+**The bug.** `registerCoreJobs()` in `src/lib/v2/boot.ts` built the nightly backup folder
+from `os.homedir()` (`~/.agentic-os/backups`, old snapshots exiled to
+`~/.agentic-os/.exile/`), while the database path honours `AGENTIC_OS_DB`
+(`src/lib/v2/db.ts` `dbPath()`). Any process pointed at a temp DB, which every V2 smoke
+is, would, if the job ran (Standing orders "Run it now", or a scheduler tick past 03:30),
+snapshot the TEMP database into the owner's REAL backups folder under today's filename,
+overwriting that day's real snapshot. `smoke-standing.mjs` had only dodged it by
+redirecting HOME/USERPROFILE.
+
+**The fix.** New `backupDirFor(dbFile)`: `AGENTIC_OS_BACKUPS_DIR` when set, otherwise a
+`backups` folder next to the file `ensureDb()` actually opened (`db.name`). The exile
+root is `.exile` beside the backups folder. Default install unchanged:
+`~/.agentic-os/agentos.db` still backs up to `~/.agentic-os/backups` and exiles to
+`~/.agentic-os/.exile`. A DB with no file path (`:memory:`) now fails loudly instead of
+writing into the cwd.
+
+**Verified.** New `smoke-db-backup-location.mjs`, 17 checks: default and override
+paths; `runInline("db.backup")` against a temp DB puts the snapshot beside it and it
+reads back as a real copy (marker row); nothing appears under the (redirected) home;
+retention keeps 14 and exiles the oldest beside the backups; the real
+`~/.agentic-os/backups` listing and mtimes are identical before and after. tsc clean;
+smoke-standing still passes.
+
+Rollback: revert the commit (the handler goes back to `os.homedir()` paths).
+
 ## 2026-09-29 - smoke-widgets no longer fails between 11:00 and 12:00 UTC (v2.50.2)
 
 The gate's second run stopped at `smoke-widgets` "scope=upcoming ... soonest first": the
