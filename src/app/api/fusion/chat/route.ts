@@ -10,6 +10,9 @@ export const maxDuration = 300;
 // a judge that synthesises one answer). OpenAI-compatible endpoint. We relay
 // deltas in the same envelope the agent views expect:
 //   {"t":"d","c":"chunk"}  ·  {"t":"done"}  ·  {"t":"error","m":"…"}
+// plus one real milestone: {"t":"status","s":"accepted"} once OpenRouter has
+// answered 200 and the stream is open. OpenRouter reports nothing about which
+// models sit on the panel or how far along they are, so neither do we.
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "openrouter/fusion";
 
@@ -67,6 +70,7 @@ export async function POST(req: Request) {
           send({ t: "error", m: `OpenRouter HTTP ${r.status}: ${t.slice(0, 240)}` });
           send({ t: "done" }); controller.close(); return;
         }
+        send({ t: "status", s: "accepted" });
         const reader = r.body.getReader();
         const dec = new TextDecoder();
         let buf = "";

@@ -1,5 +1,41 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Fusion shows only what the request reports: no invented panel or stages (v2.50.4)
+
+Found by the Guide writers (v2.50.0 entry) and confirmed in the code before changing it:
+`src/components/FusionView.tsx` rendered a hardcoded `PANEL` ("Opus 4.8", "Gemini 3",
+"Grok", "Fable 5", "+ more") as pulsing chips while waiting, a status line chosen by
+`stageFor(elapsed)` ("deliberating" at 8 s, "web searches" at 28 s, "the judge is
+weighing" at 55 s) and a shimmer progress bar. The route
+(`src/app/api/fusion/chat/route.ts`) never reports any of that: it forwards only the
+answer text. The "Ask the board" preset had an empty template and the click handler
+skipped empty ones, so it did nothing.
+
+**Changed.** The route sends one real milestone, `{"t":"status","s":"accepted"}`, once
+OpenRouter has answered 200. The waiting card shows the real elapsed time and a line that
+follows what the route reported ("Sending your question to OpenRouter", then "OpenRouter
+accepted it. Waiting for the answer to start"), plus a plain note that Fusion does not
+report which models are on the panel or how far along they are. The streaming label is
+"Answer streaming" (was "Judge writing the verdict", which the page cannot know). The
+chips, stage text and shimmer are gone; the empty preset is removed and a preset click
+always fills the box. `docs/modules/fusion.md` updated to match.
+
+**Not changed, waiting on the owner:** the `HTTP-Referer: https://aiprofitboardroom.com`
+header (looks inherited from upstream; OpenRouter uses it for app attribution). Also
+open: Fusion calls OpenRouter directly, while the owner says provider routing is CLI
+agents only. Sakana Fugu (`SakanaView.tsx`) has the same shimmer and was not in scope.
+
+**Verified.** New `smoke-fusion-honesty.mjs`, 17 checks: no hardcoded panel, no text
+chosen by elapsed seconds, no shimmer, the one interval only ticks the clock, every
+preset has a template; the route against a stubbed OpenRouter (fetch replaced, HOME in a
+temp dir so the real key is never read) sends "accepted" only after a 200 and before the
+first text, relays the text exactly, sends no "accepted" on HTTP 429, and fails loudly
+with no key. DOM-checked in the browser pane with a fake stream: "Sending" at 1 s,
+"accepted" at 3 s, the text under "Answer streaming", no model chips at any point, and
+the Fact-check preset filled the box. tsc clean; smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - db.backup writes beside the database it backs up, not into the home dir (v2.50.3)
 
 **The bug.** `registerCoreJobs()` in `src/lib/v2/boot.ts` built the nightly backup folder

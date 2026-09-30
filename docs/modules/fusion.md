@@ -10,7 +10,6 @@ The Fusion Boardroom. You ask one question and it goes to OpenRouter's `openrout
 
 | Control | What it does |
 |---|---|
-| **Ask the board** | Preset chip. It has no template, so clicking it does nothing. |
 | **SEO content council** | Fills the box with an SEO research template. Replace `[KEYWORD]` before sending. |
 | **Title + thumbnail brain** | Fills the box with a YouTube title template. Replace `[TOPIC]`. |
 | **Fact-check** | Fills the box with a fact-check template. Replace `[CLAIM]`. |
@@ -21,7 +20,7 @@ The Fusion Boardroom. You ask one question and it goes to OpenRouter's `openrout
 | **Stop** (shown while waiting) | Aborts the request. |
 | **Clear history** (trash icon) | Asks "Clear Fusion history?" and then empties both the browser copy and the server copy. |
 
-While waiting, a status card shows a timer and a status line. The status line and the model chips on it ("Opus 4.8", "Gemini 3", "Grok", "Fable 5", "+ more") are fixed text driven by the elapsed seconds. They do not report which models are really on the panel or what stage the request has reached. Once the judge starts streaming, the text appears under "Judge writing the verdict". A full answer usually takes 30 to 90 seconds.
+While waiting, a status card shows the real elapsed time and a status line that follows what the route reports: "Sending your question to OpenRouter" until OpenRouter answers, then "OpenRouter accepted it. Waiting for the answer to start". Fusion does not report which models are on the panel or how far along they are, so the card does not show either. Once text arrives it streams under "Answer streaming". A full answer usually takes 30 to 90 seconds.
 
 ### Workspace
 
@@ -37,6 +36,7 @@ While waiting, a status card shows a timer and a status line. The status line an
 ## How it works
 
 - The chat calls `https://openrouter.ai/api/v1/chat/completions` with model `openrouter/fusion` and streams the reply back to the page. It needs an OpenRouter key. The route looks for `OPENROUTER_API_KEY` in the server environment, then in `~/.hermes/profiles/fusion/.env`, then in `~/.hermes/.env`. With no key, the reply is an error telling you where to set it.
+- Besides the answer text, the route sends one status event (`{"t":"status","s":"accepted"}`) once OpenRouter has answered 200.
 - Each request costs OpenRouter credit. The route deliberately sends no `max_tokens` cap, because a small cap makes Fusion fail.
 - Chat history is saved to `~/.hermes/profiles/fusion/chat-history.json` (last 200 messages) on every change, and cached in browser localStorage. The server copy wins when the page loads, so history follows you between browsers.
 - The Workspace tab reads `~/.hermes/profiles/fusion/workspace` through the shared Hermes workspace routes, one folder deep, and only lists HTML and video files. Chat answers in the Boardroom are not saved there. Files appear only when the Hermes `fusion` profile writes them.
