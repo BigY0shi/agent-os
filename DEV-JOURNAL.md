@@ -1,5 +1,21 @@
 # Agent OS — Dev Journal
 
+## 2026-09-29 - Video: no silent Grok-to-MiniMax retry; Workspace HTML Source loads (v2.51.8)
+
+Guide-writer findings (v2.50.0), confirmed in the code:
+- `VideoDirector.genBroll` re-ran a failed Grok b-roll clip on MiniMax (both on an error reply
+  and on a network error) and the tile never said so: a provider switch nobody chose
+  (AGENTS.md rule 20). Now every engine is respected and a failed clip shows its error on its
+  tile, with the existing per-tile retry.
+- `VideoStudio` Workspace only fetched text for `text`/`json` files, so **Source** on an HTML
+  file sat on "Loading source..." forever. HTML is fetched too now (same 200 KB cap).
+`docs/modules/video.md` updated.
+
+Verified: `smoke-honest-labels.mjs` section G (2 checks, 22 in all). tsc clean, smoke-guide
+passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Hermes Talk: no silent switch to OpenRouter Whisper (v2.51.7)
 
 `/api/openclaw/studio/stt` (used by Hermes Talk, `MiniMaxVoiceAgent.tsx`) ran `xai/grok-stt`

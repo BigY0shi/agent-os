@@ -676,7 +676,9 @@ function WorkspaceTab() {
   useEffect(() => {
     if (!open) { setTextContent(""); return; }
     const k = fileKind(open.name);
-    if (k === "text" || k === "json") {
+    // html too: its Source view reads textContent (it used to be skipped here, so Source
+    // sat on "Loading source…" forever).
+    if (k === "text" || k === "json" || k === "html") {
       fetch(open.url).then((r) => r.text()).then((t) => {
         // Cap at 200KB so a giant package-lock doesn't lock the UI
         setTextContent(t.length > 200_000 ? t.slice(0, 200_000) + "\n\n…(truncated)" : t);

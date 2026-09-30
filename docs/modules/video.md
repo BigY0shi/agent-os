@@ -70,7 +70,7 @@ A stepper shows **Brief**, **Research + Script**, **Avatar + B-roll**, **Edit + 
 
 ## Known gaps
 
-- If a Grok b-roll clip fails, the Director retries it on MiniMax without saying so on the tile.
+- A failed b-roll clip shows its error on its tile whatever the engine (Grok is no longer retried on MiniMax behind your back); use the tile's retry.
 - The Director always narrates with ElevenLabs; there is no control for the MiniMax voice path the code also supports.
-- In Workspace, **Source** on an HTML file stays on "Loading source..." because the page only fetches text for text and JSON files.
+- In Workspace, **Source** on an HTML file shows its markup (up to 200 KB).
 - The Create hint says a render starts automatically and takes 30 to 90 seconds; that depends on the CLI path above existing.

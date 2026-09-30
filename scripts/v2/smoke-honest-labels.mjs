@@ -86,5 +86,11 @@ check("F1 Talk STT no longer switches to OpenRouter Whisper", !/transcribeWith\(
 const mva = read("src/components/MiniMaxVoiceAgent.tsx");
 check("F2 Talk's header says who really transcribes", !/MiniMax transcribes/.test(mva) && /OpenClaw \(grok-stt\) transcribes/.test(mva));
 
+// ── G. Video ──────────────────────────────────────────────────────────────────
+const vd = read("src/components/VideoDirector.tsx");
+check("G1 a failed Grok b-roll clip is shown as failed, not quietly redone on MiniMax", !/genBroll\(i, prompt, "minimax"\)/.test(vd));
+const vs = read("src/components/VideoStudio.tsx");
+check("G2 Workspace fetches HTML source, so Source can load", /k === "text" \|\| k === "json" \|\| k === "html"/.test(vs));
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
