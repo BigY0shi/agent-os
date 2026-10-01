@@ -6,6 +6,7 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- QUEUED 2026-09-30 by the supervisor in worktree artifacts-deploy (branch fix/s31-artifacts-deploy): work ONLY fix-s31-artifacts-windows-deploy (run with --feature). Branched from v2.55.0; holds none of the owner's uncommitted work; node_modules is a junction to the main checkout (do not npm install here). Never start, stop or restart the server on 3737.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
   a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature
