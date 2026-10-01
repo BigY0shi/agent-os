@@ -43,7 +43,11 @@ async function runOne(agent: string, prompt: string, o: RunOpts): Promise<{ text
   if (!(IDEA_AGENTS as readonly string[]).includes(agent)) {
     throw new Error(`"${agent}" is not an Idea Engine agent (use one of: ${IDEA_AGENTS.join(", ")})`);
   }
-  const text = await (o.cli ?? cliComplete)(agent, prompt, { timeoutMs: o.timeoutMs, module: "idea-engine" });
+  // Written out (not `(o.cli ?? cliComplete)(...)`) so the module-skills wiring stays visible:
+  // the Idea Engine's skills reach every CLI seat through module: "idea-engine".
+  const text = o.cli
+    ? await o.cli(agent, prompt, { timeoutMs: o.timeoutMs, module: "idea-engine" })
+    : await cliComplete(agent, prompt, { timeoutMs: o.timeoutMs, module: "idea-engine" });
   return { text, used: agent };
 }
 

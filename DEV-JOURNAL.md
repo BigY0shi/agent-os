@@ -1,5 +1,18 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Idea Engine skills wiring visible again (v2.54.2)
+
+The full gate after v2.54.1 stopped on `smoke-module-kit`: "every module marked readsSkills
+passes its key to a skills call in code" failed for `idea-engine`. v2.54.0 moved its CLI calls
+into `ideaSeats.ts` as `(o.cli ?? cliComplete)(...)`, which the smoke's scan (it looks for the
+literal `cliComplete(` with `module: "..."`) cannot see. The skills still reached the call at
+runtime; the wiring was just invisible to the check that keeps the Skills pop-up honest. The
+call is now written out (`o.cli ? o.cli(...) : cliComplete(...)`).
+
+Verified: smoke-module-kit and smoke-idea-seats pass; tsc clean; full gate rerun below.
+
+Rollback: revert the commit.
+
 ## 2026-09-30 - Notes: SEO parked; Idea Engine gear row in the Guide (v2.54.1)
 
 - Owner on open item 5: "Leave for now, and note it. We haven't used SEO at all yet." The
