@@ -1194,6 +1194,22 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    // 046 — bring webmcp_wizard_drafts to the S7 shape on DBs where 044 already ran. The owner's
+    // live DB recorded `44 webmcp_wizard_drafts` on 2026-09-03 from a killed S7 cycle with an
+    // older table (no applied_slug, no archived_at), so S7's 044 never runs there and its
+    // queries would fail with "no such column". Additive and idempotent: adds only what is
+    // missing; on a fresh DB (044 already created the S7 shape) it changes nothing.
+    version: 46,
+    name: "webmcp_wizard_drafts_columns",
+    up: (db) => {
+      const cols = new Set((db.prepare("PRAGMA table_info(webmcp_wizard_drafts)").all() as { name: string }[]).map((c) => c.name));
+      if (cols.size === 0) return; // no table at all: 044 creates it
+      if (!cols.has("applied_slug")) db.exec("ALTER TABLE webmcp_wizard_drafts ADD COLUMN applied_slug TEXT");
+      if (!cols.has("archived_at")) db.exec("ALTER TABLE webmcp_wizard_drafts ADD COLUMN archived_at TEXT");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_webmcp_wizard_drafts_updated ON webmcp_wizard_drafts(archived_at, updated_at)");
+    },
+  },
+  {
     version: 50,
     name: "browser_core",
     up: (db) => {

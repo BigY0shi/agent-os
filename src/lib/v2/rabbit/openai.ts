@@ -23,9 +23,9 @@ export interface ChatRequest { messages: ChatMessage[]; model: string; stream: b
 
 export const DEFAULT_MODEL_ID = "agentos-claude";
 
-/** Model ids the bridge advertises. `claude: null` = "whatever CLAUDE_MODEL is". */
+/** Model ids the bridge advertises. `claude: null` = "whatever the Claude chat model setting is" (lib/claudeModel.ts). */
 export const MODELS: ReadonlyArray<{ id: string; claude: string | null; note: string }> = [
-  { id: DEFAULT_MODEL_ID, claude: null, note: "Agent OS default Claude model (AGENTIC_OS_CLAUDE_MODEL)" },
+  { id: DEFAULT_MODEL_ID, claude: null, note: "Agent OS default Claude model (the Claude page's Model setting)" },
   { id: "claude-fable-5-1", claude: "claude-fable-5-1", note: "Claude Fable 5.1" },
   { id: "claude-opus-5", claude: "claude-opus-5", note: "Claude Opus 5" },
   { id: "claude-sonnet-5", claude: "claude-sonnet-5", note: "Claude Sonnet 5" },

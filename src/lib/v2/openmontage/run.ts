@@ -16,7 +16,7 @@
 // actually ran (`agent`, `fellBackFrom`, `fallbackReason`).
 import fs from "node:fs";
 import path from "node:path";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { startModuleRun, type ModuleRunContext } from "@/lib/moduleRuns";
 import { OpenMontageError, type OpenMontageConfig } from "./config";
 import { findPipeline, type PipelineDef } from "./pipelines";
@@ -92,7 +92,7 @@ export function agentArgs(agent: string): string[] {
   switch (agent) {
     // stream-json gives live progress (text and tool_use per turn); text mode
     // prints nothing until the end, which would leave the tray silent for an hour.
-    case "claude": return ["-p", "--model", CLAUDE_MODEL, "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"];
+    case "claude": return ["-p", "--model", claudeModel(), "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions"];
     case "codex": return ["exec", "--full-auto", "--skip-git-repo-check", "--ignore-user-config", "-"];
     case "cursor": return ["-p", "--output-format", "text", "--force", "--trust"];
     case "hermes": return ["-z", "-", "--yolo", "--accept-hooks"];

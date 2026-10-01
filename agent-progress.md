@@ -6,81 +6,26 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
-- AWAITING USER VERIFY (S30 settings sweep, 2026-10-01, worktree settings-sweep, branch
-  feat/s30-settings-sweep, v2.56.0 to v2.59.0): the code is complete and every acceptance
-  criterion is met in the tree EXCEPT the literal "./test.sh exits 0", which this worktree
-  cannot produce for reasons outside the slice. All 113 offline smokes were run to the end:
-  110 pass; the 3 red ones are the owner's uncommitted work that this worktree (branched
-  from v2.55.0) does not hold:
-  1. `smoke-guide` B1: `docs/modules/rabbit.md` (committed) names `/rabbit`, but
-     `src/app/rabbit/page.tsx` is untracked in the main checkout. Commit it (or exile the doc).
-  2. `smoke-exile-deletes` H1-H3, H6: the committed id guard `(?!.+$)` in
-     `src/lib/studioHistory.ts`, `ultracodeRuns.ts`, `claudeArtifacts.ts` rejects every id; the
-     `(?!\.)` fix is uncommitted in the main checkout (DEV-JOURNAL 2026-09-30). Commit it.
-  3. `smoke-memory-ui`: expects the gitignored `.exile/` copies of the old memory page, which
-     exist only in the main checkout. Either copy `.exile/` into the worktree or accept this one.
-  Then, in a tree with 1 and 2 committed, run `./test.sh`; when it exits 0, set
-  `feat-s30-settings-sweep` to `"passing"` in features.json (the notes already carry the
-  evidence) and merge `feat/s30-settings-sweep`. Nothing else is pending on the slice.
-  Owner-to-look after the rebuild: the gears on /ollama (key shows masked after save),
-  the Claude Chat tab's **Model**, the Room rail's **Configure**, Jarvis **Configure** (four
-  voice-lane fields), Brainstorm **Models** (two time limits), Thumbnails **Configure**
-  (Prompt model). Worktree facts still true: holds none of the owner's uncommitted work;
-  node_modules is a junction to the main checkout (do not npm install here); never start,
-  stop or restart the server on 3737.
-- S31 fix-s31-artifacts-windows-deploy BUILT 2026-10-01 in worktree artifacts-deploy (branch fix/s31-artifacts-deploy, v2.56.0):
-  netlify is resolved Windows-safe (lib/platform.ts resolveCli), the SEO deploy route too, the site lives in
-  settings.artifacts behind the Configure gear on the Artifacts tab, smoke-artifacts-deploy 35/35, smoke-exile-deletes
-  green again (8 name guards fixed here). features.json status stays "failing" ONLY because ./test.sh exits 1 at
-  smoke-guide, which is pre-existing in any fresh checkout (docs/modules/rabbit.md was committed 2026-09-29 but
-  src/app/rabbit exists in no ref) and smoke-memory-ui wants the gitignored .exile folder; neither touches S31.
-  The owner's checklist is at the END of this file (AWAITING USER VERIFY). Worktree notes still hold: node_modules
-  is a junction to the main checkout (do not npm install here); never start, stop or restart the server on 3737.
-- AWAITING USER VERIFY (S32 placeholders, worktree placeholders, branch feat/s32-placeholders,
-  v2.56.0, 2026-10-01): the feature is built, smoke-covered (smoke-placeholders, 85 checks) and
-  committed, but `./test.sh` cannot exit 0 in this worktree for three reasons outside the
-  feature, all living in the owner's uncommitted work or the main checkout's ignored folders
-  (full no-break run: 110 of 113 smokes pass, `.harness-logs/all-smokes.out`):
-  (a) `smoke-guide` B1 fails on `rabbit.md` because `/rabbit` has no page in the committed
-  tree: the Rabbit module is untracked in the main checkout (`git status` there:
-  `?? src/app/rabbit/`, `?? src/components/v2/rabbit/`, `?? src/lib/v2/rabbit/`) while
-  `docs/modules/rabbit.md` was committed by the guide commit b5304fa.
-  (b) `smoke-exile-deletes` H1-H3 and H6: the committed name guards in `studioHistory.ts`,
-  `ultracodeRuns.ts` and `claudeArtifacts.ts` reject every id ("bad slug"); the owner's fix
-  (`(?!.+$)` to `(?!\.)`) is ` M` uncommitted in the main checkout (journal 2026-09-30).
-  (c) `smoke-memory-ui` looks for the gitignored `.exile/` folder, present in the main
-  checkout only. Owner checklist:
-  1. In the main checkout, commit the Rabbit module (page, components, lib) and the
-     name-guard fix in the three stores, each on its own; or say the doc should be retitled
-     and the smokes made worktree-tolerant.
-  2. In this worktree: `git merge` or rebase onto those commits, then `./test.sh` (expect
-     exit 0; `smoke-memory-ui` still needs the `.exile/` folder, so run the gate from the main
-     checkout after merging if it stays red here).
-  3. Flip feat-s32-placeholders to "passing" in features.json (the notes already carry the
-     evidence), or tell the loop to.
-  4. Owner-to-look after rebuild: Tasks gear > Run mode "sdk", run a small task, watch the run
-     in the tray and press STOP once; a campaign page's Board (drag a drafted card to
-     approved); Today > Widgets > Customize > Add widget.
-- QUEUED 2026-09-30 by the supervisor in worktree placeholders (branch feat/s32-placeholders): work ONLY feat-s32-placeholders (run with --feature). Branched from v2.55.0; holds none of the owner's uncommitted work; node_modules is a junction to the main checkout (do not npm install here). Never start, stop or restart the server on 3737.
-- DONE 2026-10-01 in worktree webmcp-wizard (branch feat/s7-webmcp-wizard, v2.57.0): S7
-  WebMCP wizard shipped and gate-green (115/115). Owner-to-look after merge + rebuild:
-  /webmcp > Wizard > New wizard > type a description > Digest with claude (expect questions
-  + a 5-10 tool list and 'answered by claude'); edit/cut a tool > Approve this list > Emit
-  JSON > Create package in the builder > open <slug> lands in the Tools tab. Write my own:
-  paste a bad JSON, expect concrete problems with no model wait. Gear: Wizard agent /
-  Wizard fallback selects. Never run in a harness session: the server on 3737.
-- DONE 2026-10-01 in worktree openmontage (branch feat/s9-openmontage-module, v2.57.0):
-  feat-s9-openmontage-module is passing. `/openmontage` in Artist's Corner, gear with repo
-  path / python / output dir / agent / fallback / timeout, pipelines read from the checkout's
-  pipeline_defs, a run = the CLI agent driving the checkout as module run "openmontage"
-  (tray streams it), rendered files listed. smoke-openmontage 64/64, ./test.sh 115/115.
-  Owner-to-look after rebuild (not a blocker): open /openmontage, the five chips should be
-  green (doctor was green read-only on the real checkout: python 3.11.0, deps, claude);
-  press Preflight and see the registry JSON; pick framework-smoke, type a brief, Run
-  pipeline, and watch the tray. The first real pipeline run spends whatever the checkout's
-  .env allows (the prompt says prefer free/local and stay under the manifest budget).
-  Branch is pushed; merge to master is the owner's call.
-- QUEUED 2026-10-01 by the supervisor in worktree openmontage (branch feat/s9-openmontage-module): work ONLY feat-s9-openmontage-module (run with --feature). Branched from v2.56.4 (1daca86, main gate 114/114 green 2026-10-01); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737. smoke-memory-ui now skips its .exile checks in a worktree (v2.56.4), so ./test.sh can go green here. Owner rules since the spec was written: every model/provider/fallback is a gear setting, default Claude with Codex as the owner-chosen, labelled fallback (rule 20); there is NO local Ollama on this machine (Ollama means Ollama Cloud or nothing); OpenRouter is not used anywhere; Voicebox is retired (Kokoro is the TTS). Every new control goes in its docs/modules/*.md controls table (smoke-guide checks the docs). OpenMontage is at C:/Users/Yoshi/Documents/OpenMontage (exists, verified 2026-10-01). Read its AGENT_GUIDE.md and docs/ARCHITECTURE.md before writing code; never pip install anything. If it needs a narration voice, use Kokoro (127.0.0.1:8880), not Voicebox.
+- MERGED 2026-10-01 by the supervisor on branch integrate/s30-s32-s7-s9 (then fast-forwarded into
+  feat/v2-hermes3d-and-versioning, PR #18): S30 settings sweep, S31 artifacts deploy, S32
+  placeholders, S7 WebMCP wizard, S9 OpenMontage. The three red smokes that kept S30/S31/S32
+  'failing' in their worktrees are gone in the merged tree (Rabbit committed 11f76cf, name-guard
+  fix 7c377ae, smoke-memory-ui made worktree-tolerant 1daca86); the merged ./test.sh result is in
+  the DEV-JOURNAL merge entry. Also fixed in the merge: S7's migration 044 never runs on the owner's
+  live DB (44 recorded 2026-09-03 with an older table), so migration 046 adds applied_slug and
+  archived_at there (smoke-webmcp-wizard-upgrade).
+- OWNER TO VERIFY (merged 2026-10-01, loop released by the supervisor; none of these block a
+  session). After a rebuild:
+  1. S30: the gears on /ollama (key shows masked after save), the Claude Chat tab's Model, the
+     Room rail's Configure, Jarvis Configure (four voice-lane fields), Brainstorm Models (two time
+     limits), Thumbnails Configure (Prompt model).
+  2. S31: the real Netlify publish checklist at the end of this file (install netlify-cli, set the
+     site in the Artifacts gear, publish one Loop build, open the URL).
+  3. S32: Tasks gear > Run mode "sdk", run a small task, watch the tray, press STOP once; a campaign
+     page's Board (drag a drafted card to approved); Today > Widgets > Customize > Add widget.
+  4. S7: /webmcp > Wizard > New wizard > describe > Digest (questions + a 5-10 tool list, 'answered
+     by claude'); approve > Emit JSON > Create package; Write my own with a bad JSON.
+  5. S9: /openmontage chips green, Preflight, run framework-smoke with a short brief, watch the tray.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
   a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature
@@ -114,15 +59,10 @@ DEV-JOURNAL.md (hyphen, not underscore).
 - Cactus Needle 2 is the owner's tool-calling model and is NOT involved here: the backfill
   makes no tool calls, only structured-JSON completions, which is the role he assigned to
   Bonsai. He noted it is installed under his python311 folder inside KiCad.
-- UNCOMMITTED partial work from the killed pass-3 S7 cycle is still in the tree:
-  `src/lib/v2/webmcp/wizard.ts` (untracked) plus a `resolveModel()` export in
-  `llm.ts` and hunks in `settings.ts` / `dbSchema.ts`. Confirmed with the owner
-  2026-09-03: `wizard.ts` is the S7 cycle's own generated work, not his draft
-  (he didn't write it) - no data loss, safe to build on for the next S7 run.
-
 ## Next
-- S7 webmcp-wizard, then S9 openmontage-module (top-down in features.json). Both wait on
-  the marker above being retitled.
+- Queued 2026-10-01 from the owner's picks (features.json, run each with --feature in its own
+  worktree): S38 Jarvis push-to-talk hotkey (first), S34 Jarvis chat upgrades, S35 agent faces,
+  S36 fleet stats, S37 snapshots. C8 appearance is held for the visual overhaul; C11 dropped.
 
 ## Follow-ups seen, not done
 - Voice stack is now Parakeet (STT, 8881) + Kokoro (TTS, 8880), both local servers started
@@ -214,7 +154,7 @@ DEV-JOURNAL.md (hyphen, not underscore).
   S5, S7, S9 (S10 has no spec and is not listed). Gate = ./test.sh (tsc + every offline
   smoke). Loop default model claude-fable-5-1, --strict-mcp-config.
 
-## AWAITING USER VERIFY - S31 Artifacts deploy (2026-10-01)
+## OWNER TO VERIFY (merged 2026-10-01, loop released by the supervisor) - S31 Artifacts deploy
 
 Built and smoke-proven with a fake netlify; the one step a session cannot do is a real publish.
 All PowerShell-safe. Rebuild first (the Artifacts tab and the gear are new UI).
@@ -228,7 +168,7 @@ All PowerShell-safe. Rebuild first (the Artifacts tab and the gear are new UI).
    nothing is listed as live.
 4. Optional: Take it offline (trash icon) and confirm the link 404s and the page is under
    ~/.agentic-os/.exile/<stamp>/published/<slug>/.
-5. The gate: ./test.sh is red at smoke-guide in this worktree for a pre-existing reason (rabbit.md documents
+5. RESOLVED by the 2026-10-01 merge (Rabbit committed; .exile smoke fixed). Was: the gate: ./test.sh is red at smoke-guide in this worktree for a pre-existing reason (rabbit.md documents
    a /rabbit page that was never committed). Either commit src/app/rabbit or park docs/modules/rabbit.md,
    then flip fix-s31-artifacts-windows-deploy to "passing" in features.json (every other smoke passes; the
    per-smoke run is in the DEV-JOURNAL entry). smoke-memory-ui also needs the main checkout's .exile folder.

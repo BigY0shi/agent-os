@@ -497,7 +497,7 @@ export interface Settings {
   rabbit?: {
     enabled?: boolean;           // OFF = /api/rabbit/v1/* answers 503 (default true)
     requireKey?: boolean;        // ON = bearer/x-api-key must match ~/.agentic-os/rabbit.secret; OFF (default, owner's call) = open on the LAN
-    defaultModel?: string;       // model id served for "agentos-claude" / no model (default: CLAUDE_MODEL)
+    defaultModel?: string;       // model id served for "agentos-claude" / no model (default: the Claude chat model, settings.claude.model)
     persona?: string;            // system prompt prefix; empty = built-in R1 persona
     historyTurns?: number;       // prior turns packed into each claude -p prompt (default 24)
     sessionGapMinutes?: number;  // idle gap after which an echoed reply no longer re-links a session (default 120)

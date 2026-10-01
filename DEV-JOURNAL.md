@@ -1,5 +1,32 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
+
+Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,
+then fast-forwarded into feat/v2-hermes3d-and-versioning (PR #18). Bookkeeping conflicts
+(package*.json, features.json, DEV-JOURNAL, ROADMAP, agent-progress) resolved by script: ours for
+the version, incoming rows/status for features, incoming journal entries on top (S7's branch had
+its entry twice; kept once). Code conflicts: settings.ts (S30 claude+room vs S31 artifacts, both
+kept) and claudeArtifacts.ts (S31's site check kept after the identical name-guard line).
+Found and fixed in the merge, each confirmed before the fix:
+- S30 replaced the CLAUDE_MODEL constant with lib/claudeModel.ts (a per-request setting). Rabbit
+  (route, mastermind), S9 openmontage/run.ts and S32 tasks/sdkRun.ts still imported the constant:
+  the merged tsc failed with TS2305 in exactly those four files. They now call claudeModel(), so
+  they honour the Claude page's Model setting too; two stale comments updated (smoke-settings-sweep
+  D2 flagged them).
+- S7's migration 044 cannot run on the owner's live DB: `migrations` there already records
+  `44 webmcp_wizard_drafts` (2026-09-03, a killed S7 cycle) with an older table that has no
+  applied_slug / archived_at, so the wizard would fail with "no such column". Migration 046 adds the
+  missing columns only when absent (0 rows in the live table; additive). New
+  smoke-webmcp-wizard-upgrade (7 checks) builds that old shape and runs the wizard's SQL on it.
+- agent-progress.md: the slices' AWAITING USER VERIFY markers retitled OWNER TO VERIFY with every
+  checklist kept, so the next harness loops do not pause on them.
+Branch version numbers overlapped (S30 claims v2.56.0-v2.59.0, S31/S32 v2.56.0, S7/S9 v2.57.0), so
+the merged result is v2.60.0, above all of them. S30/S31/S32 flipped to passing with this gate as
+evidence. Merged ./test.sh: 120 passed, 0 failed. Not pushed.
+Rollback: on feat/v2-hermes3d-and-versioning, `git revert -m 1 <merge>` per slice, or reset the
+branch pointer to 9f698b1 by hand (the slice branches stay on the remote).
+
 ## 2026-10-01 - S9: OpenMontage module in Artist's Corner (v2.57.0)
 
 Harness session, worktree `openmontage`, feature feat-s9-openmontage-module.

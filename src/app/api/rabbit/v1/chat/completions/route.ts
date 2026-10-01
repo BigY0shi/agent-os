@@ -1,6 +1,6 @@
 import { ensureV2 } from "@/lib/v2/boot";
 import { readSettings } from "@/lib/settings";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { ensureProject, CLAUDE_SCRATCH_ROOT } from "@/lib/claudeWorkspace";
 import { rabbitAuthFailure } from "@/lib/v2/rabbit/secret";
 import {
@@ -58,9 +58,9 @@ export async function POST(req: Request) {
   const shape = `model=${parsed.req.model} stream=${stream} tools=[${tools.map((t) => t.name).join(",")}] roles=${messages.map((m) => m.role + (m.toolCalls?.length ? "+call" : "")).join(",")}`;
 
   // The owner's chosen default (gear) is what "agentos-claude" / no-model resolves to.
-  let defaultClaude = CLAUDE_MODEL;
+  let defaultClaude = claudeModel();
   if (cfg.defaultModel && cfg.defaultModel !== DEFAULT_MODEL_ID) {
-    const d = resolveModel(cfg.defaultModel, CLAUDE_MODEL);
+    const d = resolveModel(cfg.defaultModel, claudeModel());
     if (!d.ok) { log(`500 bad settings.defaultModel ${shape}`); return oaiError(`settings.rabbit.defaultModel is invalid — ${d.error}`, 500, "server_error"); }
     defaultClaude = d.claude;
   }

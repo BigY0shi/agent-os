@@ -1,7 +1,7 @@
 import { query, tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import os from "node:os";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { sanitizeSpawnEnv } from "@/lib/spawnEnv";
 import { readSettings } from "@/lib/settings";
 import { startModuleRun } from "@/lib/moduleRuns";
@@ -234,7 +234,7 @@ export async function runTaskWithSdk(input: RunTaskWithSdkInput): Promise<TaskSd
       const handlers = buildTaskSdkToolHandlers({ task, state, log: ctx.log });
       const server = buildTaskSdkServer(handlers);
       const abortController = new AbortController();
-      const model = CLAUDE_MODEL || "claude-sonnet-5";
+      const model = claudeModel();
       const system = withSkills(TASK_SDK_SYSTEM_PROMPT);
 
       const q = sdkQuery()({

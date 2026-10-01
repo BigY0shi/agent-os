@@ -12,7 +12,7 @@ import {
   type RoomAgent, type RoomTurn, type RoomConvo, type RoomMsg,
 } from "@/lib/agentRoom";
 import { config } from "@/lib/config";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { runClaudeTurn } from "./claudeChat";
 import type { ChatMessage } from "./openai";
 
@@ -115,7 +115,7 @@ export async function runMastermindTurn(opts: MastermindOpts): Promise<{ text: s
       : "";
     const systemPrompt = `${CLAUDE_SEAT_RULES}\n\nYou are ${agent.name}. ${agent.persona}${ctx}`;
     const prompt = `${tr.map((t) => `${t.speaker}: ${t.text}`).join("\n")}\n\n${agent.name}:`;
-    const r = await runClaudeTurn({ model: CLAUDE_MODEL, systemPrompt, prompt, signal: opts.signal, timeoutMs: 90_000 });
+    const r = await runClaudeTurn({ model: claudeModel(), systemPrompt, prompt, signal: opts.signal, timeoutMs: 90_000 });
     if (r.timedOut) throw new Error("timed out after 90000ms");
     if (r.isError || (!r.text && r.exitCode !== 0)) throw new Error(r.stderr || r.text || `exit ${r.exitCode ?? "?"}`);
     return r.text;

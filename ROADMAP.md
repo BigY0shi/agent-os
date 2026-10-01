@@ -13,7 +13,7 @@ is one line; the journal carries the rest.
 
 ## Now
 
-- [ ] **S30. Settings sweep: every module parameter in its gear (code complete 2026-10-01, v2.56.0 to v2.59.0; gate blocked by the owner's uncommitted work, see agent-progress.md).**
+- [x] **S30. Settings sweep: every module parameter in its gear (done 2026-10-01; merged as v2.60.0, gate green).**
   Owner rule 2026-09-30: "Every parameter needs to be in the settings for every module."
   Audit: `_design/settings-sweep-audit.md`. Landed: one `settings.ollama` block (key masked,
   host, default model, local URL) read by every Ollama caller; the Claude chat model as
@@ -133,7 +133,7 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
-- 2026-10-01 · v2.56.0-v2.59.0 · S30 Settings sweep (code complete, gate pending the owner's uncommitted files): audit of every hardcoded parameter per module; `settings.ollama` (masked key, host, default model, local URL) shared by the Ollama page, Room, Brainstorm, Loop judge, Memory, Agents, Free Claude Code; `settings.claude.model` with a picker replacing the start-time CLAUDE_MODEL constant in 25 files; `settings.room.agents` + CLI turn limit with a Room gear; Brainstorm seat limits, Jarvis voice-lane models, Thumbnails prompt model. smoke-settings-sweep 38 checks.
+- 2026-10-01 · v2.56.0-v2.59.0 · S30 Settings sweep (merged v2.60.0, gate green): audit of every hardcoded parameter per module; `settings.ollama` (masked key, host, default model, local URL) shared by the Ollama page, Room, Brainstorm, Loop judge, Memory, Agents, Free Claude Code; `settings.claude.model` with a picker replacing the start-time CLAUDE_MODEL constant in 25 files; `settings.room.agents` + CLI turn limit with a Room gear; Brainstorm seat limits, Jarvis voice-lane models, Thumbnails prompt model. smoke-settings-sweep 38 checks.
 
 - 2026-10-01 · v2.56.0 · S31 Artifacts deploy on Windows: netlify (an npm .cmd shim here) is resolved to node + its entry with a clean arg array (lib/platform.ts resolveCli), the SEO deploy route resolves npx/netlify the same way, the Artifacts site lives in settings.artifacts behind a gear on the tab (artifacts-site.json is a labelled fallback), a missing site or CLI is a clear error naming the gear or the install line, and the v2.54.3 rollback holds. smoke-artifacts-deploy 35 checks. Owner to publish one page for real (AWAITING USER VERIFY in agent-progress.md).
 - 2026-10-01 · v2.56.0 · S32 Placeholders built for real: Tasks `sdk` run mode (one Agent SDK session with the walker's guardrails: approval first, turn cap, timeout, STOP in the tray, gated tools only); Marketing campaign Calendar / Board / Assets / Metrics from the stored items, board moves through the item API, no invented analytics; Today's Widgets button hosts the Mission Control grid with its own layout. smoke-placeholders 85 checks.
