@@ -1,5 +1,13 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - smoke-memory-ui no longer needs the gitignored .exile folder (v2.56.4)
+
+All three harness worktrees (S30/S31/S32, 2026-10-01) ended with ./test.sh red on
+smoke-memory-ui: its two "exile copy of the old memory page exists" checks read `.exile/`,
+which is gitignored, so no clone or worktree has it. The checks now run only when `.exile/`
+exists and print a SKIP line otherwise. Main checkout: both still PASS (folder present).
+Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - Rabbit bridge: answers to a tool result were re-asked as "call requests" (v2.56.3)
 
 After v2.56.1 went live (restart 06:54 PDT) the owner timed "what's the weather like" at

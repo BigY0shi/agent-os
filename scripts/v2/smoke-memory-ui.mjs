@@ -57,8 +57,14 @@ if (existsSync(exileRoot)) {
     if (existsSync(oldPanel)) exiledPanelFound = true;
   }
 }
-check("exile copy of old memory page exists (.exile/*/src/app/memory/page.tsx)", exiledPageFound);
-check("exile copy of old MemoryPanel.tsx exists", exiledPanelFound);
+// .exile/ is gitignored, so a fresh clone or worktree has none: skip there (said out loud)
+// instead of failing the gate (2026-10-01; all three harness worktrees went red on this).
+if (existsSync(exileRoot)) {
+  check("exile copy of old memory page exists (.exile/*/src/app/memory/page.tsx)", exiledPageFound);
+  check("exile copy of old MemoryPanel.tsx exists", exiledPanelFound);
+} else {
+  console.log("SKIP  exile copies of the old memory page: no .exile/ in this checkout (gitignored)");
+}
 check(
   "old MemoryPanel removed from src/components (moved, not copied)",
   !existsSync(path.join(root, "src", "components", "MemoryPanel.tsx")),
