@@ -13,7 +13,7 @@ The page is one column with a session list on the left (shown on wide screens on
 | **New session** | Clears the view so your next message starts a fresh session. |
 | Session cards (left rail) | One per saved session, showing the topic, the date, and "brief ready" once a brief exists. Click to load its transcript and brief. The open session has an amber outline. |
 | Seat avatars (header) | Claude, ChatGPT and Kimi. Hovering the Kimi avatar shows the model that filled the seat. The line next to them reads "three-seat council" plus "kimi seat: <model>" once resolved. |
-| **Models** (gear) | Opens "Brainstorm models". One field: **Kimi seat (Ollama Cloud)**, placeholder `kimi-k2.6`. Saved to the `brainstorm` section of `~/.agentic-os/settings.json` and used on the next call. |
+| **Models** (gear) | Opens "Brainstorm models": **Kimi seat (Ollama Cloud)**, placeholder `kimi-k2.6`; **CLI seat time limit (seconds)** for Claude and Codex (default 240); **Kimi seat time limit (seconds)** for the Ollama Cloud call (default 180). A time limit chosen in the launch drawer still wins for that run. Saved to the `brainstorm` section of `~/.agentic-os/settings.json` and used on the next call. |
 | Message box | "Topic, idea, or goal for the council..." for a new session, "Steer the council..." once a session is open. Enter sends, Shift+Enter adds a line. |
 | **Convene** / **Steer** | Sends the message. The label is **Convene** with no session open and **Steer** inside one. It reads **In session...** while the council runs. |
 | Phase line | While running, shows the current phase with a spinner: "Diverge - independent concepts", "Converge - cross-examination", "Steer - the council responds", "Chair synthesis". |

@@ -28,7 +28,7 @@ export function claudeModel(): string {
 export function claudeModelSource(): "env" | "config.json" | "settings" | "default" {
   if (CLAUDE_MODEL_OVERRIDE_SOURCE) return CLAUDE_MODEL_OVERRIDE_SOURCE;
   const m = readSettings().claude?.model;
-  return typeof m === "string" && m.trim() ? "settings" : "default";
+  return typeof m === "string" && m.trim() && m.trim() !== DEFAULT_CLAUDE_MODEL ? "settings" : "default";
 }
 
 /** A model id or alias the claude CLI could accept; rejects anything that could smuggle a flag. */

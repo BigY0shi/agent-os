@@ -15,7 +15,7 @@ export type Settings = Record<string, unknown> & {
   opendesign?: { webUrl?: string; daemonUrl?: string; launchCmd?: string; stopCmd?: string; installPath?: string };
   paperclip?: { url?: string };
   games?: { agent?: string };
-  thumbnails?: { agent?: string; backend?: "cli" | "gpt-image" };
+  thumbnails?: { agent?: string; backend?: "cli" | "gpt-image"; promptModel?: string };
   notebook?: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban?: { agent?: string; board?: string };
   pipeline?: { provider?: "ollama" | "cli" | "minimax"; model?: string; ollamaUrl?: string; agent?: string; minimaxKey?: string };

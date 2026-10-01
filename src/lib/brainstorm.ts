@@ -15,6 +15,7 @@ import path from "node:path";
 import os from "node:os";
 import { cliComplete } from "./loopEngine";
 import { ollamaCloudHost, ollamaCloudKey } from "./ollamaCloud";
+import { readSettings } from "./settings";
 
 export type CouncilSeat = "claude" | "codex" | "kimi";
 export const COUNCIL_SEATS: CouncilSeat[] = ["claude", "codex", "kimi"];
@@ -117,6 +118,14 @@ export async function resolveKimiModel(preferred?: string): Promise<string> {
 /** Per-seat call options (S3): STOP's signal and the launch drawer's timeout. */
 export interface SeatOpts { signal?: AbortSignal; timeoutMs?: number }
 
+/** The council's time limits (S30): settings.brainstorm.seatTimeoutSec / kimiTimeoutSec, read per
+ *  call; the old 240 s / 180 s literals are the defaults. A per-run timeout (launch drawer) wins. */
+export function brainstormTimeouts(): { seatMs: number; kimiMs: number } {
+  const b = (readSettings().brainstorm ?? {}) as { seatTimeoutSec?: unknown; kimiTimeoutSec?: unknown };
+  const sec = (v: unknown, d: number) => { const n = Number(v); return (Number.isFinite(n) && n > 0 ? Math.round(n) : d) * 1000; };
+  return { seatMs: sec(b.seatTimeoutSec, 240), kimiMs: sec(b.kimiTimeoutSec, 180) };
+}
+
 /** The caller's STOP signal joined with a hard timeout; either one aborts the fetch. */
 function seatSignal(opts: SeatOpts | undefined, defaultMs: number): AbortSignal {
   const t = AbortSignal.timeout(opts?.timeoutMs ?? defaultMs);
@@ -134,7 +143,7 @@ async function kimiComplete(prompt: string, model: string, opts?: SeatOpts): Pro
       messages: [{ role: "user", content: prompt }],
       options: { num_predict: 1000 },
     }),
-    signal: seatSignal(opts, 180_000),
+    signal: seatSignal(opts, brainstormTimeouts().kimiMs),
   });
   if (!r.ok) throw new Error(`Ollama Cloud chat ${r.status}: ${(await r.text()).slice(0, 160)}`);
   const j = await r.json() as { message?: { content?: string } };
@@ -149,7 +158,7 @@ export async function seatComplete(seat: CouncilSeat, prompt: string, kimiModel:
   if (seat === "kimi") return kimiComplete(prompt, kimiModel, opts);
   // claude + codex go through the shared CLI helper (subscription auth, no keys).
   // opts.signal is STOP (moduleRuns ctx.signal): runner.ts kills the child tree on abort.
-  const text = await cliComplete(seat, prompt, { timeoutMs: opts?.timeoutMs ?? 240_000, signal: opts?.signal, module: "brainstorm" });
+  const text = await cliComplete(seat, prompt, { timeoutMs: opts?.timeoutMs ?? brainstormTimeouts().seatMs, signal: opts?.signal, module: "brainstorm" });
   const t = text.trim();
   if (!t) throw new Error(`${seat} returned nothing`);
   return t;

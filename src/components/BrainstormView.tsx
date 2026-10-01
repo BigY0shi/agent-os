@@ -173,7 +173,12 @@ export default function BrainstormView() {
           <div className="ml-auto">
             <ModelSettings section="brainstorm" title="Brainstorm models" accent="#fbbf24"
               fields={[{ key: "kimiModel", label: "Kimi seat (Ollama Cloud)", placeholder: "kimi-k2.6",
-                hint: "Chat/agentic seat — policy default kimi-k2.6. Must exist on your Ollama Cloud plan." }]} />
+                hint: "Chat/agentic seat — policy default kimi-k2.6. Must exist on your Ollama Cloud plan." },
+                // S30: the per-seat time limits (were 240 s / 180 s literals). A launch-drawer timeout wins per run.
+                { key: "seatTimeoutSec", label: "CLI seat time limit (seconds)", placeholder: "240", type: "number",
+                  hint: "How long Claude or Codex may take per council turn. Default 240." },
+                { key: "kimiTimeoutSec", label: "Kimi seat time limit (seconds)", placeholder: "180", type: "number",
+                  hint: "How long the Ollama Cloud call may take per council turn. Default 180." }]} />
           </div>
         </div>
         <p className="text-sm text-white/45 mb-4">

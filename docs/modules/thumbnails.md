@@ -12,7 +12,7 @@ The page is one panel, with no tabs.
 
 | Control | What it does |
 |---|---|
-| **Configure** | The "Thumbnails settings" gear. **Backend** is **CLI agent (image skill)** (the default) or **OpenAI gpt-image-2**. With the CLI backend, **Image agent** picks the CLI agent. **Save** writes them. |
+| **Configure** | The "Thumbnails settings" gear. **Backend** is **CLI agent (image skill)** (the default) or **OpenAI gpt-image-2**. With the CLI backend, **Image agent** picks the CLI agent. **Prompt model (OpenAI)** is the chat model that reads the reference and writes the image prompt (blank = `gpt-4o-mini`). **Save** writes them. |
 | **1 · Reference images** drop zone | Drop images or click to choose. Up to 6. Optional. |
 | Remove (X on a thumbnail) | Removes that reference image. |
 | **+ add** | Adds another reference image. |

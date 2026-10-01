@@ -13,6 +13,16 @@ is one line; the journal carries the rest.
 
 ## Now
 
+- [ ] **S30. Settings sweep: every module parameter in its gear (code complete 2026-10-01, v2.56.0 to v2.59.0; gate blocked by the owner's uncommitted work, see agent-progress.md).**
+  Owner rule 2026-09-30: "Every parameter needs to be in the settings for every module."
+  Audit: `_design/settings-sweep-audit.md`. Landed: one `settings.ollama` block (key masked,
+  host, default model, local URL) read by every Ollama caller; the Claude chat model as
+  `settings.claude.model` with a picker (env / config.json still override, and say so);
+  Agent Room overrides in `settings.room` with a Room gear (config.json only as the labelled
+  fallback); Brainstorm time limits, the Jarvis voice-lane models and the Thumbnails prompt
+  model. `smoke-settings-sweep` 38 checks. Flip to done when `./test.sh` is green in a tree
+  that holds the rabbit page and the id-guard fix.
+
 - [ ] **Jarvis v3 + Mission Control + per-module skills + memory off Honcho (in progress, 2026-09-28).**
   Owner's request of 2026-09-28 with reference screenshots and the NEXORA prompt pack.
   Plan and slice order: `_design/jarvis-v3-plan.md` (S11-S25); NEXORA diff:
@@ -109,6 +119,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-10-01 · v2.56.0-v2.59.0 · S30 Settings sweep (code complete, gate pending the owner's uncommitted files): audit of every hardcoded parameter per module; `settings.ollama` (masked key, host, default model, local URL) shared by the Ollama page, Room, Brainstorm, Loop judge, Memory, Agents, Free Claude Code; `settings.claude.model` with a picker replacing the start-time CLAUDE_MODEL constant in 25 files; `settings.room.agents` + CLI turn limit with a Room gear; Brainstorm seat limits, Jarvis voice-lane models, Thumbnails prompt model. smoke-settings-sweep 38 checks.
 
 - 2026-09-30 · v2.51.18-v2.54.0 · Owner's decisions on the open items: Agent Room has no OpenRouter, no local-Ollama fallback and no invented replies; the Loop judge is Ollama Cloud (no local Ollama) and its fallback is a Loop-gear choice (default none), with every Loop parameter in a new gear; the Oracle speaks Kokoro (bm_lewis) with its own labelled backup; Idea Engine seats default to Claude with a Codex fallback, all in its gear. Smokes: room-honesty, oracle-kokoro, idea-seats; loop-cli-only extended.
 

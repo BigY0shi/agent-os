@@ -56,9 +56,9 @@ const PERSONA =
   "function to actually do it, then confirm briefly in character (e.g. \"Opening Google now.\"). Don't claim " +
   "you've opened something unless you called the function.";
 
-// Doc-verified default (js-genai SDK examples). Override with GEMINI_LIVE_MODEL —
-// e.g. a newer native-audio model for affective dialog once you want it.
-const MODEL = process.env.GEMINI_LIVE_MODEL || "gemini-live-2.5-flash-preview";
+// The model: settings.jarvis.voice.geminiLiveModel (Jarvis models gear), else GEMINI_LIVE_MODEL,
+// else the doc-verified default gemini-live-2.5-flash-preview (lib/jarvisVoiceModels.ts).
+import { geminiLiveModel } from "@/lib/jarvisVoiceModels";
 
 export async function POST() {
   const key = geminiKey();
@@ -78,7 +78,7 @@ export async function POST() {
     if (!token?.name) return NextResponse.json({ error: "token mint returned nothing" }, { status: 502 });
     return NextResponse.json({
       token: token.name,
-      model: MODEL,
+      model: geminiLiveModel(),
       persona: `${PERSONA}\n\n# Who you're talking to\n${userContext()}`,
     });
   } catch (e) {

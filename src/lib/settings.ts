@@ -150,7 +150,9 @@ export interface Settings {
 
   // Per-module default agent overrides for the lighter modules.
   games: { agent?: string };
-  thumbnails: { agent?: string; backend?: "cli" | "gpt-image" };
+  // thumbnails.promptModel (S30): the OpenAI chat model that writes the image prompt from the
+  // reference (lib/thumbnailPrompt.ts); blank = gpt-4o-mini, the old literal.
+  thumbnails: { agent?: string; backend?: "cli" | "gpt-image"; promptModel?: string };
   notebook: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban: { agent?: string; board?: string };
 
@@ -213,7 +215,9 @@ export interface Settings {
   // User model policy: Kimi K2.6 for chat/agentic seats, K2.7 Code for coding.
   // Empty string = the module's built-in default (blank kimiModel = auto-resolve
   // preferring k2.6; blank claude models = the Claude model setting, lib/claudeModel.ts).
-  brainstorm: { kimiModel?: string };                       // the council's Kimi seat
+  // Brainstorm: the council's Kimi seat, plus (S30) the per-seat time limits that were 240 s /
+  // 180 s literals (a launch-drawer timeout still wins for that run).
+  brainstorm: { kimiModel?: string; seatTimeoutSec?: number; kimiTimeoutSec?: number };
   // Jarvis: Kimi brain model + SPEC-C C2/C2b voice-capture + hotkey knobs
   // (all surfaced in the Jarvis gear — rule 16).
   jarvis: {
@@ -239,6 +243,13 @@ export interface Settings {
       // ElevenLabs as the backup. It is a CHOSEN fallback, and the TTS response
       // labels it (provider + fellBackFrom + fallbackReason); "none" = report.
       ttsFallback?: "elevenlabs" | "none";
+      // S30: the model ids behind the hosted voice lanes, which were literals in the routes.
+      // Blank = the lane's own default (lib/jarvisVoiceModels.ts; Gemini also honours
+      // GEMINI_LIVE_MODEL from the environment first, as before).
+      geminiLiveModel?: string;       // gemini-live-2.5-flash-preview
+      openaiRealtimeModel?: string;   // gpt-realtime
+      openaiTranscribeModel?: string; // gpt-4o-mini-transcribe
+      openaiTtsModel?: string;        // gpt-4o-mini-tts
     };
     hotkey?: {
       key?: string;          // in-app fallback keybind (default "F13")
@@ -517,7 +528,7 @@ export const DEFAULT_SETTINGS: Settings = {
   opendesign: { webUrl: "http://127.0.0.1:7456", daemonUrl: "http://127.0.0.1:7455", launchCmd: "", stopCmd: "", installPath: "" },
   paperclip: { url: "" },
   games: { agent: "claude" },
-  thumbnails: { agent: "claude", backend: "cli" },
+  thumbnails: { agent: "claude", backend: "cli", promptModel: "" },
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
   ollama: { apiKey: "", host: "", defaultModel: "", localUrl: "" },
@@ -532,12 +543,13 @@ export const DEFAULT_SETTINGS: Settings = {
     },
   },
   marketing: { agent: "claude", council: true, criticAgent: "codex", textPlatforms: ["linkedin", "x", "facebook"], ideateBackend: "local", buzzChannel: "marketing-ideas" },
-  brainstorm: { kimiModel: "kimi-k2.6" },
+  brainstorm: { kimiModel: "kimi-k2.6", seatTimeoutSec: 240, kimiTimeoutSec: 180 },
   jarvis: {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs" },
+    voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs",
+      geminiLiveModel: "", openaiRealtimeModel: "", openaiTranscribeModel: "", openaiTtsModel: "" },
     hotkey: { key: "F13", enabled: true },
     glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },

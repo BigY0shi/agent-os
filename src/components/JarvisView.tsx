@@ -1179,7 +1179,16 @@ export default function JarvisView() {
         <div className="flex items-center gap-2">
           <ModelSettings section="jarvis" title="Jarvis models" accent={CYAN}
             fields={[{ key: "kimiModel", label: "Kimi voice brain (Ollama Cloud)", placeholder: "kimi-k2.6",
-              hint: "The model behind the Kimi voice provider. Chat tier — policy default kimi-k2.6." }]} />
+              hint: "The model behind the Kimi voice provider. Chat tier — policy default kimi-k2.6." },
+              // S30: the hosted voice lanes' models (settings.jarvis.voice.*), blank = the lane's default.
+              { key: "voice.geminiLiveModel", label: "Gemini Live model", placeholder: "gemini-live-2.5-flash-preview",
+                hint: "The Gemini Live speech-to-speech lane. Blank = GEMINI_LIVE_MODEL from the environment, else the default." },
+              { key: "voice.openaiRealtimeModel", label: "GPT Realtime model", placeholder: "gpt-realtime",
+                hint: "The OpenAI speech-to-speech lane." },
+              { key: "voice.openaiTranscribeModel", label: "GPT Realtime transcription model", placeholder: "gpt-4o-mini-transcribe",
+                hint: "Transcribes your side of a Realtime session." },
+              { key: "voice.openaiTtsModel", label: "OpenAI reply voice model", placeholder: "gpt-4o-mini-tts",
+                hint: "Used when the reply voice provider is OpenAI." }]} />
           <button onClick={() => setWall(true)} title="Wall mode — fullscreen HUD"
             className="px-3 h-9 rounded-lg border border-[var(--panel-border)] hover:border-[var(--panel-border-hot)] text-[12px] text-[var(--fg-dim)] flex items-center gap-1.5 transition">
             <Maximize2 size={13} /> Wall mode

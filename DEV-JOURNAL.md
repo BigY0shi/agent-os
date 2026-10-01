@@ -1,5 +1,43 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S30 settings sweep, batch 4: Brainstorm limits, Jarvis voice models, Thumbnails prompt model, the sweep smoke (v2.59.0)
+
+The last Phase B batch; every `move` row in `_design/settings-sweep-audit.md` is now a setting.
+- **Brainstorm**: `settings.brainstorm.seatTimeoutSec` (240) and `kimiTimeoutSec` (180) replace the
+  `240_000` / `180_000` literals (`brainstormTimeouts()`, read per call; a launch-drawer timeout
+  still wins for that run). Two number fields in the Brainstorm models gear.
+- **Jarvis voice lanes**: `settings.jarvis.voice.geminiLiveModel / openaiRealtimeModel /
+  openaiTranscribeModel / openaiTtsModel` (`lib/jarvisVoiceModels.ts`) replace the literals in
+  the Gemini Live session, the OpenAI Realtime session and the OpenAI TTS routes. Blank = the
+  old default; Gemini still honours `GEMINI_LIVE_MODEL` before its default, as it did. Four
+  fields in the Jarvis models gear.
+- **Thumbnails**: `settings.thumbnails.promptModel` (blank = `gpt-4o-mini`) for the OpenAI chat
+  model that writes the image prompt (`thumbnailPromptModel()`); a field in the Thumbnails gear.
+- **ModelSettings** learns dotted keys (`voice.geminiLiveModel` reaches a nested object) and
+  `type: "number"` (saved as a number; blank saves nothing so the default applies).
+- `claudeModelSource()` reports "default" when the saved value IS the default.
+- **`scripts/v2/smoke-settings-sweep.mjs`** (38 checks): for every moved parameter, the default
+  equals the old literal (A), a saved value changes what the code uses (B), precedence (C:
+  settings beat the environment for Ollama and Gemini; `AGENTIC_OS_CLAUDE_MODEL` and
+  config.json `claudeModel` still beat the setting, probed in a child process because
+  config.ts reads them at import; config.json `roomAgents` only while settings has none), and
+  wiring (D: no reader bypasses `ollamaCloud.ts`, the `CLAUDE_MODEL` constant is gone, every
+  gear has its fields, the docs name them, the Ollama key is a secret to settingsRedact).
+- Docs: brainstorm, jarvis, thumbnails.
+
+Verified: tsc clean; all 113 offline smokes run to the end (not stopping at the first red):
+110 pass. The 3 red ones are environment gaps of this worktree, not this slice, each checked
+against the main checkout: `smoke-guide` B1 (`docs/modules/rabbit.md` names `/rabbit`; its
+`src/app/rabbit/page.tsx` is the owner's uncommitted work), `smoke-memory-ui` (expects the
+gitignored `.exile/` copies of the old memory page, which exist only in the main checkout) and
+`smoke-exile-deletes` H1 to H3 and H6 (the committed id guard in `studioHistory.ts`,
+`ultracodeRuns.ts` and `claudeArtifacts.ts` is `(?!.+$)`, which rejects every id; the owner's
+`(?!\.)` fix is uncommitted in the main checkout, see the 2026-09-30 entry below). The gate
+(`./test.sh`) therefore cannot exit 0 in this worktree; see agent-progress.md for the owner's step.
+
+Rollback: revert the four batch commits in reverse order (each is additive; a settings file
+that already holds the new blocks is ignored by older code).
+
 ## 2026-10-01 - S30 settings sweep, batch 3: Agent Room overrides live in settings, with a Room gear (v2.58.0)
 
 - **`settings.room.agents[<id>]`** `{ model, provider (cli / ollama / openai), baseUrl, apiKeyEnv,
