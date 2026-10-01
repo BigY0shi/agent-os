@@ -393,6 +393,10 @@ export interface Settings {
     sandboxTimeoutMs?: number; // 'js' handler wall-clock cap (default 5000)
     allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
     llmGetActions?: boolean;   // D1.5: LLM-filtered getActions (default true; off = keyword scorer)
+    // S7 wizard: which CLI agent digests/emits/proofreads (default claude) and the
+    // owner-chosen, labelled fallback (default codex; "none" = fail loudly). Rule 20.
+    wizardAgent?: string;
+    wizardFallback?: string;
   };
   // SPEC-D G2 integrations runtime (gear panel lands with the G1 /integrations UI).
   integrations?: {

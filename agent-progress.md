@@ -62,6 +62,13 @@ DEV-JOURNAL.md (hyphen, not underscore).
      in the tray and press STOP once; a campaign page's Board (drag a drafted card to
      approved); Today > Widgets > Customize > Add widget.
 - QUEUED 2026-09-30 by the supervisor in worktree placeholders (branch feat/s32-placeholders): work ONLY feat-s32-placeholders (run with --feature). Branched from v2.55.0; holds none of the owner's uncommitted work; node_modules is a junction to the main checkout (do not npm install here). Never start, stop or restart the server on 3737.
+- DONE 2026-10-01 in worktree webmcp-wizard (branch feat/s7-webmcp-wizard, v2.57.0): S7
+  WebMCP wizard shipped and gate-green (115/115). Owner-to-look after merge + rebuild:
+  /webmcp > Wizard > New wizard > type a description > Digest with claude (expect questions
+  + a 5-10 tool list and 'answered by claude'); edit/cut a tool > Approve this list > Emit
+  JSON > Create package in the builder > open <slug> lands in the Tools tab. Write my own:
+  paste a bad JSON, expect concrete problems with no model wait. Gear: Wizard agent /
+  Wizard fallback selects. Never run in a harness session: the server on 3737.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
   a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature

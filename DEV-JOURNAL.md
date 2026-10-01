@@ -1,5 +1,28 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S7 WebMCP wizard: describe, clarify, approve, then emit (v2.57.0)
+
+The /webmcp builder gets a Wizard toggle (header, next to New package). Describe ->
+Clarify & propose -> Approve -> Emit JSON, with Write my own as the escape hatch where
+the agent only proofreads. Server side: src/lib/v2/webmcp/wizard.ts (validators, prompts,
+labelled model runner, draft store), six routes under /api/v2/webmcp/wizard, migration
+044 webmcp_wizard_drafts (drafts survive a refresh; discard archives, never deletes).
+Rules the code enforces, not the prompt: emit is a 409 until the list is approved; the
+emitted spec must pass validateWizardSpec (exporter shapes, strict spec_json, 5-10 tools,
+one job per tool, a persona on every tool, no js code, every approved tool present and no
+extras) or it comes back 422 with the problems and the draft stays approved. Proofread
+returns schema problems with no model call and says 'looks good' only when the schema
+passes and the agent found nothing. Model: the WebMCP gear's Wizard agent (default claude)
+through cliComplete, fallback the gear's Wizard fallback (default codex, none = fail);
+every reply carries provider / fellBackFrom / fallbackReason (rule 20). docs/modules/
+webmcp.md: Wizard controls table + two gear rows. smoke-webmcp-wizard.mjs: 71 checks with
+a mocked cli (digest, refused early emit with zero model calls, answers surviving a
+re-digest, edited approval, emit -> apply -> package with 6 tools, 12-tool/js/two-job
+spec -> 422, drift -> 422, proofread paths, fallback labelling, discard). Gate 115/115.
+Not done by the brief: a live-app look (owner); inputs on a proposed tool are edited
+through re-digest or the Tools tab after apply, not inline. Rollback: git revert <this
+commit> (migration 044 leaves an empty table behind, harmless).
+
 ## 2026-10-01 - S32: the three placeholders built for real: Tasks sdk mode, Marketing campaign tabs, Today Widgets (v2.56.0)
 
 Harness session (worktree placeholders, feat-s32-placeholders). Three things the Guide writers

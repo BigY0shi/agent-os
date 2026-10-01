@@ -203,8 +203,8 @@
         "smoke-webmcp-wizard.mjs passes offline with a mocked model; ./test.sh exits 0.",
         "DEV-JOURNAL.md entry, ROADMAP.md S7 ticked, version bumped (minor), roadmap page re-rendered."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "PASS 2026-10-01 v2.57.0: Wizard/Builder toggle on /webmcp (WizardPanel.tsx), steps describe -> clarify/propose -> approve -> emit; emit route 409 before approval; validateWizardSpec gates exporter shapes + strict spec_json + 5-10 tools + one job per tool + persona on every tool + no js + approved list unchanged (422 with problems otherwise); proofread returns concrete problems with no model call and 'looks good' only when schema passes and the agent found nothing; model via cliComplete with gear wizardAgent (default claude) + labelled fallback wizardFallback (default codex); drafts persisted in webmcp_wizard_drafts (migration 044). smoke-webmcp-wizard.mjs 71 checks with a mocked cli; ./test.sh 115/115. Journal entry, ROADMAP S7 ticked, roadmap page rendered, docs/modules/webmcp.md Wizard table + gear rows."
     },
     {
       "id": "feat-s9-openmontage-module",
