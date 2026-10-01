@@ -85,6 +85,11 @@ export interface Settings {
   // ~/.agentic-os/config.json is read ONLY while this holds no override (labelled fallback).
   // cliTimeoutSec: how long a CLI agent may take per room turn (was a 90 s literal).
   room: { agents?: Record<string, RoomAgentOverride>; cliTimeoutSec?: number };
+  // Artifacts (rule 16, 2026-10-01): the dedicated Netlify site publishes go to, set from the
+  // gear on the Claude page's Artifacts tab. siteId is Netlify's site ID (not a secret),
+  // baseUrl the site's public https origin. ~/.agentic-os/artifacts-site.json is read only
+  // when siteId is blank here (lib/claudeArtifacts.ts, a labelled back-compat fallback).
+  artifacts: { siteId?: string; name?: string; baseUrl?: string };
   // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
   // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
   // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
@@ -535,6 +540,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
   claude: { model: "claude-opus-4-8" },
   room: { agents: {}, cliTimeoutSec: 90 },
+  artifacts: { siteId: "", name: "", baseUrl: "" },
   loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },

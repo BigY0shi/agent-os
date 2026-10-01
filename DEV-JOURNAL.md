@@ -1,5 +1,53 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S31 Artifacts (and SEO deploy) actually deploy on Windows; site config in settings (v2.56.0)
+
+Harness session, worktree artifacts-deploy (branch fix/s31-artifacts-deploy), feature fix-s31-artifacts-windows-deploy.
+- **Evidence first (this machine, 2026-10-01).** `where netlify` -> "Could not find files" (rc 1); `npm root -g`
+  (`%APPDATA%/npm/node_modules`) has no netlify-cli and `node_modules/.bin` has none either, so the CLI is not
+  installed here at all. `spawn("netlify", ["--version"])` with no shell -> `error` event ENOENT, close code
+  -4058. `~/.agentic-os/artifacts-site.json` -> ENOENT. So no Artifact has ever deployed from this machine:
+  no CLI, no site, and even with both installed the npm `.cmd` shim is something Node's spawn cannot run
+  (the machine's own `npx.cmd` shows the shape; `runner.ts` already works around it for the agent CLIs).
+- **`lib/platform.ts`: `whichAll()` + `resolveCli()`.** A PATH scan (PATHEXT-aware, no `where` subprocess, so a
+  custom PATH works) and a resolver: a real `.exe` is run as is; a `.cmd` shim is read for the
+  `node_modules/.../*.js` it launches (the same regex as `runner.ts`; the LAST existing entry that is not
+  `npm-prefix.js`, because Node's own `npx.cmd` names that helper first) and we spawn `node <entry> ...args`;
+  anything else is an error naming what was found. Verified live: `npx` -> `node.exe` + `npx-cli.js`,
+  `netlify` -> "not on PATH", `node` -> `node.EXE`.
+- **`claudeArtifacts.ts` `deploy()`** resolves `netlify` on the deploy PATH (read per call now, not at import),
+  spawns `cli.cmd` with `[...cli.pre, deploy, --prod, --dir, <published>, --site, <id>, --no-build]` (never a
+  shell string), logs the command line, and a missing CLI is "netlify CLI not found (...)" plus the install
+  line. The v2.54.3 rollback is untouched and re-proven.
+- **SEO deploy route** had the same defect (its comment fixed PATH, not the shim): `runStep` now resolves `npx`
+  and `netlify` the same way and reports a missing CLI as a failed step (code 127) instead of an ENOENT.
+- **Site config in settings (rule 16).** `settings.artifacts { siteId, name, baseUrl }` (declared + defaulted),
+  a Configure gear on the Artifacts tab (`ArtifactsSettings.tsx`, the ConfigMenu pattern), and
+  `artifactSite()` reads settings first; `artifacts-site.json` is `LEGACY_SITE_FILE`, a labelled read-only
+  fallback used only while the settings site ID is blank, and the gear prefills from it so one Save moves it.
+  The header says which site is set (and when it is the legacy file), or that none is and where the gear is;
+  a missing site / base URL refuses publish AND unpublish with `SITE_MISSING` / `SITE_URL_MISSING`, both
+  naming "Configure (the gear) on the Artifacts tab", and netlify is never run. GET /api/claude/artifacts
+  returns the site with its `source`.
+- **Name guards.** This worktree was cut from v2.55.0 without the owner's uncommitted `(?!.+$)` -> `(?!.)`
+  (dot escaped) fix (journal 2026-09-30), so `unpublish`, Studio and Ultracode deletes refused every id and
+  smoke-exile-deletes was red here (H1, H2, H3, H6). The 8 sites in `claudeArtifacts.ts`, `studioHistory.ts`
+  and `ultracodeRuns.ts` carry the same one-character fix in this commit (identical text, so his working copy
+  merges clean). The other 17 sites (workspaces, hermes, videoProjects) are left to his uncommitted work.
+- An independent read-only check of the gear against the Kanban/Leads/Loop/Deal Desk gears found no pattern
+  deviation and two gaps, both fixed: the gear opened empty when the site came from the legacy file; a site
+  with an ID but no base URL showed no warning in the header.
+`docs/modules/claude-cli.md` updated (Configure row; the netlify line).
+
+Verified: new `smoke-artifacts-deploy.mjs`, 35 checks (the ENOENT evidence on Windows; the resolver on the fake
+shim, on an empty PATH and on this machine's npx; publish via a fake netlify that records argv: --prod --dir
+<published> --site <id> --no-build and the settings URL; settings beat the file, file only when blank, labelled;
+no site / no base URL refused naming the gear with netlify never run; exit 1 -> the v2.54.3 rollback on first
+publish, update and unpublish; exit 0 unpublish exiles outside published/; CLI missing -> the install hint;
+the SEO route, tab, gear, settings, route and doc). smoke-exile-deletes green again. tsc clean.
+Gate: `./test.sh` = tsc clean, 43 smokes PASS, then stops at smoke-guide (exit 1): pre-existing, `docs/modules/rabbit.md` (committed 2026-09-29, v2.50.0) names /rabbit and `src/app/rabbit` exists in no ref (the owner's uncommitted page). The 69 smokes after it, run one by one against the final code: 68 PASS, smoke-memory-ui FAIL on its two ".exile copy exists" checks (the gitignored folder lives in the main checkout). 111 of 113 green; both reds are outside S31, so its status stays "failing" until the owner clears smoke-guide (checklist in agent-progress.md).
+
+Rollback: revert the commit. settings.artifacts stays in settings.json unused; artifacts-site.json is untouched.
 ## 2026-10-01 - S30 settings sweep, batch 4: Brainstorm limits, Jarvis voice models, Thumbnails prompt model, the sweep smoke (v2.59.0)
 
 The last Phase B batch; every `move` row in `_design/settings-sweep-audit.md` is now a setting.
