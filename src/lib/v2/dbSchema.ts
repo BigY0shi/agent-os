@@ -917,6 +917,46 @@ CREATE INDEX IF NOT EXISTS idx_mbl_episode ON memory_backfill_log(episode_uuid, 
 CREATE INDEX IF NOT EXISTS idx_mbl_run ON memory_backfill_log(run_id, id);
 `;
 
+// 045 — Rabbit R1 bridge (/rabbit): OpenAI-compatible chat sessions served to
+// the R1 through the owner's claude CLI. last_assistant_hash is how a
+// stateless client's next request re-links to its session (store.linkSession).
+// Archive is a soft flag; rows are never destroyed.
+// NOT 044: the owner's live DB already carries a `44 webmcp_wizard_drafts` row
+// (applied 2026-09-03, since removed from this array), and the applied-set
+// runner skips any number it has seen — 044 silently created nothing. Before
+// picking a number, check the live `migrations` table, not just this file.
+const M045_RABBIT_BRIDGE = `
+CREATE TABLE IF NOT EXISTS rabbit_sessions (
+  id                  TEXT PRIMARY KEY,
+  title               TEXT NOT NULL DEFAULT '',
+  model               TEXT NOT NULL DEFAULT '',
+  client              TEXT NOT NULL DEFAULT '',
+  message_count       INTEGER NOT NULL DEFAULT 0,
+  input_tokens        INTEGER NOT NULL DEFAULT 0,
+  output_tokens       INTEGER NOT NULL DEFAULT 0,
+  last_assistant_hash TEXT,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  archived_at         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rabbit_sessions_updated ON rabbit_sessions(archived_at, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rabbit_sessions_hash    ON rabbit_sessions(last_assistant_hash);
+
+CREATE TABLE IF NOT EXISTS rabbit_messages (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES rabbit_sessions(id),
+  role          TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  content       TEXT NOT NULL,
+  model         TEXT,
+  input_tokens  INTEGER,
+  output_tokens INTEGER,
+  duration_ms   INTEGER,
+  error         TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rabbit_messages_session ON rabbit_messages(session_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -1120,6 +1160,13 @@ export const MIGRATIONS: Migration[] = [
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_rule_event
            ON automation_runs(rule_id, event_id) WHERE event_id IS NOT NULL`,
       );
+    },
+  },
+  {
+    version: 45,
+    name: "rabbit_bridge",
+    up: (db) => {
+      db.exec(M045_RABBIT_BRIDGE);
     },
   },
   {

@@ -428,6 +428,21 @@ export interface Settings {
     defaultStatus?: "inbox" | "kept" | "archived"; // status a fresh capture lands in
     maxSnapshotChars?: number; // cap on the stored content_md snapshot
   };
+  // Rabbit R1 bridge (/rabbit). Every knob here has a gear (RabbitSettings).
+  // The bearer secret is NOT here — it lives in ~/.agentic-os/rabbit.secret
+  // and leaves only through the cookie-gated GET /api/rabbit/setup.
+  rabbit?: {
+    enabled?: boolean;           // OFF = /api/rabbit/v1/* answers 503 (default true)
+    requireKey?: boolean;        // ON = bearer/x-api-key must match ~/.agentic-os/rabbit.secret; OFF (default, owner's call) = open on the LAN
+    defaultModel?: string;       // model id served for "agentos-claude" / no model (default: CLAUDE_MODEL)
+    persona?: string;            // system prompt prefix; empty = built-in R1 persona
+    historyTurns?: number;       // prior turns packed into each claude -p prompt (default 24)
+    sessionGapMinutes?: number;  // idle gap after which an echoed reply no longer re-links a session (default 120)
+    retentionDays?: number;      // "Archive idle" button threshold (default 30; 0 = archive everything idle now)
+    mastermindAgents?: string[]; // room agent ids that answer when the R1 picks "agentos-mastermind" (default claude, codex, cursor)
+    mastermindSequential?: boolean; // true (default) = agents build on each other like /room; false = all at once, faster
+    publicBaseUrl?: string;      // where the R1 reaches this box from anywhere (e.g. https://desktop.hair-halfmoon.ts.net via tailscale funnel); empty = the origin the gear was opened at
+  };
   // SPEC-F K — Newsletter. Rule 16: every knob here gets an in-app gear
   // (NewsletterSettings, chunk 4). NOTHING secret lives here — the addy.io key
   // stays in ~/.agentic-os/newsletter/config.json, read only by
@@ -587,6 +602,18 @@ export const DEFAULT_SETTINGS: Settings = {
     jarvisAgent: "claude",
     defaultStatus: "inbox",
     maxSnapshotChars: 24000,
+  },
+  rabbit: {
+    enabled: true,
+    requireKey: false,
+    defaultModel: "agentos-claude",
+    persona: "",
+    historyTurns: 24,
+    sessionGapMinutes: 120,
+    retentionDays: 30,
+    mastermindAgents: ["claude", "codex", "cursor"],
+    mastermindSequential: true,
+    publicBaseUrl: "",
   },
   newsletter: {
     syncEnabled: true,

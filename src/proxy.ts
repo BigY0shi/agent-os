@@ -8,6 +8,7 @@ import {
   mintSessionToken,
   verifySessionToken,
 } from "@/lib/authSessions";
+import { rabbitLog } from "@/lib/v2/rabbit/log";
 
 // LAN access gate. Next 16 renamed `middleware` → `proxy` (Node.js runtime by default,
 // so process.env + node:crypto/node:fs are available). This runs before every route and
@@ -47,6 +48,29 @@ export function proxy(request: NextRequest) {
   // secret header pass through for the ROUTE to validate strictly (401 on
   // mismatch); cookie-holders fall through to the normal session check below.
   if (pathname.startsWith("/api/mcp") && request.headers.has("x-agentos-mcp-secret")) {
+    return NextResponse.next();
+  }
+
+  // /api/rabbit/v1/*: the Rabbit R1 (any OpenAI-dialect client) can't hold a
+  // session cookie, and the owner chose to run it WITHOUT a key (2026-09-13:
+  // "just turn the bearer off"), so these paths pass through unconditionally
+  // and the ROUTE is the gate: settings.rabbit.requireKey ON → timing-safe
+  // bearer check (401 / 503); OFF → open to anyone who can reach this port.
+  // /api/rabbit/setup and /api/rabbit/sessions stay cookie-gated: they hand
+  // out the key and the transcripts.
+  // The R1 Creation is a static page under public/rabbit-creation/ (no secrets
+  // in it; the key arrives via the install QR and lives in the device's secure
+  // storage). It must load without a cookie — the handheld can't sign in.
+  if (pathname.startsWith("/rabbit-creation/")) {
+    // Logged so an install scan that never reaches this box is provable.
+    rabbitLog(`${request.method} ${pathname} ua="${(request.headers.get("user-agent") ?? "").slice(0, 60)}" (creation static)`);
+    return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/rabbit/v1/")) {
+    // Access line (shape only) so an unknown path or missing header from the
+    // device is visible in ~/.agentic-os/rabbit.log even under the foreground bat.
+    rabbitLog(`${request.method} ${pathname}${request.nextUrl.search} ua="${(request.headers.get("user-agent") ?? "").slice(0, 40)}" auth=${request.headers.has("authorization") || request.headers.has("x-api-key")} len=${request.headers.get("content-length") ?? "?"}`);
     return NextResponse.next();
   }
 

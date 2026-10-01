@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper, ChevronDown, ChevronRight, Armchair } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper, Rabbit, ChevronDown, ChevronRight, Armchair } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -34,6 +34,10 @@ const NAV: NavItem[] = [
   // newsletters — deduped stories with per-source chips. Workspace per SPEC-F
   // §3 (WORKSPACE_ROUTES membership decides the section, not NAV position).
   { href: "/newsletter", label: "Newsletter", icon: <Newspaper size={16} />, accent: "#4d9de0", dim: "rgba(77,157,224,0.16)" },
+  // Rabbit R1 bridge: the handheld talks to the owner's claude CLI through an
+  // OpenAI-compatible endpoint; this page is its sessions, transcripts, archive
+  // and the connection gear. Workspace (WORKSPACE_ROUTES decides the section).
+  { href: "/rabbit", label: "Rabbit R1", icon: <Rabbit size={16} />, accent: "#ff7a1a", dim: "rgba(255,122,26,0.16)" },
   // The local Tasklet: reusable background agents (SDK runtime, triggers, approvals).
   // Top-level on purpose — this is the OS's core primitive, not another module.
   { href: "/agents",   label: "Agents", icon: <Bot size={16} />, accent: "#a78bfa", dim: "rgba(167,139,250,0.16)" },
@@ -123,7 +127,7 @@ const LS_COLLAPSED = "agentos.sidebar.collapsed";
 // sits in the array, so add new orchestration modules here as well as to NAV.
 const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban", "/browser"]);
 // SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
-const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynotes", "/newsletter"]);
+const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynotes", "/newsletter", "/rabbit"]);
 // The two owner-named groups (2026-09-02). Everything the owner reaches for daily
 // sits in Agent Toolbox, directly under Agent Orchestration so Deal Desk and its
 // neighbours are all above the fold; the make-things modules collect in Artist's
