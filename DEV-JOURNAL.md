@@ -1,5 +1,27 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Rabbit bridge: every reply loaded the owner's whole Claude Code setup (v2.56.1)
+
+Owner: R1 replies take "FOREVER", when they come at all. Evidence:
+- ~/.agentic-os/rabbit.log, 99 successful chat turns: median 34.6s, p90 74.8s, max 135.5s.
+  19 extra turns came from the "explicit call request answered in prose" retry. 5 x 502 were
+  an expired OAuth login (old); 4 x 503 were the bridge switched off.
+- A probe spawning claude exactly like claudeChat.ts, with a one-line prompt on
+  claude-sonnet-5 (the gear's model): the stream-json init arrived at 9.0s and listed
+  92 plugins, 200 agents and 30 tools. The result reported 75,137 input tokens (cache
+  creation) for "what is two plus two"; the whole turn took 14.1s.
+- The same probe plus `--tools=` and `--setting-sources=`: init at 0.9s, 2 plugins, 6 agents,
+  0 tools, 723 input tokens, 3.2s total. Through the real runClaudeTurn after the fix:
+  2.4s, 526 input tokens.
+Cause: a `claude -p` turn loads user settings (plugins, agents, hooks, CLAUDE.md) and the
+built-in tool set unless told not to; the bridge never used either (the R1's functions are
+prompt-based). Fix in src/lib/v2/rabbit/claudeChat.ts: `--tools=` and `--setting-sources=`,
+in the `=` form because runner.safeArg drops an empty-string argument. smoke-rabbit
+asserts both flags. Still slow after this, not changed here: the R1 sends 130-176k chars of
+system prompt and 20-90k of history per main turn, fires ~3 requests per utterance, gets no
+streaming when it sends tools, and pays a second full turn on the prose retry.
+Live after rebuild + restart. Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - Commit the Rabbit R1 bridge that sat uncommitted since 2026-09-13 (v2.56.0)
 
 The Rabbit R1 bridge (entries 2026-09-13 to 2026-09-15 below) was built and used live but

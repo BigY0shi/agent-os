@@ -196,6 +196,11 @@ try {
     const f2 = cc.systemPromptFile("hello system");
     check("systemPromptFile: content-hashed, reused, in the TEMP dir", f1 === f2 && f1.startsWith(promptTmp) && fs.readFileSync(f1, "utf8") === "hello system", f1);
     check("systemPromptFile: different prompt → different file", cc.systemPromptFile("other") !== f1);
+    // Lean turn (2026-10-01): the owner's plugins/agents/hooks added ~9s and ~75k tokens to
+    // every reply. `=` forms because runner.safeArg drops an empty-string argument.
+    const ccSrc = read("src/lib/v2/rabbit/claudeChat.ts");
+    check("claude turn is lean: --tools= and --setting-sources= (no empty-string args)",
+      ccSrc.includes('"--tools=",') && ccSrc.includes('"--setting-sources=",') && !/"--tools",\s*""/.test(ccSrc) && !/"--setting-sources",\s*""/.test(ccSrc));
 
     // Mastermind adapter — pure helpers only (runMastermindTurn talks to real agents).
     const mm = await import("../../src/lib/v2/rabbit/mastermind.ts");

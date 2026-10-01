@@ -58,6 +58,14 @@ export function runClaudeTurn(opts: ClaudeTurnOpts): Promise<ClaudeTurnResult> {
     "--model", opts.model,
     "--system-prompt-file", systemPromptFile(opts.systemPrompt),
     "--strict-mcp-config",
+    // Lean turn (2026-10-01): no built-in tools (the R1's functions are prompt-based, the
+    // CLI's own Bash/Read/... are never used) and no user/project/local settings, so the
+    // owner's plugins, agents, hooks and CLAUDE.md stay out of a voice reply. Measured on
+    // this box: init 9.0s -> 0.9s, a one-line turn 14s -> 3.2s, input 75k -> 0.7k tokens.
+    // The `=` form on purpose: runner.safeArg drops empty strings, so `--tools ""` would
+    // arrive as a bare `--tools` and swallow the next flag.
+    "--tools=",
+    "--setting-sources=",
     "--no-session-persistence",
     "--disable-slash-commands",
     "--output-format=stream-json",
