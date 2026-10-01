@@ -37,6 +37,7 @@ export const TITLES: Record<string, PageMeta> = {
   "/thumbnails":  { numeral: "XI.",   label: "Self · Thumbnails",  title: "Thumbnail Studio",        sub: "Upload a thumbnail + say what to improve → gpt-image-2 makes better versions. Every round is logged to your vault so it learns your style." },
   "/notebook":    { numeral: "XII.",  label: "Self · Notebook",    title: "Notebook",                sub: "Your NotebookLM notebooks, audio overviews and chats — all in one place, synced to Obsidian." },
   "/hermes3d":    { numeral: "XI.",   label: "Self · Hermes 3D",   title: "Hermes 3D",               sub: "The baked Synty office in three.js. Seats are anchored; agents in them is the next slice." },
+  "/openmontage": { numeral: "XI.",   label: "Self · OpenMontage", title: "OpenMontage",             sub: "Your checkout of the agentic video production system. Pick a pipeline, give it a brief, and your CLI agent produces the video while the tray shows every step." },
   "/kanban":      { numeral: "XIII.", label: "Self · Kanban",      title: "Kanban",                  sub: "Hermes Agent multi-agent board. Drop a prompt into triage, watch the orchestrator decompose + assign." },
   "/journal":     { numeral: "XIV.",  label: "Self · Journal",     title: "Journal",                 sub: "Daily entries with voice or text. One markdown file per day." },
   "/memory":      { numeral: "XV.",   label: "Self · Memory",      title: "Memory",                  sub: "Search 1261 Omi memories + your Obsidian vault." },

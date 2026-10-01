@@ -6,6 +6,17 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- DONE 2026-10-01 in worktree openmontage (branch feat/s9-openmontage-module, v2.57.0):
+  feat-s9-openmontage-module is passing. `/openmontage` in Artist's Corner, gear with repo
+  path / python / output dir / agent / fallback / timeout, pipelines read from the checkout's
+  pipeline_defs, a run = the CLI agent driving the checkout as module run "openmontage"
+  (tray streams it), rendered files listed. smoke-openmontage 64/64, ./test.sh 115/115.
+  Owner-to-look after rebuild (not a blocker): open /openmontage, the five chips should be
+  green (doctor was green read-only on the real checkout: python 3.11.0, deps, claude);
+  press Preflight and see the registry JSON; pick framework-smoke, type a brief, Run
+  pipeline, and watch the tray. The first real pipeline run spends whatever the checkout's
+  .env allows (the prompt says prefer free/local and stay under the manifest budget).
+  Branch is pushed; merge to master is the owner's call.
 - QUEUED 2026-10-01 by the supervisor in worktree openmontage (branch feat/s9-openmontage-module): work ONLY feat-s9-openmontage-module (run with --feature). Branched from v2.56.4 (1daca86, main gate 114/114 green 2026-10-01); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737. smoke-memory-ui now skips its .exile checks in a worktree (v2.56.4), so ./test.sh can go green here. Owner rules since the spec was written: every model/provider/fallback is a gear setting, default Claude with Codex as the owner-chosen, labelled fallback (rule 20); there is NO local Ollama on this machine (Ollama means Ollama Cloud or nothing); OpenRouter is not used anywhere; Voicebox is retired (Kokoro is the TTS). Every new control goes in its docs/modules/*.md controls table (smoke-guide checks the docs). OpenMontage is at C:/Users/Yoshi/Documents/OpenMontage (exists, verified 2026-10-01). Read its AGENT_GUIDE.md and docs/ARCHITECTURE.md before writing code; never pip install anything. If it needs a narration voice, use Kokoro (127.0.0.1:8880), not Voicebox.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
