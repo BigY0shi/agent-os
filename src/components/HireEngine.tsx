@@ -586,7 +586,7 @@ export default function HireEngine() {
           <ModelSettings section="hire" title="Hire Engine models" accent="#fb923c"
             fields={[
               { key: "triageModel", label: "Triage sweep", placeholder: "claude-haiku-4-5", hint: "Cheap pursue/skip pass over the whole board (12 postings per call)." },
-              { key: "briefModel", label: "Brief + pitch writer", placeholder: "blank = pinned CLAUDE_MODEL", hint: "The full analysis and outreach writer." },
+              { key: "briefModel", label: "Brief + pitch writer", placeholder: "blank = the Claude model (Claude page gear)", hint: "The full analysis and outreach writer." },
               { key: "draftModel", label: "Gmail draft clerk", placeholder: "claude-sonnet-5", hint: "Creates the approval-gated drafts via the Gmail MCP. Needs tool-use competence." },
             ]} />
         </div>

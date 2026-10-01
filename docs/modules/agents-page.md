@@ -10,7 +10,7 @@ Reusable background agents that run on your machine and your subscriptions. The 
 
 | Control | What it does |
 |---|---|
-| **Configure** (gear, tooltip "Agents intelligence dial") | Sets the model for the **Fast tier**, **Standard tier** and **Deep tier** (blank Deep = the pinned Claude model). |
+| **Configure** (gear, tooltip "Agents intelligence dial") | Sets the model for the **Fast tier**, **Standard tier** and **Deep tier** (blank Deep = the Claude model from the Claude page's gear). |
 | **Configure** (gear, tooltip "Agents page") | **Hero poll interval (ms)**, **Default harness**, **Deploy gate: require a test run**, **Per-run spend ceiling** (Dollars, Tokens), **Let a run ask you a question**, **Also park when a turn merely ends in a question mark**, **Question timeout (minutes)**. |
 | **New agent** | Opens the Forge wizard. |
 | Live status strip | One chip per agent with its live status (running, waiting, idle, error, offline). Uses the live feed, falling back to polling. |
@@ -34,7 +34,7 @@ Steps: **Idea**, **Persona**, **Harness**, **Tools**, **Connectors**, **Permissi
 | Harness cards, **Forge Harness** | Pick a harness (run structure) or make one. |
 | **Inherit MCP servers** / **No MCP**, **Browser tools**, browser sessions, WebMCP tool packages | Tools the agent may use. |
 | Connectors | Integration accounts the agent may use. |
-| Permission mode, intelligence tier, Provider **sdk** / **cli** / **ollama** | cli and ollama need a CLI name or Ollama model and fail loudly if unreachable. |
+| Permission mode, intelligence tier, Provider **sdk** / **cli** / **ollama** | cli and ollama need a CLI name or Ollama model and fail loudly if unreachable. The ollama provider talks to the **Local Ollama URL** (and sends the Ollama Cloud key when one is saved) from the Ollama Cloud page's gear, else `OLLAMA_URL` / `OLLAMA_API_KEY`. |
 | Trigger editor | When the agent runs. |
 | **Create in Test** | Creates the agent in Test: triggers stay parked, manual runs work. |
 | **Run test**, **Deploy**, **Deploy anyway**, **Open agent** | Fire a test run (its approvals and transcript show inline), then deploy. Deploy anyway overrides the test-run gate for this deploy only. |

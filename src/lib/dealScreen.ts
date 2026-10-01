@@ -12,7 +12,7 @@
 // to run over the whole board. A lead the screen never reached, or one where the call
 // failed, stays unscreened and reads NA in purple. Nothing here invents a band.
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
 import { readSettings } from "@/lib/settings";
 import { LEADS_DIR, listDeals, setScreen, type Deal } from "@/lib/upworkDesk";
@@ -29,7 +29,7 @@ export const MAX_SCREEN = 500;
 /** Gear-configurable so the screen can run on a cheaper model than the brief (rule 16). */
 export function screenModel(): string {
   const m = readSettings().deals?.screenModel;
-  return typeof m === "string" && m.trim() ? m.trim() : CLAUDE_MODEL;
+  return typeof m === "string" && m.trim() ? m.trim() : claudeModel();
 }
 
 export function screenPrompt(deal: Deal): string {

@@ -104,7 +104,7 @@ check("C2 a bad model: 400", r.status === 400 && /is not a Claude model/.test(aw
 r = await post({ prompt: "audit it", ultracode: true, project: "ultracode-security", effort: "turbo" });
 check("C3 a bad effort: 400", r.status === 400 && /is not an effort level/.test(await r.text()));
 const rs = fs.readFileSync("src/app/api/claude/chat/route.ts", "utf8");
-check("C4 the args carry the chosen model, effort and --add-dir", /"--model", isUltra \? ucModel : CLAUDE_MODEL/.test(rs) && /"--effort", ucEffort/.test(rs) && /"--add-dir", ucTarget\.dir/.test(rs) && !/"--effort", "xhigh"/.test(rs));
+check("C4 the args carry the chosen model, effort and --add-dir", /"--model", isUltra \? ucModel : claudeModel\(\)/.test(rs) && /"--effort", ucEffort/.test(rs) && /"--add-dir", ucTarget\.dir/.test(rs) && !/"--effort", "xhigh"/.test(rs));
 check("C5 the run records model, effort and target; a resume keeps them (older runs at xhigh)", /run\.effort = ucEffort/.test(rs) && /run\.targetDir = ucTarget\.dir/.test(rs) && /resumeRun\?\.targetDir/.test(rs) && /resumeRun \? \{ model: resumeRun\.model, effort: resumeRun\.effort \?\? "xhigh" \}/.test(rs));
 check("C7 a targeted run gets the read-only args and clones into ULTRACODE_REPOS_ROOT", /"--add-dir", ucTarget\.dir, \.\.\.readOnlyArgs\(ucTarget\.dir\)/.test(rs) && /resolveUltracodeTarget\(target, ULTRACODE_REPOS_ROOT\)/.test(rs));
 check("C6 the run stays in its project folder (target only via --add-dir)", /spawnStream\("claude", args, \{ cwd: runCwd \}\)/.test(rs));

@@ -222,11 +222,17 @@ export function isAgentInstalled(agent: "claude" | "openclaw" | "hermes" | "anti
   return Boolean(config[agent]);
 }
 
-// The Claude model the dashboard pins for the real `claude` CLI (Claude agent
-// chat + SEO generation). Single source of truth so a model bump is a one-line
-// change. Override with AGENTIC_OS_CLAUDE_MODEL if you want a different one.
-// `claude-opus-4-8` = Claude Opus 4.8 (verified to resolve on the claude CLI).
-export const CLAUDE_MODEL: string =
-  process.env.AGENTIC_OS_CLAUDE_MODEL
-  ?? (fileCfg as { claudeModel?: string }).claudeModel
-  ?? "claude-opus-4-8";
+// The Claude chat model is a SETTING since S30 (settings.claude.model, picked on the Claude
+// page, read per request by lib/claudeModel.ts; default claude-opus-4-8). These two keep the
+// older back-compat override: AGENTIC_OS_CLAUDE_MODEL in the environment, else `claudeModel`
+// in ~/.agentic-os/config.json, win over the setting when present. Read once at start like
+// everything else in this file. Nothing should import a model id from here any more; call
+// claudeModel() from lib/claudeModel.ts.
+export const CLAUDE_MODEL_OVERRIDE: string | null =
+  process.env.AGENTIC_OS_CLAUDE_MODEL?.trim()
+  || (fileCfg as { claudeModel?: string }).claudeModel?.trim()
+  || null;
+export const CLAUDE_MODEL_OVERRIDE_SOURCE: "env" | "config.json" | null =
+  process.env.AGENTIC_OS_CLAUDE_MODEL?.trim() ? "env"
+  : (fileCfg as { claudeModel?: string }).claudeModel?.trim() ? "config.json"
+  : null;

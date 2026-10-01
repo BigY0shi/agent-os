@@ -7,6 +7,7 @@ import Panel from "./Panel";
 import { MOD } from "@/lib/modKey";
 import { useSettings } from "./ConfigMenu";
 import { ULTRACODE_MODELS, DEFAULT_ULTRACODE_MODEL, DEFAULT_ULTRACODE_EFFORT } from "@/lib/ultracodeModels";
+import ClaudeModelSettings from "./ClaudeModelSettings";
 
 interface Msg { role: "user" | "assistant" | "system"; text: string; }
 
@@ -102,6 +103,8 @@ export default function ClaudePanel() {
       icon={<Sparkles size={14} />}
       actions={
         <div className="flex items-center gap-2">
+          {/* S30: the Claude chat model is a setting (settings.claude.model), picked here */}
+          <ClaudeModelSettings />
           <button
             onClick={() => { setMsgs([]); setPartial(""); }}
             disabled={streaming || msgs.length === 0}

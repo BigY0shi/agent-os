@@ -1,7 +1,7 @@
 import { getDeal, addAnswer, LEADS_DIR } from "@/lib/upworkDesk";
 import { recordDeskQA, dealSubject } from "@/lib/deskMemory";
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
 import { withSkills } from "@/lib/platformSkills";
 import { listingText } from "@/lib/dealDeskControl";
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     // is being asked about (board.json, contacts, prior pitches) instead of
     // answering from the 1500 chars we paste in. No orchestrate: this is a single
     // question, not a build.
-    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: withSkills(prompt, "deals"), cwd: LEADS_DIR });
+    const r = await run("claude", ["-p", "--model", claudeModel(), "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: withSkills(prompt, "deals"), cwd: LEADS_DIR });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }

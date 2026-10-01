@@ -1,7 +1,7 @@
 import { getDeal, setEditedPitch, setDossier, LEADS_DIR } from "@/lib/upworkDesk";
 import { recordDeskPitch, dealSubject } from "@/lib/deskMemory";
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
 import { withSkills } from "@/lib/platformSkills";
 import { startModuleRun } from "@/lib/moduleRuns";
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
       // a proposal is research + positioning + copy, which is worth splitting across
       // agents rather than one model doing all three passes alone.
       const write = async (input: string) => {
-        const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs({ orchestrate: true })], { timeoutMs: 300_000, input: withSkills(input, "deals"), cwd: LEADS_DIR, signal: ctx.signal });
+        const r = await run("claude", ["-p", "--model", claudeModel(), "--output-format", "text", ...claudeBuilderArgs({ orchestrate: true })], { timeoutMs: 300_000, input: withSkills(input, "deals"), cwd: LEADS_DIR, signal: ctx.signal });
         if (!r.ok || !r.stdout.trim()) throw new HttpError(502, r.stderr || "agent returned nothing");
         return r.stdout.trim();
       };

@@ -13,7 +13,7 @@ The page is one column with a session list on the left (shown on wide screens on
 | **New session** | Clears the view so your next message starts a fresh session. |
 | Session cards (left rail) | One per saved session, showing the topic, the date, and "brief ready" once a brief exists. Click to load its transcript and brief. The open session has an amber outline. |
 | Seat avatars (header) | Claude, ChatGPT and Kimi. Hovering the Kimi avatar shows the model that filled the seat. The line next to them reads "three-seat council" plus "kimi seat: <model>" once resolved. |
-| **Models** (gear) | Opens "Brainstorm models". One field: **Kimi seat (Ollama Cloud)**, placeholder `kimi-k2.6`. Saved to the `brainstorm` section of `~/.agentic-os/settings.json` and used on the next call. |
+| **Models** (gear) | Opens "Brainstorm models": **Kimi seat (Ollama Cloud)**, placeholder `kimi-k2.6`; **CLI seat time limit (seconds)** for Claude and Codex (default 240); **Kimi seat time limit (seconds)** for the Ollama Cloud call (default 180). A time limit chosen in the launch drawer still wins for that run. Saved to the `brainstorm` section of `~/.agentic-os/settings.json` and used on the next call. |
 | Message box | "Topic, idea, or goal for the council..." for a new session, "Steer the council..." once a session is open. Enter sends, Shift+Enter adds a line. |
 | **Convene** / **Steer** | Sends the message. The label is **Convene** with no session open and **Steer** inside one. It reads **In session...** while the council runs. |
 | Phase line | While running, shows the current phase with a spinner: "Diverge - independent concepts", "Converge - cross-examination", "Steer - the council responds", "Chair synthesis". |
@@ -24,7 +24,7 @@ The page is one column with a session list on the left (shown on wide screens on
 ## How it works
 
 - `POST /api/brainstorm` streams NDJSON events (`phase`, `seat`, `msg`, `brief`, `err`, `fatal`, `done`). The first message of a session runs a diverge round, then a critique round, then the chair synthesis. Each later message runs one steer round and a re-synthesis. `GET /api/brainstorm` lists sessions; `GET /api/brainstorm?id=...` loads one.
-- Claude and codex run through your own CLI logins via `cliComplete()` in `src/lib/loopEngine.ts` (no API keys). Kimi is an HTTP call to Ollama Cloud (`OLLAMA_CLOUD_HOST`, default `https://ollama.com`) and needs `OLLAMA_API_KEY` or `OLLAMA_CLOUD_KEY` in the server environment.
+- Claude and codex run through your own CLI logins via `cliComplete()` in `src/lib/loopEngine.ts` (no API keys). Kimi is an HTTP call to Ollama Cloud using the key and host from the Ollama Cloud page's gear (`settings.ollama`, see the Ollama Cloud doc), with `OLLAMA_API_KEY` / `OLLAMA_CLOUD_HOST` in the server environment as the fallback.
 - The Kimi model is resolved live from Ollama Cloud's model list. If you set a model in the gear and it is not on your plan, the seat fails loudly rather than swapping models. If the Kimi seat cannot be filled, the council runs with two seats and says so in the error strip. If every seat fails a round, the run stops with "Every council seat failed".
 - The chair synthesis is always Claude.
 - Sessions are saved as JSON in `~/.agentic-os/brainstorm/<id>.json`, capped at the last 200 messages.

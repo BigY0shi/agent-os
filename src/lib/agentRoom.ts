@@ -14,18 +14,16 @@ import { uniqueSlug, writeItem, type PipelineItem } from "@/lib/pipeline";
 import { config, isAgentInstalled } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { personaPrompt, type Persona } from "@/lib/personas";
+import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
+import { readSettings, type RoomAgentOverride } from "@/lib/settings";
 
 const HOME = os.homedir();
 // Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
 // no local daemon required. The room used to post to localhost:11434, so whenever the
 // local daemon wasn't running (the normal case here) every Ollama agent failed.
 // There is no local daemon on this machine (owner, 2026-09-30), so there is no localhost
-// fallback: with no cloud key an Ollama agent fails and says so.
-const OLLAMA_CLOUD_HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
-function ollamaCloudKey(): string | null {
-  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
-  return k ? k.trim() : null;
-}
+// fallback: with no cloud key an Ollama agent fails and says so. Key and host come from
+// settings.ollama (the Ollama page's gear), then the environment (lib/ollamaCloud.ts).
 
 // ── Durable group-chat history — saved to the vault so it survives browser clears
 // and shows on any device (localStorage in the browser is only a fast cache). ──
@@ -108,27 +106,55 @@ export const ROOM_AGENTS: RoomAgent[] = [
     persona: "You are Free Claude Code — scrappy and resourceful, running locally for free. You love the clever low-cost solution and remind everyone it doesn't have to be expensive." },
 ];
 
-// Power users can repoint any room agent WITHOUT editing source — set "roomAgents"
-// in ~/.agentic-os/config.json, keyed by agent id. e.g. route GLM to your z.ai key:
-//   "roomAgents": { "glm": { "provider": "openai", "baseUrl": "https://api.z.ai/api/paas/v4",
-//                            "apiKeyEnv": "GLM_API_KEY", "model": "glm-4.6" },
-//                   "gemini": { "model": "google/gemini-3-pro-preview" },
-//                   "codex": { "provider": "ollama" } }
-function applyOverride(a: RoomAgent): RoomAgent {
-  const o = (config.roomAgents ?? {})[a.id];
-  const explicitModel = !!(o && typeof o.model === "string" && o.model);
-  const m: RoomAgent = o ? {
+// Any room agent can be repointed WITHOUT editing source. Since S30 (owner 2026-09-30: "every
+// parameter in settings") the overrides live in settings.room.agents, keyed by agent id and
+// edited in the Room gear, read per request. e.g. route an agent to your z.ai key:
+//   room.agents.glm = { provider: "openai", baseUrl: "https://api.z.ai/api/paas/v4",
+//                       apiKeyEnv: "GLM_API_KEY", model: "glm-4.6" }
+// `roomAgents` in ~/.agentic-os/config.json is the OLD home of the same map. It is read ONLY
+// while settings holds no override at all, as a one-time fallback for an install that
+// configured it there; the first override saved in the gear takes over completely (the two
+// are never merged), and roomOverrides().source tells the gear which one is in force.
+const hasFields = (v: unknown): v is RoomAgentOverride => {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return ["model", "provider", "baseUrl", "apiKeyEnv"].some((k) => typeof o[k] === "string" && (o[k] as string).trim() !== "")
+    || typeof o.noReasoning === "boolean";
+};
+const liveEntries = (map: Record<string, unknown> | undefined): Record<string, RoomAgentOverride> =>
+  Object.fromEntries(Object.entries(map ?? {}).filter(([, v]) => hasFields(v))) as Record<string, RoomAgentOverride>;
+
+export function roomOverrides(): { source: "settings" | "config.json" | "none"; agents: Record<string, RoomAgentOverride> } {
+  const fromSettings = liveEntries((readSettings().room?.agents ?? {}) as Record<string, unknown>);
+  if (Object.keys(fromSettings).length) return { source: "settings", agents: fromSettings };
+  const legacy = liveEntries(config.roomAgents as Record<string, unknown> | undefined);
+  return Object.keys(legacy).length ? { source: "config.json", agents: legacy } : { source: "none", agents: {} };
+}
+
+function applyOverride(a: RoomAgent, overrides: Record<string, RoomAgentOverride>): RoomAgent {
+  const o = overrides[a.id];
+  if (!o) return a;
+  const explicitModel = typeof o.model === "string" && o.model.trim() !== "";
+  // No "openrouter" (owner 2026-09-29): any other provider word is ignored, the agent keeps its own.
+  const provider = o.provider === "ollama" || o.provider === "openai" || o.provider === "cli" ? o.provider : undefined;
+  return {
     ...a,
-    ...(explicitModel ? { model: o.model as string } : {}),
-    ...(o.provider === "ollama" || o.provider === "openai" ? { provider: o.provider } : {}),
-    ...(typeof o.baseUrl === "string" && o.baseUrl ? { baseUrl: o.baseUrl } : {}),
-    ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv ? { apiKeyEnv: o.apiKeyEnv } : {}),
+    ...(explicitModel ? { model: (o.model as string).trim() } : {}),
+    ...(provider ? { provider } : {}),
+    ...(typeof o.baseUrl === "string" && o.baseUrl.trim() ? { baseUrl: o.baseUrl.trim() } : {}),
+    ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv.trim() ? { apiKeyEnv: o.apiKeyEnv.trim() } : {}),
     ...(typeof o.noReasoning === "boolean" ? { noReasoning: o.noReasoning } : {}),
-  } : a;
-  return m;
+  };
 }
 export function roomAgents(): RoomAgent[] {
-  return ROOM_AGENTS.map(applyOverride);
+  const { agents } = roomOverrides();
+  return ROOM_AGENTS.map((a) => applyOverride(a, agents));
+}
+
+/** How long a CLI agent may take per room turn: settings.room.cliTimeoutSec (default 90 s). */
+export function roomCliTimeoutMs(): number {
+  const s = Number(readSettings().room?.cliTimeoutSec);
+  return Number.isFinite(s) && s > 0 ? Math.round(s) * 1000 : 90_000;
 }
 export function getAgent(id: string): RoomAgent | undefined {
   return roomAgents().find((a) => a.id === id);
@@ -174,7 +200,7 @@ async function availableModels(): Promise<string[]> {
   const key = ollamaCloudKey();
   if (!key) return []; // not cached: a key added later is picked up on the next call
   try {
-    const r = await fetch(`${OLLAMA_CLOUD_HOST}/api/tags`, {
+    const r = await fetch(`${ollamaCloudHost()}/api/tags`, {
       headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
     });
@@ -193,9 +219,9 @@ async function roomTaskModel(transcript: RoomTurn[]): Promise<string> {
     const hit = models.find((m) => re.test(m));
     if (hit) return hit;
   }
-  // Nothing matched: the env default, then the first model the account really has.
-  // No model tag is written into the code as a last resort.
-  const pick = process.env.OLLAMA_CLOUD_MODEL || models[0];
+  // Nothing matched: the default model from settings.ollama (or OLLAMA_CLOUD_MODEL), then the
+  // first model the account really has. No model tag is written into the code as a last resort.
+  const pick = ollamaCloudDefaultModel() || models[0];
   if (!pick) throw new Error("Ollama Cloud listed no models for this account (or /api/tags failed), so there is no model to use.");
   return pick;
 }
@@ -243,8 +269,8 @@ async function openaiChat(baseUrl: string, model: string, sys: string, user: str
 }
 async function ollamaComplete(model: string, sys: string, user: string, signal?: AbortSignal): Promise<string> {
   const key = ollamaCloudKey();
-  if (!key) throw new Error("No Ollama Cloud key: set OLLAMA_API_KEY (there is no local Ollama to fall back to).");
-  const r = await fetch(`${OLLAMA_CLOUD_HOST}/api/chat`, {
+  if (!key) throw new Error("No Ollama Cloud key: add it in the Ollama page's gear or set OLLAMA_API_KEY (there is no local Ollama to fall back to).");
+  const r = await fetch(`${ollamaCloudHost()}/api/chat`, {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
     signal,
@@ -267,7 +293,7 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
 async function roomCli(id: string, sys: string, user: string, incognito?: boolean): Promise<string> {
   const prompt = `${sys}\n\n${user}`;
   if ((LOOP_CLI_AGENTS as readonly string[]).includes(id)) {
-    return cliComplete(id, prompt, { timeoutMs: 90_000, incognito, module: "room" });
+    return cliComplete(id, prompt, { timeoutMs: roomCliTimeoutMs(), incognito, module: "room" });
   }
   throw new Error(`No room CLI runner for ${id}`);
 }
@@ -363,7 +389,7 @@ export async function roomReply(
     return roomCli(agent.id, sys, user, incognito);
   }
   if (agent.provider === "ollama") {
-    if (!ollamaCloudKey()) throw new Error(`${agent.name}: no Ollama Cloud key. Set OLLAMA_API_KEY (there is no local Ollama to fall back to).`);
+    if (!ollamaCloudKey()) throw new Error(`${agent.name}: no Ollama Cloud key. Add it in the Ollama page's gear or set OLLAMA_API_KEY (there is no local Ollama to fall back to).`);
     const model = (agent.model === "auto" || !agent.model) ? await roomTaskModel(transcript) : agent.model;
     let out = await ollamaComplete(model, sys, user, signal);
     if (!out && !signal?.aborted) out = await ollamaComplete(model, sys, user, signal);  // cloud model cold-start can return empty
@@ -409,7 +435,7 @@ export function agentReachability(a: RoomAgent): { ok: boolean; why: string } {
     if (!k) return { ok: false, why: `no CLI mapping for ${a.id}` };
     return isAgentInstalled(k) ? { ok: true, why: `${a.id} CLI installed` } : { ok: false, why: `the ${a.id} CLI is not installed` };
   }
-  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: false, why: "no Ollama Cloud key (OLLAMA_API_KEY); there is no local Ollama" };
+  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: false, why: "no Ollama Cloud key (Ollama page gear, or OLLAMA_API_KEY); there is no local Ollama" };
   if (a.provider === "openai") { const env = a.apiKeyEnv || "OPENAI_API_KEY"; return profileEnvKey(env) ? { ok: true, why: `${env} set` } : { ok: false, why: `${env} is not set` }; }
   return { ok: false, why: "no supported provider (CLI, Ollama Cloud or OpenAI-compatible)" };
 }

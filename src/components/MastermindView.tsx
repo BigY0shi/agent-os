@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Send, Users } from "lucide-react";
 import GroupChatView from "./GroupChatView";
+import RoomSettings from "./RoomSettings";
 
 type Status = "working now" | "active today" | "ready" | "unreachable";
 interface Specialist { id: string; name: string; color: string; provider: string; status: Status; why: string }
@@ -22,13 +23,14 @@ export default function MastermindView() {
   const [list, setList] = useState<Specialist[] | null>(null);
   const [counts, setCounts] = useState<{ specialists: number; workingNow: number; unreachable: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [overrideSource, setOverrideSource] = useState<string | undefined>(undefined);
   const [sel, setSel] = useState<string | null>(null); // null = the whole room
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/room/status", { cache: "no-store" });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error ?? `failed (${r.status})`);
-      setList(j.specialists); setCounts(j.counts); setErr(null);
+      setList(j.specialists); setCounts(j.counts); setOverrideSource(j.overrideSource); setErr(null);
     } catch (e) { setErr((e as Error).message); }
   }, []);
   useEffect(() => {
@@ -41,9 +43,13 @@ export default function MastermindView() {
   return (
     <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[240px_1fr]" data-mastermind>
       <aside className="glass h-fit px-3 py-3 lg:sticky lg:top-4" aria-label="Specialists">
-        <div className="px-2">
-          <div className="glass-eyebrow">Specialists</div>
-          <div className="mt-1 text-[12px] text-[var(--fg-dim)]">{counts ? `${counts.specialists} specialists, ${counts.workingNow} working now` : "…"}</div>
+        <div className="flex items-start justify-between gap-2 px-2">
+          <div>
+            <div className="glass-eyebrow">Specialists</div>
+            <div className="mt-1 text-[12px] text-[var(--fg-dim)]">{counts ? `${counts.specialists} specialists, ${counts.workingNow} working now` : "…"}</div>
+          </div>
+          {/* S30: per-agent provider/model overrides + the CLI reply time limit (settings.room) */}
+          <RoomSettings overrideSource={overrideSource} />
         </div>
         <button type="button" aria-pressed={sel === null} onClick={() => setSel(null)} className={`mt-3 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12.5px] ${sel === null ? "glass neon-ring" : "hover:bg-white/5"}`}>
           <Users size={13} /> The whole room

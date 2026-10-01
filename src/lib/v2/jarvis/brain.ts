@@ -1,7 +1,7 @@
 import { query, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import os from "node:os";
 import { createHash } from "node:crypto";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { sanitizeSpawnEnv } from "@/lib/spawnEnv";
 import { cliComplete } from "@/lib/loopEngine";
 import { readSettings } from "@/lib/settings";
@@ -260,7 +260,7 @@ function bootSession(conversationId: string, stable: string, sig: string, person
   const toolState = newTurnState();
   const server = buildJarvisSdkServer({ emit: (ev) => emitRef.current(ev), state: toolState });
 
-  const model = CLAUDE_MODEL || "claude-sonnet-5";
+  const model = claudeModel();
   // S16: the owner's own external MCP servers, enabled in the Jarvis MCP tab. An
   // unreadable config throws here (named file), rather than silently dropping them.
   const external = sdkServers();

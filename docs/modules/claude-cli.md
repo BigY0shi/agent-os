@@ -12,6 +12,7 @@ The row of pill buttons at the top switches between six tabs: **Chat**, **Worksp
 
 | Control | What it does |
 |---|---|
+| **Model** (gear, "Claude model") | The Claude chat model for every Claude call outside Ultracode, platform-wide: Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, or **Custom** with any claude model id or alias. Saved to `settings.claude.model` (default `claude-opus-4-8`) and used by the next call. Shows the model in use now, and a note when `AGENTIC_OS_CLAUDE_MODEL` or config.json's `claudeModel` overrides the choice. |
 | **Ultracode** | Toggle. When on, the next message runs the CLI with the Ultracode model and effort from `settings.ultracode` (default Opus 5.5 at xhigh, set on the Ultracode tab), and the run is captured so it shows up in the Ultracode tab. An orange warning box explains the extra token use while it is on. |
 | **Logged · <time>** | Appears after a reply is saved to your Obsidian vault. Links to `/memory`. |
 | **Clear** | Asks for confirmation, then empties this chat thread. |
@@ -81,7 +82,7 @@ If `ant` is not installed, this tab only shows a note pointing to the Ant CLI ta
 
 ## How it works
 
-- **Chat** posts to `/api/claude/chat`, which spawns `claude -p --model <model> --output-format=stream-json --include-partial-messages --verbose` and streams the NDJSON back. The model is `claude-opus-4-8` unless `AGENTIC_OS_CLAUDE_MODEL` or `claudeModel` in `~/.agentic-os/config.json` says otherwise. The CLI is found via `AGENTIC_OS_CLAUDE_BIN`, the config file, or `claude` on the PATH, and uses your own Claude login.
+- **Chat** posts to `/api/claude/chat`, which spawns `claude -p --model <model> --output-format=stream-json --include-partial-messages --verbose` and streams the NDJSON back. The model is the Chat tab's **Model** gear setting (`settings.claude.model`, default `claude-opus-4-8`, read per request by `src/lib/claudeModel.ts`), unless `AGENTIC_OS_CLAUDE_MODEL` or `claudeModel` in `~/.agentic-os/config.json` is set, which still override it; the gear says when that is the case (`GET /api/claude/model`). The same setting is what every other module's Claude call uses (Deal Desk, Hire, Idea Engine, SEO, video, the Loop builder, Jarvis's brain, and any blank "Deep tier" or writer field). The CLI is found via `AGENTIC_OS_CLAUDE_BIN`, the config file, or `claude` on the PATH, and uses your own Claude login.
 - `claude -p` has no memory between calls, so the route packs the last 24 turns (up to about 8,000 characters) into each prompt. Prompts over 16,000 characters are rejected.
 - The chat thread lives in your browser's localStorage (key `agentic-os-chat-v2:claude`, last 50 messages). Each reply is also appended to `Agentic OS/Memories/<date>.md` in your Obsidian vault via `/api/memory/log`, when a vault is found.
 - Chat runs in `~/.agentic-os/claude-projects/claude-default/` (override the root with `AGENTIC_OS_CLAUDE_SCRATCH`), which is why files Claude writes appear in Workspace.

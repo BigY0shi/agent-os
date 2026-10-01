@@ -7,7 +7,8 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { run, type AgentName } from "./runner";
-import { CLAUDE_MODEL } from "./config";
+import { claudeModel } from "./claudeModel";
+import { ollamaCloudHost, ollamaCloudKey } from "./ollamaCloud";
 import { ORCHESTRATION_DIRECTIVE, claudeBuilderArgs } from "./agentPowers";
 import { withSkills } from "@/lib/platformSkills";
 import { isLoopBuilder, isLoopJudge } from "./loopModels";
@@ -97,7 +98,7 @@ export async function cliComplete(
   let args: string[];
   let input: string | undefined;
   switch (agent) {
-    case "claude":  args = ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"]; input = prompt; break;
+    case "claude":  args = ["-p", "--model", claudeModel(), "--output-format", "text"]; input = prompt; break;
     case "codex":   args = viaStdin ? ["exec", "--skip-git-repo-check", "--ignore-user-config", "-"] : ["exec", "--skip-git-repo-check", "--ignore-user-config", prompt]; break;
     case "cursor":  args = viaStdin ? ["-p", "--output-format", "text", "--force", "--trust"] : ["-p", prompt, "--output-format", "text", "--force", "--trust"]; break;
     case "pi":      args = viaStdin ? ["-p", "--mode", "text", "--no-session", "--no-context-files"] : ["-p", prompt, "--mode", "text", "--no-session", "--no-context-files"]; break;
@@ -198,18 +199,14 @@ function parseVerdict(raw: string): Verdict | null {
 // to hit ollama cloud or no fallback"), so this goes to https://ollama.com with OLLAMA_API_KEY.
 // It is used when the owner picks it as the judge, or as the fallback judge when the Loop
 // gear says so. format:"json" forces a parseable verdict. Every failure throws its reason.
-const OLLAMA_CLOUD = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/+$/, "");
-function ollamaCloudKey(): string | null {
-  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
-  return k ? k.trim() : null;
-}
+// Host and key: settings.ollama (the Ollama page's gear), then the environment, per call.
 
 /** The Ollama Cloud model to judge with: the Loop gear's choice, else picked from the
  *  account's own model list by the owner's model policy (judging is analytical, so the
  *  agentic models first). No model tag is written into the code. */
 async function cloudJudgeModel(chosen: string | undefined, key: string, signal?: AbortSignal): Promise<string> {
   if (chosen && chosen.trim()) return chosen.trim();
-  const r = await fetch(`${OLLAMA_CLOUD}/api/tags`, { headers: { Authorization: `Bearer ${key}` }, signal });
+  const r = await fetch(`${ollamaCloudHost()}/api/tags`, { headers: { Authorization: `Bearer ${key}` }, signal });
   if (!r.ok) throw new Error(`Ollama Cloud /api/tags answered HTTP ${r.status}`);
   const j = await r.json();
   const names: string[] = ((j?.models as { name?: string }[]) || []).map((m) => m?.name || "").filter(Boolean);
@@ -223,9 +220,9 @@ async function cloudJudgeModel(chosen: string | undefined, key: string, signal?:
 
 async function ollamaCloudJudge(goal: string, artifact: string, model: string | undefined, signal?: AbortSignal): Promise<Verdict> {
   const key = ollamaCloudKey();
-  if (!key) throw new Error("no Ollama Cloud key (set OLLAMA_API_KEY); there is no local Ollama");
+  if (!key) throw new Error("no Ollama Cloud key (add it in the Ollama page's gear, or set OLLAMA_API_KEY); there is no local Ollama");
   const m = await cloudJudgeModel(model, key, signal);
-  const r = await fetch(`${OLLAMA_CLOUD}/api/chat`, {
+  const r = await fetch(`${ollamaCloudHost()}/api/chat`, {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
       model: m,

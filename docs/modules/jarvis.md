@@ -17,7 +17,7 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | **Auto** / **Agent** | Auto answers fast and escalates; Agent is the full agent with tools. |
 | **Briefing** | A vault-grounded rundown (suggested focus, open action items, done this week, activity, themes, worked on, on your mind, headlines). The panel has **daily** / **weekly**, a history button ("Past briefings") and a Dismiss X. |
 | Reply voice select | Picks the reply voice and saves it to settings. |
-| **Configure** (gear, tooltip "Jarvis models") | Sets "Kimi voice brain (Ollama Cloud)". |
+| **Configure** (gear, tooltip "Jarvis models") | Sets "Kimi voice brain (Ollama Cloud)", and the models behind the hosted voice lanes: **Gemini Live model** (blank = `GEMINI_LIVE_MODEL`, else `gemini-live-2.5-flash-preview`), **GPT Realtime model** (`gpt-realtime`), **GPT Realtime transcription model** (`gpt-4o-mini-transcribe`) and **OpenAI reply voice model** (`gpt-4o-mini-tts`). Saved to `settings.jarvis` and used by the next session or reply. |
 | **Wall mode** | Full-screen HUD; Esc exits. |
 | Text box, **Send** | Type any time and press Enter. |
 | Built with Hermes-Jarvis | Gallery of pages Jarvis built; each opens in a preview. |

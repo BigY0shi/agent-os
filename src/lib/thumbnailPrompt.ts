@@ -10,8 +10,16 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { readSettings } from "./settings";
 
 const SKILL = path.join(os.homedir(), ".claude/skills/youtube-thumbnails");
+
+/** The OpenAI chat model that writes the image prompt (S30): settings.thumbnails.promptModel from
+ *  the Thumbnails gear, read per call; blank = gpt-4o-mini, the old literal. */
+export function thumbnailPromptModel(): string {
+  const m = readSettings().thumbnails?.promptModel;
+  return typeof m === "string" && m.trim() ? m.trim() : "gpt-4o-mini";
+}
 
 function openaiKey(): string | null {
   if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
@@ -73,7 +81,7 @@ export async function enhancePrompt(instruction: string, refDataUrl: string | nu
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: thumbnailPromptModel(),
         messages: [{ role: "system", content: system }, { role: "user", content: parts }],
         max_tokens: 700,
         temperature: useMode === "edit" ? 0.3 : 0.75,

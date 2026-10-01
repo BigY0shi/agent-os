@@ -6,6 +6,28 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- AWAITING USER VERIFY (S30 settings sweep, 2026-10-01, worktree settings-sweep, branch
+  feat/s30-settings-sweep, v2.56.0 to v2.59.0): the code is complete and every acceptance
+  criterion is met in the tree EXCEPT the literal "./test.sh exits 0", which this worktree
+  cannot produce for reasons outside the slice. All 113 offline smokes were run to the end:
+  110 pass; the 3 red ones are the owner's uncommitted work that this worktree (branched
+  from v2.55.0) does not hold:
+  1. `smoke-guide` B1: `docs/modules/rabbit.md` (committed) names `/rabbit`, but
+     `src/app/rabbit/page.tsx` is untracked in the main checkout. Commit it (or exile the doc).
+  2. `smoke-exile-deletes` H1-H3, H6: the committed id guard `(?!.+$)` in
+     `src/lib/studioHistory.ts`, `ultracodeRuns.ts`, `claudeArtifacts.ts` rejects every id; the
+     `(?!\.)` fix is uncommitted in the main checkout (DEV-JOURNAL 2026-09-30). Commit it.
+  3. `smoke-memory-ui`: expects the gitignored `.exile/` copies of the old memory page, which
+     exist only in the main checkout. Either copy `.exile/` into the worktree or accept this one.
+  Then, in a tree with 1 and 2 committed, run `./test.sh`; when it exits 0, set
+  `feat-s30-settings-sweep` to `"passing"` in features.json (the notes already carry the
+  evidence) and merge `feat/s30-settings-sweep`. Nothing else is pending on the slice.
+  Owner-to-look after the rebuild: the gears on /ollama (key shows masked after save),
+  the Claude Chat tab's **Model**, the Room rail's **Configure**, Jarvis **Configure** (four
+  voice-lane fields), Brainstorm **Models** (two time limits), Thumbnails **Configure**
+  (Prompt model). Worktree facts still true: holds none of the owner's uncommitted work;
+  node_modules is a junction to the main checkout (do not npm install here); never start,
+  stop or restart the server on 3737.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
   a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature

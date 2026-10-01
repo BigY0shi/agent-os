@@ -48,6 +48,15 @@ export const ORACLE_VOICEBOX_PROFILE = "The Sage";
  */
 export const ORACLE_KOKORO_VOICE = "bm_lewis";
 
+/** One room agent's repointing (settings.room.agents[id]); every field optional, blank = the agent's own default. */
+export interface RoomAgentOverride {
+  model?: string;
+  provider?: "ollama" | "openai" | "cli";
+  baseUrl?: string;
+  apiKeyEnv?: string;
+  noReasoning?: boolean;
+}
+
 export interface SeoSite {
   label: string;
   url: string;        // the live site / repo this SEO content targets
@@ -63,6 +72,19 @@ export interface Settings {
   // Ultracode (owner 2026-09-30): the Claude model + effort its missions run with, set from the
   // Ultracode tab's pickers. Validated in lib/ultracodeModels.ts.
   ultracode: { model?: string; effort?: string };
+  // The Claude chat model (S30): what every `claude -p --model` call outside Ultracode uses
+  // (chat, Deal Desk, Hire, Idea Engine, SEO, video, the Loop builder, Jarvis's brain, a blank
+  // "Deep tier" or writer field). Picked on the Claude page's gear; read per request through
+  // lib/claudeModel.ts. AGENTIC_OS_CLAUDE_MODEL / config.json claudeModel still override it
+  // for back-compat (the gear says so when they do).
+  claude: { model?: string };
+  // Agent Room / Mastermind (S30). agents: per-agent repointing, keyed by room agent id
+  // (claude, codex, cursor, pi, hermes, antigravity, openclaw, ollama, fcc): model, provider
+  // (cli / ollama / openai), baseUrl + apiKeyEnv for an OpenAI-compatible endpoint, noReasoning.
+  // Edited in the Room gear; read per request by lib/agentRoom.ts. `roomAgents` in
+  // ~/.agentic-os/config.json is read ONLY while this holds no override (labelled fallback).
+  // cliTimeoutSec: how long a CLI agent may take per room turn (was a 90 s literal).
+  room: { agents?: Record<string, RoomAgentOverride>; cliTimeoutSec?: number };
   // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
   // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
   // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
@@ -128,7 +150,9 @@ export interface Settings {
 
   // Per-module default agent overrides for the lighter modules.
   games: { agent?: string };
-  thumbnails: { agent?: string; backend?: "cli" | "gpt-image" };
+  // thumbnails.promptModel (S30): the OpenAI chat model that writes the image prompt from the
+  // reference (lib/thumbnailPrompt.ts); blank = gpt-4o-mini, the old literal.
+  thumbnails: { agent?: string; backend?: "cli" | "gpt-image"; promptModel?: string };
   notebook: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban: { agent?: string; board?: string };
 
@@ -137,11 +161,11 @@ export interface Settings {
   // the age shows on every card. Rule 16: edited in the Deal Desk gear.
   deals: {
     maxAgeDays?: number;
-    /** Model for the quick pass/not screen; falls back to CLAUDE_MODEL when unset. */
+    /** Model for the quick pass/not screen; falls back to the Claude model setting when unset. */
     screenModel?: string;
     /** Screen the unjudged leads automatically after a feed pull. */
     screenOnPull?: boolean;
-    /** Model for the dossier pass; falls back to CLAUDE_MODEL when unset. */
+    /** Model for the dossier pass; falls back to the Claude model setting when unset. */
     dossierModel?: string;
   };
 
@@ -167,6 +191,17 @@ export interface Settings {
     buzzChannel?: string;    // Buzz channel name or UUID (default: marketing-ideas)
   };
 
+  // Ollama, shared by every module that talks to it (S30, owner 2026-09-30: "every parameter
+  // in settings"). Read through lib/ollamaCloud.ts, never process.env directly. apiKey is the
+  // Ollama Cloud key, write-only: masked in every /api/settings reply (settingsRedact.ts), and
+  // it WINS over OLLAMA_API_KEY / OLLAMA_CLOUD_KEY in the environment, which stay the fallback
+  // so an existing .env.local keeps working. host blank = OLLAMA_CLOUD_HOST, else
+  // https://ollama.com. defaultModel blank = OLLAMA_CLOUD_MODEL, else each caller's own last
+  // resort (the Ollama page: qwen3-coder:480b; a Room "auto" agent: the account's first model).
+  // localUrl is the local daemon for Memory/Agents/Free Claude Code: blank = OLLAMA_URL, else
+  // http://127.0.0.1:11434. Edited in the Ollama Cloud page's gear.
+  ollama: { apiKey?: string; host?: string; defaultModel?: string; localUrl?: string };
+
   // Pipeline: which provider (Ollama / CLI agent / MiniMax) drives the shape → reason → artifact flow.
   pipeline: {
     provider?: "ollama" | "cli" | "minimax";
@@ -179,8 +214,10 @@ export interface Settings {
   // ── Model dials for the 2026-07 modules ─────────────────────────────────────
   // User model policy: Kimi K2.6 for chat/agentic seats, K2.7 Code for coding.
   // Empty string = the module's built-in default (blank kimiModel = auto-resolve
-  // preferring k2.6; blank claude models = the pinned CLAUDE_MODEL).
-  brainstorm: { kimiModel?: string };                       // the council's Kimi seat
+  // preferring k2.6; blank claude models = the Claude model setting, lib/claudeModel.ts).
+  // Brainstorm: the council's Kimi seat, plus (S30) the per-seat time limits that were 240 s /
+  // 180 s literals (a launch-drawer timeout still wins for that run).
+  brainstorm: { kimiModel?: string; seatTimeoutSec?: number; kimiTimeoutSec?: number };
   // Jarvis: Kimi brain model + SPEC-C C2/C2b voice-capture + hotkey knobs
   // (all surfaced in the Jarvis gear — rule 16).
   jarvis: {
@@ -206,6 +243,13 @@ export interface Settings {
       // ElevenLabs as the backup. It is a CHOSEN fallback, and the TTS response
       // labels it (provider + fellBackFrom + fallbackReason); "none" = report.
       ttsFallback?: "elevenlabs" | "none";
+      // S30: the model ids behind the hosted voice lanes, which were literals in the routes.
+      // Blank = the lane's own default (lib/jarvisVoiceModels.ts; Gemini also honours
+      // GEMINI_LIVE_MODEL from the environment first, as before).
+      geminiLiveModel?: string;       // gemini-live-2.5-flash-preview
+      openaiRealtimeModel?: string;   // gpt-realtime
+      openaiTranscribeModel?: string; // gpt-4o-mini-transcribe
+      openaiTtsModel?: string;        // gpt-4o-mini-tts
     };
     hotkey?: {
       key?: string;          // in-app fallback keybind (default "F13")
@@ -271,7 +315,7 @@ export interface Settings {
     killAgent?: string;        // kill pass; keep it a different lineage from claude (spec #5)
     fallbackAgent?: string;
     researchModel?: string;    // web research + judge (claude)
-    writerModel?: string;      // dossier writer; blank = pinned CLAUDE_MODEL
+    writerModel?: string;      // dossier writer; blank = the Claude model setting
     redditSubs?: string;       // comma-separated, radar pain mining
     seedTerms?: string;        // comma-separated seeds for trends/autocomplete
     dailyEnabled?: boolean;
@@ -489,6 +533,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hermes3d: { ...DEFAULT_HERMES3D },
   defaultAgent: "claude",
   ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
+  claude: { model: "claude-opus-4-8" },
+  room: { agents: {}, cliTimeoutSec: 90 },
   loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },
@@ -497,9 +543,10 @@ export const DEFAULT_SETTINGS: Settings = {
   opendesign: { webUrl: "http://127.0.0.1:7456", daemonUrl: "http://127.0.0.1:7455", launchCmd: "", stopCmd: "", installPath: "" },
   paperclip: { url: "" },
   games: { agent: "claude" },
-  thumbnails: { agent: "claude", backend: "cli" },
+  thumbnails: { agent: "claude", backend: "cli", promptModel: "" },
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
+  ollama: { apiKey: "", host: "", defaultModel: "", localUrl: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
   deals: { maxAgeDays: 5, screenOnPull: true },
   skills: {
@@ -511,12 +558,13 @@ export const DEFAULT_SETTINGS: Settings = {
     },
   },
   marketing: { agent: "claude", council: true, criticAgent: "codex", textPlatforms: ["linkedin", "x", "facebook"], ideateBackend: "local", buzzChannel: "marketing-ideas" },
-  brainstorm: { kimiModel: "kimi-k2.6" },
+  brainstorm: { kimiModel: "kimi-k2.6", seatTimeoutSec: 240, kimiTimeoutSec: 180 },
   jarvis: {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs" },
+    voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs",
+      geminiLiveModel: "", openaiRealtimeModel: "", openaiTranscribeModel: "", openaiTtsModel: "" },
     hotkey: { key: "F13", enabled: true },
     glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },

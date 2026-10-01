@@ -1,5 +1,132 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S30 settings sweep, batch 4: Brainstorm limits, Jarvis voice models, Thumbnails prompt model, the sweep smoke (v2.59.0)
+
+The last Phase B batch; every `move` row in `_design/settings-sweep-audit.md` is now a setting.
+- **Brainstorm**: `settings.brainstorm.seatTimeoutSec` (240) and `kimiTimeoutSec` (180) replace the
+  `240_000` / `180_000` literals (`brainstormTimeouts()`, read per call; a launch-drawer timeout
+  still wins for that run). Two number fields in the Brainstorm models gear.
+- **Jarvis voice lanes**: `settings.jarvis.voice.geminiLiveModel / openaiRealtimeModel /
+  openaiTranscribeModel / openaiTtsModel` (`lib/jarvisVoiceModels.ts`) replace the literals in
+  the Gemini Live session, the OpenAI Realtime session and the OpenAI TTS routes. Blank = the
+  old default; Gemini still honours `GEMINI_LIVE_MODEL` before its default, as it did. Four
+  fields in the Jarvis models gear.
+- **Thumbnails**: `settings.thumbnails.promptModel` (blank = `gpt-4o-mini`) for the OpenAI chat
+  model that writes the image prompt (`thumbnailPromptModel()`); a field in the Thumbnails gear.
+- **ModelSettings** learns dotted keys (`voice.geminiLiveModel` reaches a nested object) and
+  `type: "number"` (saved as a number; blank saves nothing so the default applies).
+- `claudeModelSource()` reports "default" when the saved value IS the default.
+- **`scripts/v2/smoke-settings-sweep.mjs`** (38 checks): for every moved parameter, the default
+  equals the old literal (A), a saved value changes what the code uses (B), precedence (C:
+  settings beat the environment for Ollama and Gemini; `AGENTIC_OS_CLAUDE_MODEL` and
+  config.json `claudeModel` still beat the setting, probed in a child process because
+  config.ts reads them at import; config.json `roomAgents` only while settings has none), and
+  wiring (D: no reader bypasses `ollamaCloud.ts`, the `CLAUDE_MODEL` constant is gone, every
+  gear has its fields, the docs name them, the Ollama key is a secret to settingsRedact).
+- Docs: brainstorm, jarvis, thumbnails.
+
+Verified: tsc clean; all 113 offline smokes run to the end (not stopping at the first red):
+110 pass. The 3 red ones are environment gaps of this worktree, not this slice, each checked
+against the main checkout: `smoke-guide` B1 (`docs/modules/rabbit.md` names `/rabbit`; its
+`src/app/rabbit/page.tsx` is the owner's uncommitted work), `smoke-memory-ui` (expects the
+gitignored `.exile/` copies of the old memory page, which exist only in the main checkout) and
+`smoke-exile-deletes` H1 to H3 and H6 (the committed id guard in `studioHistory.ts`,
+`ultracodeRuns.ts` and `claudeArtifacts.ts` is `(?!.+$)`, which rejects every id; the owner's
+`(?!\.)` fix is uncommitted in the main checkout, see the 2026-09-30 entry below). The gate
+(`./test.sh`) therefore cannot exit 0 in this worktree; see agent-progress.md for the owner's step.
+
+Rollback: revert the four batch commits in reverse order (each is additive; a settings file
+that already holds the new blocks is ignored by older code).
+
+## 2026-10-01 - S30 settings sweep, batch 3: Agent Room overrides live in settings, with a Room gear (v2.58.0)
+
+- **`settings.room.agents[<id>]`** `{ model, provider (cli / ollama / openai), baseUrl, apiKeyEnv,
+  noReasoning }` replaces `roomAgents` in `~/.agentic-os/config.json` as the home of per-agent
+  repointing. `agentRoom.ts` `roomOverrides()` reads settings per request; config.json is read
+  ONLY while settings holds no override at all (a labelled one-time fallback, never merged), and
+  the source ("settings" / "config.json" / "none") is reported by `GET /api/room/status` as
+  `overrideSource`. The old `applyOverride` logic is unchanged otherwise (an "openrouter"
+  provider word is still ignored; a blank model keeps the agent's own). `provider: "cli"` is now
+  accepted as an override too (it fails loudly for an agent with no CLI runner).
+- **`settings.room.cliTimeoutSec`** (default 90, the old `90_000` literal): how long a CLI agent
+  may take per room turn, `roomCliTimeoutMs()`.
+- **Room gear** (`RoomSettings.tsx`, in the Specialists rail): the time limit, then one block
+  per roster agent (provider select, model, and for an endpoint the base URL, the NAME of the
+  key's env var, and skip-hidden-reasoning). It always sends every agent (an untouched one as
+  `{}`) so a cleared field really clears through the server's deep-merge, and shows a note when
+  config.json's map is the one in force. `/api/room/status` now also carries each
+  specialist's `model`.
+- Docs: room (gear row, how it works).
+
+Verified: tsc clean; smoke-room-honesty (D1: a config.json override is still honoured when
+settings has none, and "openrouter" is still ignored), smoke-mastermind, smoke-settings-secrets
+pass offline.
+
+Rollback: revert the commit; a saved `room` block is ignored by older code, and config.json's
+`roomAgents` applies again.
+
+## 2026-10-01 - S30 settings sweep, batch 2: the Claude chat model is a setting with a picker (v2.57.0)
+
+- **`settings.claude.model`** (default `claude-opus-4-8`, unchanged) replaces the start-time
+  `CLAUDE_MODEL` constant in `lib/config.ts`. `src/lib/claudeModel.ts` exports `claudeModel()`
+  (read per request) and `claudeModelSource()`; the 25 importers (chat, config, deals ask/
+  proposal, hire ask, SEO, video script/hyperframes, agentsRuntime deep tier, dealBrief/Dossier/
+  Research/Screen, hermesJarvis, hireBrief, ideaValidation, jarvisBrain, leadProviders,
+  loopEngine builder, newsDigest, newsRadar, oracle, v2 jarvis brain, missions runtime) now
+  call it. The dead `CLAUDE_MODEL || "claude-sonnet-5"` fallback in the two Jarvis brains is
+  gone (the constant was never empty).
+- **Back-compat override kept, and visible.** `AGENTIC_OS_CLAUDE_MODEL`, else `claudeModel` in
+  `~/.agentic-os/config.json`, still win (`CLAUDE_MODEL_OVERRIDE` in config.ts). New
+  `GET /api/claude/model` returns the model in force and its source, and the gear shows an
+  "Overridden" note instead of a choice that is not in use.
+- **Picker** (`ClaudeModelSettings.tsx`, the **Model** gear on the Claude Chat tab): Opus 5.5,
+  Sonnet 5.5, Fable 5.1, Opus 5 (the Ultracode list) or Custom; an id that is not a claude
+  model id or alias is refused in the form. The four "blank = pinned CLAUDE_MODEL" placeholders
+  (Agents x2, Hire, Idea Engine) now say "the Claude model (Claude page gear)".
+- Docs: claude-cli (gear row + how it works), agents-page.
+
+Verified: tsc clean; smoke-ultracode-target (C4 regex follows the rename), jarvis-brain,
+agents-ui, engine, settings-secrets, jarvis-glasses, missions, deal-desk, deal-dossier,
+deal-screen, idea-seats, oracle-kokoro pass offline.
+
+Rollback: revert the commit. A saved `claude.model` is ignored by older code.
+
+## 2026-10-01 - S30 settings sweep, batch 1: one Ollama block in settings, shared by every caller (v2.56.0)
+
+Owner rule (2026-09-30): "Every parameter needs to be in the settings for every module."
+Phase A first: `_design/settings-sweep-audit.md` lists every hardcoded model id, provider,
+fallback, URL, timeout and threshold per module with file:line, today's value and the
+settings key or a `leave` reason (146 timeout literals swept and classified). Phase B lands
+in batches, one commit each; this is batch 1.
+- **`settings.ollama`** `{ apiKey, host, defaultModel, localUrl }`, edited in the Ollama Cloud
+  page's new gear (`OllamaSettings.tsx`) and read PER CALL through `src/lib/ollamaCloud.ts`
+  (`ollamaCloudKey / ollamaCloudHost / ollamaCloudDefaultModel / ollamaLocalUrl`). Settings win;
+  the environment (`OLLAMA_API_KEY` / `OLLAMA_CLOUD_KEY`, `OLLAMA_CLOUD_HOST`,
+  `OLLAMA_CLOUD_MODEL`, `OLLAMA_URL`) is the fallback for each blank field, so an existing
+  `.env.local` keeps working. Every default equals the old literal: `https://ollama.com`,
+  `qwen3-coder:480b` (Ollama page only; a Room auto agent still takes the account's first
+  model), `http://127.0.0.1:11434`.
+- **The key is write-only.** `apiKey` matches `settingsRedact.ts`'s secret rule, so
+  `/api/settings` returns it as its first 5 characters + `********` and a round-trip save keeps
+  it; no API or getter returns it in full. `smoke-settings-secrets` A7/A8 cover the mask and
+  that the stored key beats `OLLAMA_API_KEY`.
+- **Rewired readers** (nine env reads, six host literals, now zero outside `ollamaCloud.ts`):
+  `/api/ollama/chat`, `/api/ollama/models`, `/api/config` (fleet card shows the resolved
+  default model), `agentRoom.ts`, `brainstorm.ts`, `loopEngine.ts` (Ollama Cloud judge),
+  `agentsRuntime.ts` (ollama provider), `v2/memory/llm.ts`, `embed.ts`, `backfill.ts`,
+  `/api/freeclaude/build` (keeps its older `OLLAMA_HOST` as a later fallback). Error lines now
+  say "add it in the Ollama page's gear, or set OLLAMA_API_KEY".
+- Docs: ollama (new gear row + how it works), room, brainstorm, loop, memory, agents-page,
+  freeclaude.
+- Found by the gate, not by this slice: `docs/modules/rabbit.md` names `/rabbit`, whose
+  `src/app/rabbit/page.tsx` is the owner's uncommitted work in the main checkout, so
+  `smoke-guide` B1 fails in any fresh checkout (this worktree included). Left for the owner.
+
+Verified: tsc clean; smoke-settings-secrets (A7/A8 new), room-honesty, mastermind, llm,
+loop-cli-only, embed, memory-backfill pass offline.
+
+Rollback: revert the commit. The settings file keeps an `ollama` block that older code ignores.
+
 ## 2026-10-01 - Owner's picks queued: S34-S38 (Nexora C6/C7/C9/C10 + Jarvis push-to-talk hotkey) (v2.56.5)
 
 Owner decisions on the Nexora candidates (_design/nexora-diff.md section 2) and Jarvis voice:

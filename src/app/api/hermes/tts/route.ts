@@ -6,6 +6,7 @@ import { minimaxToken } from "@/lib/hermesStudio";
 import { readHermesEnv } from "@/lib/hermesPhone";
 import { readSettings, JARVIS_TTS_VOICE_ID, ORACLE_ELEVEN_VOICE_ID } from "@/lib/settings";
 import { voiceboxSynthesize } from "@/lib/voicebox";
+import { openaiTtsModel } from "@/lib/jarvisVoiceModels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +51,7 @@ async function openaiTts(text: string, voiceId: string): Promise<NextResponse> {
   const r = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "gpt-4o-mini-tts", voice, input: text.slice(0, 2000), instructions: BUTLER_INSTRUCTIONS, response_format: "mp3" }),
+    body: JSON.stringify({ model: openaiTtsModel(), voice, input: text.slice(0, 2000), instructions: BUTLER_INSTRUCTIONS, response_format: "mp3" }),
   });
   if (!r.ok) {
     const detail = await r.text().catch(() => "");

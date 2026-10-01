@@ -104,7 +104,7 @@ export default function IdeaEngineView() {
           <ModelSettings section="ideaEngine" title="Idea Engine settings" accent={AMBER}
             fields={[
               { key: "researchModel", label: "Research + judge (claude)", placeholder: "claude-sonnet-5", hint: "Web-capable seats: pain miner, market mapper, verdict judge." },
-              { key: "writerModel", label: "Dossier writer", placeholder: "blank = pinned CLAUDE_MODEL", hint: "Assembles the final dossier." },
+              { key: "writerModel", label: "Dossier writer", placeholder: "blank = the Claude model (Claude page gear)", hint: "Assembles the final dossier." },
               { key: "sizingAgent", label: "Sizing seat agent", placeholder: "claude", hint: "Evidence-only sizing. claude, codex, cursor, pi, hermes, or kimi (Ollama Cloud)." },
               { key: "clusterAgent", label: "Radar clustering agent", placeholder: "claude", hint: "Groups fresh signals into candidates. Same choices." },
               { key: "killAgent", label: "Kill pass agent", placeholder: "codex", hint: "Attacks the idea. Keep it a different lineage from claude (the research seats)." },

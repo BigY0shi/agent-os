@@ -3,6 +3,34 @@
   "project": "Agent OS - self-hosted operations dashboard (Next.js 16, V1 modules + V2 CORE on SQLite). Roadmap slices S3..S9 run as harness features. Read AGENTS.md first, especially 'Running it' and 'Harness'.",
   "features": [
     {
+      "id": "feat-s30-settings-sweep",
+      "title": "S30: Settings sweep - every module parameter in its gear",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "AGENTS.md (rule 16 gear pattern; rule 20 fallbacks; 'Credentials leave through exactly one door')",
+        "src/lib/settings.ts (Settings type + DEFAULT_SETTINGS; read per request) and src/lib/settingsRedact.ts (maskSecret / stripPlaceholders for secrets)",
+        "src/components/ConfigMenu.tsx (useSettings, Field, TextInput, SaveBar) and src/components/ModelSettings.tsx (generic text-field gear)",
+        "src/components/LoopSettings.tsx and src/lib/ideaSeats.ts (the pattern this slice repeats: v2.52.0 and v2.54.0)",
+        "src/lib/agentRoom.ts (roomAgents() reads config.json roomAgents), src/lib/config.ts (CLAUDE_MODEL), src/lib/brainstorm.ts, src/lib/pipeline.ts, src/lib/agentsRuntime.ts, src/lib/v2/memory/llm.ts",
+        "docs/modules/*.md (each module's Tabs and controls table must list new gear fields)",
+        "DEV-JOURNAL.md entries 2026-09-29/30 (what was already moved into settings)"
+      ],
+      "description": "Owner rule (2026-09-30): 'Every parameter needs to be in the settings for every module.' Find every parameter that is hardcoded or set only in a config file / environment variable and move it into that module's settings + gear, without changing behaviour. PHASE A (first session): write _design/settings-sweep-audit.md - a table per module of every hardcoded model id (claude-*, kimi*, glm*, minimax*, gpt-*, gemini*, *:cloud), provider choice, fallback, URL/port, timeout, retry count and threshold that a user could reasonably want to change, with file:line, current value, and the proposed settings key; mark anything that is not a real tunable (protocol constants, test seams) as 'leave'. Commit the audit. PHASE B (same or following sessions, one commit per module batch): implement the audit. Known items that MUST be covered: (1) Agent Room: the per-agent provider/model/baseUrl/apiKeyEnv/noReasoning overrides that src/lib/agentRoom.ts applyOverride() reads from ~/.agentic-os/config.json 'roomAgents' move to settings.room.agents with a gear on the Room page (keep reading config.json as a one-time fallback when settings has none, and say so in the code); the auto-model preference lists stay but the fallback env OLLAMA_CLOUD_MODEL becomes a setting. (2) The Ollama Cloud key: an in-app field (settings, write-only, masked with maskSecret in every GET/PATCH reply exactly like the existing secrets in settingsRedact.ts, never returned in full), read by every place that reads process.env.OLLAMA_API_KEY / OLLAMA_CLOUD_KEY (settings value wins, env stays the fallback); smoke-settings-secrets must still pass and must cover it. (3) The Claude chat model (src/lib/config.ts CLAUDE_MODEL, default claude-opus-4-8) becomes settings.claude.model with a picker (same four models as lib/ultracodeModels.ts plus custom), env/config.json still override for back-compat; default value unchanged. (4) Every remaining hardcoded model id in Brainstorm, Pipeline, Hire, Content Engine, Agents runtime and Memory that the audit marks tunable. Defaults MUST equal today's values so nothing changes until the owner edits a field. Out of scope: SEO (parked by the owner), Nexora, any UI redesign.",
+      "acceptance_criteria": [
+        "_design/settings-sweep-audit.md exists, lists every module with file:line, current value and settings key or 'leave' with a reason",
+        "Every audit row marked tunable is read from settings per request (no rebuild needed) and editable in that module's gear; defaults equal the previous hardcoded values",
+        "Agent Room overrides live in settings.room.agents with a Room gear; config.json roomAgents is only a labelled fallback",
+        "The Ollama Cloud key can be set in-app, is masked (first 5 chars + ********) in every settings reply, and is preferred over the env var everywhere it is read",
+        "The Claude chat model is a setting with a picker (Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, custom); default unchanged",
+        "New scripts/v2/smoke-settings-sweep.mjs (offline, temp dirs per rule 19) asserts, for every moved parameter, that the default equals the old value and that changing the setting changes what the code uses; smoke-settings-secrets covers the Ollama key",
+        "docs/modules/*.md updated for every new gear field; smoke-guide passes",
+        "./test.sh exits 0; one commit per module batch with version bumps; DEV-JOURNAL entries with rollback lines"
+      ],
+      "status": "failing",
+      "notes": "2026-10-01 (Fable, worktree settings-sweep, branch feat/s30-settings-sweep): CODE COMPLETE, v2.56.0-v2.59.0, four batch commits + the Phase A audit. Phase A: _design/settings-sweep-audit.md (every module, file:line, value, key or leave+reason; 146 timeout literals classified). Phase B: (1) settings.ollama {apiKey masked, host, defaultModel, localUrl} via lib/ollamaCloud.ts, read per call by /api/ollama/*, /api/config, agentRoom, brainstorm, loopEngine, agentsRuntime, memory llm/embed/backfill, freeclaude build; settings beat env; smoke-settings-secrets A7/A8 cover the key. (2) settings.claude.model (default claude-opus-4-8) via lib/claudeModel.ts in all 25 former CLAUDE_MODEL sites; env/config.json still override and GET /api/claude/model + the Model gear say so; picker Opus 5.5/Sonnet 5.5/Fable 5.1/Opus 5/custom. (3) settings.room.agents + cliTimeoutSec with RoomSettings gear; config.json roomAgents only while settings has none (overrideSource in /api/room/status). (4) brainstorm.seatTimeoutSec/kimiTimeoutSec, jarvis.voice.{geminiLiveModel,openaiRealtimeModel,openaiTranscribeModel,openaiTtsModel}, thumbnails.promptModel; ModelSettings dotted keys + numbers. scripts/v2/smoke-settings-sweep.mjs: 38 checks (defaults = old values, setting changes what runs, precedence, wiring, docs). Docs updated for ollama, claude-cli, room, brainstorm, jarvis, thumbnails, loop, memory, agents-page, freeclaude. GATE: all 113 smokes run to the end, 110 pass; the 3 red (smoke-guide B1 rabbit page, smoke-exile-deletes H1-H3/H6 id guard, smoke-memory-ui .exile copies) are the owner's uncommitted work absent from this worktree, verified against the main checkout, so ./test.sh cannot exit 0 here. Left failing per the contract; owner steps in agent-progress.md (AWAITING USER VERIFY). Flip to passing once ./test.sh is green in a tree holding those files."
+    },
+    {
       "id": "feat-s8-voicebox-everywhere",
       "title": "S8: Voicebox speaks for the Oracle and Video too",
       "priority": "HIGH",
