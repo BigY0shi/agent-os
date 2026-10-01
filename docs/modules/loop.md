@@ -12,12 +12,13 @@ One page: the cycle strip, the config panel, the builds workspace, the result, t
 
 | Control | What it does |
 |---|---|
+| **Configure** (gear, "Loop settings") | **Default builder**, **Default judge**, **Judge fallback** (None, or Ollama Cloud), **Ollama Cloud model** (blank = picked from your account: Kimi K2.6, then MiniMax M3, then GLM), **Default max rounds** (2 to 8), **Builder time limit** and **Judge time limit** in seconds. Saved to the `loop` section of `~/.agentic-os/settings.json` and read on every run. |
 | Cycle strip | Static: 1 Check state, 2 Decide, 3 Act, 4 Gather feedback, 5 Verify / terminate. Not clickable. |
 | **Definition of done** | The goal. Required to run. |
 | **Starting point** | Optional draft to refine. Leave blank to build from scratch. |
 | **Builder** | The CLI agent that builds. Groups: "Your CLI agents · no API key" (the installed ones among Claude, Codex, Cursor, Pi, Hermes) and "Other CLI agents" (the rest of those five). Default is the Claude CLI. |
 | **Max rounds** | 2 to 8, default 4. |
-| **Judge** | The grader. Groups: your CLI agents and "Other CLI agents + local" (the rest of the five CLI agents, plus Local Ollama). Default is the Claude CLI. Codex is a good independent critic. |
+| **Judge** | The grader. Groups: your CLI agents and "Other CLI agents + Ollama Cloud" (the rest of the five CLI agents, plus Ollama Cloud). Default is the gear's Default judge (Claude CLI unless changed). Codex is a good independent critic. |
 | **Run loop** / **Stop** | Starts the loop, or aborts it. Stopping ends with "Stopped by you." |
 
 ### Builds workspace
@@ -47,7 +48,7 @@ The artifact panel is titled "Work in progress" while running and "Final result"
 
 - `POST /api/loop/run` streams NDJSON. Each round: the Builder produces the artifact; if it is HTML, the server opens it in a headless Chrome and auto-rejects it (score 0) on JS errors or a blank render; then the Judge grades it. Two rounds without a higher score stops the loop as stalled.
 - The headless browser is Playwright's `chrome-headless-shell`, looked up in `%LOCALAPPDATA%\ms-playwright` on Windows. If it is not installed, the render check is skipped and does not block the round.
-- CLI only: the Builder and Judge run on your own CLI logins, no API keys. The Judge may also be the local Ollama model. Any other id (an OpenRouter, Nous Portal or MiniMax model) is refused with a clear error before a round runs.
-- If the chosen judge fails or returns nothing usable, the local Ollama model (`127.0.0.1:11434`) grades instead, and the first issue says "Graded by the LOCAL fallback judge, not <judge>". If Ollama is also unavailable, the round fails with that reason.
+- CLI only: the Builder and Judge run on your own CLI logins, no API keys. The Judge may also be Ollama Cloud (`https://ollama.com` with `OLLAMA_API_KEY`; there is no local Ollama). Any other id (an OpenRouter, Nous Portal or MiniMax model) is refused with a clear error before a round runs. An older saved "local" judge is read as Ollama Cloud.
+- If a CLI judge fails or returns nothing usable, what happens is the gear's **Judge fallback**: **None** (the default) fails the round with the reason; **Ollama Cloud** grades it instead, the first issue says "Graded by the Ollama Cloud fallback judge (your Loop setting), not <judge>", and the result banner credits the fallback. If the fallback fails too, the round fails naming both reasons.
 - Every run is logged as Markdown to your Obsidian vault under `Agentic OS/Loops/`, or to `~/.agentic-os/loop-runs/` when no vault is configured.
 - Only passed HTML builds are saved, to `~/.agentic-os/loop-builds/<slug>.html`, and served back through `/api/loop/builds/...` for the workspace.

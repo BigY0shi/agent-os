@@ -1,5 +1,6 @@
 import { workerAct, verdict, DEFAULT_WORKER, DEFAULT_JUDGE } from "@/lib/loopEngine";
-import { isLoopBuilder, isLoopJudge } from "@/lib/loopModels";
+import { isLoopBuilder, isLoopJudge, normalizeJudge } from "@/lib/loopModels";
+import { readSettings } from "@/lib/settings";
 import { writeFile, mkdir, readdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -103,7 +104,7 @@ async function renderCheck(html: string, signal?: AbortSignal): Promise<{ ok: bo
 }
 
 function judgeName(j: string): string {
-  if (j === "local") return "Local (Ollama)";
+  if (j === "ollama-cloud") return "Ollama Cloud";
   if (j.startsWith("cli:")) return `${j.slice(4)} CLI`;
   return j;
 }
@@ -113,9 +114,18 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const goal = String(body.goal || "").trim();
   const startArtifact = String(body.artifact || "");
-  const worker = String(body.worker || DEFAULT_WORKER);
-  const judge = String(body.judge || DEFAULT_JUDGE);
-  const maxIters = Math.max(1, Math.min(8, Number(body.maxIters) || 4));
+  // Every Loop parameter lives in the Loop gear (settings.loop), read per request. The page
+  // sends the builder, judge and rounds it shows; anything it leaves out comes from there.
+  const ls = readSettings().loop ?? {};
+  const worker = String(body.worker || ls.builder || DEFAULT_WORKER);
+  const judge = normalizeJudge(String(body.judge || ls.judge || DEFAULT_JUDGE));
+  const maxIters = Math.max(1, Math.min(8, Number(body.maxIters) || Number(ls.maxRounds) || 4));
+  const builderTimeoutMs = Math.max(30, Number(ls.builderTimeoutSec) || 240) * 1000;
+  const judgeOpts = {
+    timeoutMs: Math.max(30, Number(ls.judgeTimeoutSec) || 180) * 1000,
+    fallback: ls.judgeFallback === "ollama-cloud" ? "ollama-cloud" as const : "none" as const,
+    ollamaModel: ls.ollamaModel || "",
+  };
   const enc = new TextEncoder();
   const jName = judgeName(judge);
 
@@ -125,7 +135,7 @@ export async function POST(req: Request) {
       if (!goal) { send({ t: "error", m: "Define what 'done' looks like first." }); send({ t: "done", reason: "no goal" }); controller.close(); return; }
       // CLI only: refuse anything else before a single round runs.
       if (!isLoopBuilder(worker)) { send({ t: "error", m: `The Loop runs CLI agents only, and "${worker}" is not one. Pick a CLI agent for the builder.` }); send({ t: "done", reason: "builder not a CLI agent" }); controller.close(); return; }
-      if (!isLoopJudge(judge)) { send({ t: "error", m: `The Loop runs CLI agents (or the local Ollama judge) only, and "${judge}" is not one. Pick a CLI agent for the judge.` }); send({ t: "done", reason: "judge not a CLI agent" }); controller.close(); return; }
+      if (!isLoopJudge(judge)) { send({ t: "error", m: `The Loop runs CLI agents (or the Ollama Cloud judge) only, and "${judge}" is not one. Pick a CLI agent for the judge.` }); send({ t: "done", reason: "judge not a CLI agent" }); controller.close(); return; }
 
       let cur = startArtifact, issues: string[] = [], lastScore = -1, stall = 0, done = false, passed = false, reason = "";
       send({ t: "start", goal, worker, judge, maxIters });
@@ -133,7 +143,7 @@ export async function POST(req: Request) {
       for (let n = 1; n <= maxIters && !req.signal.aborted; n++) {
         send({ t: "iter", n, step: "state", detail: n === 1 ? "Reading the goal + starting point" : "Re-reading goal + last verdict" });
         send({ t: "iter", n, step: "act", detail: `Builder (${judgeName(worker)}) working…` });
-        try { cur = await workerAct(goal, cur, issues, worker, req.signal); }
+        try { cur = await workerAct(goal, cur, issues, worker, { signal: req.signal, timeoutMs: builderTimeoutMs }); }
         catch (e) { send({ t: "iter", n, step: "error", detail: `Builder failed — ${String(e).slice(0, 140)}` }); if (req.signal.aborted) break; continue; }
         send({ t: "artifact", n, artifact: cur });
 
@@ -155,10 +165,12 @@ export async function POST(req: Request) {
         // STEP — JUDGE the spec/quality (it already runs cleanly if it's HTML)
         send({ t: "iter", n, step: "verify", detail: `${jName} judging adversarially…` });
         let v;
-        try { v = await verdict(goal, cur, judge, req.signal); }
+        try { v = await verdict(goal, cur, judge, { ...judgeOpts, signal: req.signal }); }
         catch (e) { send({ t: "iter", n, step: "error", detail: `Verifier failed — ${String(e).slice(0, 140)}` }); break; }
-        send({ t: "verdict", n, pass: v.pass, score: v.score, issues: v.issues, summary: v.summary });
-        if (v.pass) { done = true; passed = true; reason = `${jName} approved on round ${n} — it runs clean and meets the goal.`; break; }
+        send({ t: "verdict", n, pass: v.pass, score: v.score, issues: v.issues, summary: v.summary, judgedBy: v.judgedBy, fellBackFrom: v.fellBackFrom });
+        // Credit whoever really graded it: the gear's fallback judge, when it stepped in.
+        const by = v.fellBackFrom ? `${judgeName(String(v.judgedBy || "").replace(/^ollama-cloud:.*/, "ollama-cloud"))} (fallback for ${jName})` : jName;
+        if (v.pass) { done = true; passed = true; reason = `${by} approved on round ${n} — it runs clean and meets the goal.`; break; }
         issues = v.issues;
         if (v.score <= lastScore) stall++; else stall = 0;
         lastScore = v.score;

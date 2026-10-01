@@ -7,7 +7,7 @@ import { Settings as Gear, X, Check, Loader2 } from "lucide-react";
 // any subtree without this file having to know every field.
 export type Settings = Record<string, unknown> & {
   defaultAgent?: string;
-  loop?: { builder?: string; judge?: string };
+  loop?: { builder?: string; judge?: string; judgeFallback?: "none" | "ollama-cloud"; ollamaModel?: string; maxRounds?: number; builderTimeoutSec?: number; judgeTimeoutSec?: number };
   seo?: { sites?: Array<{ label: string; url: string; deployCmd?: string; dir?: string }>; brand?: string; author?: string; audience?: string; agent?: string };
   leads?: { agent?: string; dataProvider?: "ai" | "agent" | "tavily" | "perplexity" | "firecrawl" | "apify"; tavilyKey?: string; perplexityKey?: string; firecrawlKey?: string; apifyToken?: string; apifyActor?: string };
   video?: { backend?: "eidolon" | "cli"; eidolonUrl?: string; comfyUrl?: string; model?: "ltx" | "wan"; agent?: string };

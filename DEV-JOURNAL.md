@@ -1,5 +1,36 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Loop: Ollama Cloud judge, an owner-chosen fallback, and every Loop parameter in a gear (v2.52.0)
+
+Owner on open item 2: "There is no local ollama. It needs to hit ollama cloud or no
+fallback", and on item 4: "Every parameter needs to be in the settings for every module."
+- **No local Ollama.** The "local" judge (`127.0.0.1:11434`) is now **Ollama Cloud**
+  (`https://ollama.com` + `OLLAMA_API_KEY`). Its model comes from the gear, or (blank) is
+  picked from the account's own `/api/tags` by the model policy (Kimi K2.6, MiniMax M3,
+  GLM...); no tag is written into the code. Every failure names its reason (it used to
+  return a silent null). A saved "local" judge is read as "ollama-cloud" (`normalizeJudge`).
+- **The fallback is the owner's choice** (rule 20). When a CLI judge returns nothing usable:
+  **None** (the default) fails the round with the reason; **Ollama Cloud** grades it, the
+  first issue says "Graded by the Ollama Cloud fallback judge (your Loop setting)", the
+  verdict carries `judgedBy`/`fellBackFrom`, and the result banner credits the fallback, not
+  the chosen judge. If the fallback fails too, both reasons are shown.
+- **New Loop gear** (`LoopSettings.tsx`, `settings.loop`): Default builder, Default judge,
+  Judge fallback, Ollama Cloud model, Default max rounds, Builder and Judge time limits.
+  `/api/loop/run` reads it per request; the page starts from it (a pick made first wins).
+  `settings.ts` change committed alone (the owner's other uncommitted lines in that file
+  stay unstaged).
+- `verdict()` / `workerAct()` take an options object; `verdict` has a `cliRunner` test seam
+  so the smoke can exercise the fallback without launching a real CLI.
+`docs/modules/loop.md` updated.
+
+Verified: `smoke-loop-cli-only.mjs` section G (6 new checks: Ollama Cloud judge with and
+without a key, the policy-picked model, fallback None, fallback Ollama Cloud with the gear's
+model, both failing; nothing calls a local Ollama), 24 in all. DOM-checked in the browser
+pane: with saved settings (Codex, Ollama Cloud, 6 rounds) the page starts on them and the
+gear shows all seven fields. tsc clean; smoke-settings-secrets and smoke-guide pass.
+
+Rollback: revert the commit (the settings.ts hunk is only the loop type and default).
+
 ## 2026-09-30 - Agent Room: no OpenRouter, no local-daemon fallback, no invented replies (v2.51.18)
 
 Owner's call on open item 1 ("Fix"), with "There is no local ollama" (item 2). In

@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { RotateCw, Square, Check, X, Loader2, Target, FlaskConical, Eye, Code2, ExternalLink, Download, FolderOpen, RefreshCw } from "lucide-react";
 import { useInstalledAgents } from "./AgentPicker";
-import { WORKERS, JUDGES, DEFAULT_WORKER, DEFAULT_JUDGE, LOOP_CLI } from "@/lib/loopModels";
+import { WORKERS, JUDGES, DEFAULT_WORKER, DEFAULT_JUDGE, LOOP_CLI, normalizeJudge } from "@/lib/loopModels";
+import LoopSettings from "./LoopSettings";
+import { useSettings } from "./ConfigMenu";
 
 function fmtAgo(ms: number): string {
   if (!ms) return "";
@@ -49,6 +51,18 @@ export default function LoopView() {
   const [builds, setBuilds] = useState<Build[]>([]);
   const [preview, setPreview] = useState<Build | null>(null);
   const { installed } = useInstalledAgents();
+  // Start from the Loop gear's defaults (settings.loop) once they arrive; a pick made on the
+  // page before then is kept.
+  const { settings } = useSettings();
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!settings || seeded.current) return;
+    seeded.current = true;
+    const l = (settings.loop || {}) as { builder?: string; judge?: string; maxRounds?: number };
+    if (l.builder) setWorker((w) => (w === DEFAULT_WORKER ? l.builder! : w));
+    if (l.judge) setJudge((j) => (j === DEFAULT_JUDGE ? normalizeJudge(l.judge!) : j));
+    if (l.maxRounds) setMaxIters((m) => (m === 4 ? Math.max(2, Math.min(8, Number(l.maxRounds))) : m));
+  }, [settings]);
   const cliAgents = installed.filter((a) => a.kind === "cli" && (LOOP_CLI as readonly string[]).includes(a.id));
   // The static lists minus whatever already shows under "Your CLI agents", so no option appears twice.
   const shown = new Set(cliAgents.map((a) => `cli:${a.id}`));
@@ -107,6 +121,7 @@ export default function LoopView() {
 
   return (
     <div className="max-w-[1000px] mx-auto w-full pb-16">
+      <div className="flex justify-end mb-2"><LoopSettings /></div>
       {/* intro */}
       <p className="text-[13.5px] leading-relaxed mb-4" style={{ color: "var(--fg-dim)" }}>
         Stop being the loop. Define what <b style={{ color: "var(--fg)" }}>done</b> looks like, and the system runs the cycle itself — a builder acts, then a separate <b style={{ color: ACCENT }}>judge</b> (the Claude CLI by default) grades it adversarially out of 100. It keeps fixing until the judge passes or progress stalls. The builder never grades its own homework.
@@ -169,7 +184,7 @@ export default function LoopView() {
                 </optgroup>
               )}
               {otherJudges.length > 0 && (
-                <optgroup label={cliAgents.length > 0 ? "Other CLI agents + local" : "CLI agents + local"}>
+                <optgroup label={cliAgents.length > 0 ? "Other CLI agents + Ollama Cloud" : "CLI agents + Ollama Cloud"}>
                   {otherJudges.map((j) => <option key={j.id} value={j.id}>{j.label}</option>)}
                 </optgroup>
               )}
@@ -182,7 +197,7 @@ export default function LoopView() {
           </div>
         </div>
         <p className="text-[10.5px] mt-3" style={{ color: "var(--fg-dimmer)" }}>
-          The Loop runs on your CLI agents only (your subscriptions, no API keys), or the local Ollama model as the judge. Pick an independent judge (Codex) for a tougher critic. If a CLI judge returns nothing usable, your <b style={{ color: ACCENT }}>local</b> model grades that round instead and the verdict says so. Results save to your vault under <span className="font-mono">Agentic OS/Loops</span>.
+          The Loop runs on your CLI agents (your subscriptions, no API keys); the judge can also be Ollama Cloud. Pick an independent judge (Codex) for a tougher critic. If a CLI judge returns nothing usable, the round fails with the reason, unless the Loop gear sets a <b style={{ color: ACCENT }}>judge fallback</b>, which then says so in the round. Results save to your vault under <span className="font-mono">Agentic OS/Loops</span>.
         </p>
       </div>
 

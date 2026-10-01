@@ -146,7 +146,7 @@ export const MINIMAX_CHAT = "https://api.minimax.io/v1/chat/completions";
 
 // STEP 3 — ACT. The builder produces / revises the work toward the goal, fixing the
 // exact issues the verifier raised last round. CLI agents only.
-export async function workerAct(goal: string, prev: string, issues: string[], worker: string, signal?: AbortSignal): Promise<string> {
+export async function workerAct(goal: string, prev: string, issues: string[], worker: string, opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<string> {
   if (!isLoopBuilder(worker)) throw new Error(`The Loop runs CLI agents only, and "${worker}" is not one. Pick a CLI agent for the builder.`);
   const sys = "You are the BUILDER in a self-running loop. Produce the best possible version of the work toward the definition of done. A separate adversarial judge will grade it — so genuinely meet the goal, don't just look plausible. "
     + "If the work is a web page, app, game or tool, output ONE complete self-contained HTML file (all CSS + JS inline, no external dependencies or CDNs, works offline by double-clicking) that is BEAUTIFUL and actually functional. Design bar: a modern dark theme with depth (layered backgrounds, soft radial glows, never flat #000), a refined accent colour with subtle gradients, real typography hierarchy (a strong display weight for headings, comfortable body size, good line-height), generous spacing and padding, rounded cards with soft shadows + 1px light borders, smooth micro-interactions (hover states, transitions, a tasteful entrance animation), and fully responsive layout. Make numbers/results big and legible. It should look like a polished premium product, not a prototype. "
@@ -155,7 +155,7 @@ export async function workerAct(goal: string, prev: string, issues: string[], wo
   const base = prev ? `\n\n--- YOUR LAST VERSION (revise it) ---\n${prev}\n--- END ---` : "\n\n(No draft yet — create the first version from scratch.)";
   const user = `DEFINITION OF DONE:\n${goal}${base}${fb}\n\nReturn the full improved work now.`;
   // CLI agent (the user's real subscription, no API key) — one-shot print mode.
-  return cliComplete(worker.slice(4), `${sys}\n\n${user}`, { timeoutMs: 240_000, signal });
+  return cliComplete(worker.slice(4), `${sys}\n\n${user}`, { timeoutMs: opts.timeoutMs ?? 240_000, signal: opts.signal });
 }
 
 export interface Verdict {
@@ -194,98 +194,113 @@ function parseVerdict(raw: string): Verdict | null {
   return null;
 }
 
-// Local Ollama judge — totally free, offline, always available. format:"json"
-// forces a strictly-parseable verdict. Used as the default-free judge AND as the
-// fallback when a free remote endpoint (N2) throttles / returns empty.
-const OLLAMA = "http://127.0.0.1:11434/api/chat";
-
-/**
- * Pick a local Ollama model that is actually pulled. The old hardcoded default
- * ("xentriom/gemma-4-12B-...") isn't installed here, so the local judge 404'd and
- * the loop's safety net was silently dead. Ask the daemon what it has.
- */
-async function localJudgeModel(signal?: AbortSignal): Promise<string | null> {
-  if (process.env.LOCAL_MODEL) return process.env.LOCAL_MODEL;
-  try {
-    const r = await fetch("http://127.0.0.1:11434/api/tags", { signal });
-    if (!r.ok) return null;
-    const j = await r.json();
-    const names: string[] = ((j?.models as { name?: string }[]) || []).map((m) => m?.name || "").filter(Boolean);
-    if (!names.length) return null;
-    // Judging is an analytical (non-coding) task → the user's agentic models first
-    // (MiniMax M3, Kimi K2.6 — via Ollama Cloud), then coders, then anything.
-    for (const re of [/kimi.*k2\.6/i, /minimax.*m3/i, /glm-?5\.2/i, /kimi/i, /glm/i, /coder|code/i, /qwen|llama|mistral/i]) {
-      const hit = names.find((n) => re.test(n));
-      if (hit) return hit;
-    }
-    return names[0];
-  } catch { return null; }
+// Ollama Cloud judge. There is no local Ollama on this machine (owner, 2026-09-30: "it needs
+// to hit ollama cloud or no fallback"), so this goes to https://ollama.com with OLLAMA_API_KEY.
+// It is used when the owner picks it as the judge, or as the fallback judge when the Loop
+// gear says so. format:"json" forces a parseable verdict. Every failure throws its reason.
+const OLLAMA_CLOUD = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/+$/, "");
+function ollamaCloudKey(): string | null {
+  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
+  return k ? k.trim() : null;
 }
 
-async function ollamaJudge(goal: string, artifact: string, signal?: AbortSignal): Promise<Verdict | null> {
-  try {
-    const model = await localJudgeModel(signal);
-    if (!model) return null;
-    const r = await fetch(OLLAMA, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: JUDGE_SYS }, { role: "user", content: judgeUser(goal, artifact) }],
-        stream: false, format: "json", keep_alive: "30m", options: { temperature: 0.2 },
-      }), signal,
-    });
-    if (!r.ok) return null;
-    const j = await r.json();
-    return parseVerdict(j?.message?.content ?? "");
-  } catch { return null; }
+/** The Ollama Cloud model to judge with: the Loop gear's choice, else picked from the
+ *  account's own model list by the owner's model policy (judging is analytical, so the
+ *  agentic models first). No model tag is written into the code. */
+async function cloudJudgeModel(chosen: string | undefined, key: string, signal?: AbortSignal): Promise<string> {
+  if (chosen && chosen.trim()) return chosen.trim();
+  const r = await fetch(`${OLLAMA_CLOUD}/api/tags`, { headers: { Authorization: `Bearer ${key}` }, signal });
+  if (!r.ok) throw new Error(`Ollama Cloud /api/tags answered HTTP ${r.status}`);
+  const j = await r.json();
+  const names: string[] = ((j?.models as { name?: string }[]) || []).map((m) => m?.name || "").filter(Boolean);
+  if (!names.length) throw new Error("Ollama Cloud listed no models for this account");
+  for (const re of [/kimi.*k2\.6/i, /minimax.*m3/i, /glm-?5\.2/i, /kimi/i, /glm/i, /coder|code/i, /qwen|llama|mistral/i]) {
+    const hit = names.find((n) => re.test(n));
+    if (hit) return hit;
+  }
+  return names[0];
+}
+
+async function ollamaCloudJudge(goal: string, artifact: string, model: string | undefined, signal?: AbortSignal): Promise<Verdict> {
+  const key = ollamaCloudKey();
+  if (!key) throw new Error("no Ollama Cloud key (set OLLAMA_API_KEY); there is no local Ollama");
+  const m = await cloudJudgeModel(model, key, signal);
+  const r = await fetch(`${OLLAMA_CLOUD}/api/chat`, {
+    method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model: m,
+      messages: [{ role: "system", content: JUDGE_SYS }, { role: "user", content: judgeUser(goal, artifact) }],
+      stream: false, format: "json", think: false, options: { temperature: 0.2 },
+    }), signal,
+  });
+  if (!r.ok) throw new Error(`Ollama Cloud ${r.status} for "${m}": ${(await r.text().catch(() => "")).slice(0, 160)}`);
+  const j = await r.json();
+  const v = parseVerdict(j?.message?.content ?? "");
+  if (!v) throw new Error(`Ollama Cloud (${m}) returned no parseable verdict`);
+  return { ...v, judgedBy: `ollama-cloud:${m}` };
+}
+
+export interface VerdictOpts {
+  signal?: AbortSignal;
+  /** Time limit for a CLI judge (Loop gear: judgeTimeoutSec). */
+  timeoutMs?: number;
+  /** Who grades when a CLI judge returns nothing usable (Loop gear: judgeFallback). */
+  fallback?: "none" | "ollama-cloud";
+  /** Ollama Cloud model (Loop gear: ollamaModel; blank = picked by the model policy). */
+  ollamaModel?: string;
+  /** Test seam: the CLI runner (default cliComplete), so a smoke can exercise the fallback
+   *  without launching a real, billed CLI agent. */
+  cliRunner?: typeof cliComplete;
 }
 
 // STEP 4+5 — GATHER FEEDBACK + VERIFY. A judge grades the work adversarially against
 // the definition of done:
-//   "cli:<agent>" → a CLI agent (default: Claude CLI)
-//   "local"       → local Ollama (offline)
-// Anything else is refused. If a CLI judge returns nothing parseable, the local Ollama
-// judge grades instead and the verdict says so (judgedBy, fellBackFrom, a flagged issue).
-export async function verdict(goal: string, artifact: string, judge: string, signal?: AbortSignal): Promise<Verdict> {
-  if (!isLoopJudge(judge)) throw new Error(`The Loop runs CLI agents (or the local Ollama judge) only, and "${judge}" is not one. Pick a CLI agent for the judge.`);
+//   "cli:<agent>"  → a CLI agent (default: Claude CLI)
+//   "ollama-cloud" → Ollama Cloud (model from the Loop gear)
+// Anything else is refused. When a CLI judge returns nothing usable, another judge grades
+// only if the owner chose one in the Loop gear (rule 20), and the verdict says so.
+export async function verdict(goal: string, artifact: string, judge: string, opts: VerdictOpts = {}): Promise<Verdict> {
+  if (!isLoopJudge(judge)) throw new Error(`The Loop runs CLI agents (or the Ollama Cloud judge) only, and "${judge}" is not one. Pick a CLI agent for the judge.`);
+  const { signal } = opts;
+  if (judge === "ollama-cloud") {
+    try { return await ollamaCloudJudge(goal, artifact, opts.ollamaModel, signal); }
+    catch (e) {
+      const msg = (e as Error)?.message || String(e);
+      return { pass: false, score: 0, issues: [`Ollama Cloud judge failed: ${msg}`], summary: "no verdict", judgedBy: "none", judgeError: msg };
+    }
+  }
+
   let raw = "";
   let judgeError = "";
   try {
-    if (judge === "local") {
-      const v = await ollamaJudge(goal, artifact, signal);
-      if (v) return { ...v, judgedBy: "local" };
-      return { pass: false, score: 0, issues: ["Local judge (Ollama) unreachable — is `ollama serve` running, and is a model pulled?"], summary: "no local judge", judgedBy: "none" };
-    } else {
-      raw = await cliComplete(judge.slice(4), `${JUDGE_SYS}\n\n${judgeUser(goal, artifact)}`, { timeoutMs: 180_000, signal });
-    }
+    raw = await (opts.cliRunner ?? cliComplete)(judge.slice(4), `${JUDGE_SYS}\n\n${judgeUser(goal, artifact)}`, { timeoutMs: opts.timeoutMs ?? 180_000, signal });
   } catch (e) {
-    // Keep the real cause — it used to be swallowed, so a missing key or an auth
-    // failure surfaced as the generic "no parseable verdict".
+    // Keep the real cause; it used to be swallowed into a generic "no parseable verdict".
     judgeError = (e as Error)?.message || String(e);
   }
-
   const v = parseVerdict(raw);
   if (v) return { ...v, judgedBy: judge };
 
-  // The chosen judge failed. Fall back to the local model so the loop keeps moving —
-  // but SAY SO, rather than silently passing off a local grade as the chosen judge's.
-  const local = await ollamaJudge(goal, artifact, signal);
-  if (local) {
-    return {
-      ...local,
-      judgedBy: "local (fallback)",
-      fellBackFrom: judge,
-      judgeError: judgeError || "returned nothing parseable",
-      issues: [
-        `⚠ Graded by the LOCAL fallback judge, not "${judge}" (${judgeError || "no parseable verdict"}).`,
-        ...local.issues,
-      ],
-    };
+  const why = judgeError || "returned no parseable verdict";
+  if (opts.fallback === "ollama-cloud") {
+    try {
+      const fb = await ollamaCloudJudge(goal, artifact, opts.ollamaModel, signal);
+      return {
+        ...fb,
+        judgedBy: `${fb.judgedBy} (fallback)`,
+        fellBackFrom: judge,
+        judgeError: why,
+        issues: [`⚠ Graded by the Ollama Cloud fallback judge (your Loop setting), not "${judge}" (${why}).`, ...fb.issues],
+      };
+    } catch (e) {
+      const fbWhy = (e as Error)?.message || String(e);
+      return { pass: false, score: 0, issues: [`Judge "${judge}" failed: ${why}. The Ollama Cloud fallback failed too: ${fbWhy}.`], summary: raw.slice(0, 180) || "no verdict", judgedBy: "none", judgeError: why };
+    }
   }
   return {
     pass: false,
     score: 0,
-    issues: [`Judge "${judge}" failed: ${judgeError || "returned no parseable verdict"}. Local fallback unavailable (is ollama running with a model pulled?).`],
+    issues: [`Judge "${judge}" failed: ${why}. No fallback judge is set (Loop gear, Judge fallback).`],
     summary: raw.slice(0, 180) || "no verdict",
     judgedBy: "none",
     judgeError: judgeError || undefined,

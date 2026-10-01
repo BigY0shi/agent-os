@@ -54,7 +54,16 @@ export interface Settings {
   // The CLI agent a module reaches for when it just needs "an agent" (id from /api/agents/list).
   defaultAgent: string;
 
-  loop: { builder?: string; judge?: string };
+  // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
+  // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
+  // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
+  // labelled in the verdict); ollamaModel is the Ollama Cloud model for that judge (blank =
+  // picked from the account's model list by the model policy); the rest are run limits.
+  loop: {
+    builder?: string; judge?: string;
+    judgeFallback?: "none" | "ollama-cloud"; ollamaModel?: string;
+    maxRounds?: number; builderTimeoutSec?: number; judgeTimeoutSec?: number;
+  };
 
   seo: {
     sites: SeoSite[];
@@ -445,7 +454,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // into a settings file written months ago.
   hermes3d: { ...DEFAULT_HERMES3D },
   defaultAgent: "claude",
-  loop: {},
+  loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },
   video: { backend: "eidolon", eidolonUrl: "", comfyUrl: "http://127.0.0.1:8188", model: "ltx", agent: "claude" },
