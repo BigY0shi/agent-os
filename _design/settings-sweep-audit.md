@@ -102,7 +102,7 @@ an existing `.env.local` keeps working.
 | Where | Today | Verdict | Settings key | Default |
 |---|---|---|---|---|
 | `src/lib/v2/memory/llm.ts:66-67` `kimi-k2.6:cloud` / `glm-5.2:cloud` | blank-field fallbacks equal to `DEFAULT_SETTINGS.memory` | leave | already gear fields | |
-| `src/lib/v2/memory/llm.ts:140-144`, `embed.ts:12-21` | cloud host literal, local URL and key from env | move | shared `ollama.host` / `ollama.localUrl` / `ollama.apiKey` | |
+| `src/lib/v2/memory/llm.ts:140-144`, `embed.ts:12-21`, `backfill.ts:222-224` `localOllamaBase()` | cloud host literal, local URL and key from env | move | shared `ollama.host` / `ollama.localUrl` / `ollama.apiKey` | |
 | `src/lib/v2/memory/embed.ts:40`, `backfill.ts:274,495`, `dbSchema.ts:233` `nomic-embed-text` | blank-field fallback for the embed model | leave | already a gear field; changing it after data exists needs `reembed.mjs` | |
 | `src/app/api/v2/memory/backfill/route.ts:27`, `MemorySettings.tsx:150,178,266` `bonsai:27b` | blank-field fallback | leave | already a gear field | |
 | `src/lib/v2/memory/llm.ts:180` `max_tokens` | | leave | protocol cap on structured output | |

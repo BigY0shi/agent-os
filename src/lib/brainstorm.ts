@@ -14,6 +14,7 @@ import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { cliComplete } from "./loopEngine";
+import { ollamaCloudHost, ollamaCloudKey } from "./ollamaCloud";
 
 export type CouncilSeat = "claude" | "codex" | "kimi";
 export const COUNCIL_SEATS: CouncilSeat[] = ["claude", "codex", "kimi"];
@@ -70,10 +71,9 @@ export async function listSessions(): Promise<Pick<BrainstormSession, "id" | "to
 
 // ── Kimi seat (Ollama Cloud) ────────────────────────────────────────────────────
 
-const OLLAMA_HOST = process.env.OLLAMA_CLOUD_HOST || "https://ollama.com";
-function ollamaKey(): string | null {
-  return process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY || null;
-}
+// Host and key: settings.ollama (the Ollama page's gear), then the environment, read per call
+// (lib/ollamaCloud.ts).
+const ollamaKey = ollamaCloudKey;
 
 let kimiCache: { key: string; model: string; at: number } | null = null;
 
@@ -90,8 +90,8 @@ export async function resolveKimiModel(preferred?: string): Promise<string> {
   const cacheKey = preferred || "_default";
   if (kimiCache && kimiCache.key === cacheKey && Date.now() - kimiCache.at < 10 * 60_000) return kimiCache.model;
   const key = ollamaKey();
-  if (!key) throw new Error("No Ollama Cloud key (set OLLAMA_API_KEY in .env.local)");
-  const r = await fetch(`${OLLAMA_HOST}/api/tags`, {
+  if (!key) throw new Error("No Ollama Cloud key (add it in the Ollama page's gear, or set OLLAMA_API_KEY in .env.local)");
+  const r = await fetch(`${ollamaCloudHost()}/api/tags`, {
     headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000),
   });
   if (!r.ok) throw new Error(`Ollama Cloud /api/tags ${r.status}`);
@@ -126,7 +126,7 @@ function seatSignal(opts: SeatOpts | undefined, defaultMs: number): AbortSignal 
 async function kimiComplete(prompt: string, model: string, opts?: SeatOpts): Promise<string> {
   const key = ollamaKey();
   if (!key) throw new Error("No Ollama Cloud key");
-  const r = await fetch(`${OLLAMA_HOST}/api/chat`, {
+  const r = await fetch(`${ollamaCloudHost()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({

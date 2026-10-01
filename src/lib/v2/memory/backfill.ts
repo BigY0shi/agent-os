@@ -1,6 +1,7 @@
 import { getDb, tx } from "../db";
 import { uuid as newUuid, now } from "../ids";
 import { readSettings } from "../../settings";
+import { ollamaLocalUrl } from "../../ollamaCloud";
 import { getEpisode, getStatementsForEpisode } from "./graph";
 import { addEpisode } from "./ingest";
 import { withMemoryModel, openaiCompatBase, openaiCompatReasoningEffort } from "./llm";
@@ -219,8 +220,9 @@ export function listBackfillLog(limit = 50): BackfillLogRow[] {
 // Local Ollama preflight — fail loudly, never fall back
 // ---------------------------------------------------------------------------
 
+// settings.ollama.localUrl (the Ollama Cloud page's gear), then OLLAMA_URL, then 127.0.0.1:11434.
 export function localOllamaBase(): string {
-  return process.env.OLLAMA_URL || "http://127.0.0.1:11434";
+  return ollamaLocalUrl();
 }
 
 /** 'bonsai:27b' matches 'bonsai:27b'; 'bonsai' matches 'bonsai:latest' and vice versa. */

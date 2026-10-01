@@ -167,6 +167,17 @@ export interface Settings {
     buzzChannel?: string;    // Buzz channel name or UUID (default: marketing-ideas)
   };
 
+  // Ollama, shared by every module that talks to it (S30, owner 2026-09-30: "every parameter
+  // in settings"). Read through lib/ollamaCloud.ts, never process.env directly. apiKey is the
+  // Ollama Cloud key, write-only: masked in every /api/settings reply (settingsRedact.ts), and
+  // it WINS over OLLAMA_API_KEY / OLLAMA_CLOUD_KEY in the environment, which stay the fallback
+  // so an existing .env.local keeps working. host blank = OLLAMA_CLOUD_HOST, else
+  // https://ollama.com. defaultModel blank = OLLAMA_CLOUD_MODEL, else each caller's own last
+  // resort (the Ollama page: qwen3-coder:480b; a Room "auto" agent: the account's first model).
+  // localUrl is the local daemon for Memory/Agents/Free Claude Code: blank = OLLAMA_URL, else
+  // http://127.0.0.1:11434. Edited in the Ollama Cloud page's gear.
+  ollama: { apiKey?: string; host?: string; defaultModel?: string; localUrl?: string };
+
   // Pipeline: which provider (Ollama / CLI agent / MiniMax) drives the shape → reason → artifact flow.
   pipeline: {
     provider?: "ollama" | "cli" | "minimax";
@@ -485,6 +496,7 @@ export const DEFAULT_SETTINGS: Settings = {
   thumbnails: { agent: "claude", backend: "cli" },
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
+  ollama: { apiKey: "", host: "", defaultModel: "", localUrl: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
   deals: { maxAgeDays: 5, screenOnPull: true },
   skills: {

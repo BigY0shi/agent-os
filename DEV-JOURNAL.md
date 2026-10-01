@@ -1,5 +1,41 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S30 settings sweep, batch 1: one Ollama block in settings, shared by every caller (v2.56.0)
+
+Owner rule (2026-09-30): "Every parameter needs to be in the settings for every module."
+Phase A first: `_design/settings-sweep-audit.md` lists every hardcoded model id, provider,
+fallback, URL, timeout and threshold per module with file:line, today's value and the
+settings key or a `leave` reason (146 timeout literals swept and classified). Phase B lands
+in batches, one commit each; this is batch 1.
+- **`settings.ollama`** `{ apiKey, host, defaultModel, localUrl }`, edited in the Ollama Cloud
+  page's new gear (`OllamaSettings.tsx`) and read PER CALL through `src/lib/ollamaCloud.ts`
+  (`ollamaCloudKey / ollamaCloudHost / ollamaCloudDefaultModel / ollamaLocalUrl`). Settings win;
+  the environment (`OLLAMA_API_KEY` / `OLLAMA_CLOUD_KEY`, `OLLAMA_CLOUD_HOST`,
+  `OLLAMA_CLOUD_MODEL`, `OLLAMA_URL`) is the fallback for each blank field, so an existing
+  `.env.local` keeps working. Every default equals the old literal: `https://ollama.com`,
+  `qwen3-coder:480b` (Ollama page only; a Room auto agent still takes the account's first
+  model), `http://127.0.0.1:11434`.
+- **The key is write-only.** `apiKey` matches `settingsRedact.ts`'s secret rule, so
+  `/api/settings` returns it as its first 5 characters + `********` and a round-trip save keeps
+  it; no API or getter returns it in full. `smoke-settings-secrets` A7/A8 cover the mask and
+  that the stored key beats `OLLAMA_API_KEY`.
+- **Rewired readers** (nine env reads, six host literals, now zero outside `ollamaCloud.ts`):
+  `/api/ollama/chat`, `/api/ollama/models`, `/api/config` (fleet card shows the resolved
+  default model), `agentRoom.ts`, `brainstorm.ts`, `loopEngine.ts` (Ollama Cloud judge),
+  `agentsRuntime.ts` (ollama provider), `v2/memory/llm.ts`, `embed.ts`, `backfill.ts`,
+  `/api/freeclaude/build` (keeps its older `OLLAMA_HOST` as a later fallback). Error lines now
+  say "add it in the Ollama page's gear, or set OLLAMA_API_KEY".
+- Docs: ollama (new gear row + how it works), room, brainstorm, loop, memory, agents-page,
+  freeclaude.
+- Found by the gate, not by this slice: `docs/modules/rabbit.md` names `/rabbit`, whose
+  `src/app/rabbit/page.tsx` is the owner's uncommitted work in the main checkout, so
+  `smoke-guide` B1 fails in any fresh checkout (this worktree included). Left for the owner.
+
+Verified: tsc clean; smoke-settings-secrets (A7/A8 new), room-honesty, mastermind, llm,
+loop-cli-only, embed, memory-backfill pass offline.
+
+Rollback: revert the commit. The settings file keeps an `ollama` block that older code ignores.
+
 ## 2026-09-30 - Ultracode: missions ask for a folder or repo (read-only), model + effort are settings (v2.55.0)
 
 Owner: "For ultracode have it ask for a folder or repo. Also make sure the model/effort is

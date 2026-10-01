@@ -36,6 +36,7 @@ import { cliComplete } from "./loopEngine";
 import { getHarness, renderHarness, type HarnessDef, type HarnessRow } from "./v2/agents/harnesses";
 import { notifyStatus } from "./v2/agents/statusFeed";
 import { evaluateSpend, limitsFrom, tokensFrom } from "@/lib/v2/agents/spendCap";
+import { ollamaCloudKey, ollamaLocalUrl } from "./ollamaCloud";
 
 // Intelligence dial → model id. User-tunable from the Agents settings menu
 // (settings.agentsModels); the fallbacks are the ids verified live on the CLI
@@ -713,9 +714,10 @@ export function makeTurnResultHandler(
  *  (unreachable host, unknown model, empty output) throws loudly; there is NO
  *  fallback to the SDK or to another model. */
 async function ollamaChatOnce(model: string, system: string, user: string, signal?: AbortSignal): Promise<string> {
-  const base = (process.env.OLLAMA_URL || "http://127.0.0.1:11434").replace(/\/+$/, "");
+  // settings.ollama.localUrl / apiKey (the Ollama page's gear), then OLLAMA_URL / OLLAMA_API_KEY.
+  const base = ollamaLocalUrl();
   const headers: Record<string, string> = { "content-type": "application/json" };
-  const key = process.env.OLLAMA_API_KEY || "";
+  const key = ollamaCloudKey() ?? "";
   if (key) headers.authorization = `Bearer ${key}`;
   const res = await fetch(`${base}/api/chat`, {
     method: "POST",

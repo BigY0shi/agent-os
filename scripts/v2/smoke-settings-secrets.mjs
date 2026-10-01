@@ -22,14 +22,18 @@ const FAKE = {
   tavily: "tvly-FAKE_TAVILY_KEY_0123456789",
   apify: "apify_FAKE_TOKEN_0123456789",
   cookie: "sid=FAKE_SUNO_COOKIE_0123456789",
+  ollama: "ollam_FAKE_OLLAMA_CLOUD_KEY_0123456789",
   short: "shortkey",
 };
 fs.writeFileSync(process.env.AGENTIC_OS_SETTINGS, JSON.stringify({
   mcp: { secret: FAKE.mcp },
   leads: { tavilyKey: FAKE.tavily, apifyToken: FAKE.apify, perplexityKey: "", apifyActor: "some/actor" },
   music: { sunoCookie: FAKE.cookie, sunoApiKey: FAKE.short },
+  ollama: { apiKey: FAKE.ollama, host: "", defaultModel: "", localUrl: "" },
   jarvis: { hotkey: { key: "F13" } },
 }), "utf8");
+// The Ollama key must be preferred over the environment (S30); make the env disagree.
+process.env.OLLAMA_API_KEY = "env-key-that-must-lose";
 
 let failures = 0;
 const check = (name, cond, extra) => {
@@ -57,6 +61,9 @@ check("A3 long secret shows its first 5 characters", j.settings.mcp.secret === "
 check("A4 short secret is the bare mask", j.settings.music.sunoApiKey === P);
 check("A5 unset secret stays empty", j.settings.leads.perplexityKey === "");
 check("A6 non-secret fields untouched", j.settings.leads.apifyActor === "some/actor" && j.settings.jarvis.hotkey.key === "F13");
+check("A7 the Ollama Cloud key (S30) is masked like every other secret", j.settings.ollama.apiKey === "ollam" + P, j.settings.ollama);
+const oc = await import("../../src/lib/ollamaCloud.ts");
+check("A8 the stored Ollama key wins over OLLAMA_API_KEY, and reads back in full only server-side", oc.ollamaCloudKey() === FAKE.ollama && oc.ollamaCloudKeySource() === "settings");
 
 // ── B. PATCH ──────────────────────────────────────────────────────────────────
 const patch = (body) => route.PATCH(new Request("http://x/api/settings", { method: "PATCH", body: JSON.stringify(body) }));
@@ -98,7 +105,7 @@ check("C6 no secret yet -> 404", none.status === 404);
 const mem = read("src/components/v2/memory/MemorySettings.tsx");
 check("D1 Memory gear copies through the reveal route", mem.includes('fetch("/api/v2/memory/mcp-secret/reveal", { method: "POST"'));
 check("D2 Memory gear no longer reads the secret from /api/settings", !/settings\?\.mcp\?\.secret/.test(mem));
-for (const [f, n] of [["src/components/LeadsSettings.tsx", 4], ["src/components/MusicSettings.tsx", 2]]) {
+for (const [f, n] of [["src/components/LeadsSettings.tsx", 4], ["src/components/MusicSettings.tsx", 2], ["src/components/OllamaSettings.tsx", 1]]) {
   const src = read(f);
   check(`D3 ${path.basename(f)}: ${n} key fields show the mask as text, a typed key as password`, (src.match(/type=\{isMaskedSecret\(\w+\) \? "text" : "password"\}/g) || []).length === n);
 }

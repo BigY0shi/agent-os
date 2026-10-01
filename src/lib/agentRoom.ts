@@ -14,18 +14,15 @@ import { uniqueSlug, writeItem, type PipelineItem } from "@/lib/pipeline";
 import { config, isAgentInstalled } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { personaPrompt, type Persona } from "@/lib/personas";
+import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
 
 const HOME = os.homedir();
 // Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
 // no local daemon required. The room used to post to localhost:11434, so whenever the
 // local daemon wasn't running (the normal case here) every Ollama agent failed.
 // There is no local daemon on this machine (owner, 2026-09-30), so there is no localhost
-// fallback: with no cloud key an Ollama agent fails and says so.
-const OLLAMA_CLOUD_HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
-function ollamaCloudKey(): string | null {
-  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
-  return k ? k.trim() : null;
-}
+// fallback: with no cloud key an Ollama agent fails and says so. Key and host come from
+// settings.ollama (the Ollama page's gear), then the environment (lib/ollamaCloud.ts).
 
 // ── Durable group-chat history — saved to the vault so it survives browser clears
 // and shows on any device (localStorage in the browser is only a fast cache). ──
@@ -174,7 +171,7 @@ async function availableModels(): Promise<string[]> {
   const key = ollamaCloudKey();
   if (!key) return []; // not cached: a key added later is picked up on the next call
   try {
-    const r = await fetch(`${OLLAMA_CLOUD_HOST}/api/tags`, {
+    const r = await fetch(`${ollamaCloudHost()}/api/tags`, {
       headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
     });
@@ -193,9 +190,9 @@ async function roomTaskModel(transcript: RoomTurn[]): Promise<string> {
     const hit = models.find((m) => re.test(m));
     if (hit) return hit;
   }
-  // Nothing matched: the env default, then the first model the account really has.
-  // No model tag is written into the code as a last resort.
-  const pick = process.env.OLLAMA_CLOUD_MODEL || models[0];
+  // Nothing matched: the default model from settings.ollama (or OLLAMA_CLOUD_MODEL), then the
+  // first model the account really has. No model tag is written into the code as a last resort.
+  const pick = ollamaCloudDefaultModel() || models[0];
   if (!pick) throw new Error("Ollama Cloud listed no models for this account (or /api/tags failed), so there is no model to use.");
   return pick;
 }
@@ -243,8 +240,8 @@ async function openaiChat(baseUrl: string, model: string, sys: string, user: str
 }
 async function ollamaComplete(model: string, sys: string, user: string, signal?: AbortSignal): Promise<string> {
   const key = ollamaCloudKey();
-  if (!key) throw new Error("No Ollama Cloud key: set OLLAMA_API_KEY (there is no local Ollama to fall back to).");
-  const r = await fetch(`${OLLAMA_CLOUD_HOST}/api/chat`, {
+  if (!key) throw new Error("No Ollama Cloud key: add it in the Ollama page's gear or set OLLAMA_API_KEY (there is no local Ollama to fall back to).");
+  const r = await fetch(`${ollamaCloudHost()}/api/chat`, {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
     signal,
@@ -363,7 +360,7 @@ export async function roomReply(
     return roomCli(agent.id, sys, user, incognito);
   }
   if (agent.provider === "ollama") {
-    if (!ollamaCloudKey()) throw new Error(`${agent.name}: no Ollama Cloud key. Set OLLAMA_API_KEY (there is no local Ollama to fall back to).`);
+    if (!ollamaCloudKey()) throw new Error(`${agent.name}: no Ollama Cloud key. Add it in the Ollama page's gear or set OLLAMA_API_KEY (there is no local Ollama to fall back to).`);
     const model = (agent.model === "auto" || !agent.model) ? await roomTaskModel(transcript) : agent.model;
     let out = await ollamaComplete(model, sys, user, signal);
     if (!out && !signal?.aborted) out = await ollamaComplete(model, sys, user, signal);  // cloud model cold-start can return empty
@@ -409,7 +406,7 @@ export function agentReachability(a: RoomAgent): { ok: boolean; why: string } {
     if (!k) return { ok: false, why: `no CLI mapping for ${a.id}` };
     return isAgentInstalled(k) ? { ok: true, why: `${a.id} CLI installed` } : { ok: false, why: `the ${a.id} CLI is not installed` };
   }
-  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: false, why: "no Ollama Cloud key (OLLAMA_API_KEY); there is no local Ollama" };
+  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: false, why: "no Ollama Cloud key (Ollama page gear, or OLLAMA_API_KEY); there is no local Ollama" };
   if (a.provider === "openai") { const env = a.apiKeyEnv || "OPENAI_API_KEY"; return profileEnvKey(env) ? { ok: true, why: `${env} set` } : { ok: false, why: `${env} is not set` }; }
   return { ok: false, why: "no supported provider (CLI, Ollama Cloud or OpenAI-compatible)" };
 }

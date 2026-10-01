@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { readSettings } from "../../settings";
 import { cliComplete, MINIMAX_CHAT } from "../../loopEngine";
+import { ollamaCloudHost, ollamaCloudKey, ollamaLocalUrl } from "../../ollamaCloud";
 import type { ChatMessage } from "./types";
 
 /**
@@ -136,11 +137,13 @@ async function ollamaChat(
   format: Record<string, unknown> | undefined,
   opts?: ModelCallOpts,
 ): Promise<string> {
+  // Host, local URL and key: settings.ollama (the Ollama page's gear), then the environment
+  // (lib/ollamaCloud.ts), read per call.
   const cloud = provider === "ollama-cloud";
-  const base = cloud ? "https://ollama.com" : process.env.OLLAMA_URL || "http://127.0.0.1:11434";
+  const base = cloud ? ollamaCloudHost() : ollamaLocalUrl();
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (cloud) {
-    const key = process.env.OLLAMA_API_KEY || "";
+    const key = ollamaCloudKey();
     if (key) headers.authorization = `Bearer ${key}`;
   }
   const body: Record<string, unknown> = { model, messages, stream: false };

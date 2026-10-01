@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Square, Trash2, Loader2, Cloud, ChevronDown, Check, Sparkles } from "lucide-react";
 import { MOD } from "@/lib/modKey";
+import OllamaSettings from "./OllamaSettings";
 
 const ACCENT = "#6CA8FF"; // cloud blue
 const HISTORY_KEY = "agentic-os/ollama-cloud/history/v1";
@@ -104,8 +105,11 @@ export default function OllamaView() {
           <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">Hosted open models · {models.length || "—"} available · streaming</div>
         </div>
 
+        {/* gear: key, host, default model, local URL (settings.ollama, shared by every Ollama caller) */}
+        <div className="ml-auto"><OllamaSettings /></div>
+
         {/* model dropdown */}
-        <div className="ml-auto relative">
+        <div className="relative">
           <button
             onClick={() => setModelOpen((o) => !o)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition mono"

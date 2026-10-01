@@ -75,5 +75,6 @@ Cards with counts for each aspect, in two groups: **World graph** (atomic facts)
 - Everything is stored in the V2 SQLite database (`~/.agentic-os/agentos.db`). Ingestion is queued and processed in the background; progress shows in Logs.
 - Every LLM call goes through `src/lib/v2/memory/llm.ts` using `settings.memory.provider` and the tier models (defaults: Ollama Cloud, `kimi-k2.6:cloud` low, `glm-5.2:cloud` medium). An empty reply is an error naming the provider and model; there is no silent fallback.
 - Embeddings default to local Ollama with `nomic-embed-text`, so Ollama must be running for ingest and semantic search. Changing the embed model after data exists needs `scripts/v2/reembed.mjs`.
+- Where Ollama is: the Ollama Cloud key and host (for the `ollama-cloud` provider and embeddings) and the local daemon URL (for `ollama-local`) come from the Ollama Cloud page's gear (`settings.ollama`), with `OLLAMA_API_KEY` / `OLLAMA_CLOUD_HOST` / `OLLAMA_URL` as the environment fallback.
 - Other modules feed memory too: Jarvis exchanges, scratchpad `@jarvis` replies and the nightly Today page, and finished tasks. Outside tools reach it through the MCP endpoint at `/api/mcp` with the secret header.
 - Nothing is hard-deleted: exiled episodes, labels and rules are kept.

@@ -5,6 +5,7 @@ import os from "node:os";
 import { FCC_SCRATCH_ROOT, ensureProject } from "@/lib/freeClaudeWorkspace";
 import { logTokens, normalizeUsage } from "@/lib/tokenLog";
 import { resolveModel } from "@/lib/localModel";
+import { ollamaLocalUrl } from "@/lib/ollamaCloud";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,9 @@ export const dynamic = "force-dynamic";
 //   • "n2"     → Nex-N2-Pro (free) via OpenRouter — a much stronger build model,
 //                still $0, used for the N2 voice-build mode.
 
-const OLLAMA = process.env.OLLAMA_HOST || "http://localhost:11434";
+// Local daemon: settings.ollama.localUrl (the Ollama page's gear), then OLLAMA_URL, then this
+// route's older OLLAMA_HOST, then localhost (lib/ollamaCloud.ts, read per request).
+const ollamaUrl = () => ollamaLocalUrl(process.env.OLLAMA_HOST || "http://localhost:11434");
 const N2_MODEL = "nex-agi/nex-n2-pro:free";
 
 async function localModel(): Promise<string> {
@@ -166,7 +169,7 @@ export async function POST(req: Request) {
           }
         } else {
           const model = await localModel();
-          const r = await fetch(`${OLLAMA}/api/chat`, {
+          const r = await fetch(`${ollamaUrl()}/api/chat`, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
