@@ -44,6 +44,7 @@ const MODULE_NAME: Record<string, string> = {
   loop: "Loop",
   pipeline: "Pipeline",
   memory: "Memory",
+  tasks: "Tasks",
 };
 
 function elapsed(from: number, to?: number): string {

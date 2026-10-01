@@ -1,5 +1,73 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S32: the three placeholders built for real: Tasks sdk mode, Marketing campaign tabs, Today Widgets (v2.56.0)
+
+Harness session (worktree placeholders, feat-s32-placeholders). Three things the Guide writers
+found that said "coming later", built from data the app already has.
+- **Tasks `sdk` run mode** (`src/lib/v2/tasks/sdkRun.ts`, hooked in `engine.ts`): the approved
+  plan goes to ONE Claude Agent SDK session, the same `query()` wiring Jarvis's brain uses, with
+  the step walker's guardrails. Plan approval is unchanged and happens first (the SDK is not
+  touched until the plan is approved). `maxStepsPerRun` is the SDK `maxTurns` AND an in-engine
+  turn count that interrupts the session itself (belt and braces; `turn_cap_enforced` event, the
+  task still lands in Review with what was said). `runTimeoutMin` is a wall clock. The run is a
+  module run (`module: "tasks"`, label "Run tk-N: title (sdk)", href to the task) so the runs
+  tray carries it and STOP aborts the signal, which interrupts the session; the task parks
+  Waiting with "run stopped by owner" through the existing failure path. Tools: an in-process
+  MCP server `agentos_tasks` (run_command, read_file, write_file, list_files, search_files,
+  coding_session, ask_user) whose handlers go through `execSlot` / `filesSlot` / `codingSlot`
+  exactly like the walker's steps (same deny lists); the CLI's native Bash/Edit/Write/Read/...
+  are in `disallowedTools`. The skills policy block rides the system prompt via `withSkills`.
+  `ask_user` parks the task Waiting with that question. An SDK error with no text is a named
+  failure, never an empty result. The walker's blocked/success tails were extracted
+  (`parkBlocked` / `deliverResult`) so both modes deliver identically. The gear gains **Run
+  mode** (saves on change); the tray names the module.
+- **Marketing campaign page tabs** (`src/lib/v2/marketing/campaignViews.ts`, client-safe pure
+  functions; `CampaignDetail.tsx`): Calendar = this campaign's items on a Monday-first month
+  grid by scheduled date, or the publish day for a published item without one, undated listed
+  apart with a count. Board = five status columns, drag a card to change status through the
+  existing `/api/marketing/item` actions (approve / unapprove / published); `boardMove()`
+  translates or refuses with the reason (an idea needs a draft, scheduled needs a date, a
+  published item cannot go back to approved), shown in a toast. Assets = the drafts the file
+  holds (counts, show, copy) and the published links; the tab says the store has no file
+  uploads. Metrics = only counts from stored rows (by status, by channel, published per ISO
+  week, overdue, unscheduled, awaiting approval) and an honest "no engagement source" slot.
+  `Mark published` now records `publishedAt` (additive field); older published items are
+  counted as "undated", never guessed into a week. `AGENTIC_OS_MARKETING_DIR` redirects the
+  store for smokes (rule 19).
+- **Today Widgets**: the button works. `HomeGrid` takes `cellsKey` ("cells" = Mission Control,
+  "todayCells" = Today) and saves under it through the same debounced `useSettings().save`;
+  `resolveHomeCells(cells, fallback)` lets Today start EMPTY with a hint instead of cloning the
+  Overview's legacy panels. Open state is `settings.home.todayShowWidgets`. Mission Control is
+  untouched (`<HomeGrid />` still reads `cells` with the default layout).
+- Docs: `tasks.md` (Run mode row, how the sdk mode works), `marketing.md` (Calendar / Board /
+  Assets / Metrics control tables), `today.md` (Widgets row + how it works).
+
+Verified: new `smoke-placeholders.mjs`, 85 checks, offline with a stubbed SDK (temp DB,
+settings, runs dir, marketing dir): approval gate before any SDK turn; the session's cap, allow
+and deny lists, prompt and tool server; runaway session ended at the cap; STOP through
+`stopModuleRun` interrupts the session and parks the task; `error_max_turns` honoured;
+error-without-text fails loudly; the tool handlers refuse through the capability gate;
+`steps` mode never touches the SDK; publishedAt; calendar buckets; the full board move table;
+assets; metrics incl. ISO-week year boundary; the page's tabs and empty states; HomeGrid /
+PageHeader / ScratchpadView wiring; docs. `smoke-home-ui` updated for the `[cellsKey]` save
+form. tsc clean.
+
+`smoke-marketing-campaign` D5 (which asserted the pending placeholder) now asserts the built tabs.
+
+Gate note: three smokes fail in this worktree for reasons that predate the feature and live in
+the owner's uncommitted work or the main checkout's ignored folders, so `./test.sh` cannot exit
+0 here (full no-break run: 110 of 113 smokes pass, `.harness-logs/all-smokes.out`):
+`smoke-guide` B1 on `rabbit.md` (`/rabbit` has no page; the Rabbit module is `??` untracked in
+the main checkout while its doc was committed with the guide); `smoke-exile-deletes` H1-H3 and
+H6 (the committed name guards still reject every id with "bad slug"; the owner's fix in
+`studioHistory.ts`, `ultracodeRuns.ts`, `claudeArtifacts.ts` is ` M` uncommitted in the main
+checkout, per the 2026-09-30 entry below); `smoke-memory-ui` (looks for the gitignored
+`.exile/` folder, which exists in the main checkout only). None are caused or fixable here
+without committing his files; the checklist is in agent-progress.md.
+
+Rollback: revert the commit. `settings.tasks.runMode` back to "steps" restores the walker
+without a rebuild; `publishedAt` is additive and ignored by older code.
+
 ## 2026-10-01 - S31 Artifacts (and SEO deploy) actually deploy on Windows; site config in settings (v2.56.0)
 
 Harness session, worktree artifacts-deploy (branch fix/s31-artifacts-deploy), feature fix-s31-artifacts-windows-deploy.

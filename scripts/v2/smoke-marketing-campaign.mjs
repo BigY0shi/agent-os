@@ -105,8 +105,11 @@ const detail = code("src/components/v2/marketing/CampaignDetail.tsx");
 check("D3 the detail component is a client component", /"use client"/.test(read("src/components/v2/marketing/CampaignDetail.tsx")));
 check("D4 it has the five tabs the later J tasks drop into",
   ["Overview", "Calendar", "Board", "Assets", "Metrics"].every((t) => detail.includes(`"${t}"`)));
-check("D5 unbuilt tabs SAY they are unbuilt rather than rendering an empty panel",
-  /PENDING/.test(detail) && /J1\.2|J2\.1/.test(read("src/components/v2/marketing/CampaignDetail.tsx")));
+// S32 built the four tabs (smoke-placeholders covers them): no tab says it is
+// pending any more, and each renders from the stored items through campaignViews.
+check("D5 the four tabs are built from campaignViews, no pending placeholder left",
+  !/PENDING/.test(detail) && !/arrives with J\d/.test(detail) && detail.includes("@/lib/v2/marketing/campaignViews") &&
+  ["CalendarTab", "BoardTab", "AssetsTab", "MetricsTab"].every((n) => detail.includes(`function ${n}(`)));
 check("D6 a 404 from the route renders the not-found panel, not a spinner forever",
   /status === 404/.test(detail) && /notFound/.test(detail));
 check("D7 a failed fetch is NOT reported as a missing campaign",
