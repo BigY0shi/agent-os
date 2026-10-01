@@ -6,7 +6,13 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
-- QUEUED 2026-10-01 by the supervisor in worktree webmcp-wizard (branch feat/s7-webmcp-wizard): work ONLY feat-s7-webmcp-wizard (run with --feature). Branched from v2.56.4 (1daca86, main gate 114/114 green 2026-10-01); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737. smoke-memory-ui now skips its .exile checks in a worktree (v2.56.4), so ./test.sh can go green here. Owner rules since the spec was written: every model/provider/fallback is a gear setting, default Claude with Codex as the owner-chosen, labelled fallback (rule 20); there is NO local Ollama on this machine (Ollama means Ollama Cloud or nothing); OpenRouter is not used anywhere; Voicebox is retired (Kokoro is the TTS). Every new control goes in its docs/modules/*.md controls table (smoke-guide checks the docs). The September notes mention an untracked src/lib/v2/webmcp/wizard.ts from a killed cycle: it is gone, start fresh. The wizard's model choice lives in the WebMCP gear (settings.webmcp, default claude, fallback codex, both labelled in the reply).
+- DONE 2026-10-01 in worktree webmcp-wizard (branch feat/s7-webmcp-wizard, v2.57.0): S7
+  WebMCP wizard shipped and gate-green (115/115). Owner-to-look after merge + rebuild:
+  /webmcp > Wizard > New wizard > type a description > Digest with claude (expect questions
+  + a 5-10 tool list and 'answered by claude'); edit/cut a tool > Approve this list > Emit
+  JSON > Create package in the builder > open <slug> lands in the Tools tab. Write my own:
+  paste a bad JSON, expect concrete problems with no model wait. Gear: Wizard agent /
+  Wizard fallback selects. Never run in a harness session: the server on 3737.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
   a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature

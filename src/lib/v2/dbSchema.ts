@@ -1163,6 +1163,30 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 44,
+    name: "webmcp_wizard",
+    up: (db) => {
+      // S7 WebMCP wizard drafts: the describe -> clarify -> approve -> emit
+      // conversation survives a refresh. state_json carries description,
+      // questions, proposal, emitted spec, own-mode text + proofread. Discard
+      // sets archived_at (rows are never deleted).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS webmcp_wizard_drafts (
+          id           TEXT PRIMARY KEY,
+          mode         TEXT NOT NULL DEFAULT 'wizard' CHECK (mode IN ('wizard','own')),
+          step         TEXT NOT NULL DEFAULT 'describe' CHECK (step IN ('describe','clarify','approved','emitted')),
+          title        TEXT NOT NULL DEFAULT '',
+          state_json   TEXT NOT NULL DEFAULT '{}',
+          applied_slug TEXT,
+          created_at   TEXT NOT NULL,
+          updated_at   TEXT NOT NULL,
+          archived_at  TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_webmcp_wizard_drafts_updated ON webmcp_wizard_drafts(archived_at, updated_at);
+      `);
+    },
+  },
+  {
     version: 45,
     name: "rabbit_bridge",
     up: (db) => {

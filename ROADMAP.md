@@ -73,10 +73,13 @@ is one line; the journal carries the rest.
 
 ## Later
 
-- [ ] **S7. WebMCP wizard.** Description in, AI digests and asks clarifying
+- [x] **S7. WebMCP wizard.** Description in, AI digests and asks clarifying
   questions, reasons in a scratchpad without code, proposes a tool list for
   approval, then emits JSON. 5-10 tools per server, one tool one job, split by
   persona. Escape hatch: paste your own JSON and have the agent proofread it.
+  Done 2026-10-01 (v2.57.0): Wizard toggle on /webmcp, drafts persisted (migration 044),
+  emit refused before approval, validator gates 5-10 tools / one job / persona / no js,
+  gear picks the agent + labelled fallback; smoke-webmcp-wizard.mjs (71 checks).
 - [x] **S8. Voicebox everywhere it makes sense.** The Oracle done (2026-09-02, see
   Done). Still open on the same client: Video voiceover and the walkthrough voiceover
   track below (backlog).
