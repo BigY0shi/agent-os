@@ -259,7 +259,14 @@ export interface Settings {
   hire: { triageModel?: string; briefModel?: string; draftModel?: string };
   // Idea Engine: model dials per seat tier + radar/daily config.
   ideaEngine: {
-    kimiModel?: string;        // sizing/clustering seat (Ollama Cloud)
+    kimiModel?: string;        // the Ollama Cloud model when a seat's agent is "kimi"
+    // Seat agents (owner 2026-09-30: "default to Claude, fallback to codex"): a CLI agent
+    // (claude/codex/cursor/pi/hermes) or "kimi" (Ollama Cloud). fallbackAgent answers when a
+    // seat's agent fails ("none" = the seat fails); every fallback is recorded in the run.
+    sizingAgent?: string;      // sizing seat (evidence-only, no web)
+    clusterAgent?: string;     // radar: clustering fresh signals into candidates
+    killAgent?: string;        // kill pass; keep it a different lineage from claude (spec #5)
+    fallbackAgent?: string;
     researchModel?: string;    // web research + judge (claude)
     writerModel?: string;      // dossier writer; blank = pinned CLAUDE_MODEL
     redditSubs?: string;       // comma-separated, radar pain mining
@@ -504,6 +511,10 @@ export const DEFAULT_SETTINGS: Settings = {
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
   ideaEngine: {
     kimiModel: "kimi-k2.6",
+    sizingAgent: "claude",
+    clusterAgent: "claude",
+    killAgent: "codex",
+    fallbackAgent: "codex",
     researchModel: "claude-sonnet-5",
     writerModel: "",
     redditSubs: "smallbusiness,Entrepreneur,SaaS,sweatystartup,agency",

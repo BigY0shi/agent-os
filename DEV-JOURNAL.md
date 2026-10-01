@@ -1,5 +1,30 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Idea Engine: seats default to Claude, fall back to Codex, all in the gear (v2.54.0)
+
+Owner on open item 4: "It should default to Claude, fallback to codex. Add the setting.
+Every parameter needs to be in the settings for every module." The sizing seat and radar
+clustering used Kimi (Ollama Cloud) with a hardcoded codex fallback; the kill pass was a
+hardcoded codex.
+- New `src/lib/ideaSeats.ts`: `ideaAgents(settings)` and `runSeat(primary, fallback, ...)`.
+  A seat runs on its agent (a CLI agent, or "kimi" on Ollama Cloud with `kimiModel`); if it
+  fails or answers nothing and a different fallback is set, the fallback answers and `used`
+  says so ("codex (fallback: claude failed: ...)"); "none" or a same-agent fallback fails the
+  seat with the reason; agents outside the list are refused.
+- `settings.ideaEngine` gains `sizingAgent` (claude), `clusterAgent` (claude), `killAgent`
+  (codex, a different lineage from the claude research seats, spec #5) and `fallbackAgent`
+  (codex). The gear shows all four plus the Kimi model. `settings.ts` change committed alone.
+- `ideaValidation.ts` sizing + kill pass and `ideaRadar.ts` clustering go through `runSeat`;
+  the dossier's `model_seats` and the radar's cluster chip record who really answered, and a
+  failed clustering now marks its chip failed with the reason.
+`docs/modules/idea-engine.md` updated.
+
+Verified: new `smoke-idea-seats.mjs`, 13 checks with stubbed agents (defaults; primary ok;
+claude fails then codex, labelled; none; same-agent; empty answers; unknown agent; kimi with
+the settings model; validation and radar wiring; the gear). tsc clean, smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-30 - The Oracle can speak with Kokoro (v2.53.0)
 
 Owner on open item 3: "Add kokoro, yes you can edit settings." Voicebox was retired on

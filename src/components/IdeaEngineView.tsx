@@ -105,7 +105,11 @@ export default function IdeaEngineView() {
             fields={[
               { key: "researchModel", label: "Research + judge (claude)", placeholder: "claude-sonnet-5", hint: "Web-capable seats: pain miner, market mapper, verdict judge." },
               { key: "writerModel", label: "Dossier writer", placeholder: "blank = pinned CLAUDE_MODEL", hint: "Assembles the final dossier." },
-              { key: "kimiModel", label: "Sizing seat (Ollama Cloud)", placeholder: "kimi-k2.6", hint: "Evidence-only sizing; falls back to codex if unreachable." },
+              { key: "sizingAgent", label: "Sizing seat agent", placeholder: "claude", hint: "Evidence-only sizing. claude, codex, cursor, pi, hermes, or kimi (Ollama Cloud)." },
+              { key: "clusterAgent", label: "Radar clustering agent", placeholder: "claude", hint: "Groups fresh signals into candidates. Same choices." },
+              { key: "killAgent", label: "Kill pass agent", placeholder: "codex", hint: "Attacks the idea. Keep it a different lineage from claude (the research seats)." },
+              { key: "fallbackAgent", label: "Fallback agent", placeholder: "codex", hint: "Answers when a seat's agent fails; the run records it. \"none\" = the seat fails instead." },
+              { key: "kimiModel", label: "Kimi model (Ollama Cloud)", placeholder: "kimi-k2.6", hint: "Used only where an agent above is kimi." },
               { key: "redditSubs", label: "Radar: reddit subs", placeholder: "smallbusiness,Entrepreneur,SaaS", hint: "Comma-separated — pain mining sources." },
               { key: "seedTerms", label: "Radar: seed terms", placeholder: "ai automation,revops", hint: "Trends + autocomplete seeds." },
               { key: "dailyEnabled", label: "Daily idea (true/false)", placeholder: "false", hint: "At the hour below: one scan + one auto-validation. Hard-capped at 1/day." },
