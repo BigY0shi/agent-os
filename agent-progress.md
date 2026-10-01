@@ -6,6 +6,14 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- BUILT 2026-10-01 in worktree ptt-hotkey (branch feat/s38-jarvis-ptt-hotkey, v2.61.0): feat-s38-jarvis-ptt-hotkey.
+  Hold the mapped key = orb chat opens, page fronts, mic records; release = stop + send (gear: Key, Mode
+  hold/open, Send on release, default on); the AHK helper reads key + mode from the secret-gated
+  `GET /api/jarvis/hotkey/config` every 30 s and posts down/up; AppUrl fixed to 3737. Mouse mic unchanged.
+  Offline evidence only (smoke-jarvis-hotkey 49 checks, smoke-jarvis-ui, smoke-guide); the live
+  mini-keyboard test is the owner's and is the AWAITING USER VERIFY checklist at the END of this file.
+  Status flipped on the green gate (the precedent: S4, S30-S32); the notes say plainly that no browser
+  saw it. The live test is the owner's.
 - QUEUED 2026-10-01 by the supervisor in worktree ptt-hotkey (branch feat/s38-jarvis-ptt-hotkey): work ONLY feat-s38-jarvis-ptt-hotkey (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. The owner uses this most; it ends with the owner-verify pause marker (see AGENTS.md 'Stopping early') holding the live mini-keyboard checklist.
 - MERGED 2026-10-01 by the supervisor on branch integrate/s30-s32-s7-s9 (then fast-forwarded into
   feat/v2-hermes3d-and-versioning, PR #18): S30 settings sweep, S31 artifacts deploy, S32
@@ -174,3 +182,28 @@ All PowerShell-safe. Rebuild first (the Artifacts tab and the gear are new UI).
    then flip fix-s31-artifacts-windows-deploy to "passing" in features.json (every other smoke passes; the
    per-smoke run is in the DEV-JOURNAL entry). smoke-memory-ui also needs the main checkout's .exile folder.
 6. Retitle this heading when done so the loop can continue (the marker grep is whole-file).
+
+## AWAITING USER VERIFY (2026-10-01) - S38 Jarvis push-to-talk on the mini USB keyboard
+
+Built and smoke-proven offline (down/up through the bus and the SSE stream, secret-gated config GET,
+the helper script's contents). No browser or keyboard saw it; that is this list. Rebuild first.
+1. In the app: orb chat > gear > Hotkey. Expect a Key field (F13), "Mode: hold to talk (push-to-talk)"
+   and "Send on release" ticked. Leave them, or set Key to the key your mini keyboard sends.
+2. Reload the helper: double-click `scripts\v2\jarvis-hotkey.ahk` (AutoHotkey v2; a running copy is
+   replaced, #SingleInstance Force). If the tray says "Secret missing", open
+   `http://127.0.0.1:3737/api/jarvis/hotkey/setup` in the signed-in browser once, then double-click again.
+   Expect a tray tip "Jarvis key: F13 · hold to talk" within a few seconds (that tip is the proof it read
+   the gear; the old script never spoke to 3737 at all).
+3. Mic permission: the Agent OS tab must already have Microphone allowed (the address-bar icon) and you
+   must have clicked anywhere in that tab since it loaded (browser autoplay rule for the spoken reply).
+   Leave that tab as the active tab in its browser window.
+4. From across the room: HOLD the key, say one sentence, RELEASE. Expect, in order: the orb chat opens
+   (if closed) and the window fronts; a pill "F13 held · release to send" beside the mic while you talk;
+   on release the text lands in the box and is sent; the reply streams and is read aloud.
+5. Mouse check: click-and-hold the mic button, talk, release. Expect the text in the box and NOTHING
+   sent (the mouse mic still follows "Auto-send on release", default off).
+6. Gear check: change Key to another key your pad sends (F14..F24), wait 30 s for the tray tip
+   "Jarvis key: F14 ...", hold that key. No script edit.
+7. Optional: set Mode to "press to open" and press once: the chat opens, nothing records.
+8. If any step fails, tell me which step and what the tray tip or the pill said. Retitle this heading
+   when done so the loop can continue (the marker grep is whole-file).

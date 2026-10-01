@@ -257,8 +257,14 @@ export interface Settings {
       openaiTtsModel?: string;        // gpt-4o-mini-tts
     };
     hotkey?: {
-      key?: string;          // in-app fallback keybind (default "F13")
+      key?: string;          // the mapped key, in-app AND in the AHK helper (default "F13")
       enabled?: boolean;     // in-app keydown listener on/off
+      // S38: what the key does. "hold" = push-to-talk (hold opens the orb chat and
+      // records, release stops); "open" = press opens the chat, as before S38.
+      mode?: "hold" | "open";
+      // S38: on a hotkey release, send the transcript (default TRUE: the owner is away
+      // from the screen). The mouse mic button keeps voice.autoSend (default false).
+      sendOnRelease?: boolean;
     };
     // Even Realities G2 custom-agent lane (/api/glasses — OpenAI chat-completions
     // shape, bearer token in ~/.agentic-os/jarvis-glasses.token, never here).
@@ -600,7 +606,7 @@ export const DEFAULT_SETTINGS: Settings = {
     cliAgent: "claude",
     voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs",
       geminiLiveModel: "", openaiRealtimeModel: "", openaiTranscribeModel: "", openaiTtsModel: "" },
-    hotkey: { key: "F13", enabled: true },
+    hotkey: { key: "F13", enabled: true, mode: "hold", sendOnRelease: true },
     glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
