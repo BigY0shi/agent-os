@@ -110,6 +110,8 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-10-01 · v2.56.0 · S32 Placeholders built for real: Tasks `sdk` run mode (one Agent SDK session with the walker's guardrails: approval first, turn cap, timeout, STOP in the tray, gated tools only); Marketing campaign Calendar / Board / Assets / Metrics from the stored items, board moves through the item API, no invented analytics; Today's Widgets button hosts the Mission Control grid with its own layout. smoke-placeholders 85 checks.
+
 - 2026-09-30 · v2.51.18-v2.54.0 · Owner's decisions on the open items: Agent Room has no OpenRouter, no local-Ollama fallback and no invented replies; the Loop judge is Ollama Cloud (no local Ollama) and its fallback is a Loop-gear choice (default none), with every Loop parameter in a new gear; the Oracle speaks Kokoro (bm_lewis) with its own labelled backup; Idea Engine seats default to Claude with a Codex fallback, all in its gear. Smokes: room-honesty, oracle-kokoro, idea-seats; loop-cli-only extended.
 
 - 2026-09-29 · v2.50.3-v2.51.16 · Guide-writer fixes: db.backup beside its DB; Fusion and Sakana show only real status; Loop is CLI agents only (v2.51.0); the gate makes no live model calls; Delete exiles in Kanban, Music, Local builds, Room history and Pipeline (whose Remove route was missing); chat Logged only when logged; honest labels in Thumbnails, Agent Kanban, Pi, OpenClaw, Local Engine, SEO, Skills; no silent provider switches in Hermes Talk and Video; Codex previews on Windows; Game Studio, Open Design and Notebook settings honoured; SEO auto-deploys every configured site. Smokes: db-backup-location, fusion-honesty, loop-cli-only, exile-deletes, honest-labels.

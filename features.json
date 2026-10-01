@@ -24,7 +24,7 @@
         "./test.sh exits 0; version bump per commit; DEV-JOURNAL entries with rollback lines"
       ],
       "status": "failing",
-      "notes": ""
+      "notes": "2026-10-01 built in worktree placeholders, v2.56.0. (1) Tasks sdk mode: src/lib/v2/tasks/sdkRun.ts + engine.ts hook; one Agent SDK session per approved plan with the walker guardrails (approval first, maxStepsPerRun = maxTurns + in-engine interrupt, runTimeoutMin wall clock, STOP via module run in the runs tray, only the gated agentos_tasks tools, natives denied, skills in the prompt); gear gains Run mode. (2) Marketing campaign Calendar/Board/Assets/Metrics from src/lib/v2/marketing/campaignViews.ts; board moves through /api/marketing/item, refusals with reasons; publishedAt recorded on Mark published; no invented analytics (engagement slot says no source). (3) Today Widgets: HomeGrid cellsKey=todayCells (empty default), open state settings.home.todayShowWidgets. Docs tasks/marketing/today updated. Evidence: smoke-placeholders 85 checks ALL PASS (3 consecutive runs), smoke-engine/home-ui/marketing-campaign/widgets/honest-labels/guide-D pass, tsc clean. GATE NOT GREEN HERE for reasons outside the feature (110/113 smokes pass): smoke-guide B1 rabbit.md (Rabbit module is the owner untracked work in the main checkout), smoke-exile-deletes H1-H3/H6 (owner uncommitted name-guard fix in studioHistory/ultracodeRuns/claudeArtifacts), smoke-memory-ui (needs the gitignored .exile folder of the main checkout). AWAITING USER VERIFY checklist in agent-progress.md; flip to passing once ./test.sh exits 0 after his commits."
     },
     {
       "id": "feat-s8-voicebox-everywhere",

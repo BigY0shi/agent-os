@@ -12,7 +12,7 @@ A daily scratchpad: one page per day. You write freely; a line typed as a checkb
 | Previous day (left arrow) | Loads the page for the day before. |
 | **Today** | Jumps back to today's page. Disabled when you are already on it. |
 | Next day (right arrow) | Loads the page for the day after. |
-| **Widgets** | Always disabled. Its tooltip says the widgets panel is coming with the Homepage phase. |
+| **Widgets** | Shows or hides the widgets panel above the editor (highlighted when open). The panel is the Mission Control widget grid with its own layout for Today: **Customize** arms drag-to-reorder, the size cycle, remove and the per-widget config form, and **Add widget** opens the same catalog (**Done** keeps the layout, **Cancel** restores the previous one). It starts empty and says so. Open state and layout are settings (`settings.home.todayShowWidgets`, `settings.home.todayCells`), saved the same way as Mission Control's `settings.home.cells`. |
 | **Configure** (gear, tooltip "Scratchpad Settings") | One field, **@jarvis reply debounce (seconds)** (default 8): how long Jarvis waits after you stop typing before answering. A note says timezone, empty-task cleanup and execution settings live in the Tasks gear. |
 | Editor | Rich-text page. Saves itself about 1.5 s after you stop typing. |
 | Checkbox line (`[ ]`) | On save, a new non-empty checkbox line creates a task (source "daily", status Ready). Ticking or unticking it marks the task Done or reopens it; editing the text renames the task. |
@@ -27,3 +27,4 @@ A daily scratchpad: one page per day. You write freely; a line typed as a checkb
 - Task binding runs on every save (`src/lib/v2/pages/butler.ts`). Task statuses for the chips come from `GET /api/v2/tasks?source=daily`. If you delete a checkbox line, its task is exiled only when it has nothing beyond its title; otherwise it is kept and just unlinked from the page.
 - `@jarvis` replies are a debounced background job. The answer comes from the Memory module's model setting (`settings.memory.provider` and its low-tier model) with recalled memory as context, and is written as a comment. It also raises a "scratchpad.reply" item in Mission Control's attention list. The same paragraph text is never answered twice; editing it triggers a new reply. If the model call fails, nothing is written and the next save tries again.
 - The day's text is ingested into Memory nightly (around 23:55 local) when it changed.
+- The Widgets panel is `HomeGrid` (`src/components/v2/home/HomeGrid.tsx`) with `cellsKey="todayCells"`: the same registry, data routes and picker as Mission Control, a separate cells list, and an empty default instead of the Overview's legacy panels.

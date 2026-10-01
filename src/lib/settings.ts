@@ -329,7 +329,7 @@ export interface Settings {
     autoApprove?: { categories?: string[]; maxSteps?: number }; // per-category skip (task metadata.category)
     maxStepsPerRun?: number;   // hard cap on plan steps executed per run (default 12)
     runTimeoutMin?: number;    // wall-clock budget per run + boot stuck-recovery threshold (default 30)
-    runMode?: "steps" | "sdk"; // 'sdk' is a NOT_IMPLEMENTED seam for chunk 3+
+    runMode?: "steps" | "sdk"; // 'steps' = bounded walker; 'sdk' = one Agent SDK session with the same guardrails (S32)
     emptyTaskGc?: boolean;     // buffer-expiry GC of abandoned Untitled daily tasks (default true)
     // B3 recurring seed tasks: per-seed enable toggle (default false — nothing
     // fires until enabled in the Tasks gear). Keys match seeds.ts settingsKey.
@@ -373,6 +373,16 @@ export interface Settings {
       config?: Record<string, unknown>;
     }>;
     showScratchpad?: boolean;  // H1.1 (chunk 2) Overview ScratchpadSlot toggle
+    // S32: the Today page's own widget panel (same grid, same registry, its own
+    // cells list) and whether the panel is open. Unset = empty and closed.
+    todayCells?: Array<{
+      id: string;
+      widgetSlug: string;
+      size: "S" | "M" | "L";
+      order: number;
+      config?: Record<string, unknown>;
+    }>;
+    todayShowWidgets?: boolean;
   };
   // SPEC-E E1 browser workstream (every field surfaced in the /browser gear — rule 16).
   // NO "opera" browserType option, ever: Opera is Yoshi's daily browser and the agent

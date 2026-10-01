@@ -79,7 +79,40 @@ Campaign planning and drafting for three brands: PayloadsCO, Launchworks / Deal 
 
 ### Campaign page (`/marketing/<slug>`)
 
-**Marketing Hub** links back. The **Overview** tab shows the goal, angle, plan and item counts by status. **Calendar**, **Board**, **Assets** and **Metrics** show a placeholder message only.
+**Marketing Hub** links back. **Overview**, **Calendar**, **Board**, **Assets** and **Metrics** are the tabs; all of them read this one campaign's stored items (`src/lib/v2/marketing/campaignViews.ts`). The **Overview** tab shows the goal, angle, plan and item counts by status.
+
+#### Calendar
+
+| Control | What it does |
+|---|---|
+| Previous month / Next month arrows, **Today** | Moves the Monday-first month grid. |
+| Day cell | This campaign's items on that day: the scheduled date, or for a published item without one, the day it was marked published. Chip colour is the status (legend: idea, drafted, approved / scheduled, published). |
+| **Undated** strip | Items with no scheduled date that are not yet marked published, with the count. Set a date from the campaign drawer in the hub. |
+
+#### Board
+
+| Control | What it does |
+|---|---|
+| Columns **idea**, **drafted**, **approved**, **scheduled**, **published** | Each item's card in its status column, with a count per column. |
+| Drag a card to another column | Changes the status through the existing item API: into approved or scheduled = **Approve**, into drafted or idea = **Unapprove**, into published = **Mark published**. A move the API cannot make (an idea into drafted without a draft, into scheduled without a date, a published item back to approved) bounces with the reason in a toast. An approved item with a date lands in scheduled, and the toast says so. |
+
+#### Assets
+
+| Control | What it does |
+|---|---|
+| **Drafts** list | One row per drafted piece: status, title, channel and platform, word and character counts. **Show** / **Hide** expands the text; **Copy** puts it on the clipboard. |
+| **Published links** | The URLs stored with Mark published. |
+
+This store holds text and links only; there are no file uploads, and the tab says so. With nothing drafted it says how many items are still undrafted.
+
+#### Metrics
+
+| Control | What it does |
+|---|---|
+| Stat tiles | Items, Drafted (items with a draft), Awaiting approval (status drafted), Published, Overdue (scheduled date before today and not published), Unscheduled (not published and no date). |
+| **By status**, **By channel** | Counts of the stored items. |
+| **Published per week** | ISO weeks from each item's publish date (recorded by Mark published since v2.56.0). Items published before that have no date and are counted separately, never guessed into a week. |
+| Engagement | There is none: nothing is posted from the hub, so there is no source for views, clicks or replies, and the tab says so instead of inventing a number. |
 
 ## How it works
 

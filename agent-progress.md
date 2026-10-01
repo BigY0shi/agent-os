@@ -6,6 +6,31 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- AWAITING USER VERIFY (S32 placeholders, worktree placeholders, branch feat/s32-placeholders,
+  v2.56.0, 2026-10-01): the feature is built, smoke-covered (smoke-placeholders, 85 checks) and
+  committed, but `./test.sh` cannot exit 0 in this worktree for three reasons outside the
+  feature, all living in the owner's uncommitted work or the main checkout's ignored folders
+  (full no-break run: 110 of 113 smokes pass, `.harness-logs/all-smokes.out`):
+  (a) `smoke-guide` B1 fails on `rabbit.md` because `/rabbit` has no page in the committed
+  tree: the Rabbit module is untracked in the main checkout (`git status` there:
+  `?? src/app/rabbit/`, `?? src/components/v2/rabbit/`, `?? src/lib/v2/rabbit/`) while
+  `docs/modules/rabbit.md` was committed by the guide commit b5304fa.
+  (b) `smoke-exile-deletes` H1-H3 and H6: the committed name guards in `studioHistory.ts`,
+  `ultracodeRuns.ts` and `claudeArtifacts.ts` reject every id ("bad slug"); the owner's fix
+  (`(?!.+$)` to `(?!\.)`) is ` M` uncommitted in the main checkout (journal 2026-09-30).
+  (c) `smoke-memory-ui` looks for the gitignored `.exile/` folder, present in the main
+  checkout only. Owner checklist:
+  1. In the main checkout, commit the Rabbit module (page, components, lib) and the
+     name-guard fix in the three stores, each on its own; or say the doc should be retitled
+     and the smokes made worktree-tolerant.
+  2. In this worktree: `git merge` or rebase onto those commits, then `./test.sh` (expect
+     exit 0; `smoke-memory-ui` still needs the `.exile/` folder, so run the gate from the main
+     checkout after merging if it stays red here).
+  3. Flip feat-s32-placeholders to "passing" in features.json (the notes already carry the
+     evidence), or tell the loop to.
+  4. Owner-to-look after rebuild: Tasks gear > Run mode "sdk", run a small task, watch the run
+     in the tray and press STOP once; a campaign page's Board (drag a drafted card to
+     approved); Today > Widgets > Customize > Add widget.
 - QUEUED 2026-09-30 by the supervisor in worktree placeholders (branch feat/s32-placeholders): work ONLY feat-s32-placeholders (run with --feature). Branched from v2.55.0; holds none of the owner's uncommitted work; node_modules is a junction to the main checkout (do not npm install here). Never start, stop or restart the server on 3737.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
