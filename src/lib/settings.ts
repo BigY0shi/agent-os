@@ -63,6 +63,11 @@ export interface Settings {
   // Ultracode (owner 2026-09-30): the Claude model + effort its missions run with, set from the
   // Ultracode tab's pickers. Validated in lib/ultracodeModels.ts.
   ultracode: { model?: string; effort?: string };
+  // Artifacts (rule 16, 2026-10-01): the dedicated Netlify site publishes go to, set from the
+  // gear on the Claude page's Artifacts tab. siteId is Netlify's site ID (not a secret),
+  // baseUrl the site's public https origin. ~/.agentic-os/artifacts-site.json is read only
+  // when siteId is blank here (lib/claudeArtifacts.ts, a labelled back-compat fallback).
+  artifacts: { siteId?: string; name?: string; baseUrl?: string };
   // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
   // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
   // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
@@ -474,6 +479,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hermes3d: { ...DEFAULT_HERMES3D },
   defaultAgent: "claude",
   ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
+  artifacts: { siteId: "", name: "", baseUrl: "" },
   loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },

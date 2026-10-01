@@ -18,6 +18,7 @@ export type Settings = Record<string, unknown> & {
   thumbnails?: { agent?: string; backend?: "cli" | "gpt-image" };
   notebook?: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban?: { agent?: string; board?: string };
+  artifacts?: { siteId?: string; name?: string; baseUrl?: string };
   pipeline?: { provider?: "ollama" | "cli" | "minimax"; model?: string; ollamaUrl?: string; agent?: string; minimaxKey?: string };
 };
 

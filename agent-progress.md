@@ -6,7 +6,14 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
-- QUEUED 2026-09-30 by the supervisor in worktree artifacts-deploy (branch fix/s31-artifacts-deploy): work ONLY fix-s31-artifacts-windows-deploy (run with --feature). Branched from v2.55.0; holds none of the owner's uncommitted work; node_modules is a junction to the main checkout (do not npm install here). Never start, stop or restart the server on 3737.
+- S31 fix-s31-artifacts-windows-deploy BUILT 2026-10-01 in worktree artifacts-deploy (branch fix/s31-artifacts-deploy, v2.56.0):
+  netlify is resolved Windows-safe (lib/platform.ts resolveCli), the SEO deploy route too, the site lives in
+  settings.artifacts behind the Configure gear on the Artifacts tab, smoke-artifacts-deploy 35/35, smoke-exile-deletes
+  green again (8 name guards fixed here). features.json status stays "failing" ONLY because ./test.sh exits 1 at
+  smoke-guide, which is pre-existing in any fresh checkout (docs/modules/rabbit.md was committed 2026-09-29 but
+  src/app/rabbit exists in no ref) and smoke-memory-ui wants the gitignored .exile folder; neither touches S31.
+  The owner's checklist is at the END of this file (AWAITING USER VERIFY). Worktree notes still hold: node_modules
+  is a junction to the main checkout (do not npm install here); never start, stop or restart the server on 3737.
 - OWNER TO VERIFY, loop released by the supervisor 21:12 PDT (S5 legacy memory backfill, v2.24.0,
   LM Studio path added v2.25.0): the routine is built and smoke-verified against a fake Ollama AND
   a fake LM Studio; the real ~20-episode sample is the owner's to run and look at (feature
@@ -139,3 +146,23 @@ DEV-JOURNAL.md (hyphen, not underscore).
 - 2026-09-02 16:30 harness installed: features.json holds S8, S6, S3, backlog wrap, S4,
   S5, S7, S9 (S10 has no spec and is not listed). Gate = ./test.sh (tsc + every offline
   smoke). Loop default model claude-fable-5-1, --strict-mcp-config.
+
+## AWAITING USER VERIFY - S31 Artifacts deploy (2026-10-01)
+
+Built and smoke-proven with a fake netlify; the one step a session cannot do is a real publish.
+All PowerShell-safe. Rebuild first (the Artifacts tab and the gear are new UI).
+1. Install and log in to the Netlify CLI once, in your own terminal: `npm install -g netlify-cli` then
+   `netlify login`. Confirm: `netlify --version` (the CLI was NOT installed on this machine on 2026-10-01).
+2. Claude page > Artifacts tab > Configure (the gear): enter the Netlify site ID (Netlify > the site >
+   Site configuration > Site ID), a name, and the base URL (https://<site>.netlify.app), Save. The header
+   should read "Publishes to <name>." and the Gallery pill should appear.
+3. Publish one Loop build from "Built by your agents". Expect a Live link within a minute; open it.
+   If it fails, the red line says exactly why (CLI missing, site missing, or netlify's own output) and
+   nothing is listed as live.
+4. Optional: Take it offline (trash icon) and confirm the link 404s and the page is under
+   ~/.agentic-os/.exile/<stamp>/published/<slug>/.
+5. The gate: ./test.sh is red at smoke-guide in this worktree for a pre-existing reason (rabbit.md documents
+   a /rabbit page that was never committed). Either commit src/app/rabbit or park docs/modules/rabbit.md,
+   then flip fix-s31-artifacts-windows-deploy to "passing" in features.json (every other smoke passes; the
+   per-smoke run is in the DEV-JOURNAL entry). smoke-memory-ui also needs the main checkout's .exile folder.
+6. Retitle this heading when done so the loop can continue (the marker grep is whole-file).
