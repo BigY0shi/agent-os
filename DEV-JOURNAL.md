@@ -1,5 +1,32 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S30 settings sweep, batch 3: Agent Room overrides live in settings, with a Room gear (v2.58.0)
+
+- **`settings.room.agents[<id>]`** `{ model, provider (cli / ollama / openai), baseUrl, apiKeyEnv,
+  noReasoning }` replaces `roomAgents` in `~/.agentic-os/config.json` as the home of per-agent
+  repointing. `agentRoom.ts` `roomOverrides()` reads settings per request; config.json is read
+  ONLY while settings holds no override at all (a labelled one-time fallback, never merged), and
+  the source ("settings" / "config.json" / "none") is reported by `GET /api/room/status` as
+  `overrideSource`. The old `applyOverride` logic is unchanged otherwise (an "openrouter"
+  provider word is still ignored; a blank model keeps the agent's own). `provider: "cli"` is now
+  accepted as an override too (it fails loudly for an agent with no CLI runner).
+- **`settings.room.cliTimeoutSec`** (default 90, the old `90_000` literal): how long a CLI agent
+  may take per room turn, `roomCliTimeoutMs()`.
+- **Room gear** (`RoomSettings.tsx`, in the Specialists rail): the time limit, then one block
+  per roster agent (provider select, model, and for an endpoint the base URL, the NAME of the
+  key's env var, and skip-hidden-reasoning). It always sends every agent (an untouched one as
+  `{}`) so a cleared field really clears through the server's deep-merge, and shows a note when
+  config.json's map is the one in force. `/api/room/status` now also carries each
+  specialist's `model`.
+- Docs: room (gear row, how it works).
+
+Verified: tsc clean; smoke-room-honesty (D1: a config.json override is still honoured when
+settings has none, and "openrouter" is still ignored), smoke-mastermind, smoke-settings-secrets
+pass offline.
+
+Rollback: revert the commit; a saved `room` block is ignored by older code, and config.json's
+`roomAgents` applies again.
+
 ## 2026-10-01 - S30 settings sweep, batch 2: the Claude chat model is a setting with a picker (v2.57.0)
 
 - **`settings.claude.model`** (default `claude-opus-4-8`, unchanged) replaces the start-time

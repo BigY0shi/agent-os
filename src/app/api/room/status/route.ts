@@ -1,4 +1,4 @@
-import { activeTodayIds, agentReachability, isWorking, roomAgents } from "@/lib/agentRoom";
+import { activeTodayIds, agentReachability, isWorking, roomAgents, roomOverrides } from "@/lib/agentRoom";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,10 +16,14 @@ export async function GET() {
   const specialists = roomAgents().map((a) => {
     const reach = agentReachability(a);
     const status = isWorking(a.id) ? "working now" : !reach.ok ? "unreachable" : today.has(a.id) ? "active today" : "ready";
-    return { id: a.id, name: a.name, color: a.color, provider: a.provider, status, why: reach.why };
+    return { id: a.id, name: a.name, color: a.color, provider: a.provider, model: a.model, status, why: reach.why };
   });
+  // S30: where the per-agent overrides come from ("settings" = the Room gear; "config.json" =
+  // the legacy ~/.agentic-os/config.json roomAgents map, read only while settings has none).
+  const overrideSource = roomOverrides().source;
   return Response.json({
     specialists,
+    overrideSource,
     counts: { specialists: specialists.length, workingNow: specialists.filter((s) => s.status === "working now").length, unreachable: specialists.filter((s) => s.status === "unreachable").length },
     todayError,
   }, { headers: { "Cache-Control": "no-store" } });

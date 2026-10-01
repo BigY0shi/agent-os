@@ -15,6 +15,7 @@ import { config, isAgentInstalled } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { personaPrompt, type Persona } from "@/lib/personas";
 import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
+import { readSettings, type RoomAgentOverride } from "@/lib/settings";
 
 const HOME = os.homedir();
 // Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
@@ -105,27 +106,55 @@ export const ROOM_AGENTS: RoomAgent[] = [
     persona: "You are Free Claude Code — scrappy and resourceful, running locally for free. You love the clever low-cost solution and remind everyone it doesn't have to be expensive." },
 ];
 
-// Power users can repoint any room agent WITHOUT editing source — set "roomAgents"
-// in ~/.agentic-os/config.json, keyed by agent id. e.g. route GLM to your z.ai key:
-//   "roomAgents": { "glm": { "provider": "openai", "baseUrl": "https://api.z.ai/api/paas/v4",
-//                            "apiKeyEnv": "GLM_API_KEY", "model": "glm-4.6" },
-//                   "gemini": { "model": "google/gemini-3-pro-preview" },
-//                   "codex": { "provider": "ollama" } }
-function applyOverride(a: RoomAgent): RoomAgent {
-  const o = (config.roomAgents ?? {})[a.id];
-  const explicitModel = !!(o && typeof o.model === "string" && o.model);
-  const m: RoomAgent = o ? {
+// Any room agent can be repointed WITHOUT editing source. Since S30 (owner 2026-09-30: "every
+// parameter in settings") the overrides live in settings.room.agents, keyed by agent id and
+// edited in the Room gear, read per request. e.g. route an agent to your z.ai key:
+//   room.agents.glm = { provider: "openai", baseUrl: "https://api.z.ai/api/paas/v4",
+//                       apiKeyEnv: "GLM_API_KEY", model: "glm-4.6" }
+// `roomAgents` in ~/.agentic-os/config.json is the OLD home of the same map. It is read ONLY
+// while settings holds no override at all, as a one-time fallback for an install that
+// configured it there; the first override saved in the gear takes over completely (the two
+// are never merged), and roomOverrides().source tells the gear which one is in force.
+const hasFields = (v: unknown): v is RoomAgentOverride => {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return ["model", "provider", "baseUrl", "apiKeyEnv"].some((k) => typeof o[k] === "string" && (o[k] as string).trim() !== "")
+    || typeof o.noReasoning === "boolean";
+};
+const liveEntries = (map: Record<string, unknown> | undefined): Record<string, RoomAgentOverride> =>
+  Object.fromEntries(Object.entries(map ?? {}).filter(([, v]) => hasFields(v))) as Record<string, RoomAgentOverride>;
+
+export function roomOverrides(): { source: "settings" | "config.json" | "none"; agents: Record<string, RoomAgentOverride> } {
+  const fromSettings = liveEntries((readSettings().room?.agents ?? {}) as Record<string, unknown>);
+  if (Object.keys(fromSettings).length) return { source: "settings", agents: fromSettings };
+  const legacy = liveEntries(config.roomAgents as Record<string, unknown> | undefined);
+  return Object.keys(legacy).length ? { source: "config.json", agents: legacy } : { source: "none", agents: {} };
+}
+
+function applyOverride(a: RoomAgent, overrides: Record<string, RoomAgentOverride>): RoomAgent {
+  const o = overrides[a.id];
+  if (!o) return a;
+  const explicitModel = typeof o.model === "string" && o.model.trim() !== "";
+  // No "openrouter" (owner 2026-09-29): any other provider word is ignored, the agent keeps its own.
+  const provider = o.provider === "ollama" || o.provider === "openai" || o.provider === "cli" ? o.provider : undefined;
+  return {
     ...a,
-    ...(explicitModel ? { model: o.model as string } : {}),
-    ...(o.provider === "ollama" || o.provider === "openai" ? { provider: o.provider } : {}),
-    ...(typeof o.baseUrl === "string" && o.baseUrl ? { baseUrl: o.baseUrl } : {}),
-    ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv ? { apiKeyEnv: o.apiKeyEnv } : {}),
+    ...(explicitModel ? { model: (o.model as string).trim() } : {}),
+    ...(provider ? { provider } : {}),
+    ...(typeof o.baseUrl === "string" && o.baseUrl.trim() ? { baseUrl: o.baseUrl.trim() } : {}),
+    ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv.trim() ? { apiKeyEnv: o.apiKeyEnv.trim() } : {}),
     ...(typeof o.noReasoning === "boolean" ? { noReasoning: o.noReasoning } : {}),
-  } : a;
-  return m;
+  };
 }
 export function roomAgents(): RoomAgent[] {
-  return ROOM_AGENTS.map(applyOverride);
+  const { agents } = roomOverrides();
+  return ROOM_AGENTS.map((a) => applyOverride(a, agents));
+}
+
+/** How long a CLI agent may take per room turn: settings.room.cliTimeoutSec (default 90 s). */
+export function roomCliTimeoutMs(): number {
+  const s = Number(readSettings().room?.cliTimeoutSec);
+  return Number.isFinite(s) && s > 0 ? Math.round(s) * 1000 : 90_000;
 }
 export function getAgent(id: string): RoomAgent | undefined {
   return roomAgents().find((a) => a.id === id);
@@ -264,7 +293,7 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
 async function roomCli(id: string, sys: string, user: string, incognito?: boolean): Promise<string> {
   const prompt = `${sys}\n\n${user}`;
   if ((LOOP_CLI_AGENTS as readonly string[]).includes(id)) {
-    return cliComplete(id, prompt, { timeoutMs: 90_000, incognito, module: "room" });
+    return cliComplete(id, prompt, { timeoutMs: roomCliTimeoutMs(), incognito, module: "room" });
   }
   throw new Error(`No room CLI runner for ${id}`);
 }

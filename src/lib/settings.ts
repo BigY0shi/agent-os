@@ -48,6 +48,15 @@ export const ORACLE_VOICEBOX_PROFILE = "The Sage";
  */
 export const ORACLE_KOKORO_VOICE = "bm_lewis";
 
+/** One room agent's repointing (settings.room.agents[id]); every field optional, blank = the agent's own default. */
+export interface RoomAgentOverride {
+  model?: string;
+  provider?: "ollama" | "openai" | "cli";
+  baseUrl?: string;
+  apiKeyEnv?: string;
+  noReasoning?: boolean;
+}
+
 export interface SeoSite {
   label: string;
   url: string;        // the live site / repo this SEO content targets
@@ -69,6 +78,13 @@ export interface Settings {
   // lib/claudeModel.ts. AGENTIC_OS_CLAUDE_MODEL / config.json claudeModel still override it
   // for back-compat (the gear says so when they do).
   claude: { model?: string };
+  // Agent Room / Mastermind (S30). agents: per-agent repointing, keyed by room agent id
+  // (claude, codex, cursor, pi, hermes, antigravity, openclaw, ollama, fcc): model, provider
+  // (cli / ollama / openai), baseUrl + apiKeyEnv for an OpenAI-compatible endpoint, noReasoning.
+  // Edited in the Room gear; read per request by lib/agentRoom.ts. `roomAgents` in
+  // ~/.agentic-os/config.json is read ONLY while this holds no override (labelled fallback).
+  // cliTimeoutSec: how long a CLI agent may take per room turn (was a 90 s literal).
+  room: { agents?: Record<string, RoomAgentOverride>; cliTimeoutSec?: number };
   // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
   // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
   // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
@@ -492,6 +508,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultAgent: "claude",
   ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
   claude: { model: "claude-opus-4-8" },
+  room: { agents: {}, cliTimeoutSec: 90 },
   loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },
