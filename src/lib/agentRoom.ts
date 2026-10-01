@@ -19,9 +19,9 @@ const HOME = os.homedir();
 // Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
 // no local daemon required. The room used to post to localhost:11434, so whenever the
 // local daemon wasn't running (the normal case here) every Ollama agent failed.
-// If no cloud key is set we fall back to a local daemon, for a local-only setup.
+// There is no local daemon on this machine (owner, 2026-09-30), so there is no localhost
+// fallback: with no cloud key an Ollama agent fails and says so.
 const OLLAMA_CLOUD_HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
-const OLLAMA_LOCAL = process.env.OLLAMA_HOST || "http://localhost:11434";
 function ollamaCloudKey(): string | null {
   const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
   return k ? k.trim() : null;
@@ -66,7 +66,9 @@ export async function deleteConversation(id: string): Promise<boolean> {
 
 export interface RoomAgent {
   id: string; name: string; color: string;
-  provider: "openrouter" | "ollama" | "openai" | "cli";
+  // No "openrouter": provider routing is CLI / Ollama Cloud / an explicit OpenAI-compatible
+  // endpoint only (owner, 2026-09-29). A config override naming openrouter is ignored.
+  provider: "ollama" | "openai" | "cli";
   model: string;
   persona: string;
   noReasoning?: boolean;  // snappy chat agents (GLM 5.2) skip chain-of-thought so a short reply is never starved
@@ -74,9 +76,8 @@ export interface RoomAgent {
   apiKeyEnv?: string;     // provider:"openai" → env var (or active Hermes profile .env key) holding the API key
 }
 
-// Each agent is authentically itself. CLI agents (cursor/pi/antigravity) run on the user's
-// real CLI subscription (no API key); claude/codex/hermes/openclaw run via OpenRouter;
-// ollama/fcc run on the local Ollama daemon.
+// Each agent is authentically itself. The CLI agents run on the user's real CLI
+// subscriptions (no API key); openclaw/ollama/fcc run on Ollama Cloud.
 export const ROOM_AGENTS: RoomAgent[] = [
   { id: "claude", name: "Claude", color: "#d97757", provider: "cli", model: "",
     persona: "You are Claude — thoughtful, careful, balanced. You weigh trade-offs, bring nuance, and give a calm, precise take. You gently flag risks others miss." },
@@ -119,7 +120,7 @@ function applyOverride(a: RoomAgent): RoomAgent {
   const m: RoomAgent = o ? {
     ...a,
     ...(explicitModel ? { model: o.model as string } : {}),
-    ...(o.provider === "openrouter" || o.provider === "ollama" || o.provider === "openai" ? { provider: o.provider } : {}),
+    ...(o.provider === "ollama" || o.provider === "openai" ? { provider: o.provider } : {}),
     ...(typeof o.baseUrl === "string" && o.baseUrl ? { baseUrl: o.baseUrl } : {}),
     ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv ? { apiKeyEnv: o.apiKeyEnv } : {}),
     ...(typeof o.noReasoning === "boolean" ? { noReasoning: o.noReasoning } : {}),
@@ -151,17 +152,6 @@ function profileEnvKey(name: string): string | null {
   }
   return process.env[name]?.trim() || null;
 }
-function openRouterKey(): string | null {
-  return profileEnvKey("OPENROUTER_API_KEY");
-}
-function hermesDefaultModel(): string {
-  try {
-    const cfg = readFileSync(path.join(HOME, ".hermes", "profiles", activeProfile(), "config.yaml"), "utf8");
-    const m = cfg.match(/^\s*default:\s*([^\s#]+)/m);
-    if (m) return m[1].trim();
-  } catch {}
-  return "anthropic/claude-opus-4.8";
-}
 // Room agents with model "auto" pick a model by the kind of task in play: a coder for
 // coding talk, a strong generalist otherwise. These used to be hardcoded to
 // minimax-m3 / kimi-k2.6 — MiniMax isn't provisioned here, and a hardcoded tag breaks
@@ -182,9 +172,10 @@ let _models: string[] | null = null;
 async function availableModels(): Promise<string[]> {
   if (_models) return _models;
   const key = ollamaCloudKey();
+  if (!key) return []; // not cached: a key added later is picked up on the next call
   try {
-    const r = await fetch(`${key ? OLLAMA_CLOUD_HOST : OLLAMA_LOCAL}/api/tags`, {
-      headers: key ? { Authorization: `Bearer ${key}` } : {},
+    const r = await fetch(`${OLLAMA_CLOUD_HOST}/api/tags`, {
+      headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
     });
     if (!r.ok) return (_models = []);
@@ -202,9 +193,11 @@ async function roomTaskModel(transcript: RoomTurn[]): Promise<string> {
     const hit = models.find((m) => re.test(m));
     if (hit) return hit;
   }
-  // Nothing matched (or the list couldn't be fetched) — fall back to the env default,
-  // then the first available model.
-  return process.env.OLLAMA_CLOUD_MODEL || models[0] || "qwen3-coder:480b";
+  // Nothing matched: the env default, then the first model the account really has.
+  // No model tag is written into the code as a last resort.
+  const pick = process.env.OLLAMA_CLOUD_MODEL || models[0];
+  if (!pick) throw new Error("Ollama Cloud listed no models for this account (or /api/tags failed), so there is no model to use.");
+  return pick;
 }
 
 const ROOM_SYSTEM =
@@ -248,15 +241,12 @@ async function openaiChat(baseUrl: string, model: string, sys: string, user: str
   if (!r.ok || !j?.choices?.[0]) throw new Error(j?.error?.message || `HTTP ${r.status}`);
   return String(j.choices[0].message?.content ?? "").trim();
 }
-function orComplete(model: string, sys: string, user: string, key: string, signal?: AbortSignal, opts?: { noReasoning?: boolean }): Promise<string> {
-  return openaiChat("https://openrouter.ai/api/v1", model, sys, user, key, signal, opts);
-}
 async function ollamaComplete(model: string, sys: string, user: string, signal?: AbortSignal): Promise<string> {
   const key = ollamaCloudKey();
-  const base = key ? OLLAMA_CLOUD_HOST : OLLAMA_LOCAL;
-  const r = await fetch(`${base}/api/chat`, {
+  if (!key) throw new Error("No Ollama Cloud key: set OLLAMA_API_KEY (there is no local Ollama to fall back to).");
+  const r = await fetch(`${OLLAMA_CLOUD_HOST}/api/chat`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+    headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
     signal,
     // think:false — kimi/minimax are reasoning models; without this they spend the
     // whole token budget in a hidden "thinking" field and return empty content.
@@ -265,11 +255,7 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
   });
   if (!r.ok) {
     const detail = await r.text().catch(() => "");
-    throw new Error(
-      key
-        ? `Ollama Cloud ${r.status} for "${model}"${detail ? ` — ${detail.slice(0, 160)}` : ""}`
-        : `Ollama ${r.status} for "${model}" — no OLLAMA_API_KEY set and the local daemon at ${OLLAMA_LOCAL} didn't accept it.`,
-    );
+    throw new Error(`Ollama Cloud ${r.status} for "${model}"${detail ? ` — ${detail.slice(0, 160)}` : ""}`);
   }
   const j = await r.json();
   // Reasoning models (minimax-m3, kimi) can emit a hidden <think> block — strip it.
@@ -352,8 +338,9 @@ export async function executeRoomActions(text: string): Promise<{ clean: string;
   return { clean: clean || text, actions };
 }
 
-// One agent's reply, given the transcript + the user's vault context. Cloud agents
-// fall back to the Hermes default model if their model errors — never stalls.
+// One agent's reply, given the transcript + the user's vault context. A failure is an
+// error that names the agent and the reason; nothing is invented and nothing switches
+// provider behind the user's back (AGENTS.md "Fail loudly", rule 20).
 export async function roomReply(
   agent: RoomAgent,
   transcript: RoomTurn[],
@@ -376,10 +363,12 @@ export async function roomReply(
     return roomCli(agent.id, sys, user, incognito);
   }
   if (agent.provider === "ollama") {
+    if (!ollamaCloudKey()) throw new Error(`${agent.name}: no Ollama Cloud key. Set OLLAMA_API_KEY (there is no local Ollama to fall back to).`);
     const model = (agent.model === "auto" || !agent.model) ? await roomTaskModel(transcript) : agent.model;
     let out = await ollamaComplete(model, sys, user, signal);
     if (!out && !signal?.aborted) out = await ollamaComplete(model, sys, user, signal);  // cloud model cold-start can return empty
-    return out || "I'm here — running locally and ready when you are.";
+    if (!out) throw new Error(`${agent.name} got an empty reply from Ollama Cloud (${model}), twice.`);
+    return out;
   }
   // Native OpenAI-compatible endpoint (config override) — e.g. GLM via your z.ai key.
   if (agent.provider === "openai") {
@@ -389,15 +378,7 @@ export async function roomReply(
     if (!k) throw new Error(`No API key for ${agent.name} — set ${envName} (env var or your active Hermes profile .env).`);
     return await openaiChat(base, agent.model, sys, user, k, signal, { noReasoning: agent.noReasoning });
   }
-  const key = openRouterKey();
-  if (!key) throw new Error("No OpenRouter key in the active Hermes profile.");
-  try { return await orComplete(agent.model, sys, user, key, signal, { noReasoning: agent.noReasoning }); }
-  catch (e) {
-    if (signal?.aborted) throw e;
-    const fallback = hermesDefaultModel();
-    if (fallback && fallback !== agent.model) { try { return await orComplete(fallback, sys, user, key, signal); } catch {} }
-    throw e;
-  }
+  throw new Error(`${agent.name} has no supported provider (CLI, Ollama Cloud or an OpenAI-compatible endpoint).`);
 }
 
 // Pull @mentions (e.g. "@claude @gemini") from a message → agent ids, if any.
@@ -428,9 +409,9 @@ export function agentReachability(a: RoomAgent): { ok: boolean; why: string } {
     if (!k) return { ok: false, why: `no CLI mapping for ${a.id}` };
     return isAgentInstalled(k) ? { ok: true, why: `${a.id} CLI installed` } : { ok: false, why: `the ${a.id} CLI is not installed` };
   }
-  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: true, why: `no Ollama Cloud key: uses the local daemon at ${OLLAMA_LOCAL}` };
+  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: false, why: "no Ollama Cloud key (OLLAMA_API_KEY); there is no local Ollama" };
   if (a.provider === "openai") { const env = a.apiKeyEnv || "OPENAI_API_KEY"; return profileEnvKey(env) ? { ok: true, why: `${env} set` } : { ok: false, why: `${env} is not set` }; }
-  return openRouterKey() ? { ok: true, why: "OpenRouter key set" } : { ok: false, why: "no OpenRouter key in the active Hermes profile" };
+  return { ok: false, why: "no supported provider (CLI, Ollama Cloud or OpenAI-compatible)" };
 }
 
 export async function activeTodayIds(): Promise<Set<string>> {

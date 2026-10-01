@@ -1,5 +1,31 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Agent Room: no OpenRouter, no local-daemon fallback, no invented replies (v2.51.18)
+
+Owner's call on open item 1 ("Fix"), with "There is no local ollama" (item 2). In
+`src/lib/agentRoom.ts`:
+- **OpenRouter removed.** Any agent whose provider was not cli/ollama/openai fell through to
+  OpenRouter and, on error, quietly retried on Hermes's default model. `provider` is now
+  `"ollama" | "openai" | "cli"`; a `config.json` override naming openrouter is ignored; an
+  agent with no supported provider throws and says so. `orComplete`, `openRouterKey` and
+  `hermesDefaultModel` are gone.
+- **No local daemon.** With no `OLLAMA_API_KEY` the Room used to call `localhost:11434`
+  (which does not exist here). Ollama agents now need the cloud key, fail with a message
+  naming it, and show as not reachable without it.
+- **No invented reply.** An empty Ollama reply (after one retry) used to become "I'm here,
+  running locally and ready when you are." It is now an error naming the agent and model.
+- **No hardcoded model.** When no preferred model matched, the Room fell back to
+  `qwen3-coder:480b`; now `OLLAMA_CLOUD_MODEL`, then the first model the account lists,
+  else an error. (A per-agent Room model setting is a follow-up under the owner's
+  "every parameter in settings" rule.)
+`docs/modules/room.md` updated.
+
+Verified: new `smoke-room-honesty.mjs`, 10 checks, fetch stubbed (no key, empty reply,
+real reply from https://ollama.com only, the openrouter override, reachability).
+smoke-mastermind still passes. tsc clean, smoke-guide passes.
+
+Rollback: revert the commit.
+
 ## 2026-09-29 - Guide-writer backlog: what landed, what waits for the owner (v2.51.17)
 
 Autonomous run while the owner was away (v2.50.3 to v2.51.16, one commit per fix, each with
