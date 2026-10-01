@@ -1,5 +1,5 @@
 import { spawnStream } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { ensureProject, CLAUDE_SCRATCH_ROOT } from "@/lib/claudeWorkspace";
 import { newRun, applyEvent, saveRun, getRun, makeRunId, type UltracodeRun } from "@/lib/ultracodeRuns";
 import { logTokens } from "@/lib/tokenLog";
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
   // the defaults; a resumed run keeps its own. The optional target (a folder, or a git repo URL
   // cloned into the scratch area) is made readable with --add-dir while the run stays in its
   // project folder, so a report never lands inside the target. Bad input is a 400, not a swap.
-  let ucModel = CLAUDE_MODEL;
+  let ucModel = claudeModel();
   let ucEffort = "xhigh";
   let ucTarget: UltracodeTarget | null = null;
   if (isUltra) {
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
   // `claude -p` is stateless per call — this is what keeps a normal chat's memory.
   const basePrompt = resumeSessionId ? prompt : buildPromptWithHistory(history, prompt);
   const effectivePrompt = ucTarget && !resumeSessionId ? `${targetNote(ucTarget)}\n\n${basePrompt}` : basePrompt;
-  const args: string[] = ["-p", "--model", isUltra ? ucModel : CLAUDE_MODEL];
+  const args: string[] = ["-p", "--model", isUltra ? ucModel : claudeModel()];
   if (resumeSessionId) args.push("--resume", resumeSessionId);
   if (isUltra) args.push("--effort", ucEffort, "--include-hook-events");
   if (ucTarget) args.push("--add-dir", ucTarget.dir, ...readOnlyArgs(ucTarget.dir));
@@ -208,7 +208,7 @@ export async function POST(req: Request) {
           // applyEvent set run.costUsd to THIS turn's cost; add prior turns'.
           if (priorCost > 0) run.costUsd = priorCost + (run.costUsd ?? 0);
           // Record token usage for the dashboard (Claude CLI reports it in result events).
-          void logTokens({ agent: "claude", model: isUltra ? ucModel : CLAUDE_MODEL, totalTokens: run.tokensTotal ?? 0, costUsd: run.costUsd ?? 0, kind: "chat" });
+          void logTokens({ agent: "claude", model: isUltra ? ucModel : claudeModel(), totalTokens: run.tokensTotal ?? 0, costUsd: run.costUsd ?? 0, kind: "chat" });
           await maybeSave(true);
           send(JSON.stringify({ type: "ultracode_run_saved", runId }) + "\n");
         }

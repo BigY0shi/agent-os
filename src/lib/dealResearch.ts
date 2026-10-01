@@ -16,7 +16,7 @@
 // fakes and no network. State goes to the card through setResearch() as the
 // pass moves: running, then done / error / stopped with a note in words.
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
 import { withSkills } from "@/lib/platformSkills";
 import { generateBrief } from "@/lib/dealBrief";
@@ -78,7 +78,7 @@ export function parseQuestions(text: string): { q: string; a: string }[] {
 }
 
 async function askClaude(prompt: string, signal?: AbortSignal): Promise<string> {
-  const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()], {
+  const r = await run("claude", ["-p", "--model", claudeModel(), "--output-format", "text", ...claudeBuilderArgs()], {
     timeoutMs: 180_000, input: withSkills(prompt, "deals"), cwd: LEADS_DIR, signal,
   });
   if (!r.ok || !r.stdout.trim()) throw new Error(r.stderr || "agent returned nothing");

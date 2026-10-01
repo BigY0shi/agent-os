@@ -11,7 +11,7 @@
 // prose buried at the bottom of a 12,000-character posting, "did the draft answer
 // them?" becomes something that can be checked (see likelyMissedAsks).
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
 import { readSettings } from "@/lib/settings";
 import { withSkills } from "@/lib/platformSkills";
@@ -21,7 +21,7 @@ import { listingText, dossierInputHash, type Dossier, type DossierAsk } from "@/
 /** Gear-configurable, like the screen model; blank uses the configured Claude model. */
 export function dossierModel(): string {
   const m = readSettings().deals?.dossierModel;
-  return typeof m === "string" && m.trim() ? m.trim() : CLAUDE_MODEL;
+  return typeof m === "string" && m.trim() ? m.trim() : claudeModel();
 }
 
 /** The inputs a dossier is built from, in the shape the hash expects. */

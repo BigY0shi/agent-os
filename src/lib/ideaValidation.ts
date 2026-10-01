@@ -18,7 +18,7 @@ import { run } from "./runner";
 import { ideaAgents, runSeat } from "./ideaSeats";
 import { claudeBuilderArgs } from "./agentPowers";
 import { readSettings } from "./settings";
-import { CLAUDE_MODEL } from "./config";
+import { claudeModel } from "./claudeModel";
 import {
   IDEA_SCHEMA_VERSION, type IdeaDossier, type PainEvidence, type Competitor,
   type Sourced, type ValidationRun, type SeatName,
@@ -59,7 +59,7 @@ function models() {
   const s = readSettings().ideaEngine;
   return {
     research: (s.researchModel || "").trim() || "claude-sonnet-5",
-    writer: (s.writerModel || "").trim() || CLAUDE_MODEL,
+    writer: (s.writerModel || "").trim() || claudeModel(),
     kimi: (s.kimiModel || "").trim() || undefined,
     agents: ideaAgents(s),
   };

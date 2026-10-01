@@ -1,5 +1,31 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S30 settings sweep, batch 2: the Claude chat model is a setting with a picker (v2.57.0)
+
+- **`settings.claude.model`** (default `claude-opus-4-8`, unchanged) replaces the start-time
+  `CLAUDE_MODEL` constant in `lib/config.ts`. `src/lib/claudeModel.ts` exports `claudeModel()`
+  (read per request) and `claudeModelSource()`; the 25 importers (chat, config, deals ask/
+  proposal, hire ask, SEO, video script/hyperframes, agentsRuntime deep tier, dealBrief/Dossier/
+  Research/Screen, hermesJarvis, hireBrief, ideaValidation, jarvisBrain, leadProviders,
+  loopEngine builder, newsDigest, newsRadar, oracle, v2 jarvis brain, missions runtime) now
+  call it. The dead `CLAUDE_MODEL || "claude-sonnet-5"` fallback in the two Jarvis brains is
+  gone (the constant was never empty).
+- **Back-compat override kept, and visible.** `AGENTIC_OS_CLAUDE_MODEL`, else `claudeModel` in
+  `~/.agentic-os/config.json`, still win (`CLAUDE_MODEL_OVERRIDE` in config.ts). New
+  `GET /api/claude/model` returns the model in force and its source, and the gear shows an
+  "Overridden" note instead of a choice that is not in use.
+- **Picker** (`ClaudeModelSettings.tsx`, the **Model** gear on the Claude Chat tab): Opus 5.5,
+  Sonnet 5.5, Fable 5.1, Opus 5 (the Ultracode list) or Custom; an id that is not a claude
+  model id or alias is refused in the form. The four "blank = pinned CLAUDE_MODEL" placeholders
+  (Agents x2, Hire, Idea Engine) now say "the Claude model (Claude page gear)".
+- Docs: claude-cli (gear row + how it works), agents-page.
+
+Verified: tsc clean; smoke-ultracode-target (C4 regex follows the rename), jarvis-brain,
+agents-ui, engine, settings-secrets, jarvis-glasses, missions, deal-desk, deal-dossier,
+deal-screen, idea-seats, oracle-kokoro pass offline.
+
+Rollback: revert the commit. A saved `claude.model` is ignored by older code.
+
 ## 2026-10-01 - S30 settings sweep, batch 1: one Ollama block in settings, shared by every caller (v2.56.0)
 
 Owner rule (2026-09-30): "Every parameter needs to be in the settings for every module."

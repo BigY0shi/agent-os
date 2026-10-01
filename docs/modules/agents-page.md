@@ -10,7 +10,7 @@ Reusable background agents that run on your machine and your subscriptions. The 
 
 | Control | What it does |
 |---|---|
-| **Configure** (gear, tooltip "Agents intelligence dial") | Sets the model for the **Fast tier**, **Standard tier** and **Deep tier** (blank Deep = the pinned Claude model). |
+| **Configure** (gear, tooltip "Agents intelligence dial") | Sets the model for the **Fast tier**, **Standard tier** and **Deep tier** (blank Deep = the Claude model from the Claude page's gear). |
 | **Configure** (gear, tooltip "Agents page") | **Hero poll interval (ms)**, **Default harness**, **Deploy gate: require a test run**, **Per-run spend ceiling** (Dollars, Tokens), **Let a run ask you a question**, **Also park when a turn merely ends in a question mark**, **Question timeout (minutes)**. |
 | **New agent** | Opens the Forge wizard. |
 | Live status strip | One chip per agent with its live status (running, waiting, idle, error, offline). Uses the live feed, falling back to polling. |

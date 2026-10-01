@@ -48,7 +48,7 @@ export interface MissionDrivers {
 }
 
 async function realDrivers(): Promise<MissionDrivers> {
-  const [{ cliComplete }, runner, config] = await Promise.all([import("@/lib/loopEngine"), import("@/lib/runner"), import("@/lib/config")]);
+  const [{ cliComplete }, runner, config, { claudeModel }] = await Promise.all([import("@/lib/loopEngine"), import("@/lib/runner"), import("@/lib/config"), import("@/lib/claudeModel")]);
   return {
     complete: (prompt, opts) => cliComplete("claude", prompt, { timeoutMs: opts.timeoutMs, incognito: true }),
     launch: (agent, args, opts) => runner.spawnStream(agent, args, { cwd: opts.cwd, input: opts.input }) as ChildProcessWithoutNullStreams,
@@ -62,7 +62,7 @@ async function realDrivers(): Promise<MissionDrivers> {
       }
     },
     installed: (agent) => config.isAgentInstalled(agent),
-    defaultModel: (agent) => (agent === "claude" ? config.CLAUDE_MODEL : undefined),
+    defaultModel: (agent) => (agent === "claude" ? claudeModel() : undefined),
   };
 }
 

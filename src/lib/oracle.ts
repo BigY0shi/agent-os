@@ -6,7 +6,8 @@
 // (always authed on this machine, has web search). No API key.
 
 import { run, type AgentName } from "@/lib/runner";
-import { CLAUDE_MODEL, config } from "@/lib/config";
+import { config } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -25,7 +26,7 @@ export interface Consultation { at: string; question: string; answer: string; ag
 // Mirrors the "CLI agent with its own tools" pattern used for lead research.
 function sageArgs(agent: string, prompt: string): { args: string[]; input?: string } {
   switch (agent) {
-    case "claude": return { args: ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
+    case "claude": return { args: ["-p", "--model", claudeModel(), "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
     case "codex":  return { args: ["exec", "--full-auto", "--skip-git-repo-check", "--ignore-user-config", prompt] };
     case "cursor": return { args: ["-p", prompt, "--output-format", "text", "--force", "--trust"] };
     case "pi":     return { args: ["-p", prompt, "--mode", "text", "--no-session"] };

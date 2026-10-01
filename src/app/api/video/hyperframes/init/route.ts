@@ -4,7 +4,7 @@ import { writeFile, mkdir, readdir, stat, copyFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { createProject } from "@/lib/videoProjects";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -268,7 +268,7 @@ ${assets.length ? assets.map((a) => `  - assets/${a}`).join("\n") : "  (none —
 
 function runClaude(system: string, prompt: string, cwd: string, timeoutMs: number): Promise<string> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["-p", "--model", CLAUDE_MODEL, "--append-system-prompt", system, prompt],
+    const child = spawn("claude", ["-p", "--model", claudeModel(), "--append-system-prompt", system, prompt],
       { cwd, env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     const timer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} resolve(out); }, timeoutMs);

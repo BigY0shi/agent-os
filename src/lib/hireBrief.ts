@@ -6,17 +6,17 @@
 import { LEADS_DIR, type HireBrief, type HireLead } from "./hireDesk";
 import { machineFor } from "./hireMachines";
 import { run } from "./runner";
-import { CLAUDE_MODEL } from "./config";
+import { claudeModel } from "./claudeModel";
 import { readSettings } from "./settings";
 import { claudeBuilderArgs } from "./agentPowers";
 
 // Analysis models, user-tunable from the Hire Engine settings menu. Blank =
-// the built-in defaults (haiku triage sweep, pinned CLAUDE_MODEL full briefs).
+// the built-in defaults (haiku triage sweep; the Claude model setting for full briefs).
 function hireModels(): { triage: string; brief: string } {
   const s = readSettings().hire;
   return {
     triage: (s.triageModel || "").trim() || "claude-haiku-4-5",
-    brief: (s.briefModel || "").trim() || CLAUDE_MODEL,
+    brief: (s.briefModel || "").trim() || claudeModel(),
   };
 }
 

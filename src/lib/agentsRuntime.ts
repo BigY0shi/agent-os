@@ -24,7 +24,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { randomUUID } from "node:crypto";
 import { readFile, appendFile } from "node:fs/promises";
 import path from "node:path";
-import { CLAUDE_MODEL } from "./config";
+import { claudeModel } from "./claudeModel";
 import { readSettings } from "./settings";
 import { makeHttpServer, HTTP_TOOL_NAME, SENSITIVE_HTTP_RE } from "./agentsHttpTool";
 import type { AgentDef, AgentIntelligence, AgentProvider, ApprovalReq, ApprovalReason, McpServerHealth, RunEvent, RunMeta } from "./agentsTypes";
@@ -47,7 +47,7 @@ export function modelFor(intel: AgentIntelligence): string {
   const fallback: Record<AgentIntelligence, string> = {
     fast: "claude-haiku-4-5",
     standard: "claude-sonnet-5",
-    deep: CLAUDE_MODEL,
+    deep: claudeModel(),
   };
   return (s[intel] || "").trim() || fallback[intel];
 }

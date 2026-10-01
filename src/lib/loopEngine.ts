@@ -7,7 +7,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { run, type AgentName } from "./runner";
-import { CLAUDE_MODEL } from "./config";
+import { claudeModel } from "./claudeModel";
 import { ollamaCloudHost, ollamaCloudKey } from "./ollamaCloud";
 import { ORCHESTRATION_DIRECTIVE, claudeBuilderArgs } from "./agentPowers";
 import { withSkills } from "@/lib/platformSkills";
@@ -98,7 +98,7 @@ export async function cliComplete(
   let args: string[];
   let input: string | undefined;
   switch (agent) {
-    case "claude":  args = ["-p", "--model", CLAUDE_MODEL, "--output-format", "text"]; input = prompt; break;
+    case "claude":  args = ["-p", "--model", claudeModel(), "--output-format", "text"]; input = prompt; break;
     case "codex":   args = viaStdin ? ["exec", "--skip-git-repo-check", "--ignore-user-config", "-"] : ["exec", "--skip-git-repo-check", "--ignore-user-config", prompt]; break;
     case "cursor":  args = viaStdin ? ["-p", "--output-format", "text", "--force", "--trust"] : ["-p", prompt, "--output-format", "text", "--force", "--trust"]; break;
     case "pi":      args = viaStdin ? ["-p", "--mode", "text", "--no-session", "--no-context-files"] : ["-p", prompt, "--mode", "text", "--no-session", "--no-context-files"]; break;

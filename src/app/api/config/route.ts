@@ -1,4 +1,5 @@
-import { config, CLAUDE_MODEL } from "@/lib/config";
+import { config } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
 
 export const runtime = "nodejs";
@@ -23,7 +24,7 @@ export async function GET() {
   const ollamaKey = !!ollamaCloudKey();
 
   const agents = [
-    agent("claude", "Claude", "Reasoning + code", "Anthropic CLI", "claude-cli", CLAUDE_MODEL, "spiral", "#d97757", "#f2b8a2", !!config.claude),
+    agent("claude", "Claude", "Reasoning + code", "Anthropic CLI", "claude-cli", claudeModel(), "spiral", "#d97757", "#f2b8a2", !!config.claude),
     agent("codex", "Codex", "OpenAI coding agent", "codex exec", "claude-cli", "gpt-5.5", "hex-orbit", "#22c55e", "#86efac", !!config.codex),
     agent("hermes", "Hermes", "Tool-using agent", "multi-step jobs", "claude-cli", "openrouter", "ring-cross", "#60a5fa", "#bfdbfe", !!config.hermes),
     agent("antigravity", "Antigravity", "Gemini successor", "agy CLI", "claude-cli", "agy", "dual-cone", "#7c3aed", "#c4b5fd", !!config.antigravity),

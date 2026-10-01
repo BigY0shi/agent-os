@@ -63,6 +63,12 @@ export interface Settings {
   // Ultracode (owner 2026-09-30): the Claude model + effort its missions run with, set from the
   // Ultracode tab's pickers. Validated in lib/ultracodeModels.ts.
   ultracode: { model?: string; effort?: string };
+  // The Claude chat model (S30): what every `claude -p --model` call outside Ultracode uses
+  // (chat, Deal Desk, Hire, Idea Engine, SEO, video, the Loop builder, Jarvis's brain, a blank
+  // "Deep tier" or writer field). Picked on the Claude page's gear; read per request through
+  // lib/claudeModel.ts. AGENTIC_OS_CLAUDE_MODEL / config.json claudeModel still override it
+  // for back-compat (the gear says so when they do).
+  claude: { model?: string };
   // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
   // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
   // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
@@ -137,11 +143,11 @@ export interface Settings {
   // the age shows on every card. Rule 16: edited in the Deal Desk gear.
   deals: {
     maxAgeDays?: number;
-    /** Model for the quick pass/not screen; falls back to CLAUDE_MODEL when unset. */
+    /** Model for the quick pass/not screen; falls back to the Claude model setting when unset. */
     screenModel?: string;
     /** Screen the unjudged leads automatically after a feed pull. */
     screenOnPull?: boolean;
-    /** Model for the dossier pass; falls back to CLAUDE_MODEL when unset. */
+    /** Model for the dossier pass; falls back to the Claude model setting when unset. */
     dossierModel?: string;
   };
 
@@ -190,7 +196,7 @@ export interface Settings {
   // ── Model dials for the 2026-07 modules ─────────────────────────────────────
   // User model policy: Kimi K2.6 for chat/agentic seats, K2.7 Code for coding.
   // Empty string = the module's built-in default (blank kimiModel = auto-resolve
-  // preferring k2.6; blank claude models = the pinned CLAUDE_MODEL).
+  // preferring k2.6; blank claude models = the Claude model setting, lib/claudeModel.ts).
   brainstorm: { kimiModel?: string };                       // the council's Kimi seat
   // Jarvis: Kimi brain model + SPEC-C C2/C2b voice-capture + hotkey knobs
   // (all surfaced in the Jarvis gear — rule 16).
@@ -282,7 +288,7 @@ export interface Settings {
     killAgent?: string;        // kill pass; keep it a different lineage from claude (spec #5)
     fallbackAgent?: string;
     researchModel?: string;    // web research + judge (claude)
-    writerModel?: string;      // dossier writer; blank = pinned CLAUDE_MODEL
+    writerModel?: string;      // dossier writer; blank = the Claude model setting
     redditSubs?: string;       // comma-separated, radar pain mining
     seedTerms?: string;        // comma-separated seeds for trends/autocomplete
     dailyEnabled?: boolean;
@@ -485,6 +491,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hermes3d: { ...DEFAULT_HERMES3D },
   defaultAgent: "claude",
   ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
+  claude: { model: "claude-opus-4-8" },
   loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },
