@@ -49,7 +49,7 @@ is one line; the journal carries the rest.
 
 - [ ] **S38. Jarvis push-to-talk on a mappable global hotkey** (orb chat; mini USB keyboard from across the room). Also fixes the AHK helper's wrong port (3033).
 - [ ] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments.
-- [ ] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take).
+- [x] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take). Shipped 2026-10-01 (see DEV-JOURNAL): lib/agentFaces.ts inkblots on every agent surface, New shape / Reset shape on the agent page, Mark detail in the Agents gear, smoke-agent-faces.
 - [ ] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9).
 - [ ] **S37. Snapshots and restore**: weekly by default (setting: weekly / 2 weeks / monthly), old ones exiled (Nexora C10).
 - Held: **C8 Appearance** waits for the complete visual overhaul at the end. Dropped: **C11 voice cast** (not needed).

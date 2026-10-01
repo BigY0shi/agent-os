@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import { useSettings, Field, TextInput, SaveBar } from "@/components/ConfigMenu";
 import { AGENTS_ACCENT } from "./shared";
+import { FACE_DETAILS, FACE_DETAIL_LABEL, normalizeFaceDetail } from "@/lib/agentFaces";
+import { refreshAgentFaces } from "@/lib/agentFacesClient";
 
 export default function AgentsSettings() {
   const { settings, saving, save } = useSettings();
@@ -16,8 +18,10 @@ export default function AgentsSettings() {
     requireTestRun?: boolean;
     askUser?: { enabled?: boolean; heuristic?: boolean; timeoutMin?: number };
     spendCap?: { enabled?: boolean; maxUsd?: number; maxTokens?: number };
+    faces?: { detail?: string; seeds?: Record<string, number | null> };
   };
   const askUser = agents.askUser ?? {};
+  const faceDetail = normalizeFaceDetail(agents.faces?.detail);
   const spendCap = agents.spendCap ?? {};
   const capOn = spendCap.enabled !== false;
 
@@ -66,6 +70,16 @@ export default function AgentsSettings() {
           style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }}>
           {harnesses.length === 0 && <option value="oneshot-plain">oneshot-plain</option>}
           {harnesses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+        </select>
+      </Field>
+
+      <Field label="Mark detail" hint="How busy every generated agent mark is (the Rorschach shapes on agents without a hand-drawn mark). Default medium. Each agent's New shape / Reset shape live on its own page.">
+        <select
+          value={faceDetail}
+          onChange={(e) => { void save({ agents: { ...agents, faces: { ...(agents.faces ?? {}), detail: normalizeFaceDetail(e.target.value) } } }).then(() => refreshAgentFaces()); }}
+          className="w-full bg-black/30 border rounded-lg px-2.5 h-9 text-[12.5px] outline-none"
+          style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }}>
+          {FACE_DETAILS.map((d) => <option key={d} value={d}>{FACE_DETAIL_LABEL[d]}</option>)}
         </select>
       </Field>
 

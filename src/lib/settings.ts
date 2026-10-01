@@ -482,6 +482,14 @@ export interface Settings {
       heuristic?: boolean;  // default FALSE — also park when a turn merely ENDS in "?"
       timeoutMin?: number;  // default 240 (4h, matching the approval park)
     };
+    // S35 Agent faces (lib/agentFaces.ts). `detail` is the Agents gear's "Mark detail"
+    // (lobes and spot pairs of every generated mark; default medium). `seeds` holds one
+    // entry per agent the owner pressed "New shape" on; null = Reset (deepMerge cannot
+    // drop a key, so null is how "back to the id-derived shape" is spelled on disk).
+    faces?: {
+      detail?: "low" | "medium" | "high";
+      seeds?: Record<string, number | null>;
+    };
   };
   // SPEC-F I — AnyNotes. Rule 16: every knob here gets an in-app gear
   // (AnyNotesSettings, chunk 2); nothing is config-file-only.
@@ -679,6 +687,7 @@ export const DEFAULT_SETTINGS: Settings = {
     // reports, and a false positive parks a finished run instead of completing
     // it. The marker is the reliable signal; the heuristic is the opt-in net.
     askUser: { enabled: true, heuristic: false, timeoutMin: 240 },
+    faces: { detail: "medium", seeds: {} },
   },
   anynotes: {
     autoIngest: true,

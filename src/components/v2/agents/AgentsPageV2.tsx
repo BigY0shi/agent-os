@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bot, Plus } from "lucide-react";
+import AgentAvatar from "@/components/AgentAvatar";
 import type { ApprovalReq } from "@/lib/agentsTypes";
 import type { BandStatus } from "@/lib/agentsTypes";
 import { ApprovalsStrip, ago } from "@/components/AgentsView";
@@ -168,6 +169,7 @@ export default function AgentsPageV2() {
               <button key={a.id} onClick={() => router.push(`/agents/${a.id}?tab=runs`)}
                 className="w-full text-left px-4 py-2.5 flex items-center gap-3 text-[12.5px] transition hover:bg-white/[0.03]"
                 style={{ borderColor: "var(--panel-border)" }}>
+                <AgentAvatar agent={a.id} name={a.name} size={18} />
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: a.lastRun ? STATUS_COLORS[a.lastRun.status] : "var(--panel-border)" }} />
                 <span className="truncate" style={{ color: "var(--fg)" }}>{a.name}</span>
                 <span className="font-mono text-[10.5px] ml-auto shrink-0" style={{ color: "var(--fg-dimmer)" }}>

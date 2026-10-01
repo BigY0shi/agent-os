@@ -13,7 +13,7 @@ The home page. It greets you, shows measured telemetry for the machine and the a
 | **System pulse** card | Overall status word (Optimal, Under strain, Needs a look, or Unknown), "N of M checks clear", and bars for Processor, Memory and the first disk. A value with no source reads "unknown". |
 | **Runs** card | Ring with the count of recent module runs and the success rate, "running now", "average run", and a strip of the last finished runs (done, stopped, failed). Says which window it counts over. |
 | **Missions** card | Queued, Running, Review and Parked counts, how many are waiting on you, and how many were delivered. **Open** goes to `/jarvis?tab=goals` (the Jarvis Missions tab). |
-| **Orchestration** card | Jarvis and every configured agent under him with its live status, plus CLIs with running mission seats. "No agents configured." when empty. |
+| **Orchestration** card | Jarvis and every configured agent under him with its mark and live status, plus CLIs with running mission seats. "No agents configured." when empty. |
 | **Needs my attention** | Open attention items grouped as Urgent, Warnings and FYI. Each row has **Go** (opens the item's route), a check button ("Done, handled this occurrence") and an X button ("Dismiss, stop telling me about this"). Shows "All clear" when empty and names any collector that cannot read its source. Polls every 30 s. |
 | **Customize** | Arms edit mode on the widget grid. |
 | **Add widget** (edit mode) | Opens the widget catalog. A widget whose source is unavailable says "not available: <reason>". Close with the X. |

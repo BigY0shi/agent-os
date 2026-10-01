@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Hammer, Rocket, Wrench, List } from "lucide-react";
 import { STATUS_BAND_COLORS, STATUS_BAND_LABELS } from "@/components/v2/StatusBand";
+import AgentAvatar from "@/components/AgentAvatar";
 import type { BandStatus } from "@/lib/agentsTypes";
 import { AGENTS_ACCENT, type StatusEntry } from "./shared";
 
@@ -213,6 +214,7 @@ export default function AgentsHero({
                     )}
                     <span className="relative inline-flex rounded-full w-2.5 h-2.5" style={{ background: color }} />
                   </span>
+                  <AgentAvatar agent={e.agentId} name={e.name} size={18} />
                   <span className="text-[12.5px] font-medium truncate" style={{ color: "var(--fg)" }}>{e.name}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[10.5px] font-mono" style={{ color: "var(--fg-dimmer)" }}>
