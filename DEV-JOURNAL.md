@@ -1,5 +1,43 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S37: Snapshots and restore (v2.61.0)
+
+Harness session, worktree `snapshots`, feature feat-s37-snapshots. Owner's cadence call (2026-10-01):
+"not nightly, maybe weekly is fine, or bi-monthly even."
+- `src/lib/v2/snapshots/` (config, take, jobs). One folder per snapshot under the gear's folder
+  (default `<home>/AgentOS-snapshots`; a folder inside `~/.agentic-os` is refused): `agentos.db`
+  through better-sqlite3's backup API, then `journal_mode=DELETE` on the COPY so it is one file
+  (the first smoke run showed -wal/-shm sidecars the moment the WAL-header copy was opened);
+  `agentic-os/` = the state folder minus backups/, .exile/, agentos.lock, heygen-cache/ and the
+  live DB files; `manifest.json` (size + sha256 per file, secrets left out, fields removed, source
+  paths, port, Agent OS version); `restore.ps1` (ASCII; refuses a listening 3737, runs the repo's
+  `Stop Agent OS.bat` first when it can find it, asks for "yes", moves the current state and DB to
+  `<folder>/.exile/<stamp>/before-restore/`, copies in, carries the left-out secret files and the
+  removed secret fields over from that exiled state, verifies every hash). Built under
+  `.partial-<stamp>`, renamed into place at the end.
+- Secrets out by default: secrets.json, session-secret.json, principals.json, agentos.key (the
+  integrations key, so tokens inside the DB copy stay unreadable), ws-secret, rabbit/hotkey/glasses
+  secrets, newsletter/config.json, agentmail/config.json, `*.env`, `*.secrets.json`,
+  `*.secret|token|key|pem`, browser-profiles/; settings.json and config.json are kept with their
+  secret fields removed (settingsRedact isSecretPath), named in the manifest. "Include secrets"
+  puts them all in.
+- Retention: keep-last-N (default 8); older snapshots and stale .partial-* folders go to
+  `<folder>/.exile/<stamp>/` through lib/exileFile. No unlink anywhere in the module (smoke F5).
+- Schedule: `core:snapshots` (kind `snapshots.take`) on the V2 scheduler; cadence weekly (Sunday
+  04:00, default) / every 2 weeks / monthly (1st, 04:00) / off (row kept, disabled). Re-synced at
+  boot, on Save in the gear, and after every run; appears in Jarvis > Standing orders.
+- Gear (rule 16): Snapshots card on Mission Control > Health (`SnapshotsCard.tsx`): last snapshot
+  from its own manifest, schedule + next run and last scheduled run from the job row, folder with
+  kept / exiled counts; Snapshot now; Configure (Cadence, Snapshot folder, Keep last, Include
+  secrets). `/api/v2/snapshots` GET / POST now (409 while running) / PATCH (validates; a folder
+  inside the state folder is refused before it is saved; lowering keep prunes at once).
+- smoke-snapshots: 56 checks, incl. a real `restore.ps1` run with pwsh against a temp target on
+  port 1 (SKIP off Windows). Docs: mission-control.md Health table + How it works. Gate result below.
+Rollback: `git revert <commit>`. The `snapshots` settings key is inert without the code; the
+`core:snapshots` job row is logged as "skipped: no handler" by the scheduler and can be held in
+Standing orders or removed with `DELETE FROM jobs WHERE id='core:snapshots'`. Snapshot folders
+already written stay where they are.
+
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
 Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,

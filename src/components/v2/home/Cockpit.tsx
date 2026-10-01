@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, RefreshCw } from "lucide-react";
+import { SnapshotsCard } from "./SnapshotsCard";
 
 interface Pulse {
   sampledAt: string;
@@ -282,6 +283,8 @@ export function SystemPulse() {
           {(pulse.drives ?? h?.disks ?? []).map((d) => <Bar key={d.mount} label={d.mount} pct={Math.round(d.usedPercent)} detail={`${gb(d.freeBytes)} free of ${gb(d.totalBytes)}`} />)}
         </div>
       </section>
+
+      <SnapshotsCard />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <section className="glass px-5 py-4">

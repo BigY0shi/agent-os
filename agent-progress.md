@@ -6,7 +6,14 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
-- QUEUED 2026-10-01 by the supervisor in worktree snapshots (branch feat/s37-snapshots): work ONLY feat-s37-snapshots (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. Weekly default; old snapshots go to .exile; secrets excluded unless the setting is on.
+- DONE 2026-10-01 in worktree snapshots (branch feat/s37-snapshots): feat-s37-snapshots passing,
+  v2.61.0, gate green (see DEV-JOURNAL). OWNER TO LOOK after a rebuild: Mission Control > Health >
+  Snapshots card: press Snapshot now, open the folder it names (default ~/AgentOS-snapshots) and see
+  agentos.db, agentic-os/, manifest.json, restore.ps1; Configure > Cadence; Jarvis > Standing orders
+  lists "Snapshot of Agent OS state" with its next run. Not done by design: no restore from the UI
+  (restore.ps1 runs with Agent OS stopped, so it is a script); the restore was exercised only against
+  a temp target in the smoke, never against the live ~/.agentic-os. Note for the merge: the job row
+  core:snapshots is created at boot in whichever DB the process opens.
 - MERGED 2026-10-01 by the supervisor on branch integrate/s30-s32-s7-s9 (then fast-forwarded into
   feat/v2-hermes3d-and-versioning, PR #18): S30 settings sweep, S31 artifacts deploy, S32
   placeholders, S7 WebMCP wizard, S9 OpenMontage. The three red smokes that kept S30/S31/S32
