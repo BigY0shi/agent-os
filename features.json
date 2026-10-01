@@ -3,6 +3,32 @@
   "project": "Agent OS - self-hosted operations dashboard (Next.js 16, V1 modules + V2 CORE on SQLite). Roadmap slices S3..S9 run as harness features. Read AGENTS.md first, especially 'Running it' and 'Harness'.",
   "features": [
     {
+      "id": "fix-s31-artifacts-windows-deploy",
+      "title": "S31: Artifacts (and SEO deploy) actually deploy on Windows; site config in settings",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/claudeArtifacts.ts (deploy(): spawn(\"netlify\", [...]) with PATH from augmentPath; publish/unpublish rollback added v2.54.3)",
+        "src/app/api/seo/deploy/route.ts (its comment says a bare spawn of netlify/npx fails with ENOENT on Windows - read how it solves that)",
+        "src/lib/runner.ts and src/lib/platform.ts (how this codebase resolves npm .cmd shims on Windows; READ ONLY if runner.ts is not yours to change)",
+        "Global CLAUDE.md: never invoke a bare .CMD/.BAT name from a subprocess; resolve it or use cmd /c",
+        "scripts/v2/smoke-exile-deletes.mjs section H (how Artifacts is tested with netlify unavailable)",
+        "~/.agentic-os/artifacts-site.json is the current site config (siteId, name, baseUrl) - file-only, against rule 16"
+      ],
+      "description": "Found 2026-09-30: claudeArtifacts.deploy() spawns 'netlify' without a shell. On Windows the netlify CLI is an npm .cmd shim, which Node cannot spawn without a shell, so every publish/unpublish likely fails with ENOENT (Artifacts may never have deployed on this machine). Diagnose with evidence first (where netlify is installed here: `where netlify`, `npm ls -g netlify-cli`; what spawn returns), then fix deploy() to launch netlify the Windows-safe way the codebase already uses (prefer the existing resolver in platform.ts/runner.ts or the approach the SEO deploy route uses; args must be passed safely, never string-concatenated into a shell). Check the SEO deploy route for the same defect and fix it the same way if present. Move the Artifacts site config (siteId, name, baseUrl) into settings.artifacts with a gear on the Claude page's Artifacts tab (the file stays a read-only fallback for back-compat, labelled in code); a missing site is a clear error that names the gear. Rule 20/'fail loudly' apply: a deploy failure keeps the v2.54.3 rollback behaviour. Do NOT run a real Netlify deploy in a session; prove it with a fake netlify.cmd/netlify script on a temp PATH. End with an AWAITING USER VERIFY checklist in agent-progress.md for the owner to publish one page for real (the only step a session cannot do).",
+      "acceptance_criteria": [
+        "Evidence in notes: how netlify is installed here and what the old spawn did (exit code/ENOENT) before the fix",
+        "deploy() launches netlify the Windows-safe way with args passed safely; the SEO deploy route checked and fixed if it had the same defect",
+        "settings.artifacts {siteId, name, baseUrl} with a gear on the Artifacts tab; artifacts-site.json is only a labelled fallback; a missing site is a clear error naming the gear",
+        "New scripts/v2/smoke-artifacts-deploy.mjs (offline, temp dirs per rule 19): a fake netlify on a temp PATH records its argv and exits 0 -> publish ok, item listed, argv has --prod --dir <published> --site <id>; exits 1 -> the v2.54.3 rollback holds; site from settings beats the file",
+        "smoke-exile-deletes still passes",
+        "./test.sh exits 0; version bump; DEV-JOURNAL entry with a rollback line",
+        "agent-progress.md ends with an AWAITING USER VERIFY checklist: set the site in the gear, publish one Loop build, open the URL"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
       "id": "feat-s8-voicebox-everywhere",
       "title": "S8: Voicebox speaks for the Oracle and Video too",
       "priority": "HIGH",
