@@ -3,6 +3,30 @@
   "project": "Agent OS - self-hosted operations dashboard (Next.js 16, V1 modules + V2 CORE on SQLite). Roadmap slices S3..S9 run as harness features. Read AGENTS.md first, especially 'Running it' and 'Harness'.",
   "features": [
     {
+      "id": "feat-s32-placeholders",
+      "title": "S32: Replace the placeholders - Tasks sdk mode, Marketing Calendar/Board/Assets/Metrics, Today Widgets",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "docs/modules/tasks.md (\"The sdk run mode is not implemented yet; runs use the bounded step walker\"), docs/modules/marketing.md (Calendar/Board/Assets/Metrics show a placeholder message only), docs/modules/today.md (Widgets button always disabled)",
+        "src/lib/v2/tasks/ (run modes, the bounded step walker, approvals) and src/lib/v2/jarvis/brain.ts (how this codebase already drives the Claude Agent SDK, its hooks and taint rule)",
+        "src/lib/marketing.ts and the Marketing components (campaign items, statuses, dates, assets)",
+        "src/components/v2/home/ (HomeGrid, WidgetPicker, WidgetShell, the widget registry in src/lib/v2/widgets/) and the Today page",
+        "AGENTS.md 'Never fabricate state' (an empty chair is honest, a busy animation is not)"
+      ],
+      "description": "Three placeholders the Guide writers found, built for real from data the app already has. (1) Tasks 'sdk' run mode: implement it by reusing the Agent SDK wiring Jarvis already has (brain.ts) with the same guardrails the step walker enforces (turn cap, approvals, STOP via the runs tray, the module's skills); if a safe SDK path cannot be built from what exists, make the option say so plainly in the UI and the docs instead of offering a mode that silently uses the walker, and record why in notes. (2) Marketing Hub campaign tabs: Calendar = the campaign's items on a month grid by their scheduled/published dates (undated items listed apart); Board = items in columns by status, moving a card updates its status through the existing API; Assets = the files/assets the campaign items reference, from the existing store; Metrics = only numbers computable from real data (counts by status/channel, published per week, overdue); no invented analytics - with no data source for engagement, say so. (3) Today's Widgets button: open the existing Mission Control widget system (WidgetPicker/HomeGrid) for the Today page, persisted the same way as Mission Control's widgets; if that cannot be reused without a large refactor, wire the button to Mission Control's widget view instead and say so. Every new control goes in the docs' controls tables.",
+      "acceptance_criteria": [
+        "Tasks: the sdk mode either runs a task through the Agent SDK with the walker's guardrails (smoke with a stubbed SDK proving turn cap, approval and STOP), or is shown as unavailable with the reason - never a silent walker run",
+        "Marketing: Calendar, Board, Assets, Metrics render real campaign data with honest empty states; Board moves persist via the existing API; Metrics shows no number that is not computed from stored data",
+        "Today: the Widgets button works (Today hosts widgets, or it opens Mission Control's widget view), persisted like Mission Control",
+        "New scripts/v2/smoke-placeholders.mjs (offline, temp dirs per rule 19) covering each of the three, asserting behaviour not just strings where possible",
+        "docs/modules/tasks.md, marketing.md, today.md updated; smoke-guide passes",
+        "./test.sh exits 0; version bump per commit; DEV-JOURNAL entries with rollback lines"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
       "id": "feat-s8-voicebox-everywhere",
       "title": "S8: Voicebox speaks for the Oracle and Video too",
       "priority": "HIGH",
