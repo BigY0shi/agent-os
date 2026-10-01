@@ -83,7 +83,7 @@ export async function POST(req: Request) {
   const engine = body.engine === "n2" ? "n2" : "local";
   // N2 builds default into the "n2" project so they collect in the n2 workspace folder.
   const fallbackProject = engine === "n2" ? "n2" : "free-claude-code";
-  const projectName = typeof body.project === "string" && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(body.project)
+  const projectName = typeof body.project === "string" && /^(?!\.)[A-Za-z0-9_.-]+$/.test(body.project)
     ? body.project : fallbackProject;
   const dir = (await ensureProject(projectName)) ?? path.join(FCC_SCRATCH_ROOT, projectName);
 

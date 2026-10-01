@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   // assumptions, etc) instead of starting cold.
   let resumeRun: UltracodeRun | null = null;
   let resumeSessionId: string | null = null;
-  if (typeof resumeRunId === "string" && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(resumeRunId)) {
+  if (typeof resumeRunId === "string" && /^(?!\.)[A-Za-z0-9_.-]+$/.test(resumeRunId)) {
     resumeRun = await getRun(resumeRunId);
     if (resumeRun?.sessionId) resumeSessionId = resumeRun.sessionId;
   }
@@ -65,8 +65,8 @@ export async function POST(req: Request) {
   let runCwd: string | undefined = typeof cwd === "string" && cwd ? cwd : undefined;
   if (!runCwd) {
     const projName =
-      (resumeRun?.project && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(resumeRun.project)) ? resumeRun.project
-      : (typeof project === "string" && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) ? project
+      (resumeRun?.project && /^(?!\.)[A-Za-z0-9_.-]+$/.test(resumeRun.project)) ? resumeRun.project
+      : (typeof project === "string" && /^(?!\.)[A-Za-z0-9_.-]+$/.test(project)) ? project
       : "claude-default";
     runCwd = (await ensureProject(projName)) ?? path.join(CLAUDE_SCRATCH_ROOT, projName);
   }

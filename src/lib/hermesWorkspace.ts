@@ -27,7 +27,7 @@ function readActiveProfile(): string {
   try {
     const txt = require("node:fs").readFileSync(path.join(HERMES_ROOT, "active_profile"), "utf8");
     const trimmed = (txt as string).trim();
-    if (trimmed && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(trimmed)) return trimmed;
+    if (trimmed && /^(?!\.)[A-Za-z0-9_.-]+$/.test(trimmed)) return trimmed;
   } catch { /* fall through */ }
   return "julian";
 }

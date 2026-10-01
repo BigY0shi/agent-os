@@ -1,5 +1,16 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Commit the name/slug guard fix that sat uncommitted since 2026-09-14 (v2.55.1)
+
+The 2026-09-14 fix below (`(?!.+$)` -> `(?!\.)`, every guarded name was rejected) never got a
+commit; it lived only as uncommitted edits in this checkout. That left HEAD broken, and the
+three slice worktrees branched from HEAD (S30/S31/S32, 2026-09-30) failed smoke-exile-deletes
+H1-H3/H6 because of it. Committed now at the owner's word ("commit rabbit + name guard"),
+exactly as written then: 20 files, the same one-regex swap in each, plus smoke-name-guard.mjs.
+Verified before the commit: `npx tsx scripts/v2/smoke-name-guard.mjs` ALL PASS; no `(?!.+$)`
+left in src/ or scripts/ outside the explanatory comment in claudeWorkspace.ts.
+Rollback: `git revert <this commit>` (restores the broken guard; do not, unless replacing it).
+
 ## 2026-09-30 - Ultracode: missions ask for a folder or repo (read-only), model + effort are settings (v2.55.0)
 
 Owner: "For ultracode have it ask for a folder or repo. Also make sure the model/effort is
@@ -1722,6 +1733,60 @@ Rollback: exile `src/components/faces/`, `src/components/jarvis/JarvisHub.tsx`, 
 `src/app/jarvis/page.tsx`, `src/app/hermes/page.tsx`, `JarvisView.tsx`, `OracleView.tsx`,
 `NewsView.tsx` from `4ddede3`, and drop the S11 block at the end of
 `globals.css`.
+
+## 2026-09-14 - Name/slug guard regex rejected every name; 35 sites fixed (v2.32.1)
+
+The guard `/^(?!.+$)[A-Za-z0-9_.-]+$/` appears at 36 places (19 files). Its
+lookahead `(?!.+$)` fails for every non-empty string, so `.test("rabbit")` is
+false and every guarded helper returned null / every guarded route answered
+400. Evidence this session: `node -e` on the old regex prints `false` for
+"rabbit"; on the new one `true`. The 2026-09-13 v2.32.0 fix had corrected only
+`claudeWorkspace.ensureProject`. Now every site reads `/^(?!\.)[A-Za-z0-9_.-]+$/`
+(no leading dot, safe charset) — the regex and nothing else changed. The 36th
+hit is the explanatory comment above `ensureProject`, left as is.
+
+**Behavior that changes now that the guard accepts names** (each of these was
+dead code or a permanent error before):
+
+- `api/claude/chat`: `resumeRunId` is honored, so the Ultracode reply box
+  actually `--resume`s the captured session and appends to the same run record
+  (it always started cold before). A client-passed `project` is honored instead
+  of always landing in `claude-default`.
+- `api/codex/chat`, `api/freeclaude/chat`, `api/freeclaude/build`: the client's
+  `project` is honored and the scratch dir is actually created (before: fell
+  through to a `path.join` of a dir that was never made — spawn in a missing
+  cwd unless it happened to exist). `api/freeclaude/builds` honors `?project=`
+  instead of always `DEFAULT_PROJECT`.
+- `api/openclaw/studio/talks` POST answered 400 "invalid id" for every save;
+  `api/video/hyperframes/render` POST answered 400 "invalid slug" for every
+  render; `api/antigravity/workspace/raw` answered 400 for every file. All work.
+- `listProjectFiles` / `readProjectFile` in antigravity, claude, codex,
+  freeClaude and kimi workspaces returned null for every project — those
+  Workspace tabs were always empty. `videoProjects.resolveProjectFile` always
+  null — the video preview route always 404'd.
+- `ultracodeRuns.saveRun` early-returned, so **runs were never persisted**;
+  they now land in `~/.agentic-os/ultracode-runs/`. `getRun` works.
+- **Deletes are live again**: `claudeArtifacts.unpublish` really removes
+  `published/<slug>` and redeploys; `studioHistory.deleteSearch/deleteTalk` and
+  `ultracodeRuns.deleteRun` really unlink. Each was a silent no-op before.
+- `hermesStudio.activeProfile` and `hermesWorkspace.readActiveProfile` now
+  read `~/.hermes/active_profile` (currently `main`). Studio: no change (its
+  default was already `main`). Workspace: `PROFILE_ROOT` moves from the
+  hard-coded fallback `profiles/julian` to `profiles/main` — the only profile
+  that exists on disk, so the Hermes workspace buckets now point at the real
+  folder.
+
+`scripts/v2/smoke-name-guard.mjs` imports the claude/kimi/codex `ensureProject`
+helpers (scratch roots redirected to a temp dir before import) and asserts the
+directory on disk: plain name accepted + dir created, leading dot / empty /
+path-ish names rejected with no dir. It caught two botched replacement passes
+in this very session where the shell ate the backslash and left `(?!.)`, which
+rejects everything again. ALL PASS; `tsc --noEmit` clean outside `.next/types`.
+
+**Rollback.** `git checkout` the 18 touched files under `src/app/api/` and
+`src/lib/` (all except `claudeWorkspace.ts`, which also carries the 09-13
+fix — there revert only lines 98 and 135), exile `scripts/v2/smoke-name-guard.mjs`.
+Note a rollback restores the always-reject behavior above.
 
 ## 2026-09-08 - "(no reply)" after one message was the brain, not the voice (v2.31.1)
 

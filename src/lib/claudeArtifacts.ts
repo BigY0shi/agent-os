@@ -183,7 +183,7 @@ export async function publish(id: string, customTitle?: string): Promise<{ ok: b
 }
 
 export async function unpublish(slug: string): Promise<{ ok: boolean; error?: string }> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
   const all = await readManifest();
   const items = all.filter((i) => i.slug !== slug);
   // Exiled, never deleted, and OUTSIDE the published folder (that whole folder is deployed,

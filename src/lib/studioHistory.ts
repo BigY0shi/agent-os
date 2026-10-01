@@ -96,7 +96,7 @@ export async function listSearches(maxItems = 80): Promise<SearchRecord[]> {
 }
 
 export async function getSearch(id: string): Promise<SearchRecord | null> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return null;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return null;
   const p = path.join(SEARCHES_DIR, `${id}.json`);
   if (!existsSync(p)) return null;
   try {
@@ -106,7 +106,7 @@ export async function getSearch(id: string): Promise<SearchRecord | null> {
 }
 
 export async function deleteSearch(id: string): Promise<boolean> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const p = path.join(SEARCHES_DIR, `${id}.json`);
   if (!existsSync(p)) return false;
   // Exiled, never deleted: the search moves to studio/searches/.exile/<stamp>/.
@@ -160,7 +160,7 @@ export async function listTalks(maxItems = 60): Promise<TalkRecord[]> {
 }
 
 export async function getTalk(id: string): Promise<TalkRecord | null> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return null;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return null;
   const p = path.join(TALKS_DIR, `${id}.json`);
   if (!existsSync(p)) return null;
   try {
@@ -170,7 +170,7 @@ export async function getTalk(id: string): Promise<TalkRecord | null> {
 }
 
 export async function deleteTalk(id: string): Promise<boolean> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const p = path.join(TALKS_DIR, `${id}.json`);
   if (!existsSync(p)) return false;
   // Exiled, never deleted: the conversation moves to studio/talks/.exile/<stamp>/.

@@ -211,7 +211,7 @@ export function applyEvent(run: UltracodeRun, raw: unknown): UltracodeRun {
 
 export async function saveRun(run: UltracodeRun): Promise<void> {
   if (!existsSync(ULTRACODE_RUNS_ROOT)) await mkdir(ULTRACODE_RUNS_ROOT, { recursive: true });
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(run.id)) return;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(run.id)) return;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${run.id}.json`);
   const tmp = `${file}.tmp-${Date.now()}`;
   await writeFile(tmp, JSON.stringify(run, null, 2), "utf8");
@@ -256,7 +256,7 @@ export async function listRuns(limit = 50): Promise<RunSummary[]> {
 }
 
 export async function getRun(id: string): Promise<UltracodeRun | null> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return null;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return null;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${id}.json`);
   if (!existsSync(file)) return null;
   try { return JSON.parse(await readFile(file, "utf8")) as UltracodeRun; }
@@ -264,7 +264,7 @@ export async function getRun(id: string): Promise<UltracodeRun | null> {
 }
 
 export async function deleteRun(id: string): Promise<boolean> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${id}.json`);
   if (!existsSync(file)) return false;
   // Exiled, never deleted: the run's replay moves to <runs>/.exile/<stamp>/.
