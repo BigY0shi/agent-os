@@ -6,6 +6,17 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- DONE 2026-10-01 in worktree jarvis-chat (branch feat/s34-jarvis-chat-upgrades, v2.61.0):
+  feat-s34-jarvis-chat-upgrades is passing (./test.sh 121 passed, 0 failed;
+  smoke-jarvis-chat-upgrades 55 checks). Gap audit in features.json notes and the
+  DEV-JOURNAL entry: S13 already had sessions/list/rename/archive/restore/resume, so the slice
+  added only overlay reload persistence + naming, a per-session thinking effort (migration
+  036, the 30s band; the runner applies by version so it runs on the live DB after 63), and
+  one-image-per-message attachments by magic bytes. OWNER TO VERIFY after a rebuild: open the
+  orb chat, send a line, see its first words in the header and rename with the pencil; pick a
+  `think:` level, press F5, reopen the orb (same session, same level); paperclip a png (chip
+  appears, send, reply) and then a .txt renamed to .png (red "Attachment refused: not an
+  image"). The Sessions tab shows the same name. Nothing was deleted; archive stays soft.
 - QUEUED 2026-10-01 by the supervisor in worktree jarvis-chat (branch feat/s34-jarvis-chat-upgrades): work ONLY feat-s34-jarvis-chat-upgrades (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. Audit what Jarvis Sessions (S13) already does before building; build only the gaps.
 - MERGED 2026-10-01 by the supervisor on branch integrate/s30-s32-s7-s9 (then fast-forwarded into
   feat/v2-hermes3d-and-versioning, PR #18): S30 settings sweep, S31 artifacts deploy, S32

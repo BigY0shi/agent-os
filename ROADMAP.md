@@ -48,7 +48,7 @@ is one line; the journal carries the rest.
 ## Next (owner's picks, 2026-10-01)
 
 - [ ] **S38. Jarvis push-to-talk on a mappable global hotkey** (orb chat; mini USB keyboard from across the room). Also fixes the AHK helper's wrong port (3033).
-- [ ] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments.
+- [x] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments. (2026-10-01, v2.61.0)
 - [ ] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take).
 - [ ] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9).
 - [ ] **S37. Snapshots and restore**: weekly by default (setting: weekly / 2 weeks / monthly), old ones exiled (Nexora C10).
@@ -176,6 +176,8 @@ is one line; the journal carries the rest.
 - 2026-09-28 · v2.37.0 · Jarvis v3 S15 Control Room tab: measured host and local-service status with plain-words checks (Windows load average reported as unavailable, loopback-only probes), one skills/workflows matrix across every module, Claude Code plugins (global, next session, backup per change), insights from the run registry with its window stated, and every module's settings behind a new masked door (`/api/control/settings`). Found and queued: GET /api/settings returns key material. smoke-control-room 42 checks.
 
 - 2026-09-28 · config · Jarvis v3 S19: memory off Honcho. Claude Code uses Agent OS Memory V2 through the user-scope MCP server `agent-os` (memory_search / memory_ingest / memory_about_user, verified live); Honcho plugins disabled; global CLAUDE.md updated. Hermes not moved (its `mcp add` cannot send the auth header). No repo code changed.
+
+- 2026-10-01 · v2.61.0 · S34 Jarvis chat upgrades (Nexora C6 on Jarvis). Audit first: S13 already had server-side sessions, list/search/rename/archive/restore and resume. Added only the gaps: the orb overlay keeps its session across a reload (id in localStorage, row on the server) and names it in the header (rename via PATCH); a per-session thinking effort (`jarvis_conversations.effort`, migration 036) that rebuilds the warm SDK session when it changes; one image per message (`POST /api/v2/jarvis/attachments`, png/jpeg/webp by magic bytes, cap and folder in the gear) pushed to the brain as an image block, refused with the reason otherwise, cli engine says it is text-only. smoke-jarvis-chat-upgrades 55 checks against a fake SDK query.
 
 - 2026-09-28 · v2.36.0 · Jarvis v3 S14: skills and workflows on every module. A "Skills & workflows" pop-up in the TopBar (every page; Jarvis tabs are their own modules) switches each skill and workflow on per module or everywhere, runs workflows in place (module runs: runs tray, STOP) and creates new ones; Jarvis's `module_kit` tool does the same by voice (writes gated). Skills now reach 14 modules (cliComplete `module` option + Oracle + Jarvis's own); `moduleRegistry` says which, and the smoke proves it against the code. Workflows are new (`~/.agentic-os/workflows`, retire never deletes). `/api/skills` finally exists (the launch drawer's picker was always empty). Also fixed: Deal Desk saves painted success before the server answered. smoke-module-kit 73 checks.
 

@@ -129,9 +129,23 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | **Insights** | Runs by module, agents, skills in use. |
 | **Settings** | Each settings block as JSON; **Save <block>**, **Open <module>**. Secrets are masked. |
 
+### Orb chat (the overlay on every page)
+
+Opened from the orb in the corner, the hotkey, or **Resume in overlay** on the Sessions tab. The current session comes back after a page reload; the chat itself is stored on the server, the browser keeps only its id.
+
+| Control | What it does |
+|---|---|
+| Session name (header), pencil | The session's name; the first words you send name it. Click the pencil to rename. The Sessions tab shows the same name. |
+| History, **New conversation** | The drawer lists past sessions; pick one to continue it. New conversation starts a fresh one and keeps the previous one listed and resumable. Nothing is deleted. |
+| Archive (in the drawer) | Hides a session; Restore on the Sessions tab brings it back. |
+| **think:** select | The thinking effort for this session (default, low, medium, high, xhigh, max). Saved on the session, so it survives a reload and a server restart. |
+| Paperclip, or paste an image | Attaches one image (png, jpeg or webp, decided by the file bytes) to the next message. Shown as a chip above the text box with an X to drop it. A file that is not an image or is over the cap is refused with the reason and nothing is sent. The image reaches the brain as an image block and goes nowhere else. Needs the sdk engine; the cli engine is text-only and says so. |
+| Gear: **Chat** block | **Default thinking effort** for a new conversation, **Attachment size cap (MB)** (default 4), **Attachment folder** (blank = `~/.agentic-os/jarvis/attachments`). |
+
 ## How it works
 
-- The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`.
+- The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`, each with its own thinking effort; a changed effort rebuilds the warm session (the done event says `sessionRebuilt: "effort"`).
+- Attachments: `POST /api/v2/jarvis/attachments` stores one image under the attachment folder and answers an id; the ask carries `attachments: [{ id }]` and the brain reads the file back into an image content block for that turn only. Earlier images are not replayed when a session resumes, their names are.
 - Voice: Parakeet for dictation, Kokoro for replies via `/api/hermes/tts`.
 - Missions live in `~/.agentic-os/missions/<id>/`; each seat works in its own scratch folder.
 - Oracle keeps consultations in `~/.agentic-os/oracle`, News Radar in `~/.agentic-os/news`, Outreach in `~/.agentic-os/outreach/`, Jarvis MCP servers in `~/.agentic-os/jarvis/mcp-servers.json`. File saves keep the previous version in `~/.agentic-os/file-versions/`.
