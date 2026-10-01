@@ -5,7 +5,7 @@ import { ensureProject, CLAUDE_SCRATCH_ROOT } from "@/lib/claudeWorkspace";
 import { rabbitAuthFailure } from "@/lib/v2/rabbit/secret";
 import {
   DEFAULT_MODEL_ID, parseChatRequest, resolveModel, buildPrompt, splitTurns, parseToolCall, toolCallText, newCallId,
-  explicitCallRequest, CALL_REMINDER, completionId, completionJson, sseChunk, SSE_DONE, type ToolCall,
+  explicitCallRequest, callRequestText, CALL_REMINDER, completionId, completionJson, sseChunk, SSE_DONE, type ToolCall,
 } from "@/lib/v2/rabbit/openai";
 import { runClaudeTurn, type ClaudeTurnResult } from "@/lib/v2/rabbit/claudeChat";
 import { linkSession, recordTurn } from "@/lib/v2/rabbit/store";
@@ -87,7 +87,11 @@ export async function POST(req: Request) {
   // ── AI Agent Mastermind: the /room panel answers instead of one claude spawn.
   // Device-function requests ("call …", "use web_search …") still go to Claude
   // below, since the panel has no tools; everything else is a round.
-  if (isMastermindModel(parsed.req.model) && !(tools.length && explicitCallRequest(current, tools))) {
+  // What the user asked for in their own words; null while a tool result is being answered
+  // (that goes back to Claude, which issued the call; the panel has no tools).
+  const ask = callRequestText(messages);
+  const callTurn = tools.length > 0 && (ask === null ? messages.some((m) => m.role === "tool") : explicitCallRequest(ask, tools));
+  if (isMastermindModel(parsed.req.model) && !callTurn) {
     const panelIds = Array.isArray(cfg.mastermindAgents) ? cfg.mastermindAgents.filter((x): x is string => typeof x === "string") : [];
     const sequential = cfg.mastermindSequential !== false;
     const finishRound = (text: string, durationMs: number, error: string | null) => {
@@ -139,7 +143,8 @@ export async function POST(req: Request) {
   // Prompt-based calling is sampled. When the user explicitly asked for a call
   // and the model answered in prose anyway, ask once more with a reminder —
   // the rabbitOS 3 probe gives up after a single miss.
-  const wantsCall = tools.length > 0 && explicitCallRequest(current, tools);
+  // Never on a turn that answers a tool result: prose is the right reply there (2026-10-01).
+  const wantsCall = tools.length > 0 && ask !== null && explicitCallRequest(ask, tools);
   const runTurn = async (onDelta?: (t: string) => void): Promise<ClaudeTurnResult> => {
     const first = await runClaudeTurn({ model: model.claude, systemPrompt, prompt, cwd, signal: req.signal, onDelta });
     if (!wantsCall || first.isError || first.timedOut || parseToolCall(first.text, tools)) return first;

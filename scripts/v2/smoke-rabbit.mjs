@@ -182,6 +182,25 @@ try {
     check("explicitCallRequest: common-word tool name 'wait' does NOT trigger", openai.explicitCallRequest("wait, can you run that by me again?", R1_TOOLS) === false);
     check("explicitCallRequest: snake_case tool name as a whole word triggers", openai.explicitCallRequest("use web_search for the weather", R1_TOOLS) === true && openai.explicitCallRequest("use my web_searches", R1_TOOLS) === false);
     check("CALL_REMINDER mentions the JSON object", openai.CALL_REMINDER.includes("JSON tool_call object"));
+    // 2026-10-01: answering a tool result was re-asked as a "call request" because the
+    // search results ("[web_search] ... use ...") were tested; a weather question took 91s.
+    const WS = [{ name: "web_search", description: "", parameters: {} }, { name: "ping", description: "", parameters: {} }];
+    const afterTool = [
+      { role: "system", content: "sys" },
+      { role: "user", content: '<user channel="r1">What is the weather like?</user>' },
+      { role: "assistant", content: "", toolCalls: [{ id: "c1", name: "web_search", arguments: "{}" }] },
+      { role: "tool", content: "Use the forecast below. Run times: web_search returned 5 results", toolCallId: "c1", name: "web_search" },
+      { role: "user", content: "<supplementary-context>use web_search tool output</supplementary-context>" },
+    ];
+    check("callRequestText: a turn answering a tool result is never a call request (null)", openai.callRequestText(afterTool) === null);
+    const wrapped = [{ role: "user", content: '<user channel="r1" occurredAt="x">What is the weather like?</user> <supplementary-context>use the web_search tool when needed</supplementary-context>' }];
+    const ask = openai.callRequestText(wrapped);
+    check("callRequestText: only the <user> text of an rabbitOS wrapper counts", ask === "What is the weather like?" && openai.explicitCallRequest(ask, WS) === false, ask);
+    const probeAsk = openai.callRequestText([{ role: "user", content: "Call the ping function." }]);
+    check("callRequestText: the rabbitOS probe still reads as a call request", probeAsk === "Call the ping function." && openai.explicitCallRequest(probeAsk, WS) === true, probeAsk);
+    const routeSrc = read("src/app/api/rabbit/v1/chat/completions/route.ts");
+    check("route: the prose retry is gated on callRequestText, never on the whole tail",
+      routeSrc.includes("const ask = callRequestText(messages);") && routeSrc.includes("ask !== null && explicitCallRequest(ask, tools)") && !routeSrc.includes("explicitCallRequest(current, tools)"));
 
     // Big-conversation guards: the R1's real turn is ~60k+ chars of content.
     const big = "x".repeat(150_000);

@@ -1,5 +1,23 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Rabbit bridge: answers to a tool result were re-asked as "call requests" (v2.56.3)
+
+After v2.56.1 went live (restart 06:54 PDT) the owner timed "what's the weather like" at
+~1.5-2 min. rabbit.log 14:00:14-14:01:45 UTC (91s): notify_before_act 6.4s, web_search call
+3.5s, then the turn answering the search result took 38.6s: `chat retry: explicit call
+request answered in prose` fired, the forced retry called web_search AGAIN, then another
+web_search (12.1s), web_fetch (10.2s) and a final answer that was retried too (6.6s). Both
+retried answer turns end `...,assistant+call,tool,user`.
+Cause: the retry gate ran explicitCallRequest(current), and `current` is the whole tail since
+the last assistant turn, tool results included (`[web_search] ...` + text with "use"/"run"),
+so every answer to a tool result looked like an explicit call request.
+Fix: openai.ts callRequestText(messages) - only the user's own words since the last assistant
+turn, only the `<user>` text inside an rabbitOS wrapper, and null when the tail carries a
+tool result. The route gates the prose retry on it; Mastermind routing keeps sending
+tool-result turns to Claude. The rabbitOS probe ("Call the ping function.") still triggers
+the retry. smoke-rabbit: 4 new checks on the exact failing shape. tsc clean, smoke-guide pass.
+Live after rebuild + restart. Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - Rabbit bridge: the 3-minute weather answer, replayed before/after (v2.56.2)
 
 Owner: "3 minutes on something like what's the weather like". Transcript (rabbit_messages,

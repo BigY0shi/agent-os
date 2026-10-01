@@ -303,6 +303,28 @@ export function explicitCallRequest(text: string, tools: ToolDef[]): boolean {
   });
 }
 
+/**
+ * The words to test with explicitCallRequest: only what the USER said since the last
+ * assistant turn. null when that stretch carries a tool result, because then the model is
+ * answering the result and prose is the right reply. Inside an rabbitOS wrapper
+ * (`<user channel=...>text</user>` + `<supplementary-context>`) only the `<user>` text
+ * counts. Found 2026-10-01: testing the whole tail meant search results ("[web_search] ...
+ * use ... run ...") read as a request to call a function, so every answer to a tool result
+ * was thrown away and re-asked, and the model searched again (a weather question: 91s).
+ */
+export function callRequestText(messages: ChatMessage[]): string | null {
+  const turns = messages.filter((m) => m.role !== "system");
+  let lastAsst = -1;
+  for (let i = turns.length - 1; i >= 0; i--) if (turns[i].role === "assistant") { lastAsst = i; break; }
+  const tail = turns.slice(lastAsst + 1);
+  if (tail.some((m) => m.role === "tool")) return null;
+  const said = tail.filter((m) => m.role === "user").map((m) => {
+    const inner = [...m.content.matchAll(/<user\b[^>]*>([\s\S]*?)<\/user>/gi)].map((x) => x[1]);
+    return inner.length ? inner.join("\n") : m.content;
+  }).join("\n").trim();
+  return said || null;
+}
+
 export const CALL_REMINDER =
   "\n\n(Reminder: the user asked you to call a function. Your entire reply must be the JSON tool_call object and nothing else — no words, no explanation.)";
 
