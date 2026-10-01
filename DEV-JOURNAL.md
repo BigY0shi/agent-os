@@ -1,5 +1,18 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Owner's picks queued: S34-S38 (Nexora C6/C7/C9/C10 + Jarvis push-to-talk hotkey) (v2.56.5)
+
+Owner decisions on the Nexora candidates (_design/nexora-diff.md section 2) and Jarvis voice:
+C6 yes, all of it, but on Jarvis not Hermes (S34). C7 a generated Rorschach-style mark for every
+agent like Claude's and Codex's (S35). C8 appearance held for the complete visual overhaul at the
+end. C9 yes but not hourly (S36: 12 h buckets by default, a setting). C10 yes, weekly or rarer
+(S37: weekly default, old snapshots exiled). C11 dropped. Jarvis hands-free loop declined; instead
+push-to-talk in the orb chat on a mappable global hotkey for a mini USB keyboard (S38). Found while
+scoping S38: scripts/v2/jarvis-hotkey.ahk posts to http://127.0.0.1:3033 but Agent OS listens on
+3737, so the existing open-Jarvis hotkey cannot have reached the server; S38 fixes it.
+Rows appended to features.json (operator-owned fields only); ROADMAP.md "Next (owner's picks)".
+Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - smoke-memory-ui no longer needs the gitignored .exile folder (v2.56.4)
 
 All three harness worktrees (S30/S31/S32, 2026-10-01) ended with ./test.sh red on

@@ -201,6 +201,121 @@
       ],
       "status": "failing",
       "notes": ""
+    },
+    {
+      "id": "feat-s34-jarvis-chat-upgrades",
+      "title": "S34: Jarvis chat upgrades (Nexora C6, moved from Hermes to Jarvis by the owner)",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "_design/nexora-diff.md section 2, C6 (the Nexora pack drives Hermes the way Agent OS drives Jarvis; owner 2026-10-01: build it on Jarvis)",
+        "src/lib/v2/jarvis/ (brain.ts, conversations.ts, resume.ts) and src/components/v2/jarvis/ChatboxOverlay.tsx",
+        "S13 Sessions (v2.35.0) in DEV-JOURNAL.md / ROADMAP.md Done: what Jarvis already has",
+        "docs/modules/jarvis.md"
+      ],
+      "description": "Owner 2026-10-01: 'C6: yes to all of these, but they go to Jarvis, not Hermes.' Bring the four Nexora chat upgrades to Jarvis: (1) named persistent sessions with server-side history, (2) 'New conversation' that starts fresh WITHOUT deleting the old one (it stays listed and resumable), (3) a thinking/effort flag per session that survives a reload, (4) attachments: at least one image per message passed to the brain as an image content block (png/jpg/webp checked by magic bytes, size cap as a setting, default 4 MB). FIRST audit what Jarvis already has (S13 Sessions shipped v2.35.0, conversations.ts, resume.ts) and write the gap list into notes; build only the gaps, do not rebuild what works. Attachments are stored under ~/.agentic-os (path from settings) and never sent anywhere but the brain call. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "notes list what Jarvis already had vs what this slice added (the gap audit)",
+        "Sessions are named, listed, resumable after a server restart; 'New conversation' keeps the previous one listed (nothing deleted)",
+        "The per-session thinking/effort choice survives a page reload",
+        "An image attached in the orb chat reaches the brain as an image block; non-image or oversized files are refused with the reason",
+        "New scripts/v2/smoke-jarvis-chat-upgrades.mjs (offline, stubbed brain) covers all four",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s35-agent-faces",
+      "title": "S35: Agent faces - a Rorschach-style mark for every agent (Nexora C7, owner's take)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/components/AgentAvatar.tsx (the hand-drawn symmetric marks: Claude's four-point star, Codex's six-petal rosette)",
+        "src/lib/agentsStore.ts and the Crew view (S21), Mission Control (S18), Hermes 3D seats - every place an agent is drawn",
+        "_design/nexora-diff.md C7 (license note: Nexora's portraits are not ours)"
+      ],
+      "description": "Owner 2026-10-01: 'each agent should be getting a rorschach type shape, like Codex and Claude currently have.' Every agent without a hand-drawn mark (custom/crew agents, Jarvis crew, Hermes profiles, any agent id AgentAvatar does not know) gets a generated mark: an SVG inkblot with mirror symmetry about the vertical axis, smooth blob paths, drawn in white on the agent's accent gradient like the existing marks, deterministic from the agent id (seeded PRNG) so it never changes on its own. A 'New shape' control on the agent (Crew view / agent detail) re-rolls it by storing a per-agent seed as data; 'Reset' returns to the id-derived shape. The existing hand-drawn marks (Claude, Codex and the other CLI brand marks) stay as they are. No uploads, no stock portraits. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "Every agent shown in Crew, Mission Control and the agent pickers has a mark; none falls back to a letter or a blank",
+        "Generated marks are deterministic per id and seed, and mirror-symmetric (smoke checks the path data)",
+        "Re-roll persists across reloads and server restarts; Reset restores the id-derived shape",
+        "New scripts/v2/smoke-agent-faces.mjs covers determinism, symmetry, re-roll persistence and that hand-drawn marks are untouched",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s36-fleet-stats",
+      "title": "S36: Fleet stats - activity over time, heatmap, handoffs, session counts (Nexora C9)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "_design/nexora-diff.md C9",
+        "src/app/api/fleet/runtime/route.ts, the V2 runs/tasks/agents tables (src/lib/v2/), Jarvis conversations, Rabbit sessions, Ultracode runs",
+        "src/lib/tokenLog.ts ('not tracked' convention)",
+        "Mission Control (S18) and Crew (S21) components"
+      ],
+      "description": "Owner 2026-10-01: 'it doesn't need to be hourly. Maybe bidaily or so. But yes, we will need these metrics.' Add fleet stats to Mission Control (or Crew, whichever already shows fleet data): two-line sparklines (you vs agents) over a window, an activity heatmap in the owner's timezone, recent handoffs between agents, and session counts (last 24 h and total). Bucket size is a setting, default 12 hours (twice a day), choices 6/12/24/48 h; window length a setting, default 14 days. Every number is computed from stored records only (runs, tasks, conversations, sessions); a source that is not recorded shows 'not tracked', never zero and never an estimate. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "Sparklines, heatmap, handoffs and session counts render from stored records with the bucket/window settings applied",
+        "Changing the bucket setting re-buckets without a rebuild",
+        "Untracked sources read 'not tracked'; an empty fleet reads as empty, not as fabricated activity",
+        "New scripts/v2/smoke-fleet-stats.mjs (temp DB with seeded rows) asserts the bucketing math and the not-tracked path",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s37-snapshots",
+      "title": "S37: Snapshots and restore - scheduled backup of Agent OS state (Nexora C10)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "_design/nexora-diff.md C10 (conflict note: never delete old snapshots)",
+        "src/lib/v2/boot.ts (db.backup handler, backupDirFor, v2.50.3) and src/lib/exileFile.ts",
+        "the existing scheduler used by newsletter/jobs (rrule) and the Health page (S27) / Standing orders (S26)"
+      ],
+      "description": "Owner 2026-10-01: 'not nightly, maybe weekly is fine, or bi-monthly even.' A scheduled snapshot of ~/.agentic-os plus the V2 database taken with the SQLite backup API (never a raw copy of a WAL database), written to a snapshot folder outside ~/.agentic-os (setting, default ~/AgentOS-snapshots). Cadence is a setting: weekly (default), every 2 weeks, monthly, off. Each snapshot holds a manifest (files, sizes, hashes) and a restore.ps1 that restores it (stopping first if Agent OS is running, never overwriting without moving the current state to .exile). Secrets are left out by default (key files, secret files, credential configs; list in code and docs), with an 'include secrets' setting off by default. Keep-last-N is a setting (default 8); older snapshots are moved to .exile, never deleted. A 'Snapshot now' button and the last/next run time show in the gear (Health page or Standing orders, wherever scheduled jobs already live). Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "A snapshot contains a consistent DB copy made with the backup API, a manifest and restore.ps1; secrets are absent unless the setting is on",
+        "The schedule runs at the chosen cadence and appears with last/next run; 'Snapshot now' works",
+        "Retention moves the oldest snapshots to .exile (nothing deleted)",
+        "New scripts/v2/smoke-snapshots.mjs (temp dirs) takes a snapshot, checks the manifest against the files, checks secrets are excluded, and checks retention exiles",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s38-jarvis-ptt-hotkey",
+      "title": "S38: Jarvis push-to-talk on a mappable global hotkey (orb chat)",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "scripts/v2/jarvis-hotkey.ahk (AutoHotkey v2 helper; NOTE its AppUrl is http://127.0.0.1:3033, but Agent OS listens on 3737 - a live bug)",
+        "src/app/api/jarvis/hotkey/{route,setup,stream}, src/lib/v2/jarvis/hotkeyBus.ts, hotkeySecret.ts",
+        "src/components/v2/jarvis/JarvisOmnipresence.tsx (SSE consumer, in-app fallback keybind) and ChatboxOverlay.tsx (hold-to-talk mic, pushToTalk, autoSend)",
+        "src/lib/v2/jarvis/useVoiceCapture.ts, scripts/v2/smoke-jarvis-hotkey.mjs"
+      ],
+      "description": "Owner 2026-10-01: 'Jarvis push to talk should be in the orb chat. There's no hot key to activate the mic. I use it a lot when I'm not sitting in front of my computer, so it'd be nice to have a hot key that's mappable, so I can just use a mini usb keyboard.' Today the OS-global hotkey only OPENS the orb chat. Make it push-to-talk: holding the key opens the orb chat (if closed), fronts the page and starts mic capture; releasing it stops capture and, when the new setting jarvis.hotkey.sendOnRelease is on (default ON for the hotkey path, because the owner is away from the screen), sends the transcript; the reply is read aloud as today. The mouse mic button keeps its current behaviour. The key is mappable in the Jarvis gear (jarvis.hotkey.key already exists; add a mode setting: 'hold to talk' default, or 'press to open' as today), and the AHK helper must read the key and mode from the server (a secret-gated GET) instead of its own hard-coded line, so the gear is the one place to change it; fix AppUrl to 3737 (or read it). The helper sends key-down and key-up events; the bus and SSE carry them; the in-app fallback keybind does the same hold-to-talk when the page has focus. Document F13-F24 and remapping a spare key on a mini USB keyboard in docs/modules/jarvis.md. Note any browser limit on starting the mic in a background tab and handle it (front the page first); if a real limit remains, say so in the UI and the docs. End with an AWAITING USER VERIFY checklist: install/reload the helper, hold the key from across the room, speak, release, hear the reply. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "Holding the mapped key starts capture in the orb chat; releasing stops it and sends when sendOnRelease is on",
+        "The key and mode are set in the Jarvis gear and the AHK helper picks them up without editing the script; AppUrl points at 3737",
+        "The mouse mic behaviour is unchanged; the in-app keybind also does hold-to-talk when focused",
+        "smoke-jarvis-hotkey.mjs extended: down/up events through the bus and SSE, secret still required, config GET returns key+mode only",
+        "agent-progress.md ends with an AWAITING USER VERIFY checklist for the live mini-keyboard test",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
     }
   ]
 }

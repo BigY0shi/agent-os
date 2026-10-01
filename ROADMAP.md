@@ -25,7 +25,7 @@ is one line; the journal carries the rest.
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
   readbacks. Spec: `_design/jarvis-screen-control.md`. Not yet seen in a browser.
-- [ ] **Jarvis hands-free loop (proposed, owner's call).** The overlay needs a mic
+- [x] **Jarvis hands-free loop: DECLINED by the owner 2026-10-01** (not needed; push-to-talk on a hotkey instead, S38). Was: The overlay needs a mic
   press per turn (C2b contract: mic not hot on open). An opt-in "Hands-free" toggle
   that re-arms capture when read-aloud ends, plus auto-send, would make Deal Desk
   voice-only. Touches a contract Yoshi stated twice, so it waits for his yes.
@@ -35,6 +35,14 @@ is one line; the journal carries the rest.
   added/removed); the only mid-run control is STOP. Deal Desk is the reference
   implementation to copy. Start with Content Engine and Kanban, the two he has
   run most.
+## Next (owner's picks, 2026-10-01)
+
+- [ ] **S38. Jarvis push-to-talk on a mappable global hotkey** (orb chat; mini USB keyboard from across the room). Also fixes the AHK helper's wrong port (3033).
+- [ ] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments.
+- [ ] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take).
+- [ ] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9).
+- [ ] **S37. Snapshots and restore**: weekly by default (setting: weekly / 2 weeks / monthly), old ones exiled (Nexora C10).
+- Held: **C8 Appearance** waits for the complete visual overhaul at the end. Dropped: **C11 voice cast** (not needed).
 ## Next
 
 - [x] **S4. Deal Desk: more control from the chair.** Asked by Yoshi 2026-09-02; all six parts landed 2026-09-02 (see Done, v2.18.0 to v2.23.0). Not yet seen in a browser.
