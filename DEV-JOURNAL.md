@@ -1,5 +1,30 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - The Oracle can speak with Kokoro (v2.53.0)
+
+Owner on open item 3: "Add kokoro, yes you can edit settings." Voicebox was retired on
+2026-09-08, so the Oracle's gear only had ElevenLabs that worked.
+- `settings.oracle.voice`: provider adds `"kokoro"` (now the default for a fresh setup) and a
+  `kokoroVoice` (`ORACLE_KOKORO_VOICE` = `bm_lewis`, distinct from Jarvis's `bm_george`).
+  The owner's saved choice (ElevenLabs) is left as it is; he switches in the gear.
+- `/api/hermes/tts` provider `"kokoro"` (and `"local"` with `module: "oracle"`): the local
+  Kokoro server speaks; when it fails, the Oracle's own backup choice applies exactly as it
+  did for Voicebox (rule 20): ElevenLabs speaks labelled `fellBackFrom: "kokoro"` with the
+  reason, or "none" gives a 502 naming Kokoro. Jarvis's plain `"local"` path is unchanged.
+- The Oracle gear: **Kokoro (local, free)** first, ElevenLabs, **Voicebox (retired)**; a
+  **Kokoro voice** picker (the British voices `server.py` documents: Lewis, George, Fable,
+  Daniel; a saved custom one stays visible); **If Kokoro fails** / **If Voicebox fails**.
+- `settings.ts` change committed alone (the owner's other uncommitted lines stay unstaged).
+`docs/modules/jarvis.md` updated; `smoke-voicebox.mjs`'s Oracle-default check now expects
+Kokoro.
+
+Verified: new `smoke-oracle-kokoro.mjs`, 8 checks (defaults; Kokoro answers with the chosen
+voice; Kokoro down with backup ElevenLabs, labelled; backup none, a 502 and no ElevenLabs
+call; Jarvis's local path untouched; the gear). fetch stubbed, HOME in a temp dir.
+smoke-voicebox, smoke-voice-mode, smoke-jarvis-v3-ui, smoke-settings-secrets pass. tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-30 - Loop: Ollama Cloud judge, an owner-chosen fallback, and every Loop parameter in a gear (v2.52.0)
 
 Owner on open item 2: "There is no local ollama. It needs to hit ollama cloud or no

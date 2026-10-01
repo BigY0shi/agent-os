@@ -37,7 +37,7 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 |---|---|
 | Question box, **Consult the Oracle** (Ctrl/Cmd + Enter) | Runs the chosen CLI agent autonomously for counsel, not lookups. |
 | **Voice** picker | Which CLI agent answers. |
-| Gear ("The Oracle's voice") | **Voice engine** (Voicebox or ElevenLabs), **Voicebox profile**, **If Voicebox fails**, **ElevenLabs voice**. |
+| Gear ("The Oracle's voice") | **Voice engine** (Kokoro, the local default; ElevenLabs; or Voicebox, marked retired), **Kokoro voice** (Lewis by default; George is Jarvis's), **If Kokoro fails** / **If Voicebox fails** (the ElevenLabs voice below, labelled, or silence), **ElevenLabs voice**. |
 | **Read aloud** / **Stop**, **Ask again** | Speak the answer, or clear it. |
 | **Past counsel** | Reopens earlier consultations. |
 

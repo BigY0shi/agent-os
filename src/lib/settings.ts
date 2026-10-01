@@ -42,6 +42,12 @@ export const ORACLE_ELEVEN_VOICE_ID = "Bu13R3bywbVy3lQswSJo";
  */
 export const ORACLE_VOICEBOX_PROFILE = "The Sage";
 
+/**
+ * The Kokoro voice the Oracle speaks with by default (local Kokoro TTS on :8880, British
+ * pipeline). bm_lewis keeps it distinct from Jarvis's bm_george. Changed in the Oracle's gear.
+ */
+export const ORACLE_KOKORO_VOICE = "bm_lewis";
+
 export interface SeoSite {
   label: string;
   url: string;        // the live site / repo this SEO content targets
@@ -220,7 +226,10 @@ export interface Settings {
   // module: "oracle".
   oracle: {
     voice?: {
-      provider?: "voicebox" | "elevenlabs";
+      // kokoro = local Kokoro TTS (default since 2026-09-30); voicebox is retired
+      // (2026-09-08) and kept only so a saved value stays visible.
+      provider?: "kokoro" | "voicebox" | "elevenlabs";
+      kokoroVoice?: string;
       voiceboxProfile?: string;
       elevenVoiceId?: string;
       fallback?: "elevenlabs" | "none";
@@ -486,7 +495,7 @@ export const DEFAULT_SETTINGS: Settings = {
     glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
-  oracle: { voice: { provider: "voicebox", voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
+  oracle: { voice: { provider: "kokoro", kokoroVoice: ORACLE_KOKORO_VOICE, voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
   voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
   stt: { parakeetUrl: "http://127.0.0.1:8881" },
   runsTray: { enabled: true, autoDismissSec: 45 },

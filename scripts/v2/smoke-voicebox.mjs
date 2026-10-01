@@ -193,8 +193,10 @@ check("the real Hermes profile was never opened", !fs.existsSync(path.join(dir, 
 // ---- H. S8: the Oracle speaks through the same door, on its own settings ----
 console.log("-- H: Oracle voice (S8) --");
 const od = S.DEFAULT_SETTINGS.oracle?.voice ?? {};
-check("oracle defaults: Voicebox + The Sage, ElevenLabs backup, named Sage voice id",
-  od.provider === "voicebox" && od.voiceboxProfile === "The Sage" && od.fallback === "elevenlabs" && od.elevenVoiceId === S.ORACLE_ELEVEN_VOICE_ID && /^[A-Za-z0-9]{16,}$/.test(S.ORACLE_ELEVEN_VOICE_ID),
+// Default engine is Kokoro since 2026-09-30 (Voicebox retired 2026-09-08); The Sage profile is
+// kept for a saved Voicebox choice, and ElevenLabs stays the labelled backup.
+check("oracle defaults: Kokoro (bm_lewis), The Sage kept, ElevenLabs backup, named Sage voice id",
+  od.provider === "kokoro" && od.kokoroVoice === S.ORACLE_KOKORO_VOICE && od.voiceboxProfile === "The Sage" && od.fallback === "elevenlabs" && od.elevenVoiceId === S.ORACLE_ELEVEN_VOICE_ID && /^[A-Za-z0-9]{16,}$/.test(S.ORACLE_ELEVEN_VOICE_ID),
   JSON.stringify(od));
 check("oracle defaults survive the merge with a settings file that lacks them", S.readSettings().oracle?.voice?.voiceboxProfile === "The Sage");
 const oracleSrc = fs.readFileSync(new URL("../../src/components/OracleView.tsx", import.meta.url), "utf8");

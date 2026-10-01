@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
 //                                   engine since 2026-09-02. Never falls back.
 //   "local"                       — Kokoro-82M on this machine (~/.agentic-os/kokoro-tts,
 //                                   port 8880, British bm_george). Free, offline, GPU-fast.
+//   "kokoro"                      — the same Kokoro server for the Oracle, with the
+//                                   Oracle's own labelled backup (oracle.voice.fallback).
 //   "auto"                        — local first, then ElevenLabs, then OpenAI — the first
 //                                   backend that actually produces audio wins.
 //   "openai" (default for Jarvis) — gpt-4o-mini-tts, steered to a refined English butler.
@@ -184,6 +186,34 @@ async function voiceboxTts(text: string, profileRef: string, module: string): Pr
   );
 }
 
+// Kokoro for the Oracle (owner, 2026-09-30: "Add kokoro"). The Oracle's own backup choice
+// (oracle.voice.fallback, rule 20) covers Kokoro the same way it covers Voicebox: when the
+// local server fails, ElevenLabs speaks only if the owner chose it, and the reply says so.
+// Jarvis's "local" path is unchanged (no fallback there).
+async function oracleKokoroTts(text: string, voice: string): Promise<NextResponse> {
+  let reason: string;
+  try {
+    const r = await localTts(text, voice);
+    const j = (await r.clone().json().catch(() => ({}))) as { audio?: string; error?: string; detail?: string };
+    if (r.ok && j.audio) return NextResponse.json({ audio: j.audio, provider: "kokoro" });
+    reason = `${j.error ?? `local TTS ${r.status}`}${j.detail ? ` (${j.detail})` : ""}`;
+  } catch (e) {
+    reason = `Kokoro is not answering (${String((e as Error)?.message ?? e)})`;
+  }
+  const policy = fallbackPolicy("oracle");
+  if (policy.fallback !== "elevenlabs") {
+    return NextResponse.json({ error: reason, provider: "kokoro" }, { status: 502 });
+  }
+  console.warn(`[tts] Kokoro failed (${reason}); falling back to ElevenLabs as configured for oracle`);
+  const r = await elevenTts(text, policy.voiceId);
+  const j = (await r.json().catch(() => ({}))) as { audio?: string; error?: string };
+  if (r.ok && j.audio) return NextResponse.json({ audio: j.audio, provider: "elevenlabs", fellBackFrom: "kokoro", fallbackReason: reason });
+  return NextResponse.json(
+    { error: `Kokoro failed (${reason}); ElevenLabs backup also failed (${j.error ?? r.status})`, provider: "kokoro", fallbackTried: "elevenlabs" },
+    { status: 502 },
+  );
+}
+
 export async function POST(req: Request) {
   const { text, voiceId, provider, module } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
@@ -193,6 +223,7 @@ export async function POST(req: Request) {
     const v = typeof voiceId === "string" ? voiceId : "";
     const mod = typeof module === "string" ? module : "";
     if (provider === "voicebox") return await voiceboxTts(text, v, mod);
+    if (provider === "kokoro" || (provider === "local" && mod === "oracle")) return await oracleKokoroTts(text, v);
     if (provider === "local") return await localTts(text, v);
     if (provider === "auto") {
       // First backend that actually yields audio wins: free local Kokoro, then

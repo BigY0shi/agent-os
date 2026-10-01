@@ -19,11 +19,19 @@ interface Consultation { at: string; question: string; answer: string; agent: st
 // below and read at speak time. Defaults come merged from the server, so the
 // client never carries a voice id of its own.
 interface OracleVoice {
-  provider?: "voicebox" | "elevenlabs";
+  provider?: "kokoro" | "voicebox" | "elevenlabs";
+  kokoroVoice?: string;
   voiceboxProfile?: string;
   elevenVoiceId?: string;
   fallback?: "elevenlabs" | "none";
 }
+// Kokoro voices the local server documents (server.py, British pipeline). bm_george is Jarvis's.
+const KOKORO_VOICES = [
+  { id: "bm_lewis", label: "Lewis (bm_lewis) · default" },
+  { id: "bm_george", label: "George (bm_george) · Jarvis's voice" },
+  { id: "bm_fable", label: "Fable (bm_fable)" },
+  { id: "bm_daniel", label: "Daniel (bm_daniel)" },
+];
 const voiceOf = (s: unknown): OracleVoice => ((s as { oracle?: { voice?: OracleVoice } } | null)?.oracle?.voice) ?? {};
 
 const CONTEMPLATIONS = [
@@ -73,7 +81,7 @@ export default function OracleView() {
   // Voice settings + the gear (rule 16: every knob in-app).
   const { settings, save, saving } = useSettings();
   const voice = voiceOf(settings);
-  const provider = voice.provider ?? "voicebox";
+  const provider = voice.provider ?? "kokoro";
   const [gearOpen, setGearOpen] = useState(false);
   const [vbProfiles, setVbProfiles] = useState<{ id: string; name: string; engine: string | null }[]>([]);
   const [vbError, setVbError] = useState<string | null>(null);
@@ -125,8 +133,8 @@ export default function OracleView() {
         const sr = await fetch("/api/settings", { cache: "no-store" });
         v = voiceOf((await sr.json())?.settings);
       }
-      const prov = v.provider ?? "voicebox";
-      const voiceId = prov === "voicebox" ? (v.voiceboxProfile ?? "") : (v.elevenVoiceId ?? "");
+      const prov = v.provider ?? "kokoro";
+      const voiceId = prov === "kokoro" ? (v.kokoroVoice ?? "") : prov === "voicebox" ? (v.voiceboxProfile ?? "") : (v.elevenVoiceId ?? "");
       const r = await fetch("/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, provider: prov, voiceId, module: "oracle" }) });
       const d = await r.json();
       if (!d.audio) { setTts("idle"); setErr(d.error || "The Oracle's voice did not answer."); return; }
@@ -295,10 +303,30 @@ export default function OracleView() {
                 <label>
                   <span className="lab">Voice engine</span>
                   <select value={provider} disabled={saving} onChange={(e) => patchVoice({ provider: e.target.value as OracleVoice["provider"] })}>
-                    <option value="voicebox">Voicebox (local studio, cloned voices)</option>
+                    <option value="kokoro">Kokoro (local, free)</option>
                     <option value="elevenlabs">ElevenLabs</option>
+                    <option value="voicebox">Voicebox (retired)</option>
                   </select>
                 </label>
+                {provider === "kokoro" && (
+                  <label>
+                    <span className="lab">Kokoro voice</span>
+                    <select value={voice.kokoroVoice ?? "bm_lewis"} disabled={saving} onChange={(e) => patchVoice({ kokoroVoice: e.target.value })}>
+                      {/* British voices the local server documents; a saved custom one stays visible. */}
+                      {voice.kokoroVoice && !KOKORO_VOICES.some((k) => k.id === voice.kokoroVoice) && <option value={voice.kokoroVoice}>{voice.kokoroVoice}</option>}
+                      {KOKORO_VOICES.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+                    </select>
+                  </label>
+                )}
+                {provider !== "elevenlabs" && (
+                  <label>
+                    <span className="lab">If {provider === "kokoro" ? "Kokoro" : "Voicebox"} fails</span>
+                    <select value={voice.fallback ?? "elevenlabs"} disabled={saving} onChange={(e) => patchVoice({ fallback: e.target.value as OracleVoice["fallback"] })}>
+                      <option value="elevenlabs">Use the ElevenLabs voice below (labelled)</option>
+                      <option value="none">Report the error, stay silent</option>
+                    </select>
+                  </label>
+                )}
                 {provider === "voicebox" ? (
                   <>
                     <label>
@@ -317,18 +345,11 @@ export default function OracleView() {
                     {!vbError && voice.voiceboxProfile && vbProfiles.length > 0 && !vbProfiles.some((p) => p.id === voice.voiceboxProfile || p.name.trim().toLowerCase() === (voice.voiceboxProfile ?? "").trim().toLowerCase()) && (
                       <div className="warn">Profile &quot;{voice.voiceboxProfile}&quot; is not in the studio. Available: {vbProfiles.map((p) => p.name.trim()).join(", ")}</div>
                     )}
-                    <label>
-                      <span className="lab">If Voicebox fails</span>
-                      <select value={voice.fallback ?? "elevenlabs"} disabled={saving} onChange={(e) => patchVoice({ fallback: e.target.value as OracleVoice["fallback"] })}>
-                        <option value="elevenlabs">Use the ElevenLabs voice below (labelled)</option>
-                        <option value="none">Report the error, stay silent</option>
-                      </select>
-                    </label>
                   </>
                 ) : null}
                 {(provider === "elevenlabs" || (voice.fallback ?? "elevenlabs") === "elevenlabs") && (
                   <label>
-                    <span className="lab">ElevenLabs voice{provider === "voicebox" ? " (backup)" : ""}</span>
+                    <span className="lab">ElevenLabs voice{provider !== "elevenlabs" ? " (backup)" : ""}</span>
                     <select value={voice.elevenVoiceId ?? ""} disabled={saving || !elevenVoices.length} onChange={(e) => patchVoice({ elevenVoiceId: e.target.value })}>
                       {voice.elevenVoiceId && !elevenVoices.some((v) => v.voice_id === voice.elevenVoiceId) && (
                         <option value={voice.elevenVoiceId}>{elevenVoices.length ? `${voice.elevenVoiceId} (not in your ElevenLabs list)` : voice.elevenVoiceId}</option>
