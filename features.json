@@ -227,8 +227,8 @@
         "smoke-openmontage.mjs passes offline; ./test.sh exits 0.",
         "DEV-JOURNAL.md entry, ROADMAP.md S9 ticked, version bumped (minor), roadmap page re-rendered."
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "DONE 2026-10-01 v2.57.0 (worktree openmontage). /openmontage in Sidebar NAV + ARTIST_ROUTES, pageMeta title OpenMontage; gear OpenMontageSettings: openmontage.repoPath (default ~/Documents/OpenMontage), pythonBin (python), outputDir (<repo>/projects), agent (claude), fallbackAgent (codex|none, rule 20), timeoutMin (90). Pipelines read live from <repo>/pipeline_defs/*.yaml (js-yaml; broken manifests named). A run = startModuleRun module 'openmontage' spawning the CLI agent in the checkout (claude -p stream-json, turns summarised into ctx.log; codex/cursor/hermes raw lines), STOP + timeout kill the child, rendered files under projects/<id>/ listed on done. Doctor (repo, python 3.10+, 4 core imports, agent, output dir) gates GET and the run with a 503 + the exact fix; nothing installed. Evidence: smoke-openmontage.mjs 64/64 offline (fake checkout, exec + spawnAgent seams); ./test.sh 115/115; tsc clean; read-only doctor on the real checkout green (python 3.11.0, deps present, claude installed, 13 pipelines, 0 broken). No real pipeline run was started. Journal + ROADMAP S9 ticked + roadmap page rendered."
     },
     {
       "id": "feat-s34-jarvis-chat-upgrades",

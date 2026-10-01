@@ -62,6 +62,7 @@ All 50 sidebar modules are written against the code (2026-09-29). Each has a con
 | Ollama Cloud | `/ollama` | [ollama.md](ollama.md) |
 | Open Design | `/opendesign` | [opendesign.md](opendesign.md) |
 | OpenClaw | `/openclaw` | [openclaw.md](openclaw.md) |
+| OpenMontage | `/openmontage` | [openmontage.md](openmontage.md) |
 | Paperclip | `/paperclip` | [paperclip.md](paperclip.md) |
 | Pi | `/pi` | [pi.md](pi.md) |
 | Pipeline | `/pipeline` | [pipeline.md](pipeline.md) |

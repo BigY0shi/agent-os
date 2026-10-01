@@ -90,6 +90,10 @@ const NAV: NavItem[] = [
   // Hermes 3D (SPEC-F L2): the baked Synty office in three.js. Mounted
   // 2026-09-02 (S6) - the assets had been baked for two days with no route.
   { href: "/hermes3d", label: "Hermes 3D", icon: <Armchair size={16} />, accent: "#f472b6", dim: "rgba(244,114,182,0.16)" },
+  // OpenMontage (S9, 2026-10-01): the owner's checkout of the agentic video
+  // production system, its pipelines started as module runs. Artist's Corner
+  // via ARTIST_ROUTES below (NAV position alone would land it in "Self").
+  { href: "/openmontage", label: "OpenMontage", icon: <Clapperboard size={16} />, accent: "#f97316", dim: "rgba(249,115,22,0.16)" },
   { href: "/kanban",   label: "Kanban",   icon: <Columns3 size={16} />,  accent: "#14b8a6", dim: "rgba(20,184,166,0.16)" },
   // Tasks V2 (SPEC-B): list + calendar + drag-drop board + agents strip. Lives in
   // "Self" by default (sectionOf fallback) — do NOT add to the section Sets.
@@ -134,7 +138,7 @@ const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynot
 // Corner. Skills and Terminal went to the Toolbox rather than being left as a
 // two-item orphan group - move them if that reads wrong.
 const TOOLBOX_ROUTES = new Set(["/loop", "/seo", "/leads", "/memory", "/content-engine", "/kanban", "/tasks", "/today", "/webmcp", "/skills", "/terminal"]);
-const ARTIST_ROUTES = new Set(["/opendesign", "/video", "/music", "/games", "/thumbnails", "/notebook", "/hermes3d"]);
+const ARTIST_ROUTES = new Set(["/opendesign", "/video", "/music", "/games", "/thumbnails", "/notebook", "/hermes3d", "/openmontage"]);
 function sectionOf(href: string): string {
   if (WORKSPACE_ROUTES.has(href)) return "Workspace";
   if (TOOLBOX_ROUTES.has(href)) return "Agent Toolbox";

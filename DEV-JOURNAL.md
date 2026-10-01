@@ -1,5 +1,51 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - S9: OpenMontage module in Artist's Corner (v2.57.0)
+
+Harness session, worktree `openmontage`, feature feat-s9-openmontage-module.
+What OpenMontage is, from its own docs (AGENT_GUIDE.md "Rule Zero", docs/ARCHITECTURE.md
+"Agent-First Orchestration"): there is NO Python entry point that runs a pipeline. The
+coding agent reads the YAML manifest and the stage director skills and drives the Python
+tools itself; Python is tools + checkpoints. So "run a pipeline with a brief" is honestly
+the owner's CLI agent started inside the checkout with the prompt he would type into
+Claude Code there, and that is what the module does.
+- `/openmontage` (Sidebar NAV + ARTIST_ROUTES, pageMeta title "OpenMontage"): environment
+  strip (Checkout / Python / Dependencies / Agent / Output dir, each red chip with its fix),
+  Preflight (OpenMontage's `make preflight` registry report through the gear's python, as a
+  module run), the pipeline list read live from `pipeline_defs/*.yaml` (js-yaml; a broken
+  manifest is named, not dropped), brief + project id, Run pipeline, the run card (status,
+  the same events the tray shows, STOP, who actually ran, rendered files), Projects on disk.
+- Gear (rule 16): `openmontage.repoPath` ("" = ~/Documents/OpenMontage), `pythonBin`
+  ("python", never python3), `outputDir` ("" = <repo>/projects, what Backlot watches),
+  `agent` (claude), `fallbackAgent` (codex | none, rule 20), `timeoutMin` (90).
+- `src/lib/v2/openmontage/`: config.ts (resolve + OpenMontageError{fix,status}),
+  pipelines.ts (assertRepo, listPipelines, findPipeline), doctor.ts (repo, python 3.10+,
+  the four core imports by import name with the exact pip command, agent, output dir;
+  injectable exec), run.ts (startPipelineRun -> startModuleRun module "openmontage";
+  claude via `-p --output-format stream-json --verbose --dangerously-skip-permissions`
+  with the prompt on stdin, each assistant turn's text + tool_use summarised into ctx.log;
+  codex/cursor/hermes log raw lines; STOP and the timeout kill the child; outputs =
+  media under projects/<id>/, renders/ first; stages = checkpoint_<stage>.json),
+  preflight.ts, agents.ts.
+- Fallback semantics (rule 20): only when the primary CLI cannot START (not installed or
+  spawn error) and only to the gear's choice; the result carries agent / fellBackFrom /
+  fallbackReason and the tray says so. A CLI that started and died is a failed run, never
+  re-driven by a second agent.
+- Routes: GET /api/openmontage (503 + fix when the checkout is missing; doctor failures
+  ride inside a 200 so the list still renders), POST /api/openmontage/run (202 + runId,
+  the page polls /api/runs/:id; doctor gates the start with 503 + fix), POST
+  /api/openmontage/preflight. Route files export handlers only (a helper export there is
+  a Next build error; agentInstalled lives in lib).
+- Evidence: scripts/v2/smoke-openmontage.mjs 64/64 (fake checkout in a temp dir, fake
+  python through the exec seam, fake CLI children through the spawnAgent seam; settings
+  defaults, discovery, missing repo/python/dependency errors, streamed log, outputs,
+  STOP, labelled fallback, static wiring, docs). ./test.sh 115/115, tsc clean. Read-only
+  doctor against the real checkout: python 3.11.0, all four deps present, claude
+  installed, 13 pipelines discovered, 0 broken. No run was started on the real checkout.
+- Not done: Kokoro narration inside OpenMontage (its tts_selector picks from its own
+  providers), serving the rendered MP4 from the page (listed with path and size only).
+  Rollback: `git revert <this commit>`; the settings block is additive.
+
 ## 2026-10-01 - S7 WebMCP wizard: describe, clarify, approve, then emit (v2.57.0)
 
 The /webmcp builder gets a Wizard toggle (header, next to New package). Describe ->

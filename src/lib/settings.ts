@@ -541,6 +541,20 @@ export interface Settings {
     clips?: Record<string, string[]>;    // state -> eligible clip slugs
   };
 
+  // S9 OpenMontage (Artist's Corner). Rule 16: every knob is in the gear
+  // (OpenMontageSettings). The checkout is the owner's own clone; a pipeline run
+  // is the configured CLI agent driving that checkout (AGENT_GUIDE.md Rule Zero:
+  // the agent IS the orchestrator, there is no Python entry point for a pipeline).
+  // Python is used for the preflight (tool registry) and the dependency check.
+  openmontage?: {
+    repoPath?: string;     // the OpenMontage checkout; "" = <home>/Documents/OpenMontage
+    pythonBin?: string;    // "python" on Windows (never python3); or the checkout's .venv python
+    outputDir?: string;    // where projects/<id>/ are written and listed; "" = <repo>/projects
+    agent?: string;        // CLI agent that drives a pipeline run (default claude)
+    fallbackAgent?: "codex" | "none"; // rule 20: owner-chosen, labelled; used only when the primary cannot start
+    timeoutMin?: number;   // a pipeline run is killed after this many minutes (default 90)
+  };
+
   [extra: string]: unknown;
 }
 
@@ -550,6 +564,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // install picks up new clips as they are baked instead of freezing the pool
   // into a settings file written months ago.
   hermes3d: { ...DEFAULT_HERMES3D },
+  openmontage: { repoPath: "", pythonBin: "python", outputDir: "", agent: "claude", fallbackAgent: "codex", timeoutMin: 90 },
   defaultAgent: "claude",
   ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
   claude: { model: "claude-opus-4-8" },

@@ -101,12 +101,14 @@ is one line; the journal carries the rest.
 - [x] **S8. Voicebox everywhere it makes sense.** The Oracle done (2026-09-02, see
   Done). Still open on the same client: Video voiceover and the walkthrough voiceover
   track below (backlog).
-- [ ] **S9. OpenMontage module (Artist's Corner).** Local checkout at
-  `C:/Users/Yoshi/Documents/OpenMontage`: a Python agentic video production system
-  (pipelines, Remotion composer, AGPLv3). Read `AGENT_GUIDE.md` and
-  `docs/ARCHITECTURE.md` first, then wrap it as a sidebar module the way the other
-  Artist's Corner tools are wrapped. Pairs with Agent-Reach and with Voicebox (S8)
-  for narration.
+- [x] **S9. OpenMontage module (Artist's Corner).** Done 2026-10-01 (v2.57.0):
+  `/openmontage` lists the checkout's `pipeline_defs/*.yaml`, takes a brief, and starts
+  the pipeline as a module run driven by the gear's CLI agent (claude, Codex as the
+  labelled fallback) inside `C:/Users/Yoshi/Documents/OpenMontage`; the tray streams the
+  agent's turns, rendered files are listed when it ends. Gear: repo path, python, output
+  dir, agent, fallback, timeout. Missing repo / python / dependency is a visible error
+  with the exact command. Not wired yet: Kokoro narration inside OpenMontage (its own
+  TTS selector runs), serving/playing the renders from the page.
 - [ ] **S10. PRIME AGENT (Agent Toolbox).** Named in Yoshi's new-modules doc with no
   description yet. Needs a spec before it gets a slot.
 
