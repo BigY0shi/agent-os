@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Square, Sparkles, Zap, AlertTriangle } from "lucide-react";
 import Panel from "./Panel";
 import { MOD } from "@/lib/modKey";
+import { useSettings } from "./ConfigMenu";
+import { ULTRACODE_MODELS, DEFAULT_ULTRACODE_MODEL, DEFAULT_ULTRACODE_EFFORT } from "@/lib/ultracodeModels";
 
 interface Msg { role: "user" | "assistant" | "system"; text: string; }
 
@@ -14,6 +16,11 @@ export default function ClaudePanel() {
   const [streaming, setStreaming] = useState(false);
   const [partial, setPartial] = useState("");
   const [ultracode, setUltracode] = useState(false);
+  // The toggle runs with the Ultracode tab's model + effort (settings.ultracode); say which.
+  const { settings } = useSettings();
+  const ucSet = (settings?.ultracode ?? {}) as { model?: string; effort?: string };
+  const ucModelId = ucSet.model || DEFAULT_ULTRACODE_MODEL;
+  const ucLabel = `${ULTRACODE_MODELS.find((m) => m.id === ucModelId)?.label ?? ucModelId} at ${ucSet.effort || DEFAULT_ULTRACODE_EFFORT} effort`;
   const ctrlRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -106,8 +113,8 @@ export default function ClaudePanel() {
           <button
             onClick={() => setUltracode((v) => !v)}
             title={ultracode
-              ? "Ultracode ON — xhigh effort, dynamic workflows enabled. Uses substantially more tokens."
-              : "Turn on Ultracode — xhigh effort + dynamic workflows (parallel subagents). Heavy token use."}
+              ? `Ultracode ON — ${ucLabel}, dynamic workflows enabled (set on the Ultracode tab). Uses substantially more tokens.`
+              : `Turn on Ultracode — ${ucLabel} + dynamic workflows (parallel subagents). Heavy token use.`}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] uppercase tracking-widest transition"
             style={{
               borderColor: ultracode ? "#d97757" : "var(--panel-border)",
@@ -142,7 +149,7 @@ export default function ClaudePanel() {
                   <li>• Multi-turn — keeps context across messages (<strong>New chat</strong> resets)</li>
                   <li>• stream-json with partial deltas</li>
                   <li>• Esc to abort an in-flight call</li>
-                  <li>• <strong style={{ color: "var(--claude)" }}>Ultracode</strong> toggle (top-right) → xhigh effort + dynamic workflows for big jobs</li>
+                  <li>• <strong style={{ color: "var(--claude)" }}>Ultracode</strong> toggle (top-right) → {ucLabel} + dynamic workflows for big jobs</li>
                 </ul>
               </motion.div>
             )}
@@ -190,7 +197,7 @@ export default function ClaudePanel() {
             <AlertTriangle size={13} className="shrink-0 mt-0.5" style={{ color: "var(--claude)" }} />
             <div>
               <span className="font-semibold" style={{ color: "var(--claude)" }}>Ultracode is on.</span>{" "}
-              Claude runs at <code>xhigh</code> effort and may spin up a dynamic workflow — tens to hundreds of parallel subagents, checked by adversarial reviewers before results return. Best for big jobs: codebase-wide audits, large migrations, work you want stress-tested. <span className="opacity-80">Uses substantially more tokens than a normal chat.</span>
+              Claude runs {ucLabel} (set on the Ultracode tab) and may spin up a dynamic workflow — tens to hundreds of parallel subagents, checked by adversarial reviewers before results return. Best for big jobs: codebase-wide audits, large migrations, work you want stress-tested. <span className="opacity-80">Uses substantially more tokens than a normal chat.</span>
             </div>
           </div>
         )}

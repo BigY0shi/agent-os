@@ -16,19 +16,23 @@ import { motion } from "framer-motion";
 import { Zap, RefreshCw, Trash2, DollarSign, Clock, Users, Loader2, CheckCircle2, AlertCircle, Sparkles, ShieldCheck, Scissors, Rocket, Brain, Send, Square, Ban } from "lucide-react";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import { MOD } from "@/lib/modKey";
+import { useSettings } from "./ConfigMenu";
+import { ULTRACODE_MODELS, ULTRACODE_EFFORTS, DEFAULT_ULTRACODE_MODEL, DEFAULT_ULTRACODE_EFFORT } from "@/lib/ultracodeModels";
 
 // One-click Ultracode missions — preset prompts that fire scoped dynamic
 // workflows. Each runs through /api/claude/chat with ultracode:true; the server
 // captures the run, and the history list below picks it up live.
-interface Mission { id: string; label: string; icon: React.ReactNode; color: string; project: string; prompt: string; }
+// needsTarget: the mission reads code, so it asks for a folder or repo first (owner,
+// 2026-09-30); without one it used to scan its own empty project folder.
+interface Mission { id: string; label: string; icon: React.ReactNode; color: string; project: string; prompt: string; needsTarget?: boolean; }
 const MISSIONS: Mission[] = [
   {
-    id: "security", label: "Security audit", icon: <ShieldCheck size={13} />, color: "#f472b6", project: "ultracode-security",
-    prompt: "Run a security audit of this Agent OS codebase (src/). Use parallel subagents to hunt independently for: (1) injection / unsafe shell exec, (2) missing input validation at API boundaries, (3) secret/credential leakage, (4) path-traversal in file routes. Have reviewer agents try to refute each finding before it's reported. Output a prioritised findings report as security-audit.md — real issues only, no false positives.",
+    id: "security", label: "Security audit", icon: <ShieldCheck size={13} />, color: "#f472b6", project: "ultracode-security", needsTarget: true,
+    prompt: "Run a security audit of the codebase in the target folder. Use parallel subagents to hunt independently for: (1) injection / unsafe shell exec, (2) missing input validation at API boundaries, (3) secret/credential leakage, (4) path-traversal in file routes. Have reviewer agents try to refute each finding before it's reported. Output a prioritised findings report as security-audit.md — real issues only, no false positives.",
   },
   {
-    id: "deadcode", label: "Find dead code", icon: <Scissors size={13} />, color: "#5ab896", project: "ultracode-deadcode",
-    prompt: "Find dead code + cleanup opportunities across src/. Use parallel subagents to scan different areas, then cross-check: unused exports, unreachable branches, orphaned components, duplicated helpers. Verify each candidate is genuinely unused before listing it. Output dead-code-report.md with file:line references and a confidence level per item.",
+    id: "deadcode", label: "Find dead code", icon: <Scissors size={13} />, color: "#5ab896", project: "ultracode-deadcode", needsTarget: true,
+    prompt: "Find dead code + cleanup opportunities across the codebase in the target folder. Use parallel subagents to scan different areas, then cross-check: unused exports, unreachable branches, orphaned components, duplicated helpers. Verify each candidate is genuinely unused before listing it. Output dead-code-report.md with file:line references and a confidence level per item.",
   },
   {
     id: "showcase", label: "Build a showcase page", icon: <Rocket size={13} />, color: "#d4a574", project: "ultracode-showcase",
@@ -56,7 +60,7 @@ interface SubagentNode {
 interface VerdictEntry { at: number; category: string; detail: string; }
 interface RunTurn { prompt: string; at: number; }
 interface UltracodeRun {
-  id: string; prompt: string; project?: string; model: string; ultracode: boolean;
+  id: string; prompt: string; project?: string; model: string; ultracode: boolean; effort?: string;
   sessionId?: string; turns?: RunTurn[];
   startedAt: number; finishedAt?: number; status: "running" | "completed" | "failed" | "stopped";
   subagents: SubagentNode[]; verdicts: VerdictEntry[]; headline?: string;
@@ -96,6 +100,19 @@ export default function UltracodeView() {
   const [run, setRun] = useState<UltracodeRun | null>(null);
   const [launching, setLaunching] = useState<string | null>(null); // mission id in flight
   const [customPrompt, setCustomPrompt] = useState("");
+  // What to work on (a folder path or a git repo URL), the model and the effort. Model + effort
+  // live in settings.ultracode, so the pickers below ARE the setting (saved on change).
+  const [target, setTarget] = useState("");
+  const [launchErr, setLaunchErr] = useState<string | null>(null);
+  const { settings, save } = useSettings();
+  const ucSaved = (settings?.ultracode ?? {}) as { model?: string; effort?: string };
+  const ucModel = ucSaved.model || DEFAULT_ULTRACODE_MODEL;
+  const ucEffort = ucSaved.effort || DEFAULT_ULTRACODE_EFFORT;
+  // Send only the changed key: the server deep-merges, and a stale sibling would undo a change
+  // made a moment earlier (here or in another open copy of the app).
+  const setUc = (patch: { model?: string; effort?: string }) => { void save({ ultracode: patch }); };
+  // Until settings arrive the pickers would show defaults, and a launch would use them.
+  const settingsReady = !!settings;
 
   const loadList = useCallback(async () => {
     try {
@@ -125,14 +142,17 @@ export default function UltracodeView() {
   // We read + discard chunks; the history poll animates the swarm meanwhile.
   const launchMission = useCallback(async (id: string, prompt: string, project: string, resumeRunId?: string) => {
     if (launching || !prompt.trim()) return;
+    setLaunchErr(null);
     setLaunching(id);
     if (resumeRunId) setOpenId(resumeRunId); // keep the resumed run open + live-polling
     try {
       const r = await fetch("/api/claude/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(resumeRunId ? { prompt, resumeRunId } : { prompt, ultracode: true, project }),
+        body: JSON.stringify(resumeRunId ? { prompt, resumeRunId } : { prompt, ultracode: true, project, model: ucModel, effort: ucEffort, target: target.trim() || undefined }),
       });
+      // A bad folder / repo / model is a 400 with the reason; show it instead of a silent no-op.
+      if (!r.ok) { setLaunchErr((await r.text().catch(() => "")) || `HTTP ${r.status}`); return; }
       if (!r.body) return;
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
@@ -155,7 +175,7 @@ export default function UltracodeView() {
       void loadList();
       if (resumeRunId) void loadRun(resumeRunId);
     }
-  }, [launching, loadList, loadRun]);
+  }, [launching, loadList, loadRun, ucModel, ucEffort, target]);
 
   useEffect(() => { if (openId) loadRun(openId); else setRun(null); }, [openId, loadRun]);
   // Fast poll while the open run is still going.
@@ -204,12 +224,33 @@ export default function UltracodeView() {
           <div className="text-[9.5px] uppercase tracking-[0.25em] text-[var(--cream-mute)] font-semibold mb-2 flex items-center gap-1.5">
             <Rocket size={11} /> Launch a mission · fires a dynamic workflow
           </div>
+          {/* What to work on + how hard to think */}
+          <div className="flex flex-wrap items-center gap-2 mb-2.5">
+            <input
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              placeholder="Folder or repo to work on: C:\path\to\project, or https://github.com/owner/repo"
+              disabled={!!launching}
+              className="flex-1 min-w-[260px] px-3 py-1.5 text-[12px] rounded-md border bg-transparent text-[var(--cream)] placeholder:text-[var(--cream-mute)] disabled:opacity-50"
+              style={{ borderColor: target.trim() ? `${GOLD}88` : "var(--line-soft)" }}
+              title="A local folder is read where it is; a repo URL is shallow-cloned into ~/.agentic-os/ultracode-repos. The target is read-only for the run (writes there are denied and the shell is off); the report goes into the mission's own folder."
+            />
+            <select value={ucModel} onChange={(e) => setUc({ model: e.target.value })} disabled={!!launching || !settingsReady} title="Claude model for Ultracode runs (saved)"
+              className="px-2 py-1.5 text-[12px] rounded-md border bg-transparent text-[var(--cream)] disabled:opacity-50" style={{ borderColor: "var(--line-soft)", background: "var(--bg-mid)" }}>
+              {!ULTRACODE_MODELS.some((m) => m.id === ucModel) && <option value={ucModel}>{ucModel}</option>}
+              {ULTRACODE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+            <select value={ucEffort} onChange={(e) => setUc({ effort: e.target.value })} disabled={!!launching || !settingsReady} title="Effort level for Ultracode runs (saved)"
+              className="px-2 py-1.5 text-[12px] rounded-md border bg-transparent text-[var(--cream)] disabled:opacity-50" style={{ borderColor: "var(--line-soft)", background: "var(--bg-mid)" }}>
+              {ULTRACODE_EFFORTS.map((e) => <option key={e} value={e}>effort: {e}</option>)}
+            </select>
+          </div>
           <div className="flex flex-wrap gap-2">
             {MISSIONS.map((m) => (
               <button key={m.id}
                 onClick={() => launchMission(m.id, m.prompt, m.project)}
-                disabled={!!launching}
-                title={m.prompt}
+                disabled={!!launching || !settingsReady || (!!m.needsTarget && !target.trim())}
+                title={m.needsTarget && !target.trim() ? "Enter a folder or repo above first" : m.prompt}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11.5px] font-medium transition disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ borderColor: `${m.color}55`, background: `${m.color}12`, color: m.color }}>
                 {launching === m.id ? <Loader2 size={13} className="animate-spin" /> : m.icon}
@@ -222,15 +263,15 @@ export default function UltracodeView() {
             <input
               value={customPrompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && customPrompt.trim() && !launching) launchMission("custom", customPrompt, "ultracode-custom"); }}
-              placeholder="…or type a custom mission and hit enter (runs at xhigh effort)"
+              onKeyDown={(e) => { if (e.key === "Enter" && customPrompt.trim() && !launching && settingsReady) launchMission("custom", customPrompt, "ultracode-custom"); }}
+              placeholder={`…or type a custom mission and hit enter (${ULTRACODE_MODELS.find((m) => m.id === ucModel)?.label ?? ucModel}, effort ${ucEffort}; uses the folder or repo above if given)`}
               disabled={!!launching}
               className="flex-1 px-3 py-1.5 text-[12px] rounded-md border bg-transparent text-[var(--cream)] placeholder:text-[var(--cream-mute)] disabled:opacity-50"
               style={{ borderColor: "var(--line-soft)" }}
             />
             <button
               onClick={() => launchMission("custom", customPrompt, "ultracode-custom")}
-              disabled={!!launching || !customPrompt.trim()}
+              disabled={!!launching || !settingsReady || !customPrompt.trim()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-[11px] uppercase tracking-widest font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ borderColor: `${GOLD}`, background: `${GOLD}1a`, color: GOLD }}>
               {launching === "custom" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
@@ -240,9 +281,10 @@ export default function UltracodeView() {
           {launching && (
             <div className="mt-2 text-[11px] flex items-center gap-1.5" style={{ color: GOLD }}>
               <Loader2 size={11} className="animate-spin" />
-              Mission running — watch the swarm spawn below. This uses xhigh effort + real tokens.
+              Mission running — watch the swarm spawn below. This uses {ULTRACODE_MODELS.find((m) => m.id === ucModel)?.label ?? ucModel} at {ucEffort} effort + real tokens.
             </div>
           )}
+          {launchErr && <div className="mt-2 text-[11.5px] text-[var(--plum)]">Mission not started: {launchErr}</div>}
         </div>
       </div>
 
@@ -426,7 +468,7 @@ function RunDetail({ run, launching, onReply, onStop }: { run: UltracodeRun; lau
         </div>
         {run.status !== "running" && (
           <div className="text-[10px] text-[var(--cream-mute)] mt-1.5 px-1">
-            Continues the same Claude session via <code className="mono">--resume</code> at xhigh effort — it remembers everything above.
+            Continues the same Claude session via <code className="mono">--resume</code> with the model and effort it started with ({run.model}, {run.effort ?? "xhigh"}) — it remembers everything above.
           </div>
         )}
       </div>
@@ -472,7 +514,7 @@ function PlanningPanel({ run }: { run: UltracodeRun }) {
         <div>
           <div className="text-[14px] font-semibold text-[var(--cream)]">Claude is planning the workflow…</div>
           <div className="text-[11.5px] text-[var(--cream-mute)]">
-            xhigh effort thinks hard before it spawns agents. Elapsed <span className="mono" style={{ color: GOLD }}>{mm}:{ss}</span> · subagents will appear here the moment they fan out.
+            {run.effort ?? "xhigh"} effort on {run.model} thinks before it spawns agents. Elapsed <span className="mono" style={{ color: GOLD }}>{mm}:{ss}</span> · subagents will appear here the moment they fan out.
           </div>
         </div>
       </div>

@@ -61,6 +61,9 @@ export interface UltracodeRun {
   project?: string;        // claude scratch project it ran in
   model: string;
   ultracode: boolean;      // was --effort xhigh on
+  effort?: string;         // the --effort level the run used (settings.ultracode / the tab)
+  targetDir?: string;      // what it worked on (--add-dir), when a folder or repo was given
+  targetLabel?: string;    // the folder path or repo URL as the owner typed it
   sessionId?: string;      // Claude session id — lets us --resume to reply
   turns: RunTurn[];        // every user prompt (turn 1 = the mission, then replies)
   startedAt: number;       // epoch ms

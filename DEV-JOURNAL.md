@@ -1,5 +1,50 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Ultracode: missions ask for a folder or repo (read-only), model + effort are settings (v2.55.0)
+
+Owner: "For ultracode have it ask for a folder or repo. Also make sure the model/effort is
+configurable. At least between opus 5.5, sonnet 5.5, fable 5.1 and opus 5."
+- **Folder or repo** field on the Ultracode tab. **Security audit** and **Find dead code** (which
+  used to "scan src/" inside their own empty project folder) stay disabled until it is filled;
+  custom missions use it when given. A local folder is used where it is; an `https://` git URL
+  is shallow-cloned into `~/.agentic-os/ultracode-repos/<host>-<path>-<hash>`
+  (`lib/ultracodeTarget.ts`). Bad input (missing folder, a file, a relative path, http://,
+  git@, odd URLs) is a 400 with the reason, before any claude process starts, and the tab
+  shows it ("Mission not started: ...").
+- **Read-only, enforced.** The target is passed with `--add-dir` plus `--permission-mode
+  acceptEdits` and `--disallowedTools Bash Edit(//c/...) Write(...) NotebookEdit(...)`; the run
+  stays in its project folder, where the report is written. Verified live with three small
+  Haiku calls on this machine: the `//C:/...` rule form did NOT block a write into the target;
+  the `//c/...` form (lower-case drive, forward slashes) did, while `report.md` in the cwd was
+  still written. `permissionPathFor()` emits that form.
+- **Model + effort** (`lib/ultracodeModels.ts`, `settings.ultracode`, default Opus 5.5 at
+  xhigh): Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, and the CLI's low/medium/high/xhigh/max.
+  The tab's pickers are the setting (saved on change). The route takes the request's choice,
+  else the setting, else the default; anything invalid is a 400, never swapped. A resumed run
+  keeps the model/effort/target it started with (runs saved before this ran at xhigh). The
+  Chat tab's Ultracode toggle uses the same setting and its text says which. The run record
+  gains `effort`, `targetDir`, `targetLabel`.
+- **Independent review before commit** (a three-lens workflow, each finding adversarially
+  verified; 12 of 13 confirmed), all fixed here: --add-dir gave write access (now enforced
+  read-only); clones sat inside the served Claude scratch root (moved out); two repos could share
+  a clone folder and be mislabelled (folder = host + whole path + URL hash, and an existing
+  clone's origin is checked); a shallow `pull --ff-only` fails once upstream moves (now fetch the
+  tip + `checkout --detach --force FETCH_HEAD`); git could hang on a credential prompt
+  (`GIT_TERMINAL_PROMPT=0`, `credential.interactive=never`); the pickers could revert each other
+  (save only the changed key) and showed defaults before settings loaded (disabled until then);
+  old runs resumed at the current effort (now xhigh); banners and the Chat tab still said xhigh.
+- The chat route, `ultracodeRuns.ts` and `settings.ts` carry the owner's uncommitted work;
+  only these edits are committed.
+`docs/modules/claude-cli.md` updated.
+
+Verified: new `smoke-ultracode-target.mjs`, 36 checks (models/efforts/defaults/precedence and
+refusals; folder resolution and every refusal; clone-folder naming incl. the review's
+collisions; the verified permission-rule form; readOnlyArgs; the route's 400s before spawning
+and its args; resume rules; the tab's fields, pickers, gating and error line; no stale
+"xhigh" text). smoke-exile-deletes, smoke-settings-secrets, smoke-guide pass; tsc clean.
+
+Rollback: revert the commit.
+
 ## 2026-09-30 - Studio, Ultracode and Artifacts: deletes are recoverable; a failed deploy publishes nothing (v2.54.3)
 
 Owner on open item 7: "Go ahead and fix 7." All three files carry the owner's uncommitted

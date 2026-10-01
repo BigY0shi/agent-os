@@ -12,7 +12,7 @@ The row of pill buttons at the top switches between six tabs: **Chat**, **Worksp
 
 | Control | What it does |
 |---|---|
-| **Ultracode** | Toggle. When on, the next message runs the CLI with `--effort xhigh`, and the run is captured so it shows up in the Ultracode tab. An orange warning box explains the extra token use while it is on. |
+| **Ultracode** | Toggle. When on, the next message runs the CLI with the Ultracode model and effort from `settings.ultracode` (default Opus 5.5 at xhigh, set on the Ultracode tab), and the run is captured so it shows up in the Ultracode tab. An orange warning box explains the extra token use while it is on. |
 | **Logged · <time>** | Appears after a reply is saved to your Obsidian vault. Links to `/memory`. |
 | **Clear** | Asks for confirmation, then empties this chat thread. |
 | Mic button | Voice input (`VoiceButton`). Interim speech shows in the box with a `[voice]` marker, the final transcript replaces it. |
@@ -47,7 +47,9 @@ Images, video and audio play inline. Other text files show as source.
 
 | Control | What it does |
 |---|---|
-| **Security audit**, **Find dead code**, **Build a showcase page**, **Stress-test a plan** | Preset missions. Each posts a fixed prompt to `/api/claude/chat` with Ultracode on, in its own project folder (`ultracode-security`, `ultracode-deadcode`, `ultracode-showcase`, `ultracode-plan`). Hover shows the full prompt. |
+| **Folder or repo** field | What a mission works on: an absolute local folder (read where it is) or an `https://` git repo URL (shallow-cloned into `~/.agentic-os/ultracode-repos/<host>-<path>-<hash>`, outside the folders the Workspace serves; a later run checks the clone's origin and moves it to the remote's current tip; git never prompts for credentials, so public repos only). It is passed to Claude with `--add-dir` and is read-only for the run: `--permission-mode acceptEdits` with Edit/Write/NotebookEdit denied under the target and the shell (Bash) turned off, while the run's own project folder stays writable for the report. A missing folder, a file or a non-https URL stops the launch with the reason. |
+| Model + effort pickers | The Claude model (Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5) and the `--effort` level (low, medium, high, xhigh, max) for Ultracode runs. Saved to `settings.ultracode` on change (default Opus 5.5 at xhigh); the Chat tab's Ultracode toggle uses the same setting, and a resumed run keeps the model, effort and target it started with. |
+| **Security audit**, **Find dead code**, **Build a showcase page**, **Stress-test a plan** | Preset missions. **Security audit** and **Find dead code** read code, so they stay disabled until the Folder or repo field is filled. Each posts a fixed prompt to `/api/claude/chat` with Ultracode on, in its own project folder (`ultracode-security`, `ultracode-deadcode`, `ultracode-showcase`, `ultracode-plan`). Hover shows the full prompt. |
 | Custom mission box + **Launch** | Runs your own prompt the same way, in `ultracode-custom`. Enter also launches. |
 | **Runs** list | Saved runs, newest first, with subagent count, cost, duration and age. Click to open. Refresh icon reloads, trash icon removes a run after confirmation (its replay moves to the runs folder's `.exile/<timestamp>/`, recoverable). |
 | **Stop** | Shown on a running run. Kills the CLI process and marks the run stopped. |

@@ -3,6 +3,8 @@ import { CLAUDE_MODEL } from "@/lib/config";
 import { ensureProject, CLAUDE_SCRATCH_ROOT } from "@/lib/claudeWorkspace";
 import { newRun, applyEvent, saveRun, getRun, makeRunId, type UltracodeRun } from "@/lib/ultracodeRuns";
 import { logTokens } from "@/lib/tokenLog";
+import { readSettings } from "@/lib/settings";
+import { ultracodeChoice, resolveUltracodeTarget, targetNote, readOnlyArgs, ULTRACODE_REPOS_ROOT, type UltracodeTarget } from "@/lib/ultracodeTarget";
 import { registerProc, unregisterProc, isStopped } from "@/lib/ultracodeProcs";
 import path from "node:path";
 
@@ -39,7 +41,7 @@ function buildPromptWithHistory(history: ChatMsg[], current: string): string {
 }
 
 export async function POST(req: Request) {
-  const { prompt, cwd, ultracode, project, resumeRunId, history } = await req.json();
+  const { prompt, cwd, ultracode, project, resumeRunId, history, model, effort, target } = await req.json();
   if (typeof prompt !== "string" || prompt.length === 0) {
     return new Response("missing prompt", { status: 400 });
   }
@@ -73,13 +75,33 @@ export async function POST(req: Request) {
   // run (parsing system/task_* + result events) and persist it so it's
   // replayable in the Workspace's Ultracode tab.
   const isUltra = ultracode === true || !!resumeRun?.ultracode;
+  // Ultracode's model + effort: the request (the tab's pickers), else settings.ultracode, else
+  // the defaults; a resumed run keeps its own. The optional target (a folder, or a git repo URL
+  // cloned into the scratch area) is made readable with --add-dir while the run stays in its
+  // project folder, so a report never lands inside the target. Bad input is a 400, not a swap.
+  let ucModel = CLAUDE_MODEL;
+  let ucEffort = "xhigh";
+  let ucTarget: UltracodeTarget | null = null;
+  if (isUltra) {
+    try {
+      // A resumed run keeps what it started with; runs saved before effort was recorded ran at xhigh.
+      const c = ultracodeChoice(readSettings().ultracode, resumeRun ? { model: resumeRun.model, effort: resumeRun.effort ?? "xhigh" } : { model, effort });
+      ucModel = c.model; ucEffort = c.effort;
+      if (resumeRun?.targetDir) ucTarget = { dir: resumeRun.targetDir, label: resumeRun.targetLabel ?? resumeRun.targetDir, kind: "folder" };
+      else if (!resumeRun && typeof target === "string" && target.trim()) ucTarget = await resolveUltracodeTarget(target, ULTRACODE_REPOS_ROOT);
+    } catch (e) {
+      return new Response(String((e as Error)?.message || e), { status: 400 });
+    }
+  }
   // When we're resuming a captured session (the ultracode reply path), that session already
   // holds the context, so send the raw prompt. Otherwise pack the prior turns in, because
   // `claude -p` is stateless per call — this is what keeps a normal chat's memory.
-  const effectivePrompt = resumeSessionId ? prompt : buildPromptWithHistory(history, prompt);
-  const args: string[] = ["-p", "--model", CLAUDE_MODEL];
+  const basePrompt = resumeSessionId ? prompt : buildPromptWithHistory(history, prompt);
+  const effectivePrompt = ucTarget && !resumeSessionId ? `${targetNote(ucTarget)}\n\n${basePrompt}` : basePrompt;
+  const args: string[] = ["-p", "--model", isUltra ? ucModel : CLAUDE_MODEL];
   if (resumeSessionId) args.push("--resume", resumeSessionId);
-  if (isUltra) args.push("--effort", "xhigh", "--include-hook-events");
+  if (isUltra) args.push("--effort", ucEffort, "--include-hook-events");
+  if (ucTarget) args.push("--add-dir", ucTarget.dir, ...readOnlyArgs(ucTarget.dir));
   args.push(
     "--output-format=stream-json",
     "--include-partial-messages",
@@ -113,10 +135,12 @@ export async function POST(req: Request) {
     run = newRun({
       id: runId,
       prompt,
-      model: CLAUDE_MODEL,
+      model: ucModel,
       ultracode: true,
       project: runCwd ? path.basename(runCwd) : undefined,
     });
+    run.effort = ucEffort;
+    if (ucTarget) { run.targetDir = ucTarget.dir; run.targetLabel = ucTarget.label; }
   }
   // Make this run killable by the Stop button (a separate request).
   if (runId) registerProc(runId, child);
@@ -184,7 +208,7 @@ export async function POST(req: Request) {
           // applyEvent set run.costUsd to THIS turn's cost; add prior turns'.
           if (priorCost > 0) run.costUsd = priorCost + (run.costUsd ?? 0);
           // Record token usage for the dashboard (Claude CLI reports it in result events).
-          void logTokens({ agent: "claude", model: CLAUDE_MODEL, totalTokens: run.tokensTotal ?? 0, costUsd: run.costUsd ?? 0, kind: "chat" });
+          void logTokens({ agent: "claude", model: isUltra ? ucModel : CLAUDE_MODEL, totalTokens: run.tokensTotal ?? 0, costUsd: run.costUsd ?? 0, kind: "chat" });
           await maybeSave(true);
           send(JSON.stringify({ type: "ultracode_run_saved", runId }) + "\n");
         }
