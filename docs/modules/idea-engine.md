@@ -13,7 +13,7 @@ The page is a single scroll: header, validate box, live run panel, Trend Radar, 
 | Control | What it does |
 |---|---|
 | Dossier count | "N dossiers" next to the title. |
-| **Models** (gear) | Opens "Idea Engine settings" with seven fields: **Research + judge (claude)**, **Dossier writer**, **Sizing seat (Ollama Cloud)**, **Radar: reddit subs**, **Radar: seed terms**, **Daily idea (true/false)**, **Daily hour (0-23)**. Saved to the `ideaEngine` section of `~/.agentic-os/settings.json`. |
+| **Models** (gear) | Opens "Idea Engine settings" with eleven fields: **Research + judge (claude)**, **Dossier writer**, **Sizing seat agent**, **Radar clustering agent**, **Kill pass agent**, **Fallback agent** (each a CLI agent or kimi; defaults claude, claude, codex, codex), **Kimi model (Ollama Cloud)**, **Radar: reddit subs**, **Radar: seed terms**, **Daily idea (true/false)**, **Daily hour (0-23)**. Saved to the `ideaEngine` section of `~/.agentic-os/settings.json`. |
 | **Idea of the Day** | Appears when today's daily run produced a dossier. Click to open it. If today's daily run spent its slot without a dossier, a grey line explains why instead. |
 | Idea box | Free text. Enter submits, Shift+Enter adds a line. |
 | **Validate** | Posts the idea to `/api/idea-engine/validate`. Reads **In council...** while a run is active. Only one run can be active at a time (a second one gets a 409). |

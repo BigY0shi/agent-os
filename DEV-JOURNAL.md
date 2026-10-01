@@ -1,5 +1,17 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Notes: SEO parked; Idea Engine gear row in the Guide (v2.54.1)
+
+- Owner on open item 5: "Leave for now, and note it. We haven't used SEO at all yet." The
+  SEO per-site **Deploy command** stays saved-but-unused (its placeholder already says so);
+  ROADMAP.md records it as parked until SEO is picked up.
+- `docs/modules/idea-engine.md`: the gear row now lists the eleven fields from v2.54.0 (that
+  edit failed to write during the v2.54.0 commit, a transient Windows file error, and is
+  landed here).
+- ROADMAP.md: one Done line for v2.51.18 to v2.54.0.
+Open, waiting on the owner: item 6 (Ultracode presets) and item 7 (the three hard-deleting
+files in his uncommitted work) were questions, answered in chat, no code changed.
+
 ## 2026-09-30 - Idea Engine: seats default to Claude, fall back to Codex, all in the gear (v2.54.0)
 
 Owner on open item 4: "It should default to Claude, fallback to codex. Add the setting.

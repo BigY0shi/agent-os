@@ -20,6 +20,7 @@ is one line; the journal carries the rest.
   S13 Sessions (v2.35.0), S14 Skills + Workflows (v2.36.0),
   S19 memory off Honcho (config), S15 Control Room (v2.37.0), S16 MCP tab (v2.38.0), S17 Missions (v2.40.0), S18 Mission Control (v2.41.0), S21 Crew (v2.42.0), S28 Files (v2.43.0), S27 Health (v2.44.0), S26 Standing orders (v2.45.0), S23 Mission board (v2.46.0), S24 Crew archive (v2.47.0), S25 Mastermind (v2.48.0), S22 Voice mode (v2.49.0), S29 Guide (v2.50.0).
   Jarvis v3 plan complete. Guide-writer fixes landed v2.50.3-v2.51.16 (see Done); the ones that need the owner's call are listed in DEV-JOURNAL 2026-09-29.
+  Parked by the owner (2026-09-30): SEO is not in use yet, so its per-site Deploy command stays saved-but-unused (the field says so) until SEO is picked up.
 
 - [x] **Jarvis user-directed screen control.** Shipped 2026-09-08, v2.30.0 (see Done).
   Inspect and operate app controls, with Deal Desk / Hire Engine labels and spoken
@@ -108,6 +109,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-09-30 · v2.51.18-v2.54.0 · Owner's decisions on the open items: Agent Room has no OpenRouter, no local-Ollama fallback and no invented replies; the Loop judge is Ollama Cloud (no local Ollama) and its fallback is a Loop-gear choice (default none), with every Loop parameter in a new gear; the Oracle speaks Kokoro (bm_lewis) with its own labelled backup; Idea Engine seats default to Claude with a Codex fallback, all in its gear. Smokes: room-honesty, oracle-kokoro, idea-seats; loop-cli-only extended.
 
 - 2026-09-29 · v2.50.3-v2.51.16 · Guide-writer fixes: db.backup beside its DB; Fusion and Sakana show only real status; Loop is CLI agents only (v2.51.0); the gate makes no live model calls; Delete exiles in Kanban, Music, Local builds, Room history and Pipeline (whose Remove route was missing); chat Logged only when logged; honest labels in Thumbnails, Agent Kanban, Pi, OpenClaw, Local Engine, SEO, Skills; no silent provider switches in Hermes Talk and Video; Codex previews on Windows; Game Studio, Open Design and Notebook settings honoured; SEO auto-deploys every configured site. Smokes: db-backup-location, fusion-honesty, loop-cli-only, exile-deletes, honest-labels.
 
