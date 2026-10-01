@@ -50,7 +50,7 @@ is one line; the journal carries the rest.
 - [ ] **S38. Jarvis push-to-talk on a mappable global hotkey** (orb chat; mini USB keyboard from across the room). Also fixes the AHK helper's wrong port (3033).
 - [ ] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments.
 - [ ] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take).
-- [ ] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9).
+- [x] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9). Landed 2026-10-01, v2.61.0 (see Done).
 - [ ] **S37. Snapshots and restore**: weekly by default (setting: weekly / 2 weeks / monthly), old ones exiled (Nexora C10).
 - Held: **C8 Appearance** waits for the complete visual overhaul at the end. Dropped: **C11 voice cast** (not needed).
 ## Next
@@ -132,6 +132,8 @@ is one line; the journal carries the rest.
 ## Done
 
 (Slices move here with their commit and version when they land.)
+
+- 2026-10-01 · v2.61.0 · S36 Fleet stats on Mission Control (Nexora C9): a strip under the telemetry band with two-line sparklines (you vs agents) per bucket, a weekday-by-hour heatmap in the Tasks timezone, the newest mission hand-offs (from seat to seat, with Jarvis as the origin), and per-source session counts for 24 h and all time; Hermes reads "not tracked" (no reader for its state.db). Bucket (6/12/24/48 h, default 12) and window (7/14/30/60 d, default 14) are gear settings read per request, so a change re-buckets with no rebuild. Every number is a stored record: Jarvis, Rabbit and task-chat rows, agent run records, module runs, missions, Ultracode runs. smoke-fleet-stats 43 checks.
 
 - 2026-10-01 · v2.56.0-v2.59.0 · S30 Settings sweep (merged v2.60.0, gate green): audit of every hardcoded parameter per module; `settings.ollama` (masked key, host, default model, local URL) shared by the Ollama page, Room, Brainstorm, Loop judge, Memory, Agents, Free Claude Code; `settings.claude.model` with a picker replacing the start-time CLAUDE_MODEL constant in 25 files; `settings.room.agents` + CLI turn limit with a Room gear; Brainstorm seat limits, Jarvis voice-lane models, Thumbnails prompt model. smoke-settings-sweep 38 checks.
 

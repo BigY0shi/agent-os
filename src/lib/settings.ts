@@ -414,6 +414,13 @@ export interface Settings {
   automations?: {
     enabled?: boolean;         // kill switch: false = rules never fire (default true; /test dry-runs still work)
   };
+  // S36 Fleet stats on Mission Control (Nexora C9). Both knobs live in the card's gear
+  // (rule 16) and are read per request, so a change re-buckets with no rebuild. The
+  // heatmap's timezone is tasks.timezone, the single timezone source (CONVENTIONS §10).
+  fleetStats?: {
+    bucketHours?: 6 | 12 | 24 | 48;  // sparkline bucket; default 12 = twice a day (owner: "bidaily or so")
+    windowDays?: 7 | 14 | 30 | 60;   // how far back the sparklines and heatmap look; default 14
+  };
   // SPEC-D H2 home widget grid. `cells` unset = the DEFAULT_HOME_CELLS const in
   // src/lib/v2/widgets/types.ts (fallback at read time so default-layout changes
   // reach untouched installs — deliberately NOT copied into DEFAULT_SETTINGS).
@@ -711,6 +718,7 @@ export const DEFAULT_SETTINGS: Settings = {
     addyDomain: "",
     gmailLabel: "",
   },
+  fleetStats: { bucketHours: 12, windowDays: 14 },
 };
 
 function settingsPath(): string {

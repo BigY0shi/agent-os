@@ -296,8 +296,8 @@
         "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
         "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "2026-10-01 v2.61.0 (worktree fleet-stats, branch feat/s36-fleet-stats). Fleet stats strip under the Cockpit telemetry band on / (src/components/v2/home/FleetStats.tsx, mounted in Overview.tsx): two-line sparklines you vs agents per bucket, weekday x hour heatmap in tasks.timezone, newest 12 mission hand-offs (from = upstream seats or Jarvis, to = seat agent + role), per-source session counts last 24 h / total. Route GET /api/v2/home/fleet-stats; lib src/lib/v2/fleetStats/stats.ts reads jarvis_messages, rabbit_messages, v2_messages (human, non-ephemeral), agent run metas, module-runs.json, missions + events.jsonl, ultracode-runs; Hermes is tracked:false (no state.db reader) and renders not tracked, never 0. Gear: settings.fleetStats.bucketHours 6/12/24/48 (default 12) and windowDays 7/14/30/60 (default 14), read per request (fleetStatsOptions) so a change re-buckets with no rebuild; out-of-range values fall back and are reported in errors. Docs: docs/modules/mission-control.md rows (Fleet stats strip, gear, four cards, how it works). Evidence: scripts/v2/smoke-fleet-stats.mjs 43 checks ALL PASS (A math on fixed instants in America/Chicago incl. local-midnight alignment and all four bucket sizes; B seeded temp DB + temp dirs give exactly the seeded counts you 5 / agents 9 / sessions 8 of 10, two hand-offs newest first, settings write of bucketHours 24 halves the buckets on the next read; C wiring); ./test.sh 121 passed 0 failed, tsc clean. Not seen in a browser: owner to check the strip on / after a rebuild."
     },
     {
       "id": "feat-s37-snapshots",
