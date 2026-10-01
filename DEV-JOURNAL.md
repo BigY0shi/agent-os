@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Rabbit bridge: the 3-minute weather answer, replayed before/after (v2.56.2)
+
+Owner: "3 minutes on something like what's the weather like". Transcript (rabbit_messages,
+2026-09-30 20:11-20:16 UTC): notify_before_act ("pulling the forecast") 30s, then a PROSE
+forecast with numbers 54s (prose-retry fired), repeated for Medford; the R1's own supervisor
+filed report_correction twice: "no web_search backing those specific numbers". The device's
+web_search was never called. Replay of that exact turn (cached system file
+system-ef8fe35a9d5c7c6a.txt, 131,957 chars, + the stored user message), claude-sonnet-5:
+- old flags: 77.2s, 2 CLI turns, 4,203 output tokens; the model emitted a REAL CLI
+  tool_use named notify_before_act (the CLI had tools, so it tried them), failed, then wrote
+  the JSON call.
+- with --tools= --setting-sources= (v2.56.1): 4.5s, 1 turn, 157 output tokens, a correct
+  prompt-based call (recall_memory for the owner's location).
+- plus --effort low: 4.8s but it skipped the lookup and asked for the location: worse, so
+  effort is left at the CLI default. No code change in this entry; evidence for v2.56.1.
+Rollback: n/a (journal only).
+
 ## 2026-10-01 - Rabbit bridge: every reply loaded the owner's whole Claude Code setup (v2.56.1)
 
 Owner: R1 replies take "FOREVER", when they come at all. Evidence:
