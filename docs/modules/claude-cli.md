@@ -38,7 +38,7 @@ Images, video and audio play inline. Other text files show as source.
 |---|---|
 | **Gallery** | Opens the base URL of your artifacts site (only shown when a site is configured). |
 | **Built by your agents** | Every `.html` file in `~/.agentic-os/loop-builds/` and under `~/.agentic-os/claude-projects/` (up to 4 folders deep). Refresh icon reloads it. |
-| **Publish** / **Update** | Copies the HTML into `~/.agentic-os/published/<slug>/index.html`, rebuilds the gallery page and runs `netlify deploy --prod`. The label reads **Update** when that source is already live. |
+| **Publish** / **Update** | Copies the HTML into `~/.agentic-os/published/<slug>/index.html`, rebuilds the gallery page and runs `netlify deploy --prod`. The label reads **Update** when that source is already live. If the deploy fails, nothing is listed as published: the gallery and manifest are put back, and the new copy is moved out of the published folder (or the slug's previous page restored). Unpublish moves the page to `~/.agentic-os/.exile/<timestamp>/published/<slug>` (outside the deployed folder) and, if its deploy fails, puts it back and keeps it listed, since it is still live. |
 | **Live links** | Everything in `~/.agentic-os/published/manifest.json`. |
 | **Copy** / **Open** | Copies the public URL, or opens it. |
 | Trash icon ("Take offline") | Asks for confirmation, removes the slug folder and manifest entry, then redeploys. |
@@ -49,7 +49,7 @@ Images, video and audio play inline. Other text files show as source.
 |---|---|
 | **Security audit**, **Find dead code**, **Build a showcase page**, **Stress-test a plan** | Preset missions. Each posts a fixed prompt to `/api/claude/chat` with Ultracode on, in its own project folder (`ultracode-security`, `ultracode-deadcode`, `ultracode-showcase`, `ultracode-plan`). Hover shows the full prompt. |
 | Custom mission box + **Launch** | Runs your own prompt the same way, in `ultracode-custom`. Enter also launches. |
-| **Runs** list | Saved runs, newest first, with subagent count, cost, duration and age. Click to open. Refresh icon reloads, trash icon deletes a run after confirmation. |
+| **Runs** list | Saved runs, newest first, with subagent count, cost, duration and age. Click to open. Refresh icon reloads, trash icon removes a run after confirmation (its replay moves to the runs folder's `.exile/<timestamp>/`, recoverable). |
 | **Stop** | Shown on a running run. Kills the CLI process and marks the run stopped. |
 | Swarm map | One node per subagent the run spawned, coloured by status (running, done, failed). While Claude is still planning with no subagents yet, a live text panel with an elapsed timer shows instead. |
 | **Verdict trail**, **Your replies**, **Final answer** | The run's captured verdicts, your follow-up turns, and the result text (or streaming text while running). |

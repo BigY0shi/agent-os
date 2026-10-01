@@ -1,5 +1,37 @@
 # Agent OS — Dev Journal
 
+## 2026-09-30 - Studio, Ultracode and Artifacts: deletes are recoverable; a failed deploy publishes nothing (v2.54.3)
+
+Owner on open item 7: "Go ahead and fix 7." All three files carry the owner's uncommitted
+name-guard fix (`(?!.+$)` to `(?!\.)` on their id checks); these edits sit beside those lines
+and are committed alone, so his fix stays his, uncommitted.
+- **Studio** (`studioHistory.ts`, OpenClaw Studio): deleting a saved X-search or a Talk
+  conversation moved from `unlink` to `exileFile`, into `searches/.exile/<stamp>/` and
+  `talks/.exile/<stamp>/`.
+- **Ultracode** (`ultracodeRuns.ts`): deleting a run exiles its replay JSON into the runs
+  folder's `.exile/<stamp>/`.
+- **Artifacts** (`claudeArtifacts.ts`):
+  - `publish` wrote the gallery and manifest listing the item BEFORE deploying and left them
+    on failure, so a failed deploy showed as live (and the next successful deploy would have
+    shipped it). Now a failed deploy puts the gallery and manifest back, restores the slug's
+    previous page (an update) or moves the new copy out of `published/`, and says "Deploy
+    failed, so nothing was published".
+  - `unpublish` did `rm -rf published/<slug>`. Now it exiles to
+    `~/.agentic-os/.exile/<stamp>/published/<slug>` (outside `published/`, which is deployed
+    whole, so an exile inside it would go public) and, if the deploy fails, moves it back and
+    keeps it listed ("still live").
+Docs updated: claude-cli, openclaw.
+
+Verified: `smoke-exile-deletes.mjs` section H (9 checks): search and talk deletes exile; a run
+delete exiles; with `netlify` unavailable (PATH points at an empty folder) a publish lists
+nothing and moves its copy out, a failed unpublish keeps the page listed and in place, no
+`.exile` ever appears inside `published/`, and none of the three files calls unlink or rm.
+tsc clean, smoke-guide passes. Note: deploy spawns `netlify` without a shell, which on Windows
+cannot run the npm `.cmd` shim, so Artifacts may never have deployed on this machine; not
+changed here (it needs a live check with the owner's Netlify site).
+
+Rollback: revert the commit.
+
 ## 2026-09-30 - Idea Engine skills wiring visible again (v2.54.2)
 
 The full gate after v2.54.1 stopped on `smoke-module-kit`: "every module marked readsSkills

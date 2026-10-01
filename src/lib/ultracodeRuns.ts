@@ -23,6 +23,7 @@ import { readdir, readFile, writeFile, mkdir, rename, stat } from "node:fs/promi
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { exileFile } from "./exileFile";
 
 export const ULTRACODE_RUNS_ROOT = process.env.AGENTIC_OS_ULTRACODE_RUNS
   ?? path.join(os.homedir(), ".agentic-os", "ultracode-runs");
@@ -263,11 +264,8 @@ export async function deleteRun(id: string): Promise<boolean> {
   if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${id}.json`);
   if (!existsSync(file)) return false;
-  try {
-    const { unlink } = await import("node:fs/promises");
-    await unlink(file);
-    return true;
-  } catch { return false; }
+  // Exiled, never deleted: the run's replay moves to <runs>/.exile/<stamp>/.
+  try { return !!(await exileFile(file, ULTRACODE_RUNS_ROOT)); } catch { return false; }
 }
 
 // Tiny helper so the route can stamp a run id.

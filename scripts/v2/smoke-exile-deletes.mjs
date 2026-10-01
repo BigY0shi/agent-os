@@ -121,6 +121,50 @@ if (VW.AGENTIC_DIR && path.resolve(VW.AGENTIC_DIR).startsWith(path.resolve(tmp))
   check("G4 a bad slug is refused (404), nothing moved", r.status === 404);
 }
 
+// ── H. Studio searches + talks, Ultracode runs, Artifacts (owner 2026-09-30: "fix 7") ──
+{
+  const SH = await import("../../src/lib/studioHistory.ts");
+  const srec = await SH.saveSearch({ query: "agent os", answer: "x", sources: [], createdAt: Date.now() });
+  check("H0 the search was saved under the temp home", fs.existsSync(path.join(SH.SEARCHES_DIR, `${srec.id}.json`)) && SH.SEARCHES_DIR.startsWith(tmp));
+  check("H1 Studio: deleting a search exiles it", (await SH.deleteSearch(srec.id)) === true && !fs.existsSync(path.join(SH.SEARCHES_DIR, `${srec.id}.json`)) && exiled(SH.SEARCHES_DIR).some((f) => f.endsWith(`${srec.id}.json`)));
+  await SH.saveTalk({ id: "talk-smoke-1", title: "t", turns: [], createdAt: Date.now(), updatedAt: Date.now() });
+  check("H2 Studio: deleting a Talk conversation exiles it", (await SH.deleteTalk("talk-smoke-1")) === true && exiled(SH.TALKS_DIR).some((f) => f.endsWith("talk-smoke-1.json")));
+
+  process.env.AGENTIC_OS_ULTRACODE_RUNS = path.join(tmp, "ultracode-runs");
+  const UR = await import("../../src/lib/ultracodeRuns.ts");
+  const run = UR.newRun({ id: "uc-smoke-1", prompt: "audit", model: "claude-opus-5-5", ultracode: true });
+  await UR.saveRun(run);
+  check("H3 Ultracode: deleting a run exiles its replay", (await UR.deleteRun("uc-smoke-1")) === true && !(await UR.getRun("uc-smoke-1")) && exiled(UR.ULTRACODE_RUNS_ROOT).some((f) => f.endsWith("uc-smoke-1.json")));
+
+  // Artifacts: PATH points at an empty folder, so `netlify` cannot be found and every deploy
+  // fails: exactly the failure paths that used to leave a page listed as live.
+  const emptyBin = path.join(tmp, "empty-bin"); fs.mkdirSync(emptyBin, { recursive: true });
+  process.env.PATH = emptyBin;
+  const ag = path.join(tmp, ".agentic-os");
+  fs.mkdirSync(path.join(ag, "loop-builds"), { recursive: true });
+  fs.writeFileSync(path.join(ag, "artifacts-site.json"), JSON.stringify({ siteId: "smoke-site", name: "smoke", baseUrl: "https://smoke.invalid" }), "utf8");
+  fs.writeFileSync(path.join(ag, "loop-builds", "calc.html"), "<html><head><title>Calc</title></head><body>calc</body></html>", "utf8");
+  const AR2 = await import("../../src/lib/claudeArtifacts.ts");
+  check("H4 Artifacts' published folder is inside the temp home", AR2.PUBLISHED_DIR.startsWith(tmp));
+  const pub = await AR2.publish("loop:calc.html");
+  const listed = await AR2.listPublished?.() ?? JSON.parse(fs.readFileSync(path.join(AR2.PUBLISHED_DIR, "manifest.json"), "utf8"));
+  const pubExiled = exiled(ag);
+  check("H5 a failed deploy publishes nothing: error says so, nothing listed, the copy moved out of published/",
+    pub.ok === false && /nothing was published/.test(pub.error || "") && listed.length === 0 &&
+    !fs.existsSync(path.join(AR2.PUBLISHED_DIR, "calc")) && pubExiled.some((f) => /published\/calc\/index\.html$/.test(f)), { pub, listed, pubExiled });
+  // Seed a "live" page (as if an earlier deploy worked), then fail to unpublish it.
+  fs.mkdirSync(path.join(AR2.PUBLISHED_DIR, "live-page"), { recursive: true });
+  fs.writeFileSync(path.join(AR2.PUBLISHED_DIR, "live-page", "index.html"), "<html>live</html>", "utf8");
+  fs.writeFileSync(path.join(AR2.PUBLISHED_DIR, "manifest.json"), JSON.stringify([{ slug: "live-page", title: "Live", source: "loop:calc.html", url: "https://smoke.invalid/live-page/", publishedAt: 1, bytes: 17 }]), "utf8");
+  const un = await AR2.unpublish("live-page");
+  const after = JSON.parse(fs.readFileSync(path.join(AR2.PUBLISHED_DIR, "manifest.json"), "utf8"));
+  check("H6 a failed unpublish keeps the page where it was and still listed (it is still live)",
+    un.ok === false && /still live/.test(un.error || "") && after.some((i) => i.slug === "live-page") && fs.readFileSync(path.join(AR2.PUBLISHED_DIR, "live-page", "index.html"), "utf8") === "<html>live</html>", { un, after });
+  check("H7 no exile folder was created inside published/ (it would be deployed)", !fs.existsSync(path.join(AR2.PUBLISHED_DIR, ".exile")));
+  const left = ["src/lib/studioHistory.ts", "src/lib/ultracodeRuns.ts", "src/lib/claudeArtifacts.ts"].filter((p) => /unlink\(|await rm\(/.test(fs.readFileSync(p, "utf8")));
+  check("H8 none of the three still calls unlink or rm", left.length === 0, left);
+}
+
 // ── F ─────────────────────────────────────────────────────────────────────────
 const srcs = ["src/lib/agentRoom.ts", "src/lib/kanbanStore.ts", "src/lib/localBuilds.ts", "src/lib/musicStudio.ts"];
 const still = srcs.filter((p) => /\bunlink\b/.test(fs.readFileSync(p, "utf8")));

@@ -3,7 +3,8 @@
 // share at a link.) Publishing deploys to a DEDICATED Netlify site so it never
 // touches the guides / SEO sites.
 
-import { readFile, writeFile, mkdir, readdir, stat, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat, rename } from "node:fs/promises";
+import { exileFile } from "@/lib/exileFile";
 import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -155,8 +156,12 @@ export async function publish(id: string, customTitle?: string): Promise<{ ok: b
   if (existing && existing.source !== id) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
 
   const dir = path.join(PUBLISHED_DIR, slug);
+  const pagePath = path.join(dir, "index.html");
+  // What was live for this slug before (an update re-publishes the same slug), so a failed
+  // deploy can put it back instead of leaving the new copy queued for the next deploy.
+  const prevHtml = await readFile(pagePath, "utf8").catch(() => null);
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "index.html"), html, "utf8");
+  await writeFile(pagePath, html, "utf8");
 
   const item: PublishedItem = { slug, title, source: id, url: `${site.baseUrl}/${slug}/`, publishedAt: Date.now(), bytes: Buffer.byteLength(html) };
   const next = [item, ...items.filter((i) => i.slug !== slug)];
@@ -164,16 +169,34 @@ export async function publish(id: string, customTitle?: string): Promise<{ ok: b
   await writeManifest(next);
 
   const d = await deploy();
-  if (!d.ok) return { ok: false, error: `Deploy failed: ${d.log.slice(-300)}` };
+  if (!d.ok) {
+    // Nothing went live, so nothing may say it did: put the gallery and manifest back, and
+    // either restore the slug's previous page or move the new copy out of the published
+    // folder (exiled beside it, never deleted) so the next deploy cannot ship it unseen.
+    await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(items), "utf8");
+    await writeManifest(items);
+    if (prevHtml !== null) await writeFile(pagePath, prevHtml, "utf8");
+    else await exileFile(dir, path.dirname(PUBLISHED_DIR)).catch(() => null);
+    return { ok: false, error: `Deploy failed, so nothing was published: ${d.log.slice(-300)}` };
+  }
   return { ok: true, item };
 }
 
 export async function unpublish(slug: string): Promise<{ ok: boolean; error?: string }> {
   if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
-  const items = (await readManifest()).filter((i) => i.slug !== slug);
-  try { await rm(path.join(PUBLISHED_DIR, slug), { recursive: true, force: true }); } catch {}
+  const all = await readManifest();
+  const items = all.filter((i) => i.slug !== slug);
+  // Exiled, never deleted, and OUTSIDE the published folder (that whole folder is deployed,
+  // so an .exile inside it would go public): ~/.agentic-os/.exile/<stamp>/published/<slug>.
+  const dir = path.join(PUBLISHED_DIR, slug);
+  const moved = await exileFile(dir, path.dirname(PUBLISHED_DIR)).catch(() => null);
   await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(items), "utf8");
   await writeManifest(items);
   const d = await deploy();
-  return d.ok ? { ok: true } : { ok: false, error: d.log.slice(-200) };
+  if (d.ok) return { ok: true };
+  // The page is still live, so put it back where it was and keep listing it.
+  if (moved) await rename(moved, dir).catch(() => {});
+  await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(all), "utf8");
+  await writeManifest(all);
+  return { ok: false, error: `Unpublish deploy failed, so it is still live: ${d.log.slice(-200)}` };
 }

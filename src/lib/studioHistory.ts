@@ -9,6 +9,7 @@
 // ~/.openclaw/studio/searches/ (no separate binary artefact to attach to).
 
 import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
+import { exileFile } from "./exileFile";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -108,7 +109,8 @@ export async function deleteSearch(id: string): Promise<boolean> {
   if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const p = path.join(SEARCHES_DIR, `${id}.json`);
   if (!existsSync(p)) return false;
-  try { await (await import("node:fs/promises")).unlink(p); return true; } catch { return false; }
+  // Exiled, never deleted: the search moves to studio/searches/.exile/<stamp>/.
+  try { return !!(await exileFile(p, SEARCHES_DIR)); } catch { return false; }
 }
 
 // ============================================================================
@@ -171,7 +173,8 @@ export async function deleteTalk(id: string): Promise<boolean> {
   if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const p = path.join(TALKS_DIR, `${id}.json`);
   if (!existsSync(p)) return false;
-  try { await (await import("node:fs/promises")).unlink(p); return true; } catch { return false; }
+  // Exiled, never deleted: the conversation moves to studio/talks/.exile/<stamp>/.
+  try { return !!(await exileFile(p, TALKS_DIR)); } catch { return false; }
 }
 
 // Build a slug from a prompt — used by route handlers when naming artefacts.

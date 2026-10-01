@@ -21,13 +21,13 @@ Five sub-tabs: **Image**, **X-Search**, **Voice**, **Video**, **Talk**.
 | **Image**: Prompt, **Aspect**, **Generate** | Runs `openclaw infer image generate --model xai/grok-imagine-image` and shows the result with **New tab** and **Save**. **Your image history** below; click one to reload it and its prompt. |
 | **X-Search**: Query, **Search X** | Runs `openclaw infer web search --provider grok` (limit 20) and shows Grok's answer with numbered sources. Ctrl/Cmd+Enter searches. |
 | **Auto-refresh (30s)** | Re-runs the last search every 30 seconds while ticked. Every run is saved. |
-| Saved searches list | Click to reopen a past search; delete asks for confirmation. |
+| Saved searches list | Click to reopen a past search; delete asks for confirmation and moves it to `~/.openclaw/studio/searches/.exile/<timestamp>/` (recoverable). |
 | **Voice**: Say this, **Voice**, **Speak** | Runs `openclaw infer tts convert` with the xAI voice you pick (eve, ara, rex, sal, leo, una) and plays the MP3. **Your voice history** below. |
 | **Video**: Prompt, **Aspect**, **Res**, **Audio**, **Generate video** | Runs `openclaw infer video generate --model xai/grok-imagine-video` (up to 4 minutes). **Audio** is a toggle. **Your video history** below. |
 | **Talk**: crab button | Starts a hands-free voice conversation: browser speech recognition listens, sends your words after about 0.9 seconds of silence, speaks the reply, then listens again. Press again to end. |
 | **Grok's voice** | **Browser (instant)** uses the browser's own speech; the xAI voices go through the TTS route and add a few seconds per turn. |
 | **Clear conversation** | Starts a new conversation slot. The old one stays in history. |
-| Saved conversations list | Click to reload a past talk (not while one is live); delete asks for confirmation. |
+| Saved conversations list | Click to reload a past talk (not while one is live); delete asks for confirmation and moves it to `~/.openclaw/studio/talks/.exile/<timestamp>/` (recoverable). |
 
 ### Workspace
 
