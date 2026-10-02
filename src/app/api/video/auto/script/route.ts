@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { spawn } from "node:child_process";
-import { CLAUDE_MODEL, config } from "@/lib/config";
+import { config } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { resolveModel } from "@/lib/localModel";
 
 export const runtime = "nodejs";
@@ -58,7 +59,7 @@ function runClaude(system: string, prompt: string, timeoutMs: number): Promise<{
     const bin = config.claude || "claude";
     // Allow web tools so it can actually research; harmless if unavailable.
     const child = spawn(bin, [
-      "-p", "--model", CLAUDE_MODEL,
+      "-p", "--model", claudeModel(),
       "--allowedTools", "WebSearch,WebFetch",
       "--append-system-prompt", system, prompt,
     ], { env: { ...process.env }, stdio: ["ignore", "pipe", "pipe"] });

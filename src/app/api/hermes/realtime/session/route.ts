@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 import { readHermesEnv } from "@/lib/hermesPhone";
 import { config } from "@/lib/config";
+import { openaiRealtimeModel, openaiTranscribeModel } from "@/lib/jarvisVoiceModels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const voice = /^(alloy|ash|ballad|coral|echo|sage|shimmer|verse|marin|cedar)$/.test(body?.voice) ? body.voice : "ash";
   const instructions = `${PERSONA}\n\n# Who you're talking to\n${userContext()}`;
+  // S30: the lane's models come from settings.jarvis.voice (Jarvis models gear), per request.
+  const realtimeModel = openaiRealtimeModel();
 
   try {
     const r = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         session: {
           type: "realtime",
-          model: "gpt-realtime",
+          model: realtimeModel,
           instructions,
           audio: {
             input: {
@@ -67,7 +70,7 @@ export async function POST(req: Request) {
               // silence_duration_ms is the main latency lever (default 500); 280 is snappy
               // without chopping you off mid-pause.
               turn_detection: { type: "server_vad", threshold: 0.5, prefix_padding_ms: 200, silence_duration_ms: 280 },
-              transcription: { model: "gpt-4o-mini-transcribe" },
+              transcription: { model: openaiTranscribeModel() },
             },
             output: { voice },
           },
@@ -88,7 +91,7 @@ export async function POST(req: Request) {
     });
     const j = await r.json();
     if (!r.ok || !j?.value) return NextResponse.json({ error: j?.error?.message || "realtime session failed", detail: j }, { status: 502 });
-    return NextResponse.json({ value: j.value, model: "gpt-realtime", expires_at: j.expires_at });
+    return NextResponse.json({ value: j.value, model: realtimeModel, expires_at: j.expires_at });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

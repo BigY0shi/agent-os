@@ -1,0 +1,399 @@
+{
+  "$schema_note": "Ralph harness contract: a session may change ONLY a feature's 'status', 'notes' and 'model'. Every other field is operator-owned. Order = value/risk; the loop works top-down. status is 'failing' or 'passing'. These rows are the roadmap slices in ROADMAP.md; the slice id is in each title.",
+  "project": "Agent OS - self-hosted operations dashboard (Next.js 16, V1 modules + V2 CORE on SQLite). Roadmap slices S3..S9 run as harness features. Read AGENTS.md first, especially 'Running it' and 'Harness'.",
+  "features": [
+    {
+      "id": "feat-s30-settings-sweep",
+      "title": "S30: Settings sweep - every module parameter in its gear",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "AGENTS.md (rule 16 gear pattern; rule 20 fallbacks; 'Credentials leave through exactly one door')",
+        "src/lib/settings.ts (Settings type + DEFAULT_SETTINGS; read per request) and src/lib/settingsRedact.ts (maskSecret / stripPlaceholders for secrets)",
+        "src/components/ConfigMenu.tsx (useSettings, Field, TextInput, SaveBar) and src/components/ModelSettings.tsx (generic text-field gear)",
+        "src/components/LoopSettings.tsx and src/lib/ideaSeats.ts (the pattern this slice repeats: v2.52.0 and v2.54.0)",
+        "src/lib/agentRoom.ts (roomAgents() reads config.json roomAgents), src/lib/config.ts (CLAUDE_MODEL), src/lib/brainstorm.ts, src/lib/pipeline.ts, src/lib/agentsRuntime.ts, src/lib/v2/memory/llm.ts",
+        "docs/modules/*.md (each module's Tabs and controls table must list new gear fields)",
+        "DEV-JOURNAL.md entries 2026-09-29/30 (what was already moved into settings)"
+      ],
+      "description": "Owner rule (2026-09-30): 'Every parameter needs to be in the settings for every module.' Find every parameter that is hardcoded or set only in a config file / environment variable and move it into that module's settings + gear, without changing behaviour. PHASE A (first session): write _design/settings-sweep-audit.md - a table per module of every hardcoded model id (claude-*, kimi*, glm*, minimax*, gpt-*, gemini*, *:cloud), provider choice, fallback, URL/port, timeout, retry count and threshold that a user could reasonably want to change, with file:line, current value, and the proposed settings key; mark anything that is not a real tunable (protocol constants, test seams) as 'leave'. Commit the audit. PHASE B (same or following sessions, one commit per module batch): implement the audit. Known items that MUST be covered: (1) Agent Room: the per-agent provider/model/baseUrl/apiKeyEnv/noReasoning overrides that src/lib/agentRoom.ts applyOverride() reads from ~/.agentic-os/config.json 'roomAgents' move to settings.room.agents with a gear on the Room page (keep reading config.json as a one-time fallback when settings has none, and say so in the code); the auto-model preference lists stay but the fallback env OLLAMA_CLOUD_MODEL becomes a setting. (2) The Ollama Cloud key: an in-app field (settings, write-only, masked with maskSecret in every GET/PATCH reply exactly like the existing secrets in settingsRedact.ts, never returned in full), read by every place that reads process.env.OLLAMA_API_KEY / OLLAMA_CLOUD_KEY (settings value wins, env stays the fallback); smoke-settings-secrets must still pass and must cover it. (3) The Claude chat model (src/lib/config.ts CLAUDE_MODEL, default claude-opus-4-8) becomes settings.claude.model with a picker (same four models as lib/ultracodeModels.ts plus custom), env/config.json still override for back-compat; default value unchanged. (4) Every remaining hardcoded model id in Brainstorm, Pipeline, Hire, Content Engine, Agents runtime and Memory that the audit marks tunable. Defaults MUST equal today's values so nothing changes until the owner edits a field. Out of scope: SEO (parked by the owner), Nexora, any UI redesign.",
+      "acceptance_criteria": [
+        "_design/settings-sweep-audit.md exists, lists every module with file:line, current value and settings key or 'leave' with a reason",
+        "Every audit row marked tunable is read from settings per request (no rebuild needed) and editable in that module's gear; defaults equal the previous hardcoded values",
+        "Agent Room overrides live in settings.room.agents with a Room gear; config.json roomAgents is only a labelled fallback",
+        "The Ollama Cloud key can be set in-app, is masked (first 5 chars + ********) in every settings reply, and is preferred over the env var everywhere it is read",
+        "The Claude chat model is a setting with a picker (Opus 5.5, Sonnet 5.5, Fable 5.1, Opus 5, custom); default unchanged",
+        "New scripts/v2/smoke-settings-sweep.mjs (offline, temp dirs per rule 19) asserts, for every moved parameter, that the default equals the old value and that changing the setting changes what the code uses; smoke-settings-secrets covers the Ollama key",
+        "docs/modules/*.md updated for every new gear field; smoke-guide passes",
+        "./test.sh exits 0; one commit per module batch with version bumps; DEV-JOURNAL entries with rollback lines"
+      ],
+      "status": "passing",
+      "notes": "2026-10-01 (Fable, worktree settings-sweep, branch feat/s30-settings-sweep): CODE COMPLETE, v2.56.0-v2.59.0, four batch commits + the Phase A audit. Phase A: _design/settings-sweep-audit.md (every module, file:line, value, key or leave+reason; 146 timeout literals classified). Phase B: (1) settings.ollama {apiKey masked, host, defaultModel, localUrl} via lib/ollamaCloud.ts, read per call by /api/ollama/*, /api/config, agentRoom, brainstorm, loopEngine, agentsRuntime, memory llm/embed/backfill, freeclaude build; settings beat env; smoke-settings-secrets A7/A8 cover the key. (2) settings.claude.model (default claude-opus-4-8) via lib/claudeModel.ts in all 25 former CLAUDE_MODEL sites; env/config.json still override and GET /api/claude/model + the Model gear say so; picker Opus 5.5/Sonnet 5.5/Fable 5.1/Opus 5/custom. (3) settings.room.agents + cliTimeoutSec with RoomSettings gear; config.json roomAgents only while settings has none (overrideSource in /api/room/status). (4) brainstorm.seatTimeoutSec/kimiTimeoutSec, jarvis.voice.{geminiLiveModel,openaiRealtimeModel,openaiTranscribeModel,openaiTtsModel}, thumbnails.promptModel; ModelSettings dotted keys + numbers. scripts/v2/smoke-settings-sweep.mjs: 38 checks (defaults = old values, setting changes what runs, precedence, wiring, docs). Docs updated for ollama, claude-cli, room, brainstorm, jarvis, thumbnails, loop, memory, agents-page, freeclaude. GATE: all 113 smokes run to the end, 110 pass; the 3 red (smoke-guide B1 rabbit page, smoke-exile-deletes H1-H3/H6 id guard, smoke-memory-ui .exile copies) are the owner's uncommitted work absent from this worktree, verified against the main checkout, so ./test.sh cannot exit 0 here. Left failing per the contract; owner steps in agent-progress.md (AWAITING USER VERIFY). Flip to passing once ./test.sh is green in a tree holding those files. | PASS 2026-10-01 (supervisor, merged into feat/v2-hermes3d-and-versioning as v2.60.0): the worktree-only blockers are gone in the merged tree (Rabbit 11f76cf, name-guard 7c377ae, smoke-memory-ui 1daca86); merged ./test.sh 120 passed, 0 failed. Owner live checks stay listed under OWNER TO VERIFY in agent-progress.md."
+    },
+    {
+      "id": "feat-s8-voicebox-everywhere",
+      "title": "S8: Voicebox speaks for the Oracle and Video too",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/voicebox.ts",
+        "src/app/api/hermes/tts/route.ts",
+        "src/components/OracleView.tsx",
+        "src/app/api/voicebox/profiles/route.ts",
+        "src/components/v2/jarvis/JarvisSettings.tsx",
+        "DEV-JOURNAL.md (entries 'S1: Voicebox is the voice engine' and 'Heard, 12:00')"
+      ],
+      "description": "S1 made Voicebox (local studio at 127.0.0.1:17493, lib/voicebox.ts, provider 'voicebox' in /api/hermes/tts, profiles from /api/voicebox/profiles) the voice engine for Jarvis. The Oracle (OracleView.tsx) still speaks ElevenLabs with a hardcoded voice id 'Bu13R3bywbVy3lQswSJo' and its own ElevenLabs picker; the owner has already made a Voicebox profile named 'The Sage' for it. Make the Oracle's voice provider a setting (oracle.voice.provider: 'voicebox' | 'elevenlabs', oracle.voice.voiceboxProfile, default voicebox + 'The Sage' when that profile exists) exposed in the Oracle's own gear (rule 16 - add a small gear if it has none), and make OracleView speak through /api/hermes/tts with provider from settings and voiceId = the Voicebox profile id/name. Keep ElevenLabs selectable. Do NOT touch Video/voiceover in this feature; note it in agent-progress.md as a follow-up if you see the seam.",
+      "acceptance_criteria": [
+        "OracleView reads oracle.voice from /api/settings and sends provider + voiceId accordingly; no hardcoded ElevenLabs id remains as the default path.",
+        "The Oracle gear lists Voicebox profiles from /api/voicebox/profiles and persists the choice via PATCH /api/settings.",
+        "When Voicebox fails and the owner's fallback setting allows it, the reply is labelled (provider/fellBackFrom) exactly as the Jarvis path does; no silent substitution.",
+        "A new or extended offline smoke asserts the settings defaults and greps that OracleView no longer hardcodes provider 'elevenlabs'; ./test.sh exits 0.",
+        "Version bumped (npm run version:bump -- minor), DEV-JOURNAL.md entry written, ROADMAP.md S8 ticked into Done with commit + version, node scripts/roadmap-page.mjs re-run."
+      ],
+      "status": "passing",
+      "notes": "PASS 2026-09-02 (harness, v2.15.0): settings.oracle.voice {provider voicebox|elevenlabs, voiceboxProfile default The Sage, elevenVoiceId = ORACLE_ELEVEN_VOICE_ID, fallback elevenlabs|none} in lib/settings.ts; Oracle gear (Settings2 in the eyebrow row) lists /api/voicebox/profiles + /api/video/voices, PATCH /api/settings; OracleView speak() reads settings, sends {provider, voiceId, module: oracle} to /api/hermes/tts, shows fellBackFrom in the footer; route fallbackPolicy(module) honours the Oracle own fallback + Sage ElevenLabs voice (rule 20). Evidence: smoke-voicebox.mjs section H, 48 checks (from 36); ./test.sh 73/73 exit 0; tsc clean. Not verified: audio in the browser (needs rebuilt app). Video voiceover left on the ROADMAP backlog per the description."
+    },
+    {
+      "id": "feat-s6-hermes3d-missing",
+      "title": "S6: Hermes 3D is nowhere - find out why and mount it or say why not",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/v2/hermes3d/clips.ts",
+        "_design/hermes3d/PIPELINE.md",
+        "public/hermes3d/ (gitignored baked assets: office.glb, hermes-clips.glb, characters/, office-seats.json)",
+        "src/components/Sidebar.tsx (NAV + route Sets; a route in NAV but in no Set lands in 'Self')",
+        "src/lib/pageMeta.ts",
+        "_design/agentos-v2/ultraplan/ (SPEC-F, the Hermes 3D spec)"
+      ],
+      "description": "The owner reports 'Hermes 3D is nowhere'. Evidence so far (2026-09-02): the baked assets exist under public/hermes3d (15 MB), src/lib/v2/hermes3d/ holds only clips.ts, and there is NO page route, NO NAV entry and NO component referencing hermes3d in src/app or src/components. So it is not a stale build: the module was never mounted after the asset pipeline landed. Read SPEC-F to learn what the page was meant to be (a 3D office scene with agents in seats, driven by office-seats.json and the clip GLB). Deliver the smallest honest mount: a /hermes3d page in Artist's Corner (add to ARTIST_ROUTES in Sidebar.tsx, pageMeta entry) that loads office.glb + characters + clips with three.js (already a dependency; check package.json) and renders the office with idle clips on a few seats, fails loudly with a visible message when an asset is missing (the directory is gitignored), and a gear stub. If the full scene is out of reach in one session, mount the page with the office mesh alone and write the rest as a follow-up in agent-progress.md; do not fake agent activity (AGENTS.md 'Never fabricate state').",
+      "acceptance_criteria": [
+        "A /hermes3d route exists, appears in the sidebar under Artist's Corner, and has a TopBar title via pageMeta.",
+        "The page renders office.glb from public/hermes3d when present and shows an explicit 'assets not baked, see _design/hermes3d/PIPELINE.md' message when absent; never a blank canvas.",
+        "An offline smoke asserts the NAV/Set placement, the pageMeta entry, and that office-seats.json parses to >= 100 anchors when present (skip with a printed reason when the gitignored dir is absent); ./test.sh exits 0.",
+        "DEV-JOURNAL.md records what was actually missing and what was mounted; ROADMAP.md S6 ticked; version bumped; roadmap page re-rendered."
+      ],
+      "status": "passing",
+      "notes": "PASSING 2026-09-02 17:30 PDT (v2.16.0). Cause: not a stale build, an unmounted route - public/hermes3d was fully baked 2026-08-31 (office.glb 5.5 MB, hermes-clips.glb 7.7 MB, 18 characters + atlas, office-seats.json 149 anchors) but no page/NAV/component existed; SPEC-F L2 was never started (r3f/drei never installed). Mounted: src/app/hermes3d/page.tsx -> Hermes3DView (client, ssr:false boundary) -> HermesOffice (plain three.js GLTFLoader+OrbitControls; HEAD-probes office.glb before any WebGL and shows MISSING_ASSETS_MESSAGE naming _design/hermes3d/PIPELINE.md; zero-mesh GLB is an error panel; seats idle bodies on pickSeats() chairs with the SEATED idle clips; HUD says bodies are not agents). Sidebar NAV + ARTIST_ROUTES, pageMeta /hermes3d, gear (quality/shadows/showFps/seatedCount) via ConfigMenu, settings.hermes3d spreads DEFAULT_HERMES3D. Evidence: scripts/v2/smoke-hermes3d-ui.mjs 36 checks ALL PASS (section E parses the real office-seats.json: >=100 anchors, 4 deterministic chairs; SKIPs with a printed reason when the dir is absent); ./test.sh exit 0, tsc clean, 74/74 smokes (.harness-logs/gate-s6-cycle3.log). Built by cycle 2, which ended before its background gate finished; cycle 3 verified and committed. NOT verified: the picture in a browser (owner). Follow-up: wire run state (SPEC-F L2.1) so real agents take the seats."
+    },
+    {
+      "id": "feat-s3-prelaunch-drawer-stop",
+      "title": "S3: pre-launch settings drawer + STOP for Content Engine and Kanban",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/moduleRuns.ts (the S2 registry: startModuleRun, ctx.log/progress)",
+        "src/components/RunsTray.tsx",
+        "src/app/api/content-engine/generate/route.ts",
+        "src/app/api/content-engine/plan/route.ts",
+        "src/components/ContentEngineView.tsx",
+        "src/app/api/agent-kanban/ (build, plan, preview, workspace)",
+        "src/components/AgentKanban*.tsx",
+        "src/components/DealDesk.tsx (the reference implementation the owner called 'done pretty well and tight')",
+        "src/lib/loopEngine.ts (cliComplete accepts opts.signal and kills the child on abort)",
+        "src/lib/settings.ts + src/components/ConfigMenu.tsx (runtime settings store; rule 16)"
+      ],
+      "description": "Owner decision 2026-09-02: configuration happens BEFORE a run launches, in a settings drawer, and the ONLY mid-run control is STOP. No live editing of constraints. The drawer is where skills get applied and guardrails added/removed. Build it for Content Engine (generate + plan) and Agent Kanban (plan + build), the two modules he runs most. Two halves. (1) STOP: extend moduleRuns with an AbortController per run (ctx.signal) and a stopModuleRun(id) that aborts it and marks status 'stopped' with who/when; expose POST /api/runs/:id {action:'stop'}; pass ctx.signal into cliComplete / multiModelComplete so the child CLI actually dies (loopEngine already supports signal; check contentEngine.multiModelComplete and the kanban routes and thread the signal through); RunsTray shows a STOP button on running runs. (2) Drawer: a reusable <RunLaunchDrawer> component: opened by the module's Run/Generate/Plan button, shows the run's settings (provider/model seat, skills to apply from /api/skills, guardrail toggles such as max steps / no network / require test run, extra instructions), a Launch button, and persists the last-used values per module in settings (settings.launch.<module>) so the drawer opens pre-filled. The route receives the chosen values in the POST body and honors them; unknown fields are rejected, not ignored. Wire Content Engine first, then Kanban; keep Deal Desk untouched (S4 owns it). Smokes: extend smoke-module-runs.mjs for stop (signal fires, status 'stopped', a stopped run's promise rejects with an AbortError-like message, dismiss allowed after stop), and add smoke-launch-drawer.mjs asserting the settings shape/defaults and that both routes read and validate the launch options.",
+      "acceptance_criteria": [
+        "POST /api/runs/:id {action:'stop'} aborts a running module run: ctx.signal fires, the child CLI is killed via the existing signal support, status becomes 'stopped', and the tray shows it as stopped (never 'done').",
+        "Content Engine generate/plan and Kanban plan/build open a pre-launch drawer with settings, skills and guardrails; Launch sends them in the body; the routes validate and honor them; last-used values persist in settings.launch.<module> (rule 16: everything visible in-app).",
+        "No mid-run control other than STOP exists; the drawer is not editable while that module's run is in flight.",
+        "smoke-module-runs.mjs covers stop; smoke-launch-drawer.mjs covers the settings shape and route validation; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry, ROADMAP.md S3 ticked into Done, version bumped (minor), roadmap page re-rendered."
+      ],
+      "status": "passing",
+      "notes": "PASSING 2026-09-02 (v2.17.0, harness cycle 4). STOP: moduleRuns AbortController per run, ctx.signal, stopModuleRun(id, by) -> status stopped + stoppedBy, POST /api/runs/:id {action:stop} (409 when not running), RunsTray Stop button + stopped label (never done); signal threaded through seatComplete/kimiComplete/multiModelComplete/localChat to runner.ts killTree; no fallback after a STOP. Drawer: lib/launchOptions.ts (per-module seats + enforced guardrails: content-engine timeoutMin/noFallback, agent-kanban timeoutMin/maxCards/noExternalScripts; strict parse, unknown field = 400 naming it; resolve body > settings.launch.<module> > defaults), RunLaunchDrawer.tsx (skills from /api/skills, persists settings.launch on Launch, locked while that module runs, no control but Stop), wired to Content Engine plan/generate and Agent Kanban plan/build; kanban routes now register runs; Deal Desk untouched. Evidence: smoke-module-runs 62 checks, smoke-launch-drawer 70 checks, tsc clean, ./test.sh 75/75 exit 0 (.harness-logs/gate-s3.log). Not verified: the drawer/STOP in a browser (owner to look after rebuild)."
+    },
+    {
+      "id": "feat-backlog-wrap-long-routes",
+      "title": "Backlog: Deal Desk and Hire Engine long routes register module runs",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/moduleRuns.ts",
+        "src/app/api/content-engine/generate/route.ts (the pattern: wrap, await run.promise, return runId)",
+        "src/app/api/deals/brief/route.ts",
+        "src/app/api/deals/brief-batch/route.ts",
+        "src/app/api/deals/proposal/route.ts",
+        "src/app/api/deals/enrich/route.ts (NOTE: this file is in the owner's uncommitted working set - do not stage or reformat it; skip it if it is dirty per git status)",
+        "src/app/api/hire/brief/route.ts",
+        "src/app/api/hire/draft/route.ts",
+        "src/app/api/hire/pitch/route.ts",
+        "src/app/api/hire/scrape/route.ts",
+        "src/app/api/hire/enrich/route.ts"
+      ],
+      "description": "S2 built the module-run registry and wired Content Engine only. Wrap the Deal Desk and Hire Engine long routes listed in sources with startModuleRun() the same way: module slug 'deals' or 'hire', a human label naming the listing/lead, href '/deals' or '/hire', ctx.log at the meaningful steps, await run.promise, add runId to the response, keep the existing response shapes and status codes. Check `git status --short` first and SKIP any listed file that is already modified in the working tree (the owner's in-progress work); record which were skipped in notes. Stage only the files you changed.",
+      "acceptance_criteria": [
+        "Every clean route in the list calls startModuleRun and returns runId; response shapes and status codes are unchanged.",
+        "smoke-module-runs.mjs section F greps each wired route for startModuleRun; ./test.sh exits 0.",
+        "DEV-JOURNAL.md notes which routes were wired and which were skipped as dirty; version bumped (patch); ROADMAP.md backlog line updated."
+      ],
+      "status": "passing",
+      "notes": "2026-09-02 PASSING (v2.17.1). Wired 8: deals/brief, deals/brief-batch, deals/proposal, hire/brief, hire/draft, hire/pitch, hire/scrape, hire/enrich (startModuleRun, ctx.log, same await, runId in every response, codes unchanged, 409 {stopped} after STOP). Skipped as dirty: deals/enrich (owner working set). New lib/runRoute.ts (HttpError + runErrorResponse); lib/briefBatch.ts split planBriefBatch/runBriefBatch so the batch route owns its run. STOP kills the child in deals/* + hire/scrape + hire/enrich; hire/brief|pitch|draft mark stopped only (hireBrief.ts/hireDraft.ts take no signal and are dirty) - seam noted in ROADMAP. smoke-module-runs 84 checks; gate 75/75 exit 0."
+    },
+    {
+      "id": "feat-s4-deal-desk-control",
+      "title": "S4: Deal Desk - more control from the chair (a-f)",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "ROADMAP.md (the S4 bullet is the spec: parts a-f)",
+        "src/components/DealDesk.tsx",
+        "src/lib/upworkDesk.ts (rotated store, withLock; listDeals skips board rows with no pitches.json entry)",
+        "src/lib/dealBrief.ts (NOTE: dirty in the owner's tree - read, do not stage)",
+        "src/app/api/deals/* (action, ask, brief, brief-batch, cookie, enrich (dirty), feeds, list, proposal, refill, scrape)",
+        "src/lib/deskMemory.ts",
+        "docs/modules/deal-desk.md",
+        "scripts/v2/smoke-deal-desk.mjs, scripts/v2/smoke-desk-memory.mjs",
+        "src/lib/settings.ts (add deals.* knobs; rule 16: expose them in the Deal Desk gear)"
+      ],
+      "description": "Owner asks, 2026-09-02, in his words. (a) Manual intake: paste one or more job-listing URLs and have the desk scrape, evaluate and pitch them like feed items (new POST /api/deals/intake taking urls[]; reuse the scrape + brief + proposal path; a paste box in the Deal Desk header). (b) Deny without opening: a deny control on the card face, multi-select with bulk deny (one action call per card or a new bulk action in /api/deals/action), and the Parked/Denied lane reachable without horizontal scroll (a 'Denied' drop target or a sticky lane). (c) Verdict first: the evaluator already scores and says pass or pursue; move that one-sentence verdict to the TOP of the yellow summary box and add a colour band on the card edge that encodes it (pursue / maybe / pass). (d) Gate enrichment on a live Upwork session: detect the login wall in the scraped HTML (title/URL/redirect to login, or the known 'Log in' markers), stop the enrich run, mark the card 'needs login' and surface a banner with a re-login link instead of enriching against the wall. (e) 'More info needed' must fire work: today it only paints a yellow cone; make it kick off a research pass (enrich + brief + the open questions via the ask route) as a module run (startModuleRun, module 'deals') and report back on the card; add a 'Get more info' button in the drawer. (f) Gate scrapes by posted date: a deals.maxAgeDays setting (default 5) in the gear, drop older listings at scrape time, show the age on the card. Ride-along: a visible spinner on Reload. Deal Desk is the reference for S3, so keep the drawer pattern consistent with RunLaunchDrawer if it exists by then. Do this in the order (c), (b), (f), (d), (a), (e); each part is a separate commit; if you run out of session, leave the remaining parts as the next session's work in agent-progress.md (this row stays failing until all six land).",
+      "acceptance_criteria": [
+        "(c) The verdict sentence is the first line of the summary box and the card edge colour matches it; (b) a card can be denied from its face and several at once; the denied lane is reachable without horizontal scrolling.",
+        "(f) Listings older than deals.maxAgeDays are dropped at scrape time and the age shows on the card; the knob is in the gear.",
+        "(d) A logged-out Upwork session stops enrichment with a visible 'needs login' state instead of enriching the login page; (a) pasted URLs become cards through the normal pipeline; (e) 'More info needed' starts a module run and its result lands on the card.",
+        "smoke-deal-desk.mjs (or a new smoke) covers: verdict extraction, bulk deny, max-age filter, login-wall detection on fixture HTML, intake URL validation; all redirect AGENTIC_OS_DESK / UPWORK_LEADS_DIR / AGENTIC_OS_SETTINGS first; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry per part, ROADMAP.md S4 ticked, version bumped (minor), docs/modules/deal-desk.md updated, roadmap page re-rendered."
+      ],
+      "status": "passing",
+      "notes": "PASSING 2026-09-02 (harness cycle, six commits v2.18.0..v2.23.0, each part its own commit in the owner order c,b,f,d,a,e). (c) deriveVerdict() [lib/dealDeskControl.ts] -> verdict.line first in the summary box + card edge colour by band. (b) setStatusBulk + action bulkStatus; tick box + deny cross on the card face; Deny N selected bar; Parked/Denied full-width lane under the board (two drop targets); Reload shows Reloading. (f) settings.deals.maxAgeDays (gear DealDeskSettings.tsx, default 5); pruneLeadsFileByAge after scoring (board+shortlist) and after a feed pull; dropped rows kept as <name>.dropped-<date>.json; age + OLD on the card. (d) lib/dealEnrich.ts + POST /api/deals/enrichment (module run): login wall stops, flags needsLogin, banner with Open Upwork login + Update cookie, cookie save clears flags; old /enrich untouched (owner working set). (a) parseIntakeUrls + scripts/deals/intake-scrape.mjs + lib/dealIntake.ts + POST /api/deals/intake: dataset -> score_board.mjs -> pitch.mjs -> New. (e) lib/dealResearch.ts + POST /api/deals/research: needsInfo ON fires enrich+brief+open questions as a module run; Get more info in drawer; state on card. Evidence: scripts/v2/smoke-deal-desk-control.mjs 75 checks (A-F), redirects AGENTIC_OS_DESK/UPWORK_LEADS_DIR/AGENTIC_OS_SETTINGS/AGENTIC_OS_RUNS_DIR; ./test.sh 76/76 exit 0. Not seen in a browser: intake-scrape.mjs against upwork.com, the real research pass, and the new lane layout need the rebuilt app and the owner."
+    },
+    {
+      "id": "feat-s5-legacy-memory-backfill",
+      "title": "S5: legacy memory backfill routine (20-episode sample)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/v2/memory/ (episodes, derivation, ingest queue; find the aspect/derivation code and the content-hash dedup)",
+        "src/lib/v2/dbSchema.ts (memory migrations in the 20s)",
+        "scripts/v2/smoke-memory*.mjs",
+        "HANDOFF.md item 2 (the plan agreed with the owner)",
+        "src/lib/settings.ts (memory.* knobs; the model policy memory: local models via Ollama)"
+      ],
+      "description": "Imported legacy episodes sit with no aspect (Identity / Event / Relationship). Re-running import in full mode cannot fix them because content-hash dedup rejects the rows. Build a backfill routine that reads EXISTING episode rows lacking derivation and runs the same derivation over them, using the owner's LOCAL models through Ollama (chat model 'bonsai' 27B - he is downloading it 2026-09-02; embeddings 'nomic-embed-text'). Deliverables: src/lib/v2/memory/backfill.ts with listUndrivedEpisodes(limit) and backfillEpisodes({limit, model, dryRun}) that records per-episode results; a CLI entry scripts/v2/memory-backfill.mjs --limit 20 --model bonsai:27b [--dry-run]; a gear entry in the Memory module (limit, model, run button) that runs it as a module run (startModuleRun, module 'memory') so the tray shows progress via ctx.progress. It must fail loudly if Ollama or the model is absent (never fall back to a hosted model). Smoke: mock the model call, insert 5 legacy rows in a temp DB (AGENTIC_OS_DB, AGENTIC_OS_SETTINGS redirected; memory.ingestEnabled false), run backfill, assert aspects land and dedup is untouched. Do NOT run the real 20-episode sample yourself: the owner wants to see it; write the exact command in agent-progress.md under AWAITING USER VERIFY and stop there.",
+      "acceptance_criteria": [
+        "backfill.ts + memory-backfill.mjs exist; a dry run lists candidate episodes without writing; a real run derives aspects for existing rows without re-importing or touching the content-hash dedup.",
+        "Ollama/model absence produces a clear error and no fallback.",
+        "The Memory gear exposes limit + model + a Run button that starts a module run with progress.",
+        "smoke-memory-backfill.mjs passes offline with a mocked model; ./test.sh exits 0.",
+        "agent-progress.md carries an AWAITING USER VERIFY checklist with the exact 20-episode command for the owner; DEV-JOURNAL.md entry; version bumped (minor); ROADMAP.md S5 marked 'built, sample pending owner'."
+      ],
+      "status": "passing",
+      "notes": "2026-09-02 v2.24.0: backfill.ts (listUndrivedEpisodes/countUndrivedEpisodes/backfillEpisodes/listBackfillLog) + scripts/v2/memory-backfill.mjs (--limit --model --dry-run --json) + POST/GET /api/v2/memory/backfill as a module run (module memory, ctx.progress, 409 while running) + Memory gear 'Legacy backfill' (limit, model, Dry-run, Run backfill; persists settings.memory.backfillLimit/backfillModel). llm.ts withMemoryModel() AsyncLocalStorage override pins ollama-local + model for the whole addEpisode tree and threads STOP into every fetch. Migration 4 memory_backfill_log (derived/nothing/failed) makes runs idempotent; content_hash + original_content asserted untouched. checkLocalOllama(): Ollama down / chat model missing / embed model missing = named error, no fallback. smoke-memory-backfill.mjs 62 checks offline (fake Ollama on fetch, settings set to ollama-cloud to prove the pin, CLI dry run as a child process). Gate 77/77 exit 0. Real 20-episode sample NOT run per the contract; AWAITING USER VERIFY checklist with the exact commands in agent-progress.md. ROADMAP S5 ticked 'built, sample pending owner'."
+    },
+    {
+      "id": "feat-s7-webmcp-wizard",
+      "title": "S7: WebMCP wizard - describe, clarify, propose tools, approve, then emit JSON",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/v2/webmcp/ (engine, exporter, spec_json)",
+        "src/app/api/v2/webmcp/*",
+        "src/components/v2/webmcp/* (the /webmcp builder page)",
+        "_design/agentos-v2/ultraplan/ (SPEC-D, WebMCP)",
+        "scripts/v2/smoke-webmcp*.mjs",
+        "src/lib/loopEngine.ts (cliComplete) / src/lib/v2/jarvis (how the brain is called)"
+      ],
+      "description": "Owner spec (bug list): the WebMCP builder should be a wizard, not an input page. Step 1: the user gives an exact description of what the tool should do (vague or granular). Step 2: an AI digests it, asks clarifying questions, and reasons in a scratchpad WITHOUT writing code: a proposed tool list (name, one-job purpose, inputs, persona/category). Step 3: the user approves or edits the list. Step 4: only then the agent emits the JSON spec following the existing exporter's schema and best practices: 5-10 tools per server, one tool one job, unused tools cut, tools split by persona or category. Escape hatch: a 'write your own JSON' mode where the agent only proofreads and reports problems. Build it as a stepper inside the existing /webmcp builder with server-side routes for digest (questions + proposal), and emit; the model call goes through the existing cliComplete/provider seam and honours the selected provider (never a silent fallback). Persist wizard drafts so a refresh does not lose the conversation. Smokes: the proposal->JSON transform with a mocked model, schema validation of emitted specs, the proofread path flagging a bad spec.",
+      "acceptance_criteria": [
+        "The /webmcp builder offers Wizard and Write-my-own modes; the wizard has description -> clarify/propose -> approve -> emit steps and never emits JSON before approval.",
+        "Emitted specs validate against the existing WebMCP schema and respect 5-10 tools, one job per tool, persona/category split.",
+        "The proofread mode returns concrete problems for an invalid spec and says 'looks good' only when the schema passes.",
+        "smoke-webmcp-wizard.mjs passes offline with a mocked model; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry, ROADMAP.md S7 ticked, version bumped (minor), roadmap page re-rendered."
+      ],
+      "status": "passing",
+      "notes": "PASS 2026-10-01 v2.57.0: Wizard/Builder toggle on /webmcp (WizardPanel.tsx), steps describe -> clarify/propose -> approve -> emit; emit route 409 before approval; validateWizardSpec gates exporter shapes + strict spec_json + 5-10 tools + one job per tool + persona on every tool + no js + approved list unchanged (422 with problems otherwise); proofread returns concrete problems with no model call and 'looks good' only when schema passes and the agent found nothing; model via cliComplete with gear wizardAgent (default claude) + labelled fallback wizardFallback (default codex); drafts persisted in webmcp_wizard_drafts (migration 044). smoke-webmcp-wizard.mjs 71 checks with a mocked cli; ./test.sh 115/115. Journal entry, ROADMAP S7 ticked, roadmap page rendered, docs/modules/webmcp.md Wizard table + gear rows."
+    },
+    {
+      "id": "feat-s9-openmontage-module",
+      "title": "S9: OpenMontage module in Artist's Corner",
+      "priority": "LOW",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "C:/Users/Yoshi/Documents/OpenMontage/AGENT_GUIDE.md",
+        "C:/Users/Yoshi/Documents/OpenMontage/docs/ARCHITECTURE.md",
+        "C:/Users/Yoshi/Documents/OpenMontage/README.md (quick start, pipelines)",
+        "src/components/Sidebar.tsx (ARTIST_ROUTES), src/lib/pageMeta.ts",
+        "src/lib/runner.ts (NOTE dirty; read only) and src/lib/loopEngine.ts (how CLIs are spawned on Windows; python is 'python' not 'python3')",
+        "src/lib/settings.ts (add openmontage.* knobs: repo path, python bin, output dir; rule 16 gear)"
+      ],
+      "description": "OpenMontage (calesthio/OpenMontage, AGPLv3) is a Python agentic video production system checked out at C:/Users/Yoshi/Documents/OpenMontage. Read its AGENT_GUIDE.md and docs/ARCHITECTURE.md FIRST to learn its CLI/entry points and pipeline definitions; do not guess them. Then wrap it as a sidebar module '/openmontage' in Artist's Corner the way other Artist's Corner tools wrap external programs: a gear with the repo path (default the path above), the python executable, and an output directory, all in settings; a page that lists available pipelines from pipeline_defs, lets the owner pick one and give a brief, and runs it as a module run (startModuleRun, module 'openmontage', ctx.log streaming the process output) with the rendered output listed when done. Fail loudly when the repo, python or a dependency is missing. Do not install Python packages; if requirements are unmet, show the exact command for the owner. Smoke: mock the spawn and assert the pipeline discovery, settings defaults, and the missing-repo error.",
+      "acceptance_criteria": [
+        "/openmontage exists in Artist's Corner with a TopBar title; the gear exposes repo path, python bin and output dir.",
+        "Pipelines are discovered from the checkout's pipeline_defs and a run starts as a module run with live log lines in the tray.",
+        "A missing repo / python / dependency is a visible error with the fix, never a silent no-op.",
+        "smoke-openmontage.mjs passes offline; ./test.sh exits 0.",
+        "DEV-JOURNAL.md entry, ROADMAP.md S9 ticked, version bumped (minor), roadmap page re-rendered."
+      ],
+      "status": "passing",
+      "notes": "DONE 2026-10-01 v2.57.0 (worktree openmontage). /openmontage in Sidebar NAV + ARTIST_ROUTES, pageMeta title OpenMontage; gear OpenMontageSettings: openmontage.repoPath (default ~/Documents/OpenMontage), pythonBin (python), outputDir (<repo>/projects), agent (claude), fallbackAgent (codex|none, rule 20), timeoutMin (90). Pipelines read live from <repo>/pipeline_defs/*.yaml (js-yaml; broken manifests named). A run = startModuleRun module 'openmontage' spawning the CLI agent in the checkout (claude -p stream-json, turns summarised into ctx.log; codex/cursor/hermes raw lines), STOP + timeout kill the child, rendered files under projects/<id>/ listed on done. Doctor (repo, python 3.10+, 4 core imports, agent, output dir) gates GET and the run with a 503 + the exact fix; nothing installed. Evidence: smoke-openmontage.mjs 64/64 offline (fake checkout, exec + spawnAgent seams); ./test.sh 115/115; tsc clean; read-only doctor on the real checkout green (python 3.11.0, deps present, claude installed, 13 pipelines, 0 broken). No real pipeline run was started. Journal + ROADMAP S9 ticked + roadmap page rendered."
+    },
+    {
+      "id": "feat-s34-jarvis-chat-upgrades",
+      "title": "S34: Jarvis chat upgrades (Nexora C6, moved from Hermes to Jarvis by the owner)",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "_design/nexora-diff.md section 2, C6 (the Nexora pack drives Hermes the way Agent OS drives Jarvis; owner 2026-10-01: build it on Jarvis)",
+        "src/lib/v2/jarvis/ (brain.ts, conversations.ts, resume.ts) and src/components/v2/jarvis/ChatboxOverlay.tsx",
+        "S13 Sessions (v2.35.0) in DEV-JOURNAL.md / ROADMAP.md Done: what Jarvis already has",
+        "docs/modules/jarvis.md"
+      ],
+      "description": "Owner 2026-10-01: 'C6: yes to all of these, but they go to Jarvis, not Hermes.' Bring the four Nexora chat upgrades to Jarvis: (1) named persistent sessions with server-side history, (2) 'New conversation' that starts fresh WITHOUT deleting the old one (it stays listed and resumable), (3) a thinking/effort flag per session that survives a reload, (4) attachments: at least one image per message passed to the brain as an image content block (png/jpg/webp checked by magic bytes, size cap as a setting, default 4 MB). FIRST audit what Jarvis already has (S13 Sessions shipped v2.35.0, conversations.ts, resume.ts) and write the gap list into notes; build only the gaps, do not rebuild what works. Attachments are stored under ~/.agentic-os (path from settings) and never sent anywhere but the brain call. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "notes list what Jarvis already had vs what this slice added (the gap audit)",
+        "Sessions are named, listed, resumable after a server restart; 'New conversation' keeps the previous one listed (nothing deleted)",
+        "The per-session thinking/effort choice survives a page reload",
+        "An image attached in the orb chat reaches the brain as an image block; non-image or oversized files are refused with the reason",
+        "New scripts/v2/smoke-jarvis-chat-upgrades.mjs (offline, stubbed brain) covers all four",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s35-agent-faces",
+      "title": "S35: Agent faces - a Rorschach-style mark for every agent (Nexora C7, owner's take)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/components/AgentAvatar.tsx (the hand-drawn symmetric marks: Claude's four-point star, Codex's six-petal rosette)",
+        "src/lib/agentsStore.ts and the Crew view (S21), Mission Control (S18), Hermes 3D seats - every place an agent is drawn",
+        "_design/nexora-diff.md C7 (license note: Nexora's portraits are not ours)"
+      ],
+      "description": "Owner 2026-10-01: 'each agent should be getting a rorschach type shape, like Codex and Claude currently have.' Every agent without a hand-drawn mark (custom/crew agents, Jarvis crew, Hermes profiles, any agent id AgentAvatar does not know) gets a generated mark: an SVG inkblot with mirror symmetry about the vertical axis, smooth blob paths, drawn in white on the agent's accent gradient like the existing marks, deterministic from the agent id (seeded PRNG) so it never changes on its own. A 'New shape' control on the agent (Crew view / agent detail) re-rolls it by storing a per-agent seed as data; 'Reset' returns to the id-derived shape. The existing hand-drawn marks (Claude, Codex and the other CLI brand marks) stay as they are. No uploads, no stock portraits. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "Every agent shown in Crew, Mission Control and the agent pickers has a mark; none falls back to a letter or a blank",
+        "Generated marks are deterministic per id and seed, and mirror-symmetric (smoke checks the path data)",
+        "Re-roll persists across reloads and server restarts; Reset restores the id-derived shape",
+        "New scripts/v2/smoke-agent-faces.mjs covers determinism, symmetry, re-roll persistence and that hand-drawn marks are untouched",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s36-fleet-stats",
+      "title": "S36: Fleet stats - activity over time, heatmap, handoffs, session counts (Nexora C9)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "_design/nexora-diff.md C9",
+        "src/app/api/fleet/runtime/route.ts, the V2 runs/tasks/agents tables (src/lib/v2/), Jarvis conversations, Rabbit sessions, Ultracode runs",
+        "src/lib/tokenLog.ts ('not tracked' convention)",
+        "Mission Control (S18) and Crew (S21) components"
+      ],
+      "description": "Owner 2026-10-01: 'it doesn't need to be hourly. Maybe bidaily or so. But yes, we will need these metrics.' Add fleet stats to Mission Control (or Crew, whichever already shows fleet data): two-line sparklines (you vs agents) over a window, an activity heatmap in the owner's timezone, recent handoffs between agents, and session counts (last 24 h and total). Bucket size is a setting, default 12 hours (twice a day), choices 6/12/24/48 h; window length a setting, default 14 days. Every number is computed from stored records only (runs, tasks, conversations, sessions); a source that is not recorded shows 'not tracked', never zero and never an estimate. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "Sparklines, heatmap, handoffs and session counts render from stored records with the bucket/window settings applied",
+        "Changing the bucket setting re-buckets without a rebuild",
+        "Untracked sources read 'not tracked'; an empty fleet reads as empty, not as fabricated activity",
+        "New scripts/v2/smoke-fleet-stats.mjs (temp DB with seeded rows) asserts the bucketing math and the not-tracked path",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s37-snapshots",
+      "title": "S37: Snapshots and restore - scheduled backup of Agent OS state (Nexora C10)",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "_design/nexora-diff.md C10 (conflict note: never delete old snapshots)",
+        "src/lib/v2/boot.ts (db.backup handler, backupDirFor, v2.50.3) and src/lib/exileFile.ts",
+        "the existing scheduler used by newsletter/jobs (rrule) and the Health page (S27) / Standing orders (S26)"
+      ],
+      "description": "Owner 2026-10-01: 'not nightly, maybe weekly is fine, or bi-monthly even.' A scheduled snapshot of ~/.agentic-os plus the V2 database taken with the SQLite backup API (never a raw copy of a WAL database), written to a snapshot folder outside ~/.agentic-os (setting, default ~/AgentOS-snapshots). Cadence is a setting: weekly (default), every 2 weeks, monthly, off. Each snapshot holds a manifest (files, sizes, hashes) and a restore.ps1 that restores it (stopping first if Agent OS is running, never overwriting without moving the current state to .exile). Secrets are left out by default (key files, secret files, credential configs; list in code and docs), with an 'include secrets' setting off by default. Keep-last-N is a setting (default 8); older snapshots are moved to .exile, never deleted. A 'Snapshot now' button and the last/next run time show in the gear (Health page or Standing orders, wherever scheduled jobs already live). Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "A snapshot contains a consistent DB copy made with the backup API, a manifest and restore.ps1; secrets are absent unless the setting is on",
+        "The schedule runs at the chosen cadence and appears with last/next run; 'Snapshot now' works",
+        "Retention moves the oldest snapshots to .exile (nothing deleted)",
+        "New scripts/v2/smoke-snapshots.mjs (temp dirs) takes a snapshot, checks the manifest against the files, checks secrets are excluded, and checks retention exiles",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "feat-s38-jarvis-ptt-hotkey",
+      "title": "S38: Jarvis push-to-talk on a mappable global hotkey (orb chat)",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "scripts/v2/jarvis-hotkey.ahk (AutoHotkey v2 helper; NOTE its AppUrl is http://127.0.0.1:3033, but Agent OS listens on 3737 - a live bug)",
+        "src/app/api/jarvis/hotkey/{route,setup,stream}, src/lib/v2/jarvis/hotkeyBus.ts, hotkeySecret.ts",
+        "src/components/v2/jarvis/JarvisOmnipresence.tsx (SSE consumer, in-app fallback keybind) and ChatboxOverlay.tsx (hold-to-talk mic, pushToTalk, autoSend)",
+        "src/lib/v2/jarvis/useVoiceCapture.ts, scripts/v2/smoke-jarvis-hotkey.mjs"
+      ],
+      "description": "Owner 2026-10-01: 'Jarvis push to talk should be in the orb chat. There's no hot key to activate the mic. I use it a lot when I'm not sitting in front of my computer, so it'd be nice to have a hot key that's mappable, so I can just use a mini usb keyboard.' Today the OS-global hotkey only OPENS the orb chat. Make it push-to-talk: holding the key opens the orb chat (if closed), fronts the page and starts mic capture; releasing it stops capture and, when the new setting jarvis.hotkey.sendOnRelease is on (default ON for the hotkey path, because the owner is away from the screen), sends the transcript; the reply is read aloud as today. The mouse mic button keeps its current behaviour. The key is mappable in the Jarvis gear (jarvis.hotkey.key already exists; add a mode setting: 'hold to talk' default, or 'press to open' as today), and the AHK helper must read the key and mode from the server (a secret-gated GET) instead of its own hard-coded line, so the gear is the one place to change it; fix AppUrl to 3737 (or read it). The helper sends key-down and key-up events; the bus and SSE carry them; the in-app fallback keybind does the same hold-to-talk when the page has focus. Document F13-F24 and remapping a spare key on a mini USB keyboard in docs/modules/jarvis.md. Note any browser limit on starting the mic in a background tab and handle it (front the page first); if a real limit remains, say so in the UI and the docs. End with an AWAITING USER VERIFY checklist: install/reload the helper, hold the key from across the room, speak, release, hear the reply. Owner rules: default agent Claude with Codex as the owner-chosen, labelled fallback (rule 20); no local Ollama (Ollama Cloud or nothing); OpenRouter is not used; never fabricate state (unknown renders as unknown); exile, never delete; smokes offline with config dirs redirected (rule 19).",
+      "acceptance_criteria": [
+        "Holding the mapped key starts capture in the orb chat; releasing stops it and sends when sendOnRelease is on",
+        "The key and mode are set in the Jarvis gear and the AHK helper picks them up without editing the script; AppUrl points at 3737",
+        "The mouse mic behaviour is unchanged; the in-app keybind also does hold-to-talk when focused",
+        "smoke-jarvis-hotkey.mjs extended: down/up events through the bus and SSE, secret still required, config GET returns key+mode only",
+        "agent-progress.md ends with an AWAITING USER VERIFY checklist for the live mini-keyboard test",
+        "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
+        "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
+      ],
+      "status": "failing",
+      "notes": ""
+    },
+    {
+      "id": "fix-s31-artifacts-windows-deploy",
+      "title": "S31: Artifacts (and SEO deploy) actually deploy on Windows; site config in settings",
+      "priority": "HIGH",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "src/lib/claudeArtifacts.ts (deploy(): spawn(\"netlify\", [...]) with PATH from augmentPath; publish/unpublish rollback added v2.54.3)",
+        "src/app/api/seo/deploy/route.ts (its comment says a bare spawn of netlify/npx fails with ENOENT on Windows - read how it solves that)",
+        "src/lib/runner.ts and src/lib/platform.ts (how this codebase resolves npm .cmd shims on Windows; READ ONLY if runner.ts is not yours to change)",
+        "Global CLAUDE.md: never invoke a bare .CMD/.BAT name from a subprocess; resolve it or use cmd /c",
+        "scripts/v2/smoke-exile-deletes.mjs section H (how Artifacts is tested with netlify unavailable)",
+        "~/.agentic-os/artifacts-site.json is the current site config (siteId, name, baseUrl) - file-only, against rule 16"
+      ],
+      "description": "Found 2026-09-30: claudeArtifacts.deploy() spawns 'netlify' without a shell. On Windows the netlify CLI is an npm .cmd shim, which Node cannot spawn without a shell, so every publish/unpublish likely fails with ENOENT (Artifacts may never have deployed on this machine). Diagnose with evidence first (where netlify is installed here: `where netlify`, `npm ls -g netlify-cli`; what spawn returns), then fix deploy() to launch netlify the Windows-safe way the codebase already uses (prefer the existing resolver in platform.ts/runner.ts or the approach the SEO deploy route uses; args must be passed safely, never string-concatenated into a shell). Check the SEO deploy route for the same defect and fix it the same way if present. Move the Artifacts site config (siteId, name, baseUrl) into settings.artifacts with a gear on the Claude page's Artifacts tab (the file stays a read-only fallback for back-compat, labelled in code); a missing site is a clear error that names the gear. Rule 20/'fail loudly' apply: a deploy failure keeps the v2.54.3 rollback behaviour. Do NOT run a real Netlify deploy in a session; prove it with a fake netlify.cmd/netlify script on a temp PATH. End with an AWAITING USER VERIFY checklist in agent-progress.md for the owner to publish one page for real (the only step a session cannot do).",
+      "acceptance_criteria": [
+        "Evidence in notes: how netlify is installed here and what the old spawn did (exit code/ENOENT) before the fix",
+        "deploy() launches netlify the Windows-safe way with args passed safely; the SEO deploy route checked and fixed if it had the same defect",
+        "settings.artifacts {siteId, name, baseUrl} with a gear on the Artifacts tab; artifacts-site.json is only a labelled fallback; a missing site is a clear error naming the gear",
+        "New scripts/v2/smoke-artifacts-deploy.mjs (offline, temp dirs per rule 19): a fake netlify on a temp PATH records its argv and exits 0 -> publish ok, item listed, argv has --prod --dir <published> --site <id>; exits 1 -> the v2.54.3 rollback holds; site from settings beats the file",
+        "smoke-exile-deletes still passes",
+        "./test.sh exits 0; version bump; DEV-JOURNAL entry with a rollback line",
+        "agent-progress.md ends with an AWAITING USER VERIFY checklist: set the site in the gear, publish one Loop build, open the URL"
+      ],
+      "status": "passing",
+      "notes": "2026-10-01 BUILT (v2.56.0, worktree artifacts-deploy). Evidence: `where netlify` rc 1 (not installed; npm root -g and node_modules/.bin have no netlify-cli); bare spawn('netlify') -> error ENOENT, close -4058; artifacts-site.json ENOENT -> Artifacts never deployed here. Fix: lib/platform.ts whichAll()+resolveCli() (PATHEXT scan; .exe as is; .cmd shim -> node + its node_modules entry, last existing one that is not npm-prefix.js; else a named error); claudeArtifacts.deploy() spawns cli.cmd with [...pre, deploy, --prod, --dir, <published>, --site, <id>, --no-build], PATH read per call, CLI missing -> install hint, v2.54.3 rollback kept; SEO deploy route runStep resolves npx/netlify the same way (same defect, fixed). settings.artifacts {siteId,name,baseUrl} + ArtifactsSettings gear on the Artifacts tab (prefills from the legacy file); LEGACY_SITE_FILE is a labelled fallback used only while the settings siteId is blank; missing site/base URL -> SITE_MISSING/SITE_URL_MISSING naming the gear, netlify never run. 8 collapsed name guards ((?!.+$) -> dot-escaped) fixed in claudeArtifacts/studioHistory/ultracodeRuns so smoke-exile-deletes is green in this worktree. Smokes: new smoke-artifacts-deploy 35/35 (fake netlify.cmd shim on a temp PATH records argv; exit 0 publish ok + listed + argv flags; exit 1 rollback on first publish/update/unpublish; settings beat file; no site -> gear named; CLI missing -> hint; SEO route, tab, gear, settings, route, doc static checks); smoke-exile-deletes ALL PASS; tsc clean. GATE: ./test.sh exits 1 at smoke-guide (43 PASS before it) - PRE-EXISTING: docs/modules/rabbit.md (v2.50.0) names /rabbit but src/app/rabbit is in no ref; the 69 smokes after it run individually: 68 PASS, smoke-memory-ui FAIL on its gitignored-.exile checks (also pre-existing). Status left failing per contract; owner: clear smoke-guide (commit /rabbit or park rabbit.md) and flip to passing after the real publish - AWAITING USER VERIFY checklist in agent-progress.md. | PASS 2026-10-01 (supervisor, merged into feat/v2-hermes3d-and-versioning as v2.60.0): the worktree-only blockers are gone in the merged tree (Rabbit 11f76cf, name-guard 7c377ae, smoke-memory-ui 1daca86); merged ./test.sh 120 passed, 0 failed. Owner live checks stay listed under OWNER TO VERIFY in agent-progress.md."
+    },
+    {
+      "id": "feat-s32-placeholders",
+      "title": "S32: Replace the placeholders - Tasks sdk mode, Marketing Calendar/Board/Assets/Metrics, Today Widgets",
+      "priority": "MEDIUM",
+      "model": "claude-fable-5-1",
+      "sources": [
+        "docs/modules/tasks.md (\"The sdk run mode is not implemented yet; runs use the bounded step walker\"), docs/modules/marketing.md (Calendar/Board/Assets/Metrics show a placeholder message only), docs/modules/today.md (Widgets button always disabled)",
+        "src/lib/v2/tasks/ (run modes, the bounded step walker, approvals) and src/lib/v2/jarvis/brain.ts (how this codebase already drives the Claude Agent SDK, its hooks and taint rule)",
+        "src/lib/marketing.ts and the Marketing components (campaign items, statuses, dates, assets)",
+        "src/components/v2/home/ (HomeGrid, WidgetPicker, WidgetShell, the widget registry in src/lib/v2/widgets/) and the Today page",
+        "AGENTS.md 'Never fabricate state' (an empty chair is honest, a busy animation is not)"
+      ],
+      "description": "Three placeholders the Guide writers found, built for real from data the app already has. (1) Tasks 'sdk' run mode: implement it by reusing the Agent SDK wiring Jarvis already has (brain.ts) with the same guardrails the step walker enforces (turn cap, approvals, STOP via the runs tray, the module's skills); if a safe SDK path cannot be built from what exists, make the option say so plainly in the UI and the docs instead of offering a mode that silently uses the walker, and record why in notes. (2) Marketing Hub campaign tabs: Calendar = the campaign's items on a month grid by their scheduled/published dates (undated items listed apart); Board = items in columns by status, moving a card updates its status through the existing API; Assets = the files/assets the campaign items reference, from the existing store; Metrics = only numbers computable from real data (counts by status/channel, published per week, overdue); no invented analytics - with no data source for engagement, say so. (3) Today's Widgets button: open the existing Mission Control widget system (WidgetPicker/HomeGrid) for the Today page, persisted the same way as Mission Control's widgets; if that cannot be reused without a large refactor, wire the button to Mission Control's widget view instead and say so. Every new control goes in the docs' controls tables.",
+      "acceptance_criteria": [
+        "Tasks: the sdk mode either runs a task through the Agent SDK with the walker's guardrails (smoke with a stubbed SDK proving turn cap, approval and STOP), or is shown as unavailable with the reason - never a silent walker run",
+        "Marketing: Calendar, Board, Assets, Metrics render real campaign data with honest empty states; Board moves persist via the existing API; Metrics shows no number that is not computed from stored data",
+        "Today: the Widgets button works (Today hosts widgets, or it opens Mission Control's widget view), persisted like Mission Control",
+        "New scripts/v2/smoke-placeholders.mjs (offline, temp dirs per rule 19) covering each of the three, asserting behaviour not just strings where possible",
+        "docs/modules/tasks.md, marketing.md, today.md updated; smoke-guide passes",
+        "./test.sh exits 0; version bump per commit; DEV-JOURNAL entries with rollback lines"
+      ],
+      "status": "passing",
+      "notes": "2026-10-01 built in worktree placeholders, v2.56.0. (1) Tasks sdk mode: src/lib/v2/tasks/sdkRun.ts + engine.ts hook; one Agent SDK session per approved plan with the walker guardrails (approval first, maxStepsPerRun = maxTurns + in-engine interrupt, runTimeoutMin wall clock, STOP via module run in the runs tray, only the gated agentos_tasks tools, natives denied, skills in the prompt); gear gains Run mode. (2) Marketing campaign Calendar/Board/Assets/Metrics from src/lib/v2/marketing/campaignViews.ts; board moves through /api/marketing/item, refusals with reasons; publishedAt recorded on Mark published; no invented analytics (engagement slot says no source). (3) Today Widgets: HomeGrid cellsKey=todayCells (empty default), open state settings.home.todayShowWidgets. Docs tasks/marketing/today updated. Evidence: smoke-placeholders 85 checks ALL PASS (3 consecutive runs), smoke-engine/home-ui/marketing-campaign/widgets/honest-labels/guide-D pass, tsc clean. GATE NOT GREEN HERE for reasons outside the feature (110/113 smokes pass): smoke-guide B1 rabbit.md (Rabbit module is the owner untracked work in the main checkout), smoke-exile-deletes H1-H3/H6 (owner uncommitted name-guard fix in studioHistory/ultracodeRuns/claudeArtifacts), smoke-memory-ui (needs the gitignored .exile folder of the main checkout). AWAITING USER VERIFY checklist in agent-progress.md; flip to passing once ./test.sh exits 0 after his commits. | PASS 2026-10-01 (supervisor, merged into feat/v2-hermes3d-and-versioning as v2.60.0): the worktree-only blockers are gone in the merged tree (Rabbit 11f76cf, name-guard 7c377ae, smoke-memory-ui 1daca86); merged ./test.sh 120 passed, 0 failed. Owner live checks stay listed under OWNER TO VERIFY in agent-progress.md."
+    }
+  ]
+}

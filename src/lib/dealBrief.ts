@@ -6,7 +6,7 @@
 // path is the one that matters, because clicking 248 cards individually is not a
 // workflow.
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
 import { LEADS_DIR, type Brief, type Deal } from "@/lib/upworkDesk";
 
@@ -32,7 +32,7 @@ export function briefPrompt(deal: Deal): string {
 export async function generateBrief(deal: Deal, signal?: AbortSignal): Promise<Brief | null> {
   const r = await run(
     "claude",
-    ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()],
+    ["-p", "--model", claudeModel(), "--output-format", "text", ...claudeBuilderArgs()],
     { timeoutMs: 180_000, input: briefPrompt(deal), cwd: LEADS_DIR, signal },
   );
   const out = (r.stdout || "").trim();

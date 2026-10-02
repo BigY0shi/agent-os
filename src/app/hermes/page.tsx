@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cpu, MessageSquare, Terminal, Layers, Target, Plug, Sparkles, History, AudioLines, LayoutDashboard, Radar, Mail, Moon} from "lucide-react";
+import { Cpu, MessageSquare, Terminal, Layers, Target, Plug, Sparkles, History, AudioLines, LayoutDashboard } from "lucide-react";
 import AgentRoom from "@/components/AgentRoom";
-import HermesOutreach from "@/components/HermesOutreach";
-import NewsView from "@/components/NewsView";
-import OracleView from "@/components/OracleView";
 import UnifiedChat from "@/components/UnifiedChat";
 import HermesWorkspace from "@/components/HermesWorkspace";
 import HermesGoals from "@/components/HermesGoals";
@@ -18,7 +15,7 @@ import HermesManage from "@/components/HermesManage";
 // import HermesPhone from "@/components/HermesPhone";
 // Jarvis moved to its own /jarvis route (2026-07-27) — no longer a Hermes tab.
 
-type HermesTab = "chat" | "oracle" | "radar" | "talk" | "studio" | "sessions" | "goals" | "workspace" | "mcps" | "manage" | "control" | "outreach";
+type HermesTab = "chat" | "talk" | "studio" | "sessions" | "goals" | "workspace" | "mcps" | "manage" | "control";
 interface HmVitals { ok: boolean; model: string; provider: string; }
 
 
@@ -31,7 +28,10 @@ export default function HermesRoute() {
     const t = new URLSearchParams(window.location.search).get("tab");
     // Old bookmarks/deep-links to the retired Jarvis tab land on the standalone page.
     if (t === "jarvis") { window.location.replace("/jarvis"); return; }
-    const valid: HermesTab[] = ["chat", "oracle", "radar", "talk", "studio", "sessions", "goals", "workspace", "mcps", "manage", "control", "outreach"];
+    // Oracle, News Radar and Outreach moved into the Jarvis module on 2026-09-28.
+    const moved: Record<string, string> = { oracle: "oracle", radar: "radar", outreach: "outreach" };
+    if (t && moved[t]) { window.location.replace(`/jarvis?tab=${moved[t]}`); return; }
+    const valid: HermesTab[] = ["chat", "talk", "studio", "sessions", "goals", "workspace", "mcps", "manage", "control"];
     if (t && valid.includes(t as HermesTab)) setTab(t as HermesTab);
   }, []);
 
@@ -55,11 +55,8 @@ export default function HermesRoute() {
         {([
           { key: "chat",      label: "Chat",         icon: <MessageSquare size={14} /> },
           { key: "talk",      label: "Talk",         icon: <AudioLines size={14} /> },
-          { key: "oracle",    label: "Hermes Oracle", icon: <Moon size={14} /> },
-          { key: "radar",     label: "News Radar",    icon: <Radar size={14} /> },
           { key: "studio",    label: "Studio",       icon: <Sparkles size={14} /> },
           { key: "sessions",  label: "Sessions",     icon: <History size={14} /> },
-          { key: "outreach",  label: "Outreach",     icon: <Mail size={14} /> },
           { key: "workspace", label: "Workspace",    icon: <Layers size={14} /> },
           { key: "mcps",      label: "MCPs",         icon: <Plug size={14} /> },
           { key: "manage",    label: "Manage",       icon: <LayoutDashboard size={14} /> },
@@ -86,18 +83,12 @@ export default function HermesRoute() {
 
       {tab === "chat" ? (
         <UnifiedChat defaultAgent="hermes" showAgentSwitcher={false} />
-      ) : tab === "oracle" ? (
-        <OracleView />
-      ) : tab === "radar" ? (
-        <NewsView />
       ) : tab === "talk" ? (
         <MiniMaxVoiceAgent accent="#60a5fa" />
       ) : tab === "studio" ? (
         <HermesStudio />
       ) : tab === "goals" ? (
         <HermesGoals />
-      ) : tab === "outreach" ? (
-        <HermesOutreach />
       ) : tab === "workspace" ? (
         <HermesWorkspace />
       ) : tab === "mcps" ? (

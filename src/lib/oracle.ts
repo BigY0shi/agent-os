@@ -6,10 +6,12 @@
 // (always authed on this machine, has web search). No API key.
 
 import { run, type AgentName } from "@/lib/runner";
-import { CLAUDE_MODEL, config } from "@/lib/config";
+import { config } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { withSkills, SKILL_ARG_SAFE_CHARS } from "@/lib/platformSkills";
 
 // The CLI agents wired for autonomous "consult" runs (same set as Loop). Claude first —
 // it's the reliable default and has web search available in print mode.
@@ -24,7 +26,7 @@ export interface Consultation { at: string; question: string; answer: string; ag
 // Mirrors the "CLI agent with its own tools" pattern used for lead research.
 function sageArgs(agent: string, prompt: string): { args: string[]; input?: string } {
   switch (agent) {
-    case "claude": return { args: ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
+    case "claude": return { args: ["-p", "--model", claudeModel(), "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
     case "codex":  return { args: ["exec", "--full-auto", "--skip-git-repo-check", "--ignore-user-config", prompt] };
     case "cursor": return { args: ["-p", prompt, "--output-format", "text", "--force", "--trust"] };
     case "pi":     return { args: ["-p", prompt, "--mode", "text", "--no-session"] };
@@ -65,7 +67,7 @@ function sagePrompt(question: string): string {
 // (run() has its own timeout; it takes no AbortSignal, so the route just relies on that.)
 export async function consultOracle(question: string, agent?: string): Promise<string> {
   const a = (agent && (ORACLE_AGENTS as readonly string[]).includes(agent)) ? agent : "claude";
-  const { args, input } = sageArgs(a, sagePrompt(question));
+  const { args, input } = sageArgs(a, withSkills(sagePrompt(question), "oracle", SKILL_ARG_SAFE_CHARS));
   const res = await run(a as AgentName, args, { timeoutMs: 240_000, input });
   let out = (res.stdout || "").trim();
   // strip any stray fences / "Oracle:" label a model might add

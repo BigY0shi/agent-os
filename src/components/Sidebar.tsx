@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper } from "lucide-react";
+import { LayoutGrid, Brain, Sparkles as SparklesIcon, TrendingUp, Columns3, NotebookText, Film, Building2, Workflow, MessagesSquare, Image as ImageIcon, Gamepad2, Music2, Network, Clapperboard, Repeat, Cpu, Boxes, LayoutDashboard, Palette, GripVertical, Eye, EyeOff, SlidersHorizontal, Check, Users, Cloud, CheckCircle2, LogOut, TerminalSquare, Factory, Lightbulb, CalendarDays, Mic, Radar, Bot, Telescope, Megaphone, ListTodo, NotebookPen, Hammer, Plug, Zap, ScrollText, Globe, StickyNote, Newspaper, Rabbit, ChevronDown, ChevronRight, Armchair } from "lucide-react";
 import { useState, useEffect, type ReactNode } from "react";
 import AgentAvatar from "./AgentAvatar";
 import { cn } from "@/lib/cn";
@@ -34,6 +34,10 @@ const NAV: NavItem[] = [
   // newsletters — deduped stories with per-source chips. Workspace per SPEC-F
   // §3 (WORKSPACE_ROUTES membership decides the section, not NAV position).
   { href: "/newsletter", label: "Newsletter", icon: <Newspaper size={16} />, accent: "#4d9de0", dim: "rgba(77,157,224,0.16)" },
+  // Rabbit R1 bridge: the handheld talks to the owner's claude CLI through an
+  // OpenAI-compatible endpoint; this page is its sessions, transcripts, archive
+  // and the connection gear. Workspace (WORKSPACE_ROUTES decides the section).
+  { href: "/rabbit", label: "Rabbit R1", icon: <Rabbit size={16} />, accent: "#ff7a1a", dim: "rgba(255,122,26,0.16)" },
   // The local Tasklet: reusable background agents (SDK runtime, triggers, approvals).
   // Top-level on purpose — this is the OS's core primitive, not another module.
   { href: "/agents",   label: "Agents", icon: <Bot size={16} />, accent: "#a78bfa", dim: "rgba(167,139,250,0.16)" },
@@ -83,6 +87,13 @@ const NAV: NavItem[] = [
   { href: "/games",    label: "Game Studio", icon: <Gamepad2 size={16} />, accent: "#39ff8e", dim: "rgba(57,255,142,0.16)" },
   { href: "/thumbnails", label: "Thumbnails", icon: <ImageIcon size={16} />, accent: "#fb7185", dim: "rgba(251,113,133,0.16)" },
   { href: "/notebook", label: "Notebook", icon: <NotebookText size={16} />, accent: "#fde047", dim: "rgba(253,224,71,0.16)" },
+  // Hermes 3D (SPEC-F L2): the baked Synty office in three.js. Mounted
+  // 2026-09-02 (S6) - the assets had been baked for two days with no route.
+  { href: "/hermes3d", label: "Hermes 3D", icon: <Armchair size={16} />, accent: "#f472b6", dim: "rgba(244,114,182,0.16)" },
+  // OpenMontage (S9, 2026-10-01): the owner's checkout of the agentic video
+  // production system, its pipelines started as module runs. Artist's Corner
+  // via ARTIST_ROUTES below (NAV position alone would land it in "Self").
+  { href: "/openmontage", label: "OpenMontage", icon: <Clapperboard size={16} />, accent: "#f97316", dim: "rgba(249,115,22,0.16)" },
   { href: "/kanban",   label: "Kanban",   icon: <Columns3 size={16} />,  accent: "#14b8a6", dim: "rgba(20,184,166,0.16)" },
   // Tasks V2 (SPEC-B): list + calendar + drag-drop board + agents strip. Lives in
   // "Self" by default (sectionOf fallback) — do NOT add to the section Sets.
@@ -108,6 +119,7 @@ const BY_HREF: Record<string, NavItem> = Object.fromEntries(NAV.map((n) => [n.hr
 const AGENT_ROUTES = new Set(["/claude", "/openclaw", "/hermes", "/antigravity", "/codex", "/cursor", "/pi", "/ollama", "/freeclaude", "/fusion", "/sakana", "/local", "/engine"]);
 const LS_ORDER = "agentos.sidebar.order";
 const LS_HIDDEN = "agentos.sidebar.hidden";
+const LS_COLLAPSED = "agentos.sidebar.collapsed";
 
 // Sidebar grouping. Mission Control sits under the top "Workspace" header;
 // Paperclip + AI Agent Mastermind + Pipeline + Deal Desk + Hire Engine + Agent Kanban get
@@ -119,9 +131,18 @@ const LS_HIDDEN = "agentos.sidebar.hidden";
 // sits in the array, so add new orchestration modules here as well as to NAV.
 const ORCHESTRATION_ROUTES = new Set(["/paperclip", "/room", "/pipeline", "/deals", "/marketing", "/hire", "/audit", "/brainstorm", "/idea-engine", "/jarvis", "/agent-kanban", "/browser"]);
 // SPEC-D §6.2: /integrations sits under Workspace (membership decided HERE).
-const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynotes", "/newsletter"]);
+const WORKSPACE_ROUTES = new Set(["/", "/integrations", "/automations", "/anynotes", "/newsletter", "/rabbit"]);
+// The two owner-named groups (2026-09-02). Everything the owner reaches for daily
+// sits in Agent Toolbox, directly under Agent Orchestration so Deal Desk and its
+// neighbours are all above the fold; the make-things modules collect in Artist's
+// Corner. Skills and Terminal went to the Toolbox rather than being left as a
+// two-item orphan group - move them if that reads wrong.
+const TOOLBOX_ROUTES = new Set(["/loop", "/seo", "/leads", "/memory", "/content-engine", "/kanban", "/tasks", "/today", "/webmcp", "/skills", "/terminal"]);
+const ARTIST_ROUTES = new Set(["/opendesign", "/video", "/music", "/games", "/thumbnails", "/notebook", "/hermes3d", "/openmontage"]);
 function sectionOf(href: string): string {
   if (WORKSPACE_ROUTES.has(href)) return "Workspace";
+  if (TOOLBOX_ROUTES.has(href)) return "Agent Toolbox";
+  if (ARTIST_ROUTES.has(href)) return "Artist's Corner";
   // "/agents" (the Tasklet-style module) owns the "Agents" section header; the
   // model CLI routes were renamed to "CLI Agents" to make room (2026-07-28).
   if (href === "/agents") return "Agents";
@@ -130,16 +151,33 @@ function sectionOf(href: string): string {
   return "Self";
 }
 
+function SectionHeader({ label, collapsed, onToggle }: { label: string; collapsed: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      className="sidebar-section-label mt-5 mb-1.5 px-5 w-full flex items-center justify-between gap-2 text-left hover:opacity-80 transition"
+    >
+      <span>{label}</span>
+      {collapsed ? <ChevronRight size={11} className="opacity-60" /> : <ChevronDown size={11} className="opacity-60" />}
+    </button>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [order, setOrder] = useState<string[]>(DEFAULT_ORDER);
   const [hidden, setHidden] = useState<string[]>([]);
   const [customize, setCustomize] = useState(false);
+  // CLI Agents starts collapsed: the owner uses one of its thirteen entries.
+  const [collapsed, setCollapsed] = useState<string[]>(["CLI Agents"]);
   const [dragHref, setDragHref] = useState<string | null>(null);
   const [overHref, setOverHref] = useState<string | null>(null);
   const [version, setVersion] = useState("");
-  useEffect(() => { fetch("/api/version").then((r) => r.json()).then((j) => setVersion(j.version || "")).catch(() => {}); }, []);
+  const [pack, setPack] = useState("");
+  useEffect(() => { fetch("/api/version").then((r) => r.json()).then((j) => { setVersion(j.version || ""); setPack(j.pack || ""); }).catch(() => {}); }, []);
 
   // load saved prefs (client only)
   useEffect(() => {
@@ -149,10 +187,15 @@ export default function Sidebar() {
       const h = JSON.parse(localStorage.getItem(LS_HIDDEN) || "null");
       if (Array.isArray(o)) setOrder(o.filter((x) => typeof x === "string"));
       if (Array.isArray(h)) setHidden(h.filter((x) => typeof x === "string"));
+      const c = JSON.parse(localStorage.getItem(LS_COLLAPSED) || "null");
+      if (Array.isArray(c)) setCollapsed(c.filter((x) => typeof x === "string"));
     } catch { /* ignore */ }
   }, []);
   useEffect(() => { if (mounted) try { localStorage.setItem(LS_ORDER, JSON.stringify(order)); } catch {} }, [order, mounted]);
   useEffect(() => { if (mounted) try { localStorage.setItem(LS_HIDDEN, JSON.stringify(hidden)); } catch {} }, [hidden, mounted]);
+  useEffect(() => { if (mounted) try { localStorage.setItem(LS_COLLAPSED, JSON.stringify(collapsed)); } catch {} }, [collapsed, mounted]);
+  const toggleSection = (sec: string) =>
+    setCollapsed((c) => (c.includes(sec) ? c.filter((x) => x !== sec) : [...c, sec]));
 
   // saved order + any NAV items not yet in it (e.g. new pages added later) appended in default position
   const fullOrder = [
@@ -162,7 +205,9 @@ export default function Sidebar() {
   const visible = customize ? fullOrder : fullOrder.filter((h) => !hidden.includes(h));
   // group by section so each header shows ONCE and all its items sit together,
   // no matter how the saved drag-order interleaves them (fixes duplicate section labels)
-  const SECTION_ORDER = ["Workspace", "Agents", "Agent Orchestration", "CLI Agents", "Self"];
+  // "Self" stays last as the silent fallback for any route not claimed above. It
+  // renders nothing while empty, which is the point: a new page still appears.
+  const SECTION_ORDER = ["Workspace", "Agents", "Agent Orchestration", "Agent Toolbox", "Artist's Corner", "CLI Agents", "Self"];
   const list = SECTION_ORDER.flatMap((sec) => visible.filter((h) => sectionOf(h) === sec));
 
   function move(from: string, to: string) {
@@ -212,11 +257,11 @@ export default function Sidebar() {
             Command Center
           </span>
           <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[var(--color-ink-faint)]">
-            Agentic OS · v0.2
+            Agentic OS{version && version !== "unknown" ? ` · v${version}` : ""}
           </span>
-          {version && version !== "unknown" && (
-            <span className="font-mono text-[9px] tracking-[0.18em] text-[var(--color-ink-faint)]" title="Pack build — compare against the newest in the AI Profit Boardroom">
-              build {version}
+          {pack && (
+            <span className="font-mono text-[9px] tracking-[0.18em] text-[var(--color-ink-faint)]" title="Upstream pack stamp, not this build. Compare against the newest in the AI Profit Boardroom.">
+              pack {pack}
             </span>
           )}
         </div>
@@ -257,17 +302,28 @@ export default function Sidebar() {
           let sectionLabel: string | undefined = sec !== prevSec ? sec : undefined;
           // The top "Workspace" header already labels the first group — don't repeat it.
           if (i === 0 && sectionLabel === "Workspace") sectionLabel = undefined;
+          // A section header lives on that section's FIRST item, so collapsing cannot
+          // just filter the items out - the header would go with them. The first item
+          // renders header-only and the rest drop. Off while customizing so drag works.
+          const sectionCollapsed = !customize && collapsed.includes(sec);
+          if (sectionCollapsed && !sectionLabel) return null;
 
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           const isHidden = hidden.includes(href);
           const isOver = overHref === href && dragHref !== href;
 
+          if (sectionCollapsed && sectionLabel) {
+            return (
+              <div key={href}>
+                <SectionHeader label={sectionLabel} collapsed onToggle={() => toggleSection(sec)} />
+              </div>
+            );
+          }
+
           return (
             <div key={href}>
               {sectionLabel && (
-                <div className="sidebar-section-label mt-5 mb-1.5 px-5">
-                  {sectionLabel}
-                </div>
+                <SectionHeader label={sectionLabel} collapsed={false} onToggle={() => toggleSection(sec)} />
               )}
 
               {customize ? (

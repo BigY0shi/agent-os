@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=240, height=282, initial-scale=1, user-scalable=no">
+<title>Agent OS</title>
+<style>
+  /* Rabbit R1 Creation — 240x282 portrait, wheel + PTT driven. Served by Agent OS
+     itself from /rabbit-creation/ (proxy-exempt static), so every API call is
+     same-origin: /api/rabbit/v1/* with the x-api-key the QR handed over. */
+  :root { --bg:#0b0713; --panel:rgba(255,255,255,.04); --line:#2a2436; --fg:#e8e2f0; --dim:#9a93a8; --dimmer:#6b6478; --accent:#ff7a1a; --live:#f472b6; --ok:#7dd3a8; --err:#f87171; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; width:240px; height:282px; overflow:hidden; background:var(--bg); color:var(--fg); font:12px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  #bar { height:26px; display:flex; align-items:center; gap:6px; padding:0 8px; border-bottom:1px solid var(--line); font-weight:700; letter-spacing:.06em; font-size:11px; }
+  #bar .dot { width:7px; height:7px; border-radius:50%; background:var(--dimmer); }
+  #bar .dot.ok { background:var(--ok); } #bar .dot.err { background:var(--err); } #bar .dot.live { background:var(--live); animation:pulse 1s infinite; }
+  #bar .mode { margin-left:auto; color:var(--accent); font-weight:600; font-size:10px; }
+  #view { height:256px; overflow:hidden; position:relative; }
+  .screen { position:absolute; inset:0; display:none; flex-direction:column; }
+  .screen.on { display:flex; }
+  .list { overflow:hidden; flex:1; }
+  .item { padding:7px 9px; border-bottom:1px solid var(--line); color:var(--fg); }
+  .item small { display:block; color:var(--dimmer); font-size:10px; margin-top:1px; }
+  .item.sel { background:rgba(255,122,26,.16); }
+  .item.sel::before { content:"›"; color:var(--accent); font-weight:700; margin-right:5px; }
+  .item.back { color:var(--dim); }
+  .scroll { flex:1; overflow:hidden; padding:8px 9px; white-space:pre-wrap; word-break:break-word; }
+  .hint { color:var(--dimmer); font-size:10px; padding:4px 9px; border-top:1px solid var(--line); }
+  .state { padding:8px 9px; color:var(--accent); font-weight:600; }
+  .msg { margin:0 0 8px; } .msg.user { color:var(--dim); } .msg .who { font-size:10px; color:var(--dimmer); display:block; }
+  input { width:100%; background:var(--panel); border:1px solid var(--line); color:var(--fg); font:12px system-ui; padding:6px 8px; border-radius:6px; outline:none; }
+  @keyframes pulse { 50% { opacity:.35; } }
+</style>
+</head>
+<body>
+<div id="bar"><span class="dot" id="dot"></span><span>AGENT OS</span><span class="mode" id="modeTag">CLAUDE</span></div>
+<div id="view">
+  <div class="screen on" id="s-home"><div class="list" id="homeList"></div><div class="hint">wheel: move · click: open · hold PTT: talk</div></div>
+  <div class="screen" id="s-sessions"><div class="list" id="sessList"></div><div class="hint" id="sessHint">click a session to read it</div></div>
+  <div class="screen" id="s-transcript"><div class="scroll" id="transcript"></div><div class="hint">wheel: scroll · click: back</div></div>
+  <div class="screen" id="s-talk"><div class="state" id="talkState">hold the side button and speak</div><div class="scroll" id="talkLog"></div><div style="padding:4px 9px"><input id="typed" placeholder="or type here…"></div><div class="hint">hold PTT: talk · click: back</div></div>
+  <div class="screen" id="s-setup"><div class="scroll" id="setupText"></div><div class="hint">open the QR from the Agent OS gear</div></div>
+</div>
+<script>
+(function () {
+  const API = location.origin + "/api/rabbit/v1";
+  const $ = (id) => document.getElementById(id);
+  const store = { plain: window.creationStorage?.plain, secure: window.creationStorage?.secure };
+  const b64 = { enc: (s) => btoa(unescape(encodeURIComponent(s))), dec: (s) => decodeURIComponent(escape(atob(s))) };
+  async function sget(kind, k) { try { if (store[kind]) { const v = await store[kind].getItem(k); return v ? b64.dec(v) : null; } return localStorage.getItem(k); } catch { return null; } }
+  async function sset(kind, k, v) { try { if (store[kind]) await store[kind].setItem(k, b64.enc(v)); else localStorage.setItem(k, v); } catch {} }
+
+  let key = "", mode = "claude", screen = "home", sel = 0, items = [], scrollPos = 0;
+  let sessions = [], live = [], history = [], busy = false, rec = null, chunks = [];
+  const MODELS = { claude: "agentos-claude", mastermind: "agentos-mastermind" };
+
+  const headers = () => ({ "x-api-key": key });
+  async function api(path, init = {}) {
+    const r = await fetch(API + path, { ...init, headers: { ...(init.headers || {}), ...headers() }, cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j?.error?.message || j?.error || ("HTTP " + r.status));
+    return j;
+  }
+  function setDot(cls) { $("dot").className = "dot " + cls; }
+  function show(name) { document.querySelectorAll(".screen").forEach((s) => s.classList.remove("on")); $("s-" + name).classList.add("on"); screen = name; sel = 0; scrollPos = 0; }
+  function ago(iso) { const s = Math.max(0, (Date.now() - new Date(iso)) / 1000); return s < 60 ? Math.round(s) + "s" : s < 3600 ? Math.round(s / 60) + "m" : s < 86400 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d"; }
+
+  function renderList(el, rows) {
+    items = rows;
+    el.innerHTML = rows.map((r, i) => `<div class="item${i === sel ? " sel" : ""}${r.back ? " back" : ""}" data-i="${i}">${r.label}${r.sub ? `<small>${r.sub}</small>` : ""}</div>`).join("");
+    const s = el.querySelector(".sel"); if (s) { const top = s.offsetTop - el.clientHeight / 2 + s.clientHeight / 2; el.scrollTop = Math.max(0, top); }
+    el.querySelectorAll(".item").forEach((n) => { n.onclick = () => { sel = Number(n.dataset.i); activate(); }; });
+  }
+  function renderHome() {
+    $("modeTag").textContent = mode.toUpperCase();
+    renderList($("homeList"), [
+      { label: "🎙 Talk", sub: mode === "claude" ? "to Claude through your PC" : "to the Mastermind panel", act: () => { show("talk"); renderTalk(); } },
+      { label: "Mode: " + (mode === "claude" ? "Claude" : "Mastermind"), sub: "click to switch", act: async () => { mode = mode === "claude" ? "mastermind" : "claude"; await sset("plain", "mode", mode); history = []; renderHome(); } },
+      { label: "Sessions", sub: `${sessions.length} recent · ${live.length} live`, act: () => { show("sessions"); renderSessions(); } },
+      { label: "Live now", sub: live.length ? live.map((t) => t.preview.slice(0, 40)).join(" · ") : "nothing in flight", act: () => { show("sessions"); renderSessions(); } },
+      { label: "Refresh", sub: location.host, act: refresh },
+    ]);
+  }
+  function renderSessions() {
+    renderList($("sessList"), [{ label: "‹ back", back: true, act: () => { show("home"); renderHome(); } }, ...sessions.map((s) => ({
+      label: s.title, sub: `${s.model.replace("agentos-", "")} · ${s.turns} turn${s.turns === 1 ? "" : "s"} · ${ago(s.updatedAt)}`,
+      act: async () => { show("transcript"); $("transcript").textContent = "loading…"; try { const j = await api("/agentos/sessions/" + s.id); $("transcript").innerHTML = j.messages.map((m) => `<p class="msg ${m.role}"><span class="who">${m.role === "user" ? "you" : (m.model || "assistant")}</span>${esc(m.content)}</p>`).join(""); } catch (e) { $("transcript").textContent = "could not load: " + e.message; } },
+    }))]);
+  }
+  function renderTalk() { $("talkLog").innerHTML = history.map((m) => `<p class="msg ${m.role}"><span class="who">${m.role === "user" ? "you" : mode}</span>${esc(m.content)}</p>`).join(""); $("talkLog").scrollTop = 1e6; }
+  function esc(s) { return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+  function activate() { const it = items[sel]; if (it && it.act) it.act(); }
+
+  async function refresh() {
+    try { const j = await api("/agentos/sessions?limit=20"); sessions = j.sessions; live = j.live; setDot(live.length ? "live" : "ok"); }
+    catch (e) { setDot("err"); if (/401|403/.test(e.message) || /Unauthorized/i.test(e.message)) return setup("Agent OS refused the key. Re-scan the QR from the /rabbit gear."); }
+    if (screen === "home") renderHome(); if (screen === "sessions") renderSessions();
+  }
+  function setup(text) { show("setup"); $("setupText").textContent = text; }
+
+  async function ask(text) {
+    if (!text || busy) return;
+    busy = true;
+    history.push({ role: "user", content: text }); if (history.length > 12) history = history.slice(-12);
+    show("talk"); renderTalk(); $("talkState").textContent = mode === "claude" ? "thinking…" : "the panel is talking…"; setDot("live");
+    try {
+      const j = await api("/chat/completions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: MODELS[mode], stream: false, messages: history }) });
+      const reply = j.choices?.[0]?.message?.content || "(no reply)";
+      history.push({ role: "assistant", content: reply }); renderTalk(); $("talkState").textContent = "hold the side button to reply";
+      speak(reply);
+    } catch (e) { $("talkState").textContent = "failed: " + e.message; }
+    finally { busy = false; setDot("ok"); }
+  }
+  async function speak(text) {
+    try { const j = await api("/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: text.slice(0, 1200) }) }); const a = new Audio(j.audio); a.play().catch(() => {}); } catch { /* TTS optional */ }
+  }
+  async function startRec() {
+    if (busy || rec) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = []; rec = new MediaRecorder(stream); rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" }); rec = null;
+        if (blob.size < 800) { $("talkState").textContent = "too short — hold and speak"; return; }
+        $("talkState").textContent = "transcribing…";
+        try { const fd = new FormData(); fd.append("audio", blob, "ptt.webm"); const j = await api("/stt", { method: "POST", body: fd }); if (j.text) ask(j.text); else $("talkState").textContent = "didn't catch that"; }
+        catch (e) { $("talkState").textContent = "stt failed: " + e.message; }
+      };
+      rec.start(); if (screen !== "talk") { show("talk"); renderTalk(); } $("talkState").textContent = "listening… release to send"; setDot("live");
+    } catch (e) { show("talk"); $("talkState").textContent = "mic unavailable — type below"; }
+  }
+  function stopRec() { if (rec && rec.state === "recording") rec.stop(); }
+
+  // ── device input ──────────────────────────────────────────────────────────
+  function move(d) {
+    if (screen === "transcript" || (screen === "talk")) { const el = screen === "transcript" ? $("transcript") : $("talkLog"); el.scrollTop += d * 40; return; }
+    const n = items.length; if (!n) return; sel = (sel + d + n) % n;
+    renderList(screen === "home" ? $("homeList") : $("sessList"), items);
+  }
+  window.addEventListener("scrollUp", () => move(-1));
+  window.addEventListener("scrollDown", () => move(1));
+  window.addEventListener("sideClick", () => { if (screen === "transcript") { show("sessions"); renderSessions(); } else if (screen === "talk") { if (document.activeElement === $("typed") && $("typed").value.trim()) { const t = $("typed").value.trim(); $("typed").value = ""; ask(t); } else { show("home"); renderHome(); } } else if (screen === "setup") { refresh(); } else activate(); });
+  window.addEventListener("longPressStart", startRec);
+  window.addEventListener("longPressEnd", stopRec);
+  window.addEventListener("keydown", (e) => { if (e.key === "ArrowUp") move(-1); if (e.key === "ArrowDown") move(1); if (e.key === "Enter" && document.activeElement !== $("typed")) activate(); });
+  $("typed").addEventListener("keydown", (e) => { if (e.key === "Enter") { const t = $("typed").value.trim(); $("typed").value = ""; if (t) ask(t); } });
+
+  // ── boot: key from the install QR (?key=) → secure storage, then reuse ────
+  (async () => {
+    const qs = new URLSearchParams(location.search);
+    if (qs.get("key")) { key = qs.get("key"); await sset("secure", "agentos_key", key); history.replaceState(null, "", location.pathname); }
+    else key = (await sget("secure", "agentos_key")) || "";
+    mode = (await sget("plain", "mode")) || "claude";
+    if (!key) return setup("No key yet. In Agent OS open /rabbit → Configure → R1 Creation and scan the QR with the R1 camera.");
+    renderHome(); await refresh(); setInterval(() => { if (!busy) refresh(); }, 6000);
+  })();
+})();
+</script>
+</body>
+</html>

@@ -80,7 +80,7 @@ export async function listProjects(): Promise<WsProject[]> {
 
 export async function listProjectFiles(kind: string, project: string, maxFiles = 80): Promise<{ root: string; files: WsFile[] } | null> {
   const root = kind === "brain" ? BRAIN_ROOT : SCRATCH_ROOT;
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) return null;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(project)) return null;
   const projectRoot = path.join(root, project);
   if (!existsSync(projectRoot)) return null;
 
@@ -118,7 +118,7 @@ export async function listProjectFiles(kind: string, project: string, maxFiles =
 
 export async function readProjectFile(kind: string, project: string, relPath: string): Promise<{ path: string; content: string; bytes: number; mtime: number; truncated: boolean } | null> {
   const root = kind === "brain" ? BRAIN_ROOT : SCRATCH_ROOT;
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) return null;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(project)) return null;
   const base = path.join(root, project);
   const abs = path.resolve(base, relPath);
   if (abs !== base && !abs.startsWith(base + path.sep)) return null;

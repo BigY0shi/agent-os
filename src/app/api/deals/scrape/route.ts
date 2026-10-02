@@ -1,4 +1,6 @@
-import { LEADS_DIR } from "@/lib/upworkDesk";
+import { LEADS_DIR, pruneLeadsFileByAge } from "@/lib/upworkDesk";
+import { clampMaxAgeDays } from "@/lib/dealDeskControl";
+import { readSettings } from "@/lib/settings";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -142,6 +144,13 @@ export async function POST(req: Request) {
       // scrape rather than a top-up. That is why stage 2 can just read the dataset.
       await runStage("scraping", ACTOR_ENTRY, ACTOR_DIR);
       await runStage("scoring", SCORE_SCRIPT, LEADS_DIR);
+      // S4 (f): the age gate lands here, between scoring and pitching, so an old
+      // listing is neither pitched (a claude call each) nor shown. Dropped rows
+      // are kept beside the file, never discarded.
+      const maxAgeDays = clampMaxAgeDays(readSettings().deals?.maxAgeDays);
+      const board = await pruneLeadsFileByAge("board", maxAgeDays);
+      const short = await pruneLeadsFileByAge("shortlist", maxAgeDays);
+      note(`age gate ${maxAgeDays}d: kept ${board.kept}, dropped ${board.dropped} (${board.unknown} undated kept); shortlist dropped ${short.dropped}`);
       if (pitch) {
         // pitch.mjs takes a file of board IDS, but score_board writes shortlist.json
         // as full records keyed by url — so bridge the two here.

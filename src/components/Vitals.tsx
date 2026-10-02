@@ -14,7 +14,7 @@ interface VitalsData {
 }
 interface FccState { enabled: boolean; reachable: boolean; model: string | null; provider: string | null; }
 
-// VitalTile — Midnight Aubergine card with small-caps label, Bricolage value,
+// VitalTile — Midnight Aubergine card with small-caps label, display-face value,
 // optional Caveat hand-script accent inside the value (use <em>…</em>), and a
 // status dot in emerald / gold / plum / gold-soft.
 function VitalTile({

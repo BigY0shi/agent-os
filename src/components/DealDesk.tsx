@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download,
+  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste, ScanLine, ClipboardList,
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
+import { VERDICT_COLOR, VERDICT_LABEL, ageDays, UPWORK_LOGIN_URL, dossierInputHash, dossierIsStale } from "@/lib/dealDeskControl";
+import DealDeskSettings from "@/components/DealDeskSettings";
 
 const fmtMoney = (n: number | null) => (n == null ? "?" : n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
 const scoreColor = (n: number) =>
@@ -37,6 +39,7 @@ function agoLabel(ms: number): string {
  * This re-derives from deal.postedAt and re-renders on a timer so it stays honest.
  */
 function PostedAgo({ deal }: { deal: Deal }) {
+  const maxAgeDays = useDesk((s) => s.maxAgeDays);
   const [, tick] = useState(0);
   useEffect(() => {
     if (deal.postedAt == null) return;
@@ -47,21 +50,28 @@ function PostedAgo({ deal }: { deal: Deal }) {
 
   if (deal.postedAt == null) {
     // Unparseable — show the raw string rather than inventing a time.
-    return <span className="opacity-70">{deal.posted || ""}</span>;
+    return <span className="opacity-70" title="Post date unknown">{deal.posted || "undated"}</span>;
   }
-  const days = (Date.now() - deal.postedAt) / 86_400_000;
+  // S4 (f): the age is judged against the gate in the gear, not a fixed 21 days.
+  const days = ageDays(deal.postedAt) ?? 0;
+  const stale = days > maxAgeDays;
   return (
-    <span title={new Date(deal.postedAt).toLocaleString()} style={days > 21 ? { color: "#fb923c" } : undefined}>
-      {agoLabel(deal.postedAt)}
+    <span title={`${new Date(deal.postedAt).toLocaleString()}${stale ? ` · older than the ${maxAgeDays}-day gate` : ""}`}
+      style={stale ? { color: "#fb923c" } : undefined}>
+      {agoLabel(deal.postedAt)}{stale && <span className="ml-1 text-[9px] uppercase tracking-wide">old</span>}
     </span>
   );
 }
 
-function Chip({ label, value }: { label: string; value: number }) {
+// `na` renders NA in the unknown band's purple. The fit a lead arrives with is the
+// feed's keyword heuristic, so showing it as a number on a lead nothing has judged
+// reads as a verdict that was never reached.
+function Chip({ label, value, na }: { label: string; value: number; na?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-mono"
-      style={{ background: "rgba(255,255,255,0.06)", color: scoreColor(value) }}>
-      {label}{value}
+      style={{ background: "rgba(255,255,255,0.06)", color: na ? VERDICT_COLOR.unknown : scoreColor(value) }}
+      title={na ? "Not screened yet - no pass/pursue call has been made on this lead" : undefined}>
+      {label}{na ? "NA" : value}
     </span>
   );
 }
@@ -78,26 +88,71 @@ function SourceTab({ label, count, active, color, onClick }: { label: string; co
   );
 }
 
-function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
+interface CardProps {
+  deal: Deal;
+  onOpen: (d: Deal) => void;
+  /** S4 (b): multi-select for bulk deny. Undefined = the lane has no selection. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  /** S4 (b): deny from the face, no drawer. Undefined on cards already denied. */
+  onDeny?: (id: string) => void;
+}
+
+function Card({ deal, onOpen, selected, onToggleSelect, onDeny }: CardProps) {
   return (
     <div
+      role="button" tabIndex={0} aria-label={`Open ${deal.title}`} data-jarvis-record={deal.id}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(deal); } }}
       draggable
       onDragStart={(e) => e.dataTransfer.setData("text/plain", deal.id)}
       onClick={() => onOpen(deal)}
       className="panel p-3 cursor-pointer transition hover:brightness-110 mb-2"
-      style={{ borderLeft: `3px solid ${scoreColor(deal.composite)}` }}
+      // S4 (c): the edge encodes the evaluator's verdict (owner's spec), not the composite.
+      style={{ borderLeft: `3px solid ${VERDICT_COLOR[deal.verdict.band]}`, outline: selected ? "1px solid rgba(248,113,113,0.7)" : undefined }}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-[13px] font-medium leading-snug line-clamp-2">{deal.title}</div>
+        {onToggleSelect && (
+          <input type="checkbox" checked={!!selected} aria-label="Select for bulk deny"
+            onClick={(e) => e.stopPropagation()} onChange={() => onToggleSelect(deal.id)}
+            className="mt-0.5 shrink-0 accent-red-400" />
+        )}
+        <div className="text-[13px] font-medium leading-snug line-clamp-2 flex-1">{deal.title}</div>
+        {deal.needsLogin && (
+          <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold shrink-0"
+            style={{ background: "rgba(248,113,113,0.18)", color: "#f87171" }}
+            title={`Upwork was logged out when this listing was visited${deal.loginWallAt ? ` (${agoLabel(deal.loginWallAt)})` : ""}. Log in again and update the cookie.`}>
+            needs login
+          </span>
+        )}
         {deal.needsInfo && <AlertTriangle size={13} style={{ color: "#fbbf24", flexShrink: 0 }} />}
+        {onDeny && (
+          <button type="button" title="Deny this lead" aria-label="Deny"
+            onClick={(e) => { e.stopPropagation(); onDeny(deal.id); }}
+            className="shrink-0 rounded p-0.5 text-white/35 hover:text-red-300 hover:bg-white/10 transition">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      <div className="mt-1.5 text-[11px] leading-snug line-clamp-2" title={deal.verdict.line}>
+        <span className="font-semibold uppercase tracking-wide text-[9.5px] mr-1.5" style={{ color: VERDICT_COLOR[deal.verdict.band] }}>{VERDICT_LABEL[deal.verdict.band]}</span>
+        <span className="text-white/60">{deal.verdict.line}</span>
       </div>
       <div className="flex flex-wrap gap-1 mt-2 items-center">
         {deal.source && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(96,165,250,0.18)", color: "#60a5fa" }}>{deal.source}</span>}
         {deal.automatable && <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold" style={{ background: "rgba(52,211,153,0.18)", color: "#34d399" }} title="Repetitive role — take-and-automate or pitch Launchworks">auto</span>}
-        <Chip label="F" value={deal.effectiveFit} />
-        <Chip label="E" value={deal.easiness} />
-        <Chip label="W" value={deal.winnability} />
-        <span className="text-[10px] text-white/40 font-mono ml-auto self-center">{deal.composite}</span>
+        {deal.recovered && (
+          <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold"
+            style={{ background: "rgba(192,132,252,0.18)", color: "#c084fc" }}
+            title="A scrape dropped this listing's record. The card was rebuilt from your own pitch data - your status, notes and proposal are intact, but the scraper's scores and the client details are gone.">
+            rebuilt
+          </span>
+        )}
+        <Chip label="F" value={deal.effectiveFit} na={deal.verdict.band === "unknown"} />
+        {/* A rebuilt card never had the scraper's easiness/winnability, so showing the
+            0 they default to would assert a score nobody ever gave this lead. */}
+        <Chip label="E" value={deal.easiness} na={deal.recovered} />
+        <Chip label="W" value={deal.winnability} na={deal.recovered} />
+        <span className="text-[10px] text-white/40 font-mono ml-auto self-center">{deal.recovered ? "NA" : deal.composite}</span>
       </div>
       <div className="flex items-center justify-between mt-2 text-[10.5px] text-white/45">
         <span>{deal.budget || "—"} {deal.jobType || ""}</span>
@@ -107,12 +162,31 @@ function Card({ deal, onOpen }: { deal: Deal; onOpen: (d: Deal) => void }) {
         {fmtMoney(deal.clientTotalSpent)} · {deal.clientRating ?? "?"}★ · {deal.clientHires ?? "?"}h
         {deal.enrichment?.proposals != null && <span style={{ color: "#22d3ee" }}> · {deal.enrichment.proposals} proposals</span>}
       </div>
+      {/* S4 (e): the research pass reports back here, on the card. */}
+      {deal.research && <ResearchLine research={deal.research} answers={deal.answers.length} />}
+    </div>
+  );
+}
+
+function ResearchLine({ research, answers }: { research: NonNullable<Deal["research"]>; answers: number }) {
+  const color = research.status === "running" ? "#fbbf24" : research.status === "done" ? "#34d399" : research.status === "stopped" ? "#a1a1aa" : "#f87171";
+  const label = research.status === "running" ? "researching…"
+    : research.status === "done" ? `researched ${agoLabel(research.at)}${answers ? ` · ${answers} answer${answers === 1 ? "" : "s"}` : ""}`
+    : research.status === "stopped" ? `research stopped ${agoLabel(research.at)}`
+    : `research failed${research.note ? `: ${research.note}` : ""}`;
+  return (
+    <div className="mt-1 text-[10.5px] inline-flex items-center gap-1" style={{ color }} title={research.note || undefined}>
+      {research.status === "running" ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+      <span className="truncate">{label}</span>
     </div>
   );
 }
 
 function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
-  const { move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask } = useDesk();
+  const { error, move, saveNotes, toggleNeedsInfo, savePitch, draftProposal, generateBrief, ask, research, fetchDeals } = useDesk();
+  const [buildingDossier, setBuildingDossier] = useState(false);
+  const [showFullDesc, setShowFullDesc] = useState(false);
+  const researching = deal.research?.status === "running";
   const [notes, setNotes] = useState(deal.notes);
   const [pitch, setPitch] = useState(deal.pitch || "");
   const [question, setQuestion] = useState("");
@@ -144,16 +218,37 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
     setDrafting(false);
   };
 
+  // The dossier is data the owner can read and correct BEFORE a proposal is written,
+  // which is the whole reason it is not an agent's private context. Staleness is
+  // computed from the persisted inputs (deal.notes, not the unsaved textarea), so
+  // saving a note visibly invalidates the account rather than silently keeping it.
+  const dossierStale = dossierIsStale(deal.dossier, dossierInputHash({
+    description: deal.description, notes: deal.notes, answers: deal.answers,
+    summary: deal.summary, why: deal.why, approach: deal.approach, crashCourse: deal.crashCourse,
+  }));
+  const buildDossier = async () => {
+    setBuildingDossier(true);
+    try {
+      await fetch("/api/deals/dossier", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deal.id, force: true }),
+      });
+      await fetchDeals();
+    } finally {
+      setBuildingDossier(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end" style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
-      <div className="w-full max-w-[640px] h-full overflow-y-auto p-6" style={{ background: "var(--bg, #14101c)", borderLeft: "1px solid rgba(255,255,255,0.1)" }} onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-label={deal.title} data-jarvis-record={deal.id} className="w-full max-w-[640px] h-full overflow-y-auto p-6" style={{ background: "var(--bg, #14101c)", borderLeft: "1px solid rgba(255,255,255,0.1)" }} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-3">
           <h2 className="text-lg font-semibold leading-snug">{deal.title}</h2>
-          <button onClick={onClose} className="text-white/50 hover:text-white"><X size={18} /></button>
+          <button aria-label="Close listing" onClick={onClose} className="text-white/50 hover:text-white"><X size={18} /></button>
         </div>
 
         <div className="flex flex-wrap gap-1.5 mb-3">
-          <Chip label="Fit " value={deal.effectiveFit} />
+          <Chip label="Fit " value={deal.effectiveFit} na={deal.verdict.band === "unknown"} />
           <Chip label="Easy " value={deal.easiness} />
           <Chip label="Win " value={deal.winnability} />
           <span className="text-[11px] text-white/45 font-mono self-center">composite {deal.composite}</span>
@@ -172,24 +267,42 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           Open on Upwork <ExternalLink size={13} />
         </a>
 
+        {error && <p role="alert" className="text-red-300 text-sm mb-3">Save failed: {error}</p>}
         {/* Status + need-info */}
         <div className="flex items-center gap-2 mb-4">
-          <select value={deal.status} onChange={(e) => move(deal.id, e.target.value as DealStatus)}
+          <select aria-label="Listing status" value={deal.status} onChange={(e) => move(deal.id, e.target.value as DealStatus)}
             className="panel px-2 py-1 text-[12px] bg-transparent">
             {["new", "reviewing", "approved", "ready", "sent", "parked", "denied"].map((s) => (
               <option key={s} value={s} style={{ background: "#14101c" }}>{s}</option>
             ))}
           </select>
           <button onClick={() => toggleNeedsInfo(deal.id)}
+            title={deal.needsInfo ? "Clear the flag (what the research pass found stays on the card)" : "Flag it AND start the research pass: enrich, brief, open questions"}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] transition"
             style={{ background: deal.needsInfo ? "rgba(251,191,36,0.18)" : "rgba(255,255,255,0.05)", color: deal.needsInfo ? "#fbbf24" : "rgba(255,255,255,0.6)" }}>
             <AlertTriangle size={12} /> Need more info
           </button>
+          {/* S4 (e): research on demand, without flipping the flag. */}
+          <button onClick={() => research(deal.id)} disabled={researching}
+            title="Run the research pass now: enrich (logged-in Upwork visit), brief, and the open questions we would need answered before bidding. Runs in the tray."
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[12px] transition disabled:opacity-50"
+            style={{ background: "rgba(34,211,238,0.14)", color: "#22d3ee" }}>
+            {researching ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} {researching ? "Researching…" : "Get more info"}
+          </button>
         </div>
+        {deal.research && (
+          <div className="mb-4 -mt-2"><ResearchLine research={deal.research} answers={deal.answers.length} /></div>
+        )}
 
-        {/* Project summary — quick "what is this" read before the full listing */}
+        {/* Project summary — quick "what is this" read before the full listing.
+            S4 (c): the verdict sentence is the FIRST line, so the call is read before
+            the description of the work (owner's request, 2026-09-02). */}
         {deal.summary && (
-          <div className="rounded-lg p-3 mb-4" style={{ background: "rgba(245,158,11,0.08)", borderLeft: "3px solid rgba(245,158,11,0.55)" }}>
+          <div className="rounded-lg p-3 mb-4" style={{ background: "rgba(245,158,11,0.08)", borderLeft: `3px solid ${VERDICT_COLOR[deal.verdict.band]}` }}>
+            <div className="text-[13px] font-semibold leading-snug mb-2" style={{ color: VERDICT_COLOR[deal.verdict.band] }}>
+              <span className="text-[10px] uppercase tracking-wide mr-2 opacity-80">{VERDICT_LABEL[deal.verdict.band]}</span>
+              {deal.verdict.line}
+            </div>
             <div className="text-[11px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: "#f59e0b" }}>Project summary</div>
             <p className="text-[13px] text-white/85 leading-relaxed">{deal.summary}</p>
           </div>
@@ -212,8 +325,60 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
           </div>
         )}
 
-        <Section title="Description">
-          <div className="text-[12.5px] text-white/65 whitespace-pre-wrap leading-relaxed">{deal.description || "—"}</div>
+        {/* Above the listing on purpose. This is the settled account of what the client
+            asked and how we answer it, which is what the owner needs before drafting -
+            and when it sat below Description plus the proposal textarea he could not
+            find it at all ("is the dossier supposed to be user facing? I don't see
+            it", 2026-09-04). The raw posting is reference; this is the decision. */}
+        <Section title="Dossier — what they actually asked">
+          <div className="flex items-center gap-2 mb-2">
+            <button onClick={buildDossier} disabled={buildingDossier}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11.5px] font-medium disabled:opacity-40"
+              style={{ background: "rgba(96,165,250,0.16)", color: "#60a5fa" }}>
+              {buildingDossier ? <Loader2 size={12} className="animate-spin" /> : <ClipboardList size={12} />}
+              {deal.dossier ? "Rebuild" : "Build dossier"}
+            </button>
+            {deal.dossier && dossierStale && (
+              <span className="text-[10.5px] px-1.5 py-0.5 rounded" style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24" }}
+                title="The notes, the Q&A or the listing changed after this was built. A proposal will rebuild it.">
+                stale
+              </span>
+            )}
+          </div>
+          {!deal.dossier ? (
+            <p className="text-[12px] text-white/40">
+              None yet. Drafting a proposal builds one automatically; build it here first if you want to check it.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {deal.dossier.openWith && (
+                <div className="text-[12px] px-2 py-1.5 rounded" style={{ background: "rgba(248,113,113,0.12)", color: "#fca5a5" }}>
+                  Must open with: <span className="font-mono">{deal.dossier.openWith}</span>
+                </div>
+              )}
+              <p className="text-[12.5px] text-white/65 leading-relaxed">{deal.dossier.position}</p>
+              {deal.dossier.asks.length === 0 ? (
+                <p className="text-[12px] text-white/40">This listing asks for nothing specific.</p>
+              ) : (
+                <ol className="space-y-1.5">
+                  {deal.dossier.asks.map((a, i) => (
+                    <li key={i} className="text-[12px] leading-snug">
+                      <span className="text-white/80">{i + 1}. {a.ask}</span>
+                      <br />
+                      <span style={{ color: a.answer ? "rgba(255,255,255,0.5)" : "#fbbf24" }}>
+                        {a.answer ?? "nothing on hand answers this"}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {deal.dossier.gaps.length > 0 && (
+                <div className="text-[11.5px]" style={{ color: "#fbbf24" }}>
+                  Gaps: {deal.dossier.gaps.join(" · ")}
+                </div>
+              )}
+            </div>
+          )}
         </Section>
 
         <Section title="Proposal (editable)">
@@ -223,8 +388,25 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
             title="Generate a full ~120-word proposal from the listing + your Notes below">
             {drafting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Draft full proposal (uses your Notes)
           </button>
-          <textarea value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
+          <textarea aria-label="Listing proposal" data-jarvis-saved-value={deal.pitch || ""} value={pitch} onChange={(e) => setPitch(e.target.value)} onBlur={() => savePitch(deal.id, pitch)}
             rows={8} className="w-full panel bg-transparent p-2 text-[12.5px] leading-relaxed resize-y" />
+        </Section>
+
+        <Section title="Description">
+          {/* Collapsed by default. A listing runs to 18,781 characters on this board and
+              an uncapped block pushed every section under it off the screen. */}
+          <div
+            className="text-[12.5px] text-white/65 whitespace-pre-wrap leading-relaxed overflow-hidden"
+            style={showFullDesc ? undefined : { maxHeight: "13rem", maskImage: "linear-gradient(#000 70%, transparent)", WebkitMaskImage: "linear-gradient(#000 70%, transparent)" }}
+          >
+            {deal.description || "—"}
+          </div>
+          {(deal.description || "").length > 600 && (
+            <button onClick={() => setShowFullDesc(!showFullDesc)}
+              className="mt-1 text-[11.5px] text-white/45 hover:text-white/75 transition">
+              {showFullDesc ? "Collapse the listing" : `Show the full listing (${(deal.description || "").length.toLocaleString()} characters)`}
+            </button>
+          )}
         </Section>
 
         {deal.approach && deal.approach !== "n/a" && (
@@ -240,14 +422,14 @@ function Drawer({ deal, onClose }: { deal: Deal; onClose: () => void }) {
         )}
 
         <Section title="Notes">
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => saveNotes(deal.id, notes)}
+          <textarea aria-label="Listing notes" data-jarvis-saved-value={deal.notes || ""} value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={() => saveNotes(deal.id, notes)}
             rows={3} placeholder="Your questions / observations…"
             className="w-full panel bg-transparent p-2 text-[12.5px] resize-y" />
         </Section>
 
         <Section title="Ask AI about this listing">
           <div className="flex gap-2">
-            <input value={question} onChange={(e) => setQuestion(e.target.value)}
+            <input aria-label="Question about this listing" value={question} onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submitAsk()}
               placeholder="e.g. how does JobNimbus' API auth work?"
               className="flex-1 panel bg-transparent px-2 py-1.5 text-[12.5px]" />
@@ -326,7 +508,15 @@ function CookieModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function DealDesk() {
-  const { deals, columns, loading, error, fetchDeals, move, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs } = useDesk();
+  const { intake, intaking, intakeResult } = useDesk();
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const submitIntake = async () => {
+    if (!pasteText.trim()) return;
+    const ok = await intake(pasteText);
+    if (ok) { setPasteText(""); setShowPaste(false); }
+  };
+  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs, screenAll, screening, screenResult, maxAgeDays, agedOut, showStale, setShowStale } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
@@ -340,17 +530,40 @@ export default function DealDesk() {
   useEffect(() => { pollBriefs(); }, [pollBriefs]);
 
   const approvedCount = deals.filter((d) => d.status === "approved").length;
+  const needsLoginCount = deals.filter((d) => d.needsLogin).length;
 
   const selected = open ? deals.find((d) => d.id === open.id) || open : null;
 
-  // Main pipeline columns + a trailing Parked/Denied bucket.
-  const allColumns = useMemo(() => {
-    const extra = [{ key: "parked" as DealStatus, label: "Parked / Denied", accent: "#5a5d80" }];
-    return [...columns, ...extra];
-  }, [columns]);
+  // S4 (b): multi-select for bulk deny. Ids only; a card that leaves the board
+  // (reload, deny) drops out of the set on the next render via `picked`.
+  const [sel, setSel] = useState<Set<string>>(() => new Set());
+  const [denying, setDenying] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const toggleSel = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const picked = deals.filter((d) => sel.has(d.id) && d.status !== "denied");
+  const denyOne = (id: string) => { setSel((s) => { const n = new Set(s); n.delete(id); return n; }); void move(id, "denied"); };
+  const denyPicked = async () => {
+    if (!picked.length) return;
+    setDenying(true);
+    // Denying a handful of cards is a judgment per card and each earns a memory
+    // episode. Selecting the whole column with "Select all" is a different act: the
+    // call is that the board is stale, not that 130 listings were each assessed. That
+    // goes as a sweep, which moves the cards but writes no episodes - the same reason
+    // the brief pass only records an assessment for a lead you approved.
+    await moveMany(picked.map((d) => d.id), "denied", { sweep: allVisibleNewPicked });
+    setSel(new Set());
+    setDenying(false);
+  };
+
+  // Main pipeline columns only. Parked/Denied used to trail them as a sixth
+  // column that sat off the right edge of every laptop; it is now a full-width
+  // lane BELOW the board (S4 b), always on screen without a horizontal scroll.
+  const allColumns = useMemo(() => columns, [columns]);
 
   const byCol = (key: DealStatus) =>
     deals.filter((d) => (key === "parked" ? d.status === "parked" || d.status === "denied" : d.status === key));
+  const parkedItems = deals.filter((d) => d.status === "parked");
+  const deniedItems = deals.filter((d) => d.status === "denied");
 
   // Source tabs live on the first (New) column, where Upwork + remote feeds all land together.
   const firstKey = allColumns[0]?.key as DealStatus | undefined;
@@ -361,6 +574,15 @@ export default function DealDesk() {
   const presentSources = Object.keys(sourceCounts).sort((a, b) =>
     a === "upwork" ? -1 : b === "upwork" ? 1 : a.localeCompare(b));
   const effTab = srcTab !== "all" && !sourceCounts[srcTab] ? "all" : srcTab; // ignore a stale tab after reload
+  // The New cards actually on screen. "Select all" must pick exactly these rather
+  // than reaching past the source tab the owner is looking at.
+  const visibleNew = effTab !== "all" ? firstItems.filter((d) => srcKey(d) === effTab) : firstItems;
+  const allVisibleNewPicked = visibleNew.length > 0 && visibleNew.every((d) => sel.has(d.id));
+  const toggleSelectAllNew = () => setSel((s) => {
+    const n = new Set(s);
+    for (const d of visibleNew) { if (allVisibleNewPicked) n.delete(d.id); else n.add(d.id); }
+    return n;
+  });
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -379,14 +601,29 @@ export default function DealDesk() {
           </button>
           <button onClick={() => setShowCookie(true)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] panel hover:brightness-110"
-            title="Upwork cookie settings">
-            <Settings size={13} />{!cookie.set && <span className="text-[11px]" style={{ color: "#fbbf24" }}>set cookie</span>}
+            title="Upwork session cookie (a secret; kept out of settings.json)">
+            <Settings size={13} />{cookie.set ? <span className="text-[11px] text-white/50">cookie</span> : <span className="text-[11px]" style={{ color: "#fbbf24" }}>set cookie</span>}
+          </button>
+          {/* S4 (f), rule 16: every deals.* knob lives in this gear. Saving re-reads the
+              board so the age labels judge against the new gate at once. */}
+          <DealDeskSettings onSaved={fetchDeals} />
+          <button onClick={screenAll} disabled={screening}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(192,132,252,0.16)", color: VERDICT_COLOR.unknown }}
+            title="Run the quick pass/pursue check on every lead showing NA. Leads it cannot judge stay NA.">
+            {screening ? <Loader2 size={13} className="animate-spin" /> : <ScanLine size={13} />} Screen NA leads
           </button>
           <button onClick={refill} disabled={refilling}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
             style={{ background: "rgba(168,85,247,0.16)", color: "#c084fc" }}
             title="Dismiss leads you didn't approve, then pitch the next-best to refill the queue to 20">
             {refilling ? <Loader2 size={13} className="animate-spin" /> : <ListRestart size={13} />} Clear passed & refill
+          </button>
+          <button onClick={() => setShowPaste((v) => !v)} disabled={intaking}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: showPaste ? "rgba(52,211,153,0.28)" : "rgba(52,211,153,0.16)", color: "#34d399" }}
+            title="Paste one or more Upwork job URLs; the desk scrapes, scores and pitches them like any feed item">
+            {intaking ? <Loader2 size={13} className="animate-spin" /> : <ClipboardPaste size={13} />} Paste URLs
           </button>
           <button onClick={pullFeeds} disabled={pullingFeeds}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
@@ -400,38 +637,121 @@ export default function DealDesk() {
             title="Re-scrape Upwork and rebuild the board (opens a browser, takes 10–20 minutes)">
             {scraping ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Re-scrape Upwork
           </button>
-          <button onClick={fetchDeals} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Reload
+          <button onClick={fetchDeals} disabled={loading} aria-busy={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110 disabled:opacity-60"
+            style={loading ? { color: "#fbbf24" } : undefined}>
+            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} {loading ? "Reloading…" : "Reload"}
           </button>
         </div>
       </div>
       <p className="text-sm text-white/45 mb-5">Upwork fast-wins — drag to move stages, open a card to review the pitch, approach, crash course, and notes before you bid.</p>
 
+      {/* S4 (a): manual intake. Paste Upwork job URLs; they go through scrape ->
+          score -> pitch like any scraped listing and land in New. */}
+      {showPaste && (
+        <div className="panel p-3 mb-4">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-white/45 mb-1.5">Paste Upwork job URLs, one per line</div>
+          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={3} disabled={intaking}
+            placeholder="https://www.upwork.com/jobs/~021234567890123456/"
+            className="w-full panel bg-transparent p-2 text-[12px] font-mono resize-y" />
+          <div className="flex items-center gap-2 mt-2">
+            <button onClick={submitIntake} disabled={intaking || !pasteText.trim()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+              style={{ background: "rgba(52,211,153,0.16)", color: "#34d399" }}>
+              {intaking ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} {intaking ? "Scraping, scoring, pitching…" : "Take them in"}
+            </button>
+            <span className="text-[11px] text-white/40">Upwork listings only (max 20). Runs in the tray; a listing already on the desk is skipped and named.</span>
+          </div>
+        </div>
+      )}
+      {intakeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#34d399" }}>{intakeResult}</div>}
+      {/* S4 (d): the login wall, said once at the top with the way out. */}
+      {needsLoginCount > 0 && (
+        <div className="panel p-3 mb-4 text-[12.5px] flex flex-wrap items-center gap-x-3 gap-y-2" style={{ borderColor: "rgba(248,113,113,0.5)", color: "#fca5a5" }}>
+          <AlertTriangle size={14} style={{ color: "#f87171", flexShrink: 0 }} />
+          <span>
+            Upwork is logged out: enrichment stopped at the login wall and {needsLoginCount} card{needsLoginCount === 1 ? "" : "s"} {needsLoginCount === 1 ? "needs" : "need"} login.
+            Log in on upwork.com, then paste a fresh cookie; that clears the flags.
+          </span>
+          <a href={UPWORK_LOGIN_URL} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] font-medium"
+            style={{ background: "rgba(248,113,113,0.16)", color: "#f87171" }}>
+            Open Upwork login <ExternalLink size={12} />
+          </a>
+          <button onClick={() => setShowCookie(true)} className="px-2.5 py-1 rounded-lg text-[12px] panel hover:brightness-110">Update cookie</button>
+        </div>
+      )}
       {enrichResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#22d3ee" }}>{enrichResult}</div>}
       {refillResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#c084fc" }}>{refillResult}</div>}
+      {screenResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: VERDICT_COLOR.unknown }}>{screenResult}</div>}
       {feedsResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#60a5fa" }}>{feedsResult}</div>}
       {scrapeResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#d97757" }}>{scrapeResult}</div>}
       {briefBatchResult && <div className="panel p-2.5 mb-4 text-[12.5px]" style={{ color: "#f59e0b" }}>{briefBatchResult}</div>}
+
+      {/* An empty column because everything aged out is a different fact from an empty
+          column because the feed returned nothing, so the board says which it is. */}
+      {(agedOut > 0 || showStale) && (
+        <div className="panel p-2.5 mb-4 text-[12.5px] flex flex-wrap items-center gap-2" style={{ color: "#fb923c" }}>
+          <span>
+            {showStale
+              ? `Showing every lead, including ${agedOut} posted more than ${maxAgeDays} days ago.`
+              : `${agedOut} lead${agedOut === 1 ? "" : "s"} hidden - posted more than ${maxAgeDays} days ago. Leads you have already picked up are never hidden.`}
+          </span>
+          <button
+            onClick={() => setShowStale(!showStale)}
+            className="px-2.5 py-1 rounded-lg text-[12px] panel hover:brightness-110"
+          >
+            {showStale ? "Hide the old ones" : "Show them anyway"}
+          </button>
+          <span className="opacity-60">Change the window in the gear.</span>
+        </div>
+      )}
 
       {error && <div className="panel p-3 mb-4 text-[12.5px]" style={{ color: "#f87171" }}>{error}</div>}
       {!loading && !error && deals.length === 0 && (
         <div className="panel p-6 text-center text-white/50 text-[13px]">No scored leads yet. Run the scraper pipeline to populate the board.</div>
       )}
 
-      <div className="flex gap-3 overflow-x-auto pb-4">
+      {/* S4 (b): bulk deny bar. Appears only while something is ticked. */}
+      {picked.length > 0 && (
+        <div className="panel p-2.5 mb-3 flex flex-wrap items-center gap-2 text-[12.5px]" style={{ borderColor: "rgba(248,113,113,0.5)" }}>
+          <span className="text-white/70">{picked.length} selected</span>
+          <button onClick={denyPicked} disabled={denying}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
+            style={{ background: "rgba(248,113,113,0.18)", color: "#f87171" }}>
+            {denying ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />} Deny {picked.length} selected
+          </button>
+          <button onClick={() => setSel(new Set())} className="px-2.5 py-1.5 rounded-lg text-[12px] panel hover:brightness-110">Clear selection</button>
+        </div>
+      )}
+
+      <div className="flex gap-3 overflow-x-auto pb-4" onDragEnd={() => setDragging(false)} onDragStart={() => setDragging(true)}>
         {allColumns.map((col) => {
           const isFirst = col.key === firstKey;
           const colItems = byCol(col.key);
-          const items = isFirst && effTab !== "all" ? colItems.filter((d) => srcKey(d) === effTab) : colItems;
+          const items = isFirst ? visibleNew : colItems;
           return (
             <div key={col.key}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { const id = e.dataTransfer.getData("text/plain"); if (id) move(id, col.key === "parked" ? "parked" : col.key); }}
+              onDrop={(e) => { setDragging(false); const id = e.dataTransfer.getData("text/plain"); if (id) move(id, col.key); }}
               className="flex-shrink-0 w-[260px]">
               <div className="flex items-center gap-2 mb-2 px-1">
                 <span className="h-2 w-2 rounded-full" style={{ background: col.accent }} />
                 <span className="text-[12px] font-semibold">{col.label}</span>
                 <span className="text-[11px] text-white/35">{colItems.length}</span>
+                {isFirst && items.length > 0 && (
+                  <button onClick={toggleSelectAllNew}
+                    className="ml-auto text-[10px] px-1.5 py-0.5 rounded border transition"
+                    style={{
+                      borderColor: allVisibleNewPicked ? "rgba(248,113,113,0.5)" : "rgba(255,255,255,0.15)",
+                      color: allVisibleNewPicked ? "#f87171" : "rgba(255,255,255,0.5)",
+                    }}
+                    title={allVisibleNewPicked
+                      ? "Clear the selection"
+                      : `Select all ${items.length} cards shown here, then use Deny below. Respects the source tab.`}>
+                    {allVisibleNewPicked ? "Clear" : `Select all ${items.length}`}
+                  </button>
+                )}
               </div>
               {isFirst && presentSources.length > 1 && (
                 <div className="flex flex-wrap gap-1 mb-2 px-1">
@@ -443,11 +763,45 @@ export default function DealDesk() {
                 </div>
               )}
               <div className="min-h-[120px] rounded-xl p-1.5" style={{ background: "rgba(255,255,255,0.02)" }}>
-                {items.map((d) => <Card key={d.id} deal={d} onOpen={setOpen} />)}
+                {items.map((d) => <Card key={d.id} deal={d} onOpen={setOpen} selected={sel.has(d.id)} onToggleSelect={toggleSel} onDeny={denyOne} />)}
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* S4 (b): Parked / Denied as a full-width lane under the board. It used to
+          be a sixth column off the right edge; now it is always reachable, and
+          each half is a drop target, so "drag to deny" needs no scrolling. */}
+      <div className="grid gap-3 md:grid-cols-2 mb-4">
+        {([
+          { key: "parked" as DealStatus, label: "Parked", accent: "#5a5d80", items: parkedItems, hint: "Drop here to park" },
+          { key: "denied" as DealStatus, label: "Denied", accent: "#f87171", items: deniedItems, hint: "Drop here to deny" },
+        ]).map((lane) => (
+          <div key={lane.key}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { setDragging(false); const id = e.dataTransfer.getData("text/plain"); if (id) move(id, lane.key); }}
+            className="rounded-xl p-2 transition"
+            style={{ background: "rgba(255,255,255,0.02)", outline: dragging ? `1px dashed ${lane.accent}` : "1px solid transparent" }}>
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <span className="h-2 w-2 rounded-full" style={{ background: lane.accent }} />
+              <span className="text-[12px] font-semibold">{lane.label}</span>
+              <span className="text-[11px] text-white/35">{lane.items.length}</span>
+              {dragging && <span className="ml-auto text-[11px]" style={{ color: lane.accent }}>{lane.hint}</span>}
+            </div>
+            {lane.items.length === 0 && !dragging && (
+              <div className="text-[11.5px] text-white/30 px-1 pb-1">Nothing {lane.label.toLowerCase()}.</div>
+            )}
+            <div className="grid gap-x-3 gap-y-0 sm:grid-cols-2 xl:grid-cols-3">
+              {lane.items.map((d) => (
+                <Card key={d.id} deal={d} onOpen={setOpen}
+                  selected={lane.key === "parked" ? sel.has(d.id) : undefined}
+                  onToggleSelect={lane.key === "parked" ? toggleSel : undefined}
+                  onDeny={lane.key === "parked" ? denyOne : undefined} />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {selected && <Drawer deal={selected} onClose={() => setOpen(null)} />}

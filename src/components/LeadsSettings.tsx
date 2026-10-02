@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ConfigMenu, { useSettings, Field, TextInput, SaveBar } from "./ConfigMenu";
+import { isMaskedSecret } from "@/lib/settingsRedact";
 import AgentPicker from "./AgentPicker";
 
 const ACCENT = "#f59e0b";
@@ -78,23 +79,23 @@ export default function LeadsSettings() {
       )}
       {dataProvider === "tavily" && (
         <Field label="Tavily API key" hint="tavily.com → API keys">
-          <TextInput type="password" placeholder="tvly-…" value={tavilyKey} onChange={(e) => setTavilyKey(e.target.value)} />
+          <TextInput type={isMaskedSecret(tavilyKey) ? "text" : "password"} placeholder="tvly-…" value={tavilyKey} onChange={(e) => setTavilyKey(e.target.value)} />
         </Field>
       )}
       {dataProvider === "perplexity" && (
         <Field label="Perplexity API key" hint="perplexity.ai → Settings → API">
-          <TextInput type="password" placeholder="pplx-…" value={perplexityKey} onChange={(e) => setPerplexityKey(e.target.value)} />
+          <TextInput type={isMaskedSecret(perplexityKey) ? "text" : "password"} placeholder="pplx-…" value={perplexityKey} onChange={(e) => setPerplexityKey(e.target.value)} />
         </Field>
       )}
       {dataProvider === "firecrawl" && (
         <Field label="Firecrawl API key" hint="firecrawl.dev → API keys">
-          <TextInput type="password" placeholder="fc-…" value={firecrawlKey} onChange={(e) => setFirecrawlKey(e.target.value)} />
+          <TextInput type={isMaskedSecret(firecrawlKey) ? "text" : "password"} placeholder="fc-…" value={firecrawlKey} onChange={(e) => setFirecrawlKey(e.target.value)} />
         </Field>
       )}
       {dataProvider === "apify" && (
         <>
           <Field label="Apify token" hint="apify.com → Settings → Integrations → API">
-            <TextInput type="password" placeholder="apify_api_…" value={apifyToken} onChange={(e) => setApifyToken(e.target.value)} />
+            <TextInput type={isMaskedSecret(apifyToken) ? "text" : "password"} placeholder="apify_api_…" value={apifyToken} onChange={(e) => setApifyToken(e.target.value)} />
           </Field>
           <Field label="Apify actor" hint="Which actor to run, e.g. apify/google-search-scraper or a lead-gen actor.">
             <TextInput placeholder="apify/google-search-scraper" value={apifyActor} onChange={(e) => setApifyActor(e.target.value)} />

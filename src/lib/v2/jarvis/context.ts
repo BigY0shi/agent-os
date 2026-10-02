@@ -2,6 +2,7 @@ import { readSettings } from "../../settings";
 import { personaPrompt } from "../../jarvisPersona";
 import { getPersonaDocument } from "../memory/persona";
 import { renderSkillPolicyBlock } from "../skills/store";
+import { moduleSkillBlock } from "../../platformSkills";
 import {
   IDENTITY_BLOCK,
   TOOL_GUIDANCE_BLOCK,
@@ -11,7 +12,9 @@ import {
   datetimeBlock,
   activePageBlock,
   userPersonaBlock,
+  replySurfaceBlock,
   type ActivePageInput,
+  type ReplySurfaceInput,
 } from "./prompts/system";
 
 /**
@@ -61,6 +64,8 @@ export function sanitizePageContext(raw: unknown): PageContextPayload | null {
 
 export interface BuildContextInput {
   pageContext?: PageContextPayload | null;
+  /** Per-request reply surface (glasses) — rendered after <active_page>, never persisted. */
+  surface?: ReplySurfaceInput | null;
   mode?: "text" | "voice";
   /** Test override — production reads getPersonaDocument()/settings itself. */
   personaDocContent?: string | null;
@@ -106,7 +111,9 @@ function skillsSlot(input: BuildContextInput): string {
     input.skillPolicies !== undefined
       ? (input.skillPolicies ?? "")
       : renderSkillPolicyBlock();
-  return [policies, skillsNoteBlock(skillNamesOrSettings(input))]
+  // S14: skills switched on for Jarvis itself in the Skills & Workflows pop-up.
+  const own = input.skillPolicies !== undefined ? "" : moduleSkillBlock("jarvis", 12_000);
+  return [policies, own, skillsNoteBlock(skillNamesOrSettings(input))]
     .filter(Boolean)
     .join("\n\n");
 }
@@ -126,10 +133,10 @@ export function buildStableSystemPrompt(input: BuildContextInput = {}): string {
     .join("\n\n");
 }
 
-/** Per-turn half — datetime + active_page. Rides in the user message on the
+/** Per-turn half — datetime + active_page + reply_surface. Rides in the user message on the
  *  sdk lane. Returns "" when there is nothing to say. */
 export function buildTurnContextBlock(input: BuildContextInput = {}): string {
-  return [datetimeBlock(input.now), activePageBlock(input.pageContext)]
+  return [datetimeBlock(input.now), activePageBlock(input.pageContext), replySurfaceBlock(input.surface)]
     .filter(Boolean)
     .join("\n");
 }
@@ -147,6 +154,7 @@ export function buildSystemPrompt(input: BuildContextInput = {}): string {
     RECALLED_MEMORY_RULE,
     datetimeBlock(input.now),
     activePageBlock(input.pageContext),
+    replySurfaceBlock(input.surface),
     SPOKEN_MECHANICS_BLOCK,
   ]
     .filter(Boolean)

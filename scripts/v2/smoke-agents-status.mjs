@@ -20,6 +20,11 @@ const settingsFile = path.join(settingsDir, "settings.json");
 process.env.AGENTIC_OS_SETTINGS = settingsFile;
 const agentsDir = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-status-agents-"));
 process.env.AGENTIC_OS_AGENTS_DIR = agentsDir;
+// createAgent registers a PRINCIPAL (identity + a browser profile it owns),
+// so an un-redirected run writes fake agents into the owner's real
+// ~/.agentic-os/principals.json. That is what happened before this line
+// existed. Rule 19: redirect every store the code under test writes to.
+process.env.AGENTIC_OS_PRINCIPALS = path.join(agentsDir, "principals.json");
 process.env.OLLAMA_URL = "http://127.0.0.1:1"; // dead port — nothing may call out
 fs.writeFileSync(
   settingsFile,

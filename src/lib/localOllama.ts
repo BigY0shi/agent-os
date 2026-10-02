@@ -29,7 +29,7 @@ export async function resolveModel(): Promise<string> {
   throw new Error("No local Ollama model available — is `ollama serve` running with a model pulled?");
 }
 
-interface ChatOpts { format?: "json"; temperature?: number; numCtx?: number }
+interface ChatOpts { format?: "json"; temperature?: number; numCtx?: number; /** STOP (moduleRuns ctx.signal) and/or a timeout. */ signal?: AbortSignal }
 
 export async function localChat(model: string, system: string, user: string, opts: ChatOpts = {}): Promise<string> {
   const body: Record<string, unknown> = {
@@ -40,10 +40,21 @@ export async function localChat(model: string, system: string, user: string, opt
     options: { temperature: opts.temperature ?? 0.4, ...(opts.numCtx ? { num_ctx: opts.numCtx } : {}) },
   };
   if (opts.format === "json") body.format = "json";
-  const r = await fetch(CHAT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const r = await fetch(CHAT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: opts.signal });
   if (!r.ok) throw new Error(`Ollama HTTP ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
   const j = await r.json();
   return (j?.message?.content ?? "").trim();
+}
+
+// Launch guardrail "No external scripts" (Agent Kanban, S3): the Reviewer rejects a
+// build that pulls script or stylesheet from anywhere but the page itself. Data:
+// and blob: URLs are still the page.
+export function hasExternalScripts(html: string): boolean {
+  const off = String.raw`["']?\s*(?:https?:)?\/\/`; // an absolute or protocol-relative URL
+  return new RegExp(String.raw`<script[^>]*\ssrc\s*=\s*${off}`, "i").test(html)
+    || new RegExp(String.raw`<link[^>]*\srel\s*=\s*["']?stylesheet["']?[^>]*\shref\s*=\s*${off}`, "i").test(html)
+    || new RegExp(String.raw`<link[^>]*\shref\s*=\s*${off}[^>]*\srel\s*=\s*["']?stylesheet`, "i").test(html)
+    || new RegExp(String.raw`@import\s+(?:url\()?\s*${off}`, "i").test(html);
 }
 
 // Pull the largest complete single-file HTML doc out of a model reply.

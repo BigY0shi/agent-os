@@ -313,7 +313,10 @@ console.log("=== LIVE PATH (probe) ===");
 let provider = null;
 let modelLow = "";
 let modelMedium = "";
-if (process.env.OLLAMA_API_KEY) {
+if (process.env.AGENTIC_SMOKE_OFFLINE) {
+  // The gate (test.sh) exports this: no live model run there, even with Ollama up.
+  console.log("SKIP  live leg: AGENTIC_SMOKE_OFFLINE=1 (run without it to exercise a real model)");
+} else if (process.env.OLLAMA_API_KEY) {
   provider = "ollama-cloud";
   modelLow = process.env.SMOKE_MODEL_LOW || "kimi-k2.6:cloud";
   modelMedium = process.env.SMOKE_MODEL_MEDIUM || "glm-5.2:cloud";
@@ -332,7 +335,7 @@ if (process.env.OLLAMA_API_KEY) {
 }
 
 if (!provider) {
-  console.log("SKIP  no Ollama provider reachable (no OLLAMA_API_KEY, no local model) — live run skipped.");
+  if (!process.env.AGENTIC_SMOKE_OFFLINE) console.log("SKIP  no Ollama provider reachable (no OLLAMA_API_KEY, no local model) — live run skipped.");
 } else {
   console.log(`      provider=${provider} modelLow=${modelLow} modelMedium=${modelMedium}`);
   writeSettings({

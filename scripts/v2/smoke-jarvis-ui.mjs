@@ -85,6 +85,11 @@ const overlay = read("src/components/v2/jarvis/ChatboxOverlay.tsx");
 // ── capture hook: capture-only, loud Opera grayout ──────────────────────────
 const hook = read("src/lib/v2/jarvis/useVoiceCapture.ts");
 check("useVoiceCapture performs NO network sends", !/fetch\(|XMLHttpRequest|EventSource/.test(hook));
+// The Voicebox lane transcribes a finished recording through a separate helper;
+// that helper may reach ONLY the local transcribe route, never the brain.
+const transcribe = read("src/lib/v2/jarvis/transcribeClient.ts");
+check("transcribeClient posts only to /api/voicebox/transcribe", (transcribe.match(/fetch\(/g) || []).length === 1 && transcribe.includes("/api/voicebox/transcribe") && !/jarvis\/ask|\/api\/v2\/jarvis/.test(transcribe));
+check("useVoiceCapture hands the transcript to the caller, never to the brain", hook.includes("transcribeRecording") && !/jarvis\/ask/.test(hook));
 check("useVoiceCapture never references sendBuffer", !hook.includes("sendBuffer"));
 check("Opera SpeechRecognition trap detected with a reason", / OPR\\\//.test(hook) && /Opera ships SpeechRecognition disabled/.test(hook));
 check(

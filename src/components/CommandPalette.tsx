@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, Box, Cpu, ChevronRight } from "lucide-react";
+import { MOD } from "@/lib/modKey";
 
 interface Action {
   id: string;
@@ -71,7 +72,7 @@ export default function CommandPalette() {
         onClick={() => setOpen(true)}
         className="hidden md:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--panel-border)] text-[12px] text-[var(--fg-dim)] hover:text-[var(--fg)] hover:border-[var(--panel-border-hot)] transition"
       >
-        <span>⌘K</span><span>Command palette</span>
+        <span>{MOD}+K</span><span>Command palette</span>
       </button>
 
       <AnimatePresence>

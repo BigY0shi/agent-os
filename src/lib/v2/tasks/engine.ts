@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getDb } from "../db";
 import { now } from "../ids";
+import { runTaskWithSdk } from "./sdkRun";
 import { emit } from "../events";
 import { enqueueTask } from "../scheduler";
 import { readSettings } from "../../settings";
@@ -47,9 +48,13 @@ import {
  * gated) → EXECUTE (bounded step walker) → deliver + ingest.
  *
  * Design decisions (recorded for the report):
- *  - runMode: 'steps' | 'sdk'. SPEC-B open question #1 is unresolved in
- *    CONVENTIONS/PROGRESS, so per the B2 brief the bounded step-walker ships
- *    now and 'sdk' throws NOT_IMPLEMENTED (chunk 3+ seam).
+ *  - runMode: 'steps' | 'sdk' (settings.tasks.runMode, the Tasks gear).
+ *    'steps' is the bounded step walker below. 'sdk' (S32) hands the SAME
+ *    approved plan to one Claude Agent SDK session in sdkRun.ts, with the
+ *    walker's guardrails: plan approval first, maxStepsPerRun as the turn
+ *    cap, runTimeoutMin as the wall clock, STOP through the runs tray, the
+ *    capability slots as the only tools, the module's skills in the prompt.
+ *    Both modes deliver through the same tail (deliverResult / parkBlocked).
  *  - The plan lives in v2_tasks.plan_md (user-facing markdown) + the walkable
  *    steps in metadata.planSteps (PlanStepSchema[]) — B1 stored plans in
  *    columns, not page zones (zones land with B5's pages).
@@ -459,10 +464,95 @@ async function runStep(
   }
 }
 
+/** Blocked tail shared by both run modes: Waiting + question + attention flag. */
+function parkBlocked(task: Task, conv: Conversation, question: string, where: string, detail: Record<string, unknown>): void {
+  appendMessage(conv.id, {
+    role: "assistant",
+    content: `Blocked ${where}:\n${question}`,
+    userType: "system",
+  });
+  changeTaskStatus(task.id, "Waiting", "agent");
+  emitAttention({
+    kind: "task.blocked",
+    severity: "warn",
+    title: `Blocked: ${task.title || task.displayId}`,
+    route: taskRoute(task),
+    dedupeKey: `task-blocked-${task.id}`,
+    taskId: task.id,
+    displayId: task.displayId,
+    question,
+  });
+  appendTaskEvent(task.id, "run_blocked", "agent", { ...detail, question });
+}
+
+/** Success tail shared by both run modes: result + Review + summary message + ingest. */
+async function deliverResult(task: Task, conv: Conversation, summary: string, detail: Record<string, unknown>): Promise<void> {
+  updateTask(task.id, { result: summary, error: null }, "agent");
+  changeTaskStatus(task.id, "Review", "agent");
+  appendMessage(conv.id, {
+    role: "assistant",
+    content: `Run complete — ready for review.\n\n${summary}`,
+    userType: "system",
+  });
+  appendTaskEvent(task.id, "run_ok", "agent", detail);
+  emit("task.run", { taskId: task.id, displayId: task.displayId, status: "ok", ...detail }, "tasks");
+
+  try {
+    await ingestFromModule({
+      episodeBody: `Task ${task.displayId} (${task.title || "untitled"}) run summary:\n${summary}`,
+      source: "task",
+      labelNames: ["task", task.displayId],
+      sessionId: `task-${task.id}`,
+      metadata: { taskId: task.id, displayId: task.displayId },
+    });
+  } catch (err) {
+    console.warn(`[v2/tasks] memory ingest failed for ${task.displayId} (run still completed):`, err);
+  }
+}
+
+/**
+ * S32 'sdk' run mode: the approved plan goes to one Agent SDK session
+ * (sdkRun.ts) with the walker's guardrails. A STOP or a timeout throws into
+ * runTask's failure path, which parks the task Waiting with the reason.
+ */
+async function executePlanWithSdk(task: Task, conv: Conversation, recallBlock: string | null): Promise<void> {
+  const s = engineSettings();
+  const planMd = task.planMd ?? task.title;
+  appendTaskEvent(task.id, "sdk_run_started", "agent", { maxTurns: s.maxStepsPerRun, runTimeoutMin: s.runTimeoutMin });
+  appendMessage(conv.id, {
+    role: "assistant",
+    content: `Running the approved plan through the Agent SDK (turn cap ${s.maxStepsPerRun}, ${s.runTimeoutMin} min; STOP is in the runs tray).`,
+    userType: "system",
+  });
+  const outcome = await runTaskWithSdk({
+    task,
+    planMd,
+    recallBlock,
+    maxTurns: s.maxStepsPerRun,
+    runTimeoutMin: s.runTimeoutMin,
+    onEvent: (ev) => {
+      if (ev.kind === "turn_cap_enforced") {
+        appendTaskEvent(task.id, "turn_cap_enforced", "system", ev.detail);
+        appendMessage(conv.id, {
+          role: "assistant",
+          content: `Turn cap reached (${String(ev.detail.turns)}/${String(ev.detail.cap)}, settings.tasks.maxStepsPerRun); ending the session with what was done so far.`,
+          userType: "system",
+        });
+      }
+    },
+  });
+  if (outcome.kind === "blocked") {
+    parkBlocked(task, conv, outcome.question, `after ${outcome.turns} turn(s) (sdk)`, { mode: "sdk", turns: outcome.turns, runId: outcome.runId });
+    return;
+  }
+  await deliverResult(task, conv, outcome.summary, { mode: "sdk", turns: outcome.turns, tools: outcome.toolCalls.length, turnCapHit: outcome.turnCapHit, runId: outcome.runId });
+}
+
 async function executePlan(task: Task, conv: Conversation, recallBlock: string | null): Promise<void> {
   const s = engineSettings();
   if (s.runMode === "sdk") {
-    throw new Error("NOT_IMPLEMENTED: runMode 'sdk' lands with a later chunk (SPEC-B open question #1 seam).");
+    await executePlanWithSdk(task, conv, recallBlock);
+    return;
   }
   const planMd = task.planMd ?? task.title;
   let steps = readPlanSteps(task);
@@ -497,23 +587,7 @@ async function executePlan(task: Task, conv: Conversation, recallBlock: string |
         title: step.title,
         question: outcome.question,
       });
-      appendMessage(conv.id, {
-        role: "assistant",
-        content: `Blocked at step ${i + 1}/${steps.length} (${step.title}):\n${outcome.question}`,
-        userType: "system",
-      });
-      changeTaskStatus(task.id, "Waiting", "agent");
-      emitAttention({
-        kind: "task.blocked",
-        severity: "warn",
-        title: `Blocked: ${task.title || task.displayId}`,
-        route: taskRoute(task),
-        dedupeKey: `task-blocked-${task.id}`,
-        taskId: task.id,
-        displayId: task.displayId,
-        question: outcome.question,
-      });
-      appendTaskEvent(task.id, "run_blocked", "agent", { step: i + 1, question: outcome.question });
+      parkBlocked(task, conv, outcome.question ?? "The agent is blocked — how should it proceed?", `at step ${i + 1}/${steps.length} (${step.title})`, { step: i + 1 });
       return;
     }
 
@@ -543,27 +617,7 @@ async function executePlan(task: Task, conv: Conversation, recallBlock: string |
     summary = outputs.map((o) => `${o.title}: ${o.output.slice(0, 300)}`).join("\n");
   }
 
-  updateTask(task.id, { result: summary, error: null }, "agent");
-  changeTaskStatus(task.id, "Review", "agent");
-  appendMessage(conv.id, {
-    role: "assistant",
-    content: `Run complete — ready for review.\n\n${summary}`,
-    userType: "system",
-  });
-  appendTaskEvent(task.id, "run_ok", "agent", { steps: outputs.length });
-  emit("task.run", { taskId: task.id, displayId: task.displayId, status: "ok", steps: outputs.length }, "tasks");
-
-  try {
-    await ingestFromModule({
-      episodeBody: `Task ${task.displayId} (${task.title || "untitled"}) run summary:\n${summary}`,
-      source: "task",
-      labelNames: ["task", task.displayId],
-      sessionId: `task-${task.id}`,
-      metadata: { taskId: task.id, displayId: task.displayId },
-    });
-  } catch (err) {
-    console.warn(`[v2/tasks] memory ingest failed for ${task.displayId} (run still completed):`, err);
-  }
+  await deliverResult(task, conv, summary, { steps: outputs.length });
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 import { getHireLead, setHireBrief } from "@/lib/hireDesk";
 import { generateHireBrief } from "@/lib/hireBrief";
+import { startModuleRun } from "@/lib/moduleRuns";
+import { HttpError, runErrorResponse } from "@/lib/runRoute";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,12 +18,26 @@ export async function POST(req: Request) {
   const lead = await getHireLead(id);
   if (!lead) return Response.json({ ok: false, error: "lead not found" }, { status: 404 });
 
+  // Registered as a module run (roadmap S2 backlog). generateHireBrief takes no
+  // signal yet (lib/hireBrief.ts): STOP marks the run stopped and answers 409,
+  // but the claude child finishes on its own and its result is discarded.
+  const run = startModuleRun(
+    { module: "hire", label: `Hire brief: ${lead.title}${lead.company ? ` @ ${lead.company}` : ""}`, href: "/hire" },
+    async (ctx) => {
+      ctx.log("asking claude for summary / why / approach / crash course");
+      const brief = await generateHireBrief(lead);
+      if ("error" in brief) throw new HttpError(502, brief.error);
+      if (ctx.signal.aborted) throw new Error("stopped before the brief was saved");
+      await setHireBrief(id, brief);
+      ctx.log("brief saved");
+      return brief;
+    },
+    { summarize: () => ({ id }) },
+  );
   try {
-    const brief = await generateHireBrief(lead);
-    if ("error" in brief) return Response.json({ ok: false, error: brief.error }, { status: 502 });
-    await setHireBrief(id, brief);
-    return Response.json({ ok: true, brief });
+    const brief = await run.promise;
+    return Response.json({ ok: true, brief, runId: run.id });
   } catch (e) {
-    return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
+    return runErrorResponse(e, run.id);
   }
 }

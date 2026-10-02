@@ -32,8 +32,14 @@ function Get-KokoroPids {
     Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
 }
 
+function Get-ParakeetPids {
+  # Local STT (Parakeet, port 8881) - same treatment as Kokoro.
+  return @(Get-NetTCPConnection -LocalPort 8881 -State Listen |
+    Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
+}
+
 Write-Host "  [1/3] Stopping the old server..."
-foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) | Sort-Object -Unique)) {
+foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) + @(Get-ParakeetPids) | Sort-Object -Unique)) {
   try {
     Stop-Process -Id $procId -Force -ErrorAction Stop
     Write-Host "        killed PID $procId" -ForegroundColor Yellow
@@ -70,6 +76,7 @@ Start-Process -WindowStyle Hidden -FilePath 'node' `
   -RedirectStandardError  (Join-Path $logDir 'agentos-server.err.log')
 
 & (Join-Path $dir 'kokoro-start.ps1')
+& (Join-Path $dir 'parakeet-start.ps1')
 
 Write-Host "  [3/3] Waiting for it to come online..."
 $ok = $false
@@ -78,4 +85,17 @@ for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Seconds 1
 }
 if ($ok) { Write-Host "        online at http://localhost:3737" -ForegroundColor Green }
-else     { Write-Host "        still starting - see $logDir\agentos-server.err.log" -ForegroundColor Red }
+else {
+  # 2026-09-02: this used to print "still starting" and exit 0, so the batch
+  # file said "Done" while nothing listened. The usual reason is the new
+  # server refusing to start; its own words are in the err log, so show them.
+  Write-Host ""
+  Write-Host "  NOT ONLINE after 40 s. The server's last words:" -ForegroundColor Red
+  $errLog = Join-Path $logDir 'agentos-server.err.log'
+  if (Test-Path $errLog) { Get-Content $errLog -Tail 6 | ForEach-Object { Write-Host "        $_" -ForegroundColor Red } }
+  Write-Host ""
+  Write-Host "  If it says an old PID still holds the lock and that PID is gone, wait a" -ForegroundColor Yellow
+  Write-Host "  minute for the lock to go stale (or rebuild: the guard now checks the PID)" -ForegroundColor Yellow
+  Write-Host "  and run this again." -ForegroundColor Yellow
+  exit 1
+}

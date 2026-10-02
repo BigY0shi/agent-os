@@ -1,5 +1,7 @@
 "use client";
 
+import { handleUiEvent } from "@/lib/v2/jarvis/uiClient";
+
 // SPEC-C C2b — the chatbox-first capture overlay. THE normative contract
 // (MASTER-PLAN §2 C2b, stated twice by Yoshi):
 //   1. Overlay opens → textarea focused, mic NOT hot.
@@ -30,6 +32,7 @@ import { Mic, Send, Settings as Gear, X, Loader2, History, Plus, Archive } from 
 import type { Settings } from "@/components/ConfigMenu";
 import { useVoiceCapture, providerInfo } from "@/lib/v2/jarvis/useVoiceCapture";
 import { getEffectivePageContext } from "@/lib/v2/jarvis/pageContext";
+import { useReadAloud } from "@/lib/v2/jarvis/useReadAloud";
 import JarvisSettings from "./JarvisSettings";
 
 const ACCENT = "#22d3ee";
@@ -70,17 +73,29 @@ export default function ChatboxOverlay({
   settings,
   save,
   saving,
+  resumeId,
+  onResumed,
 }: {
   open: boolean;
   onClose: () => void;
   settings: Settings | null;
   save: (patch: Partial<Settings>) => Promise<Settings | null>;
   saving: boolean;
+  /** S13: conversation to open (from the Sessions tab). Cleared via onResumed. */
+  resumeId?: string | null;
+  onResumed?: () => void;
 }) {
   const jarvis = (settings?.jarvis ?? {}) as {
-    voice?: { provider?: string; autoSend?: boolean; pushToTalk?: boolean };
+    voice?: { provider?: string; autoSend?: boolean; pushToTalk?: boolean; ttsProvider?: string };
   };
   const provider = jarvis.voice?.provider ?? "webspeech";
+  const speech = useReadAloud(jarvis.voice?.ttsProvider ?? "voicebox");
+  const [readReplies, setReadReplies] = useState(true);
+  const readRepliesRef = useRef(readReplies);
+  readRepliesRef.current = readReplies;
+  const speechRef = useRef(speech);
+  speechRef.current = speech;
+  useEffect(() => { if (!open) speechRef.current.stop(); }, [open]);
   const autoSend = jarvis.voice?.autoSend ?? false; // C2b default OFF
   const pushToTalk = jarvis.voice?.pushToTalk ?? true;
   const autoSendRef = useRef(autoSend);
@@ -91,6 +106,7 @@ export default function ChatboxOverlay({
   valueRef.current = value;
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const askAbortRef = useRef<AbortController | null>(null);
   const [turns, setTurns] = useState<SessionTurn[]>([]);
   const router = useRouter();
   // Conversation thread for this overlay session (handed back by the meta event).
@@ -186,15 +202,19 @@ export default function ChatboxOverlay({
     }
     const text = valueRef.current.trim();
     if (!text || busyRef.current) return;
+    speechRef.current.stop();
     valueRef.current = "";
     setValue("");
     busyRef.current = true;
     setBusy(true);
+    const askAbort = new AbortController();
+    askAbortRef.current = askAbort;
     const userId = ++idRef.current;
     const jId = ++idRef.current;
     setTurns((t) => [...t, { id: userId, role: "user", text }, { id: jId, role: "jarvis", text: "", working: true }]);
     try {
       const res = await fetch("/api/v2/jarvis/ask", {
+        signal: askAbort.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,6 +222,7 @@ export default function ChatboxOverlay({
           conversationId: conversationIdRef.current ?? undefined,
           // C5: what the user currently sees, captured at SEND time (per-request only).
           pageContext: getEffectivePageContext() ?? undefined,
+          uiControl: true,
         }),
       });
       if (!res.ok || !res.body) throw new Error(`brain ${res.status}`);
@@ -237,6 +258,7 @@ export default function ChatboxOverlay({
               redactedArgs?: Record<string, unknown>;
               expiresAt?: string;
             };
+            if (await handleUiEvent(ev, (route) => router.push(route))) continue;
             if (ev.type === "meta") {
               if (ev.conversationId) conversationIdRef.current = ev.conversationId;
               if (ev.note) setTurns((t) => t.map((x) => (x.id === jId ? { ...x, tools: [...(x.tools ?? []), ev.note!] } : x)));
@@ -259,11 +281,7 @@ export default function ChatboxOverlay({
                 t.map((x) => (x.id === jId ? { ...x, approvals: [...(x.approvals ?? []), card] } : x)),
               );
             } else if (ev.type === "navigate" && ev.route && ev.route.startsWith("/")) {
-              try {
-                router.push(ev.route);
-              } catch {
-                window.location.href = ev.route;
-              }
+              router.push(ev.route);
             } else if (ev.type === "error") {
               answer = answer || `⚠ ${ev.message ?? ev.error ?? "brain failure"}`;
               setTurns((t) => t.map((x) => (x.id === jId ? { ...x, text: answer } : x)));
@@ -275,6 +293,7 @@ export default function ChatboxOverlay({
         }
       }
       setTurns((t) => t.map((x) => (x.id === jId ? { ...x, text: x.text || "(no reply)", working: false } : x)));
+      if (readRepliesRef.current && answer) void speechRef.current.read(answer);
     } catch (e) {
       setTurns((t) =>
         t.map((x) => (x.id === jId ? { ...x, text: "Error reaching the Jarvis brain: " + String(e), working: false } : x)),
@@ -374,6 +393,12 @@ export default function ChatboxOverlay({
     }
   }, []);
 
+  // S13: resume a conversation picked in the Sessions tab.
+  useEffect(() => {
+    if (!open || !resumeId) return;
+    void openConversation(resumeId).finally(() => onResumed?.());
+  }, [open, resumeId, openConversation, onResumed]);
+
   const newConversation = useCallback(() => {
     conversationIdRef.current = null;
     setTurns([]);
@@ -439,6 +464,7 @@ export default function ChatboxOverlay({
     ? {
         onPointerDown: (e: React.PointerEvent) => {
           e.preventDefault();
+          speech.stop();
           capture.start();
         },
         onPointerUp: () => capture.stop(), // stop ≠ send (C2b)
@@ -447,7 +473,7 @@ export default function ChatboxOverlay({
         },
       }
     : {
-        onClick: () => (recording ? capture.stop() : capture.start()),
+        onClick: () => { speech.stop(); if (recording) capture.stop(); else capture.start(); },
       };
 
   const providerAvail = capture.available;
@@ -457,12 +483,16 @@ export default function ChatboxOverlay({
     <AnimatePresence>
       {open && (
         <motion.div
+          data-jarvis-chrome
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[95] flex items-start justify-center pt-[12vh] px-4"
+          // Docked, not modal (owner 2026-09-08): Jarvis navigates and operates the
+          // page behind this panel, so the page must stay visible and clickable.
+          // No backdrop, not announced as modal; the orb (bottom-5 right-5) stays reachable.
+          className="fixed bottom-[5.25rem] right-5 z-[95] w-[min(460px,calc(100vw-2.5rem))]"
           role="dialog"
-          aria-modal="true"
+          aria-label="Jarvis"
           onKeyDown={(e) => {
             if (e.key === "Escape") {
               e.stopPropagation();
@@ -470,13 +500,12 @@ export default function ChatboxOverlay({
             }
           }}
         >
-          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={discard} />
           <motion.div
-            initial={{ y: -14, opacity: 0, scale: 0.985 }}
+            initial={{ y: 14, opacity: 0, scale: 0.985 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: -10, opacity: 0, scale: 0.985 }}
+            exit={{ y: 10, opacity: 0, scale: 0.985 }}
             transition={{ duration: 0.16 }}
-            className="relative w-full max-w-[640px] rounded-2xl shadow-2xl overflow-hidden"
+            className="relative w-full rounded-2xl shadow-2xl overflow-hidden"
             style={{ background: "var(--bg, #0b0713)", border: `1px solid ${ACCENT}44` }}
           >
             {/* header */}
@@ -496,6 +525,15 @@ export default function ChatboxOverlay({
                 </span>
               )}
               <div className="ml-auto flex items-center gap-1.5">
+                {busy && <button type="button" onClick={() => { askAbortRef.current?.abort(); speech.stop(); }}
+                  className="text-[11px] px-2 py-1 rounded hover:bg-white/5">Stop actions</button>}
+                <button type="button" aria-pressed={readReplies}
+                  onClick={() => { setReadReplies(v => !v); speech.stop(); }}
+                  className="text-[11px] px-2 py-1 rounded hover:bg-white/5">
+                  {readReplies ? "Voice on" : "Voice off"}
+                </button>
+                {speech.speaking && <button type="button" onClick={speech.stop}
+                  className="text-[11px] px-2 py-1 rounded hover:bg-white/5">Stop reading</button>}
                 <button
                   onClick={toggleHistory}
                   title="Conversation history"
@@ -522,6 +560,12 @@ export default function ChatboxOverlay({
               <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--panel-border, #2a2436)" }}>
                 <JarvisSettings settings={settings} save={save} saving={saving} />
               </div>
+            )}
+            {speech.error && <p role="alert" className="px-4 py-2 text-sm text-red-300">Read aloud failed: {speech.error}</p>}
+            {speech.spokeVia && (
+              <p role="status" className="px-4 py-1.5 text-[11.5px]" style={{ color: "#fbbf24" }}>
+                {speech.spokeVia.fellBackFrom} failed{speech.spokeVia.reason ? ` (${speech.spokeVia.reason.slice(0, 140)})` : ""}; {speech.spokeVia.provider} is speaking instead.
+              </p>
             )}
 
             {/* C3.6 conversation drawer */}

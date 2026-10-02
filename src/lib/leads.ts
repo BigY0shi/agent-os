@@ -179,7 +179,7 @@ export async function getHistory(): Promise<LeadRun[]> {
 export async function modelChat(system: string, user: string, maxTokens = 4000): Promise<string> {
   const agent = (() => { try { return readSettings().leads.agent || "claude"; } catch { return "claude"; } })();
   if (agent !== "openrouter" && (LOOP_CLI_AGENTS as readonly string[]).includes(agent)) {
-    return cliComplete(agent, `${system}\n\n${user}`, { timeoutMs: 180_000 });
+    return cliComplete(agent, `${system}\n\n${user}`, { timeoutMs: 180_000, module: "leads" });
   }
   const key = openrouterKey();
   if (!key) throw new Error("No OPENROUTER_API_KEY — pick a CLI agent in Leads settings (gear), or add a key to ~/.hermes/profiles/<active>/.env");

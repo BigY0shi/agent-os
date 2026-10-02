@@ -8,6 +8,7 @@ import AgentAvatar, { agentColor, agentLabel, type AgentKey } from "./AgentAvata
 import VoiceButton from "./VoiceButton";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MOD } from "@/lib/modKey";
 
 // Render an agent reply as formatted markdown (bold, lists, code, links) instead
 // of raw text with visible ** asterisks. User messages stay plain.
@@ -35,12 +36,21 @@ function profileAccent(name: string): string {
   return "#60a5fa";
 }
 
-function logToVault(agent: AgentKey, user: string, reply: string) {
-  fetch("/api/memory/log", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ agent, kind: "chat", user, reply }),
-  }).catch(() => {});
+/** Appends the exchange to the vault. Resolves to null on success, or the reason it failed,
+ *  so the page only says "Logged" when the log really landed. */
+async function logToVault(agent: AgentKey, user: string, reply: string): Promise<string | null> {
+  try {
+    const r = await fetch("/api/memory/log", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ agent, kind: "chat", user, reply }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j?.ok !== false) return null;
+    return String(j?.error || `HTTP ${r.status}`);
+  } catch (e) {
+    return String(e);
+  }
 }
 
 interface Props {
@@ -62,6 +72,7 @@ export default function UnifiedChat({
   // Ultracode: Claude-only. Adds --effort xhigh → unlocks dynamic workflows.
   const [ultracode, setUltracode] = useState(false);
   const [lastLogged, setLastLogged] = useState<string | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
   // Elapsed seconds counter, for non-streaming agents where you can't see token-by-token progress.
   const [elapsedMs, setElapsedMs] = useState(0);
   const startMsRef = useRef<number>(0);
@@ -153,8 +164,9 @@ export default function UnifiedChat({
 
     // Log to Obsidian
     if (reply && reply.trim()) {
-      logToVault(agent, prompt, reply);
-      setLastLogged(new Date().toLocaleTimeString("en-GB", { hour12: false }));
+      const failed = await logToVault(agent, prompt, reply);
+      if (failed) { setLogError(failed); setLastLogged(null); }
+      else { setLogError(null); setLastLogged(new Date().toLocaleTimeString("en-GB", { hour12: false })); }
     }
   }
 
@@ -430,7 +442,7 @@ export default function UnifiedChat({
                   Type or use the mic. Every exchange auto-saves to <code>Agentic OS/Memories/</code> in your Obsidian vault.
                 </p>
                 <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-[var(--fg-dimmer)]">
-                  <kbd className="px-1.5 py-0.5 rounded border border-[var(--panel-border)]">⌘+Enter</kbd>
+                  <kbd className="px-1.5 py-0.5 rounded border border-[var(--panel-border)]">{MOD}+Enter</kbd>
                   <span>send</span>
                   <span>·</span>
                   <kbd className="px-1.5 py-0.5 rounded border border-[var(--panel-border)]">Esc</kbd>
@@ -550,7 +562,7 @@ export default function UnifiedChat({
               if (e.key === "Escape" && streaming) stop();
             }}
             rows={2}
-            placeholder={`Message ${agentLabel(agent)}… (⌘+Enter)`}
+            placeholder={`Message ${agentLabel(agent)}… (${MOD}+Enter)`}
             className="flex-1 bg-transparent outline-none resize-none px-2 py-2 text-[14px] text-[var(--fg)] placeholder:text-[var(--fg-dimmer)]"
           />
           {streaming ? (
@@ -576,7 +588,9 @@ export default function UnifiedChat({
           )}
         </div>
         <div className="mt-1.5 px-1 flex items-center justify-between text-[10px] text-[var(--fg-dimmer)] uppercase tracking-widest">
-          <span>auto-saved to Obsidian</span>
+          {logError
+            ? <span className="text-amber-400/80 normal-case tracking-normal" title={logError}>Not logged to Obsidian: {logError.slice(0, 80)}</span>
+            : <span>auto-saved to Obsidian</span>}
           {agent !== "claude" && (
             <span className="text-amber-400/80">
               {agent === "hermes"

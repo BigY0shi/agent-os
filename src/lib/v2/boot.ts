@@ -1,5 +1,4 @@
 import path from "node:path";
-import os from "node:os";
 import fs from "node:fs";
 import { ensureDb, dbPath } from "./db";
 import { ensureV2Scheduler, registerJobHandler, scheduleJob } from "./scheduler";
@@ -35,11 +34,32 @@ declare global {
 
 const BACKUP_KEEP = 14;
 
+/**
+ * Where snapshots of `dbFile` go: AGENTIC_OS_BACKUPS_DIR when set, otherwise a
+ * `backups` folder next to the database itself. For the default install
+ * (~/.agentic-os/agentos.db) that is ~/.agentic-os/backups, as it always was; a
+ * process pointed at a temp DB (AGENTIC_OS_DB) now backs up beside that temp DB
+ * instead of into the owner's real backups folder.
+ */
+export function backupDirFor(dbFile: string): string {
+  const override = process.env.AGENTIC_OS_BACKUPS_DIR;
+  if (override && override.trim()) return override.trim();
+  if (!dbFile || dbFile === ":memory:" || !path.isAbsolute(dbFile)) {
+    throw new Error(`db.backup: cannot place backups for a database without a file path (${dbFile || "empty"})`);
+  }
+  return path.join(path.dirname(dbFile), "backups");
+}
+
+/** Old snapshots are exiled to a `.exile` folder beside the backups folder (~/.agentic-os/.exile by default). */
+export function backupExileRootFor(dbFile: string): string {
+  return path.join(path.dirname(backupDirFor(dbFile)), ".exile");
+}
+
 function registerCoreJobs(): void {
   // F1.6 nightly backup. Push-to-.99 is a stub hook (network creds out of scope here).
   registerJobHandler("db.backup", async () => {
     const db = ensureDb();
-    const dir = path.join(os.homedir(), ".agentic-os", "backups");
+    const dir = backupDirFor(db.name); // the file ensureDb() actually opened
     fs.mkdirSync(dir, { recursive: true });
     const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const dest = path.join(dir, `agentos-${stamp}.db`);
@@ -53,9 +73,7 @@ function registerCoreJobs(): void {
       .reverse();
     if (snaps.length > BACKUP_KEEP) {
       const exileDir = path.join(
-        os.homedir(),
-        ".agentic-os",
-        ".exile",
+        backupExileRootFor(db.name),
         new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"),
       );
       fs.mkdirSync(exileDir, { recursive: true });
