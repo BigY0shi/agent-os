@@ -307,7 +307,24 @@ check("K5 recordToolCall still does NOT throw (the tool already ran)",
   ));
 check("K6 health is readable", typeof audit.auditHealth === "function");
 const toolsSrc = read("src/lib/v2/browser/tools.ts");
-check("K7 a degraded audit is surfaced on the tool result", /auditDegraded/.test(toolsSrc));
+// K7: assert the behaviour, not the word. Until 2026-10-01 this only checked that
+// "auditDegraded" appeared in tools.ts, while the helper that set it was never called
+// (Copilot review on PR #18).
+const { withAuditWarning } = await import("../../src/lib/v2/browser/tools.ts");
+const sick = { ok: false, failures: 2, lastError: "disk full" };
+const okObj = { ok: true, result: { snapshot: "s" } };
+check("K7a healthy audit: the result passes through untouched", withAuditWarning(okObj, { ok: true, failures: 0 }) === okObj);
+const w1 = withAuditWarning(okObj, sick);
+check("K7b degraded + object result: fields kept, auditDegraded on result and top level",
+  w1.ok && w1.result.snapshot === "s" && /2 failed write\(s\); last: disk full/.test(w1.result.auditDegraded) && w1.auditDegraded === w1.result.auditDegraded, w1);
+const w2 = withAuditWarning({ ok: true, result: [1, 2] }, sick);
+check("K7c degraded + array result: wrapped as { value }, never spread into numeric keys",
+  w2.ok && Array.isArray(w2.result.value) && w2.result.value.length === 2 && !("0" in w2.result), w2);
+const w3 = withAuditWarning({ ok: false, error: { code: "TOOL_ERROR", message: "no page" } }, sick);
+check("K7d degraded + FAILED call: the notice is on the error message and top level",
+  !w3.ok && w3.error.code === "TOOL_ERROR" && /^no page \[This call ran but the audit trail is not recording/.test(w3.error.message) && !!w3.auditDegraded, w3);
+check("K7e executeBrowserTool applies it to every return path (one wrapper, not per return)",
+  /const r = await executeBrowserToolInner\(toolName, params, opts\);\s*\r?\n\s*return withAuditWarning\(r, auditHealth\(\)\);/.test(toolsSrc));
 const auditRoute = read("src/app/api/v2/browser/audit/route.ts");
 check("K8 the audit route reports health alongside rows", /audit: auditHealth\(\)/.test(auditRoute));
 audit.__resetAuditHealthForTests();

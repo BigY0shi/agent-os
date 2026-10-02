@@ -1,5 +1,21 @@
 # Agent OS — Dev Journal
 
+## 2026-10-01 - Browser tools: the audit-degraded notice actually reaches the caller (v2.60.1)
+
+Copilot's review of PR #18 (2026-10-01) flagged `withAuditWarning` in src/lib/v2/browser/tools.ts:
+it returned early for failed calls and spread array results into numeric keys. Reading the code
+found worse, matching Copilot's 2026-09-01 comment on the same PR: the helper was defined inside
+executeBrowserTool and never called, so a broken audit trail was never surfaced at all.
+smoke-browser-ownership K7 had passed anyway because it only grepped for the word
+`auditDegraded`. Fix: withAuditWarning is a module-level pure function taking the health
+snapshot; executeBrowserTool is now a thin wrapper over executeBrowserToolInner that applies it to
+every return path (health read after the call). Success: plain objects keep their fields plus
+auditDegraded, arrays/primitives become { value }; failure: the notice is appended to the error
+message; both carry a top-level auditDegraded (optional on the type). K7 replaced by K7a-K7e,
+which call the function and inspect the output. ./test.sh 120/120. PR #18 description rewritten to
+cover the whole branch (it still described only the first four commits).
+Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
 Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,

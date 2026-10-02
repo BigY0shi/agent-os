@@ -48,8 +48,29 @@ export type BrowserToolErrorCode =
   | "PROFILE_ACCESS_DENIED";
 
 export type BrowserToolResult =
-  | { ok: true; result: unknown }
-  | { ok: false; error: { code: BrowserToolErrorCode; message: string } };
+  | { ok: true; result: unknown; auditDegraded?: string }
+  | { ok: false; error: { code: BrowserToolErrorCode; message: string }; auditDegraded?: string };
+
+/**
+ * A tool call that ran but was not recorded must SAY so, on success AND failure; without this
+ * the caller cannot tell a complete audit history from a silently broken one. Success: plain
+ * object results keep their fields plus `auditDegraded`; arrays and primitives are wrapped as
+ * { value } so they are never spread into numeric keys. Failure: the notice is appended to the
+ * error message (what callers already show). Both carry a top-level `auditDegraded`.
+ * (Copilot review on PR #18, 2026-10-01: the old inline helper skipped failures, mangled
+ * arrays, and was never applied at all.)
+ */
+export function withAuditWarning(
+  r: BrowserToolResult,
+  health: { ok: boolean; failures: number; lastError?: string },
+): BrowserToolResult {
+  if (health.ok) return r;
+  const note = `This call ran but the audit trail is not recording (${health.failures} failed write(s); last: ${health.lastError ?? "unknown"}).`;
+  if (!r.ok) return { ...r, error: { ...r.error, message: `${r.error.message} [${note}]` }, auditDegraded: note };
+  const v = r.result;
+  const plain = typeof v === "object" && v !== null && !Array.isArray(v) && Object.getPrototypeOf(v) === Object.prototype;
+  return { ok: true, result: plain ? { ...(v as Record<string, unknown>), auditDegraded: note } : { value: v, auditDegraded: note }, auditDegraded: note };
+}
 
 export interface BrowserToolCallOptions extends LaunchCallerInfo {
   /** In-process trusted callers (e.g. the capability slot after its own gate
@@ -445,27 +466,22 @@ export async function executeBrowserTool(
   params: Record<string, unknown>,
   opts: BrowserToolCallOptions = {},
 ): Promise<BrowserToolResult> {
+  // Every return path of the body goes through the audit-health check (read AFTER the call,
+  // so a write that failed during this very call is reported on it).
+  const r = await executeBrowserToolInner(toolName, params, opts);
+  return withAuditWarning(r, auditHealth());
+}
+
+async function executeBrowserToolInner(
+  toolName: string,
+  params: Record<string, unknown>,
+  opts: BrowserToolCallOptions,
+): Promise<BrowserToolResult> {
   const caller = opts.caller ?? "user";
   const sessionForAudit = typeof params?.session === "string" ? (params.session as string) : "*";
 
   const audit = (ok: boolean, error?: string) =>
     recordToolCall({ sessionName: sessionForAudit, tool: toolName, caller, args: params, ok, error });
-
-  /**
-   * A tool call that ran but was not recorded must SAY so. Without this the
-   * caller cannot tell a complete audit history from a silently broken one.
-   */
-  const withAuditWarning = (r: BrowserToolResult): BrowserToolResult => {
-    const health = auditHealth();
-    if (health.ok || !r.ok) return r;
-    return {
-      ...r,
-      result: {
-        ...(typeof r.result === "object" && r.result !== null ? r.result : { value: r.result }),
-        auditDegraded: `This call ran but the audit trail is not recording (${health.failures} failed write(s); last: ${health.lastError}).`,
-      },
-    };
-  };
 
   if (!isBrowserTool(toolName)) {
     // Unknown tool: audited too (E1.4 "every tool call recorded").
