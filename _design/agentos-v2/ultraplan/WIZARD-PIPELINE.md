@@ -146,8 +146,6 @@ the cheapest one, and it is the single highest-leverage step in the whole pipeli
 
 ---
 
----
-
 ## 3. Scope boundaries — one server per audience
 
 **Partition tool packages by who uses them, not by which program they talk to.** This is
@@ -427,9 +425,10 @@ read-only, what asks for confirmation and why, what is outside the package entir
 Naming the confirmation step as a *safety feature* converts the most common complaint
 ("why does it keep asking me") into a reassurance.
 
-**4. The error table.** Every `ToolError` message the package can produce, what it means
-in plain language, and what to do. The messages were written to be read by a model; this
-table makes them readable by a person.
+**4. The error table.** Every error message the package can produce — the strings that come
+back as `ExecuteResult.error` — what each one means in plain language, and what to do.
+Those messages were written to be read by a model; this table makes them readable by a
+person.
 
 **Training format that works:** thirty minutes, live, on their real data with a
 non-destructive verb. Have each person complete one real task themselves. Watching
