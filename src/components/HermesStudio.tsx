@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Image as ImageIcon, Film, Mic, Sparkles, Loader2, AlertTriangle } from "lucide-react";
+import { MOD } from "@/lib/modKey";
 
 type Kind = "image" | "video" | "voice";
 interface Item { name: string; url: string; mtime?: number; prompt?: string; }
@@ -167,7 +168,7 @@ export default function HermesStudio() {
             value={prompt} onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); generate(); } }}
             rows={2}
-            placeholder={kind === "voice" ? "Text to speak…  (⌘+Enter)" : "Describe what to generate…  (⌘+Enter)"}
+            placeholder={kind === "voice" ? `Text to speak…  (${MOD}+Enter)` : `Describe what to generate…  (${MOD}+Enter)`}
             className="flex-1 bg-[rgba(0,0,0,0.25)] border rounded-xl px-3 py-2.5 text-[13.5px] outline-none resize-none focus:border-[var(--panel-border-hot)]"
             style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }}
           />

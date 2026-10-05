@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { run } from "@/lib/runner";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { writeFile, mkdir } from "node:fs/promises";
-import os from "node:os";
+import { FCC_SCRATCH_ROOT } from "@/lib/freeClaudeWorkspace";
 import path from "node:path";
 
 export const runtime = "nodejs";
@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const BOARD = "game-studio";
-const GAMES_DIR = path.join(os.homedir(), "freeclaude-scratch", "games");
+// Same root the shelf reads (FreeClaude workspace, which honours AGENTIC_OS_FCC_SCRATCH);
+// a fixed ~/freeclaude-scratch here meant games vanished from the shelf when it was set.
+const GAMES_DIR = path.join(FCC_SCRATCH_ROOT, "games");
 
 // Pull a complete HTML doc out of an agent's reply (strip ```html fences if present).
 function extractGameHtml(text: string): string {
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
   const cliId = typeof body.agent === "string" ? body.agent.replace(/^cli:/, "") : "";
   if (cliId && cliId !== "game-dev" && (LOOP_CLI_AGENTS as readonly string[]).includes(cliId)) {
     try {
-      const out = await cliComplete(cliId, `${prompt}\n\n${buildSpec}\n\nOutput ONLY the complete HTML file — no preamble, no markdown fences.`, { timeoutMs: 280_000 });
+      const out = await cliComplete(cliId, `${prompt}\n\n${buildSpec}\n\nOutput ONLY the complete HTML file — no preamble, no markdown fences.`, { timeoutMs: 280_000, module: "games" });
       const html = extractGameHtml(out);
       if (!/<(html|canvas|body|svg|script)/i.test(html) || html.length < 120) {
         return NextResponse.json({ ok: false, error: `${cliId} didn't return a playable HTML game.` }, { status: 502 });

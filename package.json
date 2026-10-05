@@ -1,6 +1,6 @@
 {
   "name": "agentic-os",
-  "version": "2.4.1",
+  "version": "2.60.1",
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
@@ -30,6 +30,7 @@
     "google-auth-library": "^10.5.0",
     "googleapis": "^176.0.0",
     "gpt-tokenizer": "^4.0.0",
+    "gsap": "^3.15.0",
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.1",
     "linkedom": "^0.18.13",
@@ -37,6 +38,7 @@
     "next": "16.2.6",
     "node-pty": "^1.1.0",
     "playwright": "^1.62.1",
+    "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-force-graph-3d": "^1.29.1",
@@ -57,6 +59,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.184.1",

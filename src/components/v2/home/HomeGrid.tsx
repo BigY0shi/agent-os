@@ -19,8 +19,10 @@ import { Check, Plus, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { useSettings } from "@/components/ConfigMenu";
 import { getWidget } from "@/lib/v2/widgets/registry";
 import {
+  DEFAULT_HOME_CELLS,
   resolveHomeCells,
   type HomeCell,
+  type HomeCellsKey,
   type WidgetDef,
   type WidgetSize,
 } from "@/lib/v2/widgets/types";
@@ -81,11 +83,24 @@ function HeaderButton({
   );
 }
 
-export default function HomeGrid() {
+/**
+ * S32: the same grid hosts the Today page's widgets. `cellsKey` picks the
+ * list under settings.home ("cells" = Mission Control, "todayCells" = Today);
+ * Today starts EMPTY (no legacy wrappers) and shows `emptyHint` until a widget
+ * is added, persisted the same way (useSettings().save, debounced).
+ */
+export default function HomeGrid({
+  cellsKey = "cells",
+  emptyHint,
+}: {
+  cellsKey?: HomeCellsKey;
+  emptyHint?: string;
+} = {}) {
   const { settings, save } = useSettings();
+  const fallback = cellsKey === "cells" ? DEFAULT_HOME_CELLS : [];
   // While settings load (null) the defaults render — same layout in the
   // common unset case, so there is no flash for a stock install.
-  const persisted = resolveHomeCells((settings?.home as { cells?: unknown } | undefined)?.cells);
+  const persisted = resolveHomeCells((settings?.home as Record<string, unknown> | undefined)?.[cellsKey], fallback);
 
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<HomeCell[] | null>(null); // edit-mode working copy
@@ -109,10 +124,10 @@ export default function HomeGrid() {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         saveTimer.current = null;
-        void save({ home: { cells: next } });
+        void save({ home: { [cellsKey]: next } });
       }, SAVE_DEBOUNCE_MS);
     },
-    [save],
+    [save, cellsKey],
   );
 
   /** Every edit-mode mutation goes through here: working copy + debounced save. */
@@ -148,7 +163,7 @@ export default function HomeGrid() {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
-    if (draft) void save({ home: { cells: draft } });
+    if (draft) void save({ home: { [cellsKey]: draft } });
     exitEdit();
   };
 
@@ -158,7 +173,7 @@ export default function HomeGrid() {
       saveTimer.current = null;
     }
     // Debounced saves may already have landed mid-edit — restore the snapshot.
-    void save({ home: { cells: snapshotRef.current } });
+    void save({ home: { [cellsKey]: snapshotRef.current } });
     exitEdit();
   };
 
@@ -213,6 +228,15 @@ export default function HomeGrid() {
           </HeaderButton>
         )}
       </div>
+
+      {cells.length === 0 && !edit ? (
+        <div
+          className="rounded-xl px-4 py-6 text-center text-[12.5px]"
+          style={{ border: "1px dashed var(--panel-border, #2a2436)", color: "var(--fg-dimmer, #6b6478)" }}
+        >
+          {emptyHint ?? "No widgets here yet. Customize, then Add widget."}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {cells.map((cell) => {

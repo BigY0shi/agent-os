@@ -1,5 +1,6 @@
-import GroupChatView from "@/components/GroupChatView";
+import MastermindView from "@/components/MastermindView";
 
 export default function RoomRoute() {
-  return <GroupChatView />;
+  // S25: the specialist rail + one-on-one threads around the unchanged group chat.
+  return <MastermindView />;
 }

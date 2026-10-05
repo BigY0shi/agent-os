@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Square, Trash2, Loader2, Cloud, ChevronDown, Check, Sparkles } from "lucide-react";
+import { MOD } from "@/lib/modKey";
+import OllamaSettings from "./OllamaSettings";
 
 const ACCENT = "#6CA8FF"; // cloud blue
 const HISTORY_KEY = "agentic-os/ollama-cloud/history/v1";
@@ -103,8 +105,11 @@ export default function OllamaView() {
           <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">Hosted open models · {models.length || "—"} available · streaming</div>
         </div>
 
+        {/* gear: key, host, default model, local URL (settings.ollama, shared by every Ollama caller) */}
+        <div className="ml-auto"><OllamaSettings /></div>
+
         {/* model dropdown */}
-        <div className="ml-auto relative">
+        <div className="relative">
           <button
             onClick={() => setModelOpen((o) => !o)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition mono"
@@ -181,7 +186,7 @@ export default function OllamaView() {
         <div className="border-t border-[var(--line-soft)] p-3 flex items-end gap-2 shrink-0">
           <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2}
             onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); }}
-            placeholder={`Ask ${shortModel} to build, fix, or explain…  (⌘/Ctrl+Enter to send)`}
+            placeholder={`Ask ${shortModel} to build, fix, or explain…  (${MOD}+Enter to send)`}
             className="flex-1 resize-none bg-[var(--bg-mid)] border border-[var(--line-soft)] rounded-xl px-3 py-2 text-[13.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] focus:outline-none focus:border-[var(--line)] transition" />
           {streaming
             ? <motion.button whileTap={{ scale: 0.94 }} onClick={stop} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-300"><Square size={14} /> Stop</motion.button>

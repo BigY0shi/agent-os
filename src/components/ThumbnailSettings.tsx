@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ConfigMenu, { useSettings, Field, SaveBar } from "./ConfigMenu";
+import ConfigMenu, { useSettings, Field, SaveBar, TextInput } from "./ConfigMenu";
 import AgentPicker from "./AgentPicker";
 
 const ACCENT = "#fb7185";
@@ -12,17 +12,19 @@ export default function ThumbnailSettings() {
   const { settings, saving, save } = useSettings();
   const [backend, setBackend] = useState<"cli" | "gpt-image">("cli");
   const [agent, setAgent] = useState("claude");
+  const [promptModel, setPromptModel] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
-    const t = settings.thumbnails || {};
+    const t = (settings.thumbnails || {}) as { backend?: string; agent?: string; promptModel?: string };
     setBackend(t.backend === "gpt-image" ? "gpt-image" : "cli");
     setAgent(t.agent || "claude");
+    setPromptModel(t.promptModel || "");
   }, [settings]);
 
   async function onSave() {
-    await save({ thumbnails: { backend, agent } });
+    await save({ thumbnails: { backend, agent, promptModel: promptModel.trim() } });
     setSaved(true); setTimeout(() => setSaved(false), 1800);
   }
 
@@ -53,6 +55,9 @@ export default function ThumbnailSettings() {
           Uses OpenAI gpt-image-2 — needs <span className="mono">OPENAI_API_KEY</span> in <span className="mono">~/.claude/skills/youtube-thumbnails/.env</span>. (The one API-key path; CLI is the no-key default.)
         </p>
       )}
+      <Field label="Prompt model (OpenAI)" hint="The chat model that reads the reference image and writes the image prompt (lib/thumbnailPrompt.ts). Blank = gpt-4o-mini. Needs the same OPENAI_API_KEY.">
+        <TextInput value={promptModel} placeholder="gpt-4o-mini" onChange={(e) => setPromptModel(e.target.value)} />
+      </Field>
       <SaveBar saving={saving} saved={saved} onSave={onSave} accent={ACCENT} />
     </ConfigMenu>
   );

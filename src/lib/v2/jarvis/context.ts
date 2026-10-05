@@ -2,6 +2,7 @@ import { readSettings } from "../../settings";
 import { personaPrompt } from "../../jarvisPersona";
 import { getPersonaDocument } from "../memory/persona";
 import { renderSkillPolicyBlock } from "../skills/store";
+import { moduleSkillBlock } from "../../platformSkills";
 import {
   IDENTITY_BLOCK,
   TOOL_GUIDANCE_BLOCK,
@@ -110,7 +111,9 @@ function skillsSlot(input: BuildContextInput): string {
     input.skillPolicies !== undefined
       ? (input.skillPolicies ?? "")
       : renderSkillPolicyBlock();
-  return [policies, skillsNoteBlock(skillNamesOrSettings(input))]
+  // S14: skills switched on for Jarvis itself in the Skills & Workflows pop-up.
+  const own = input.skillPolicies !== undefined ? "" : moduleSkillBlock("jarvis", 12_000);
+  return [policies, own, skillsNoteBlock(skillNamesOrSettings(input))]
     .filter(Boolean)
     .join("\n\n");
 }

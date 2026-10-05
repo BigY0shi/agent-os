@@ -1,7 +1,7 @@
 import { query, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import os from "node:os";
 import { createHash } from "node:crypto";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { sanitizeSpawnEnv } from "@/lib/spawnEnv";
 import { cliComplete } from "@/lib/loopEngine";
 import { readSettings } from "@/lib/settings";
@@ -9,8 +9,10 @@ import { searchV2 } from "../memory/search";
 import { formatRecallAsMarkdown } from "../memory/search/formatter";
 import type { RecallResult } from "../memory/types";
 import { ingestFromModule } from "../memory/queue";
+import { getPersonaDocument } from "../memory/persona";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
+import { sdkServers, isExternalMcpTool } from "./mcpServers";
 import {
   buildStableSystemPrompt,
   buildSystemPrompt,
@@ -60,10 +62,11 @@ export type JarvisAskEvent =
   | { type: "meta"; conversationId: string; engine: "sdk" | "cli"; note?: string }
   | { type: "sentence"; text: string }
   | JarvisToolEvent
-  | { type: "done"; costUsd?: number | null; turns?: number; durationMs: number }
+  | { type: "done"; costUsd?: number | null; turns?: number; sessionRebuilt?: string | null; durationMs: number }
   | { type: "error"; message: string };
 
 export interface JarvisAskInput {
+  uiRequest?: import("./tools").JarvisTurnState["uiRequest"];
   text: string;
   conversationId?: string;
   pageContext?: PageContextPayload | null;
@@ -83,6 +86,8 @@ type SessionState = {
   stableHash: string;
   toolsSig: string;
   conversationId: string;
+  /** The persona document this session was booted with, pinned for its lifetime. */
+  personaDoc: string | null;
   /** Session-sticky tool state (integration taint survives across turns). */
   toolState: JarvisTurnState;
   /** Per-turn emitter indirection — tools close over this ref, each ask swaps it. */
@@ -197,6 +202,15 @@ function* splitSentences(buf: { text: string }): Generator<string> {
   }
 }
 
+function currentPersonaDoc(): string | null {
+  try {
+    return getPersonaDocument()?.content ?? null;
+  } catch (err) {
+    console.warn("[v2/jarvis] persona document unavailable (continuing without):", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 function ingestExchange(
   conversationId: string,
   userText: string,
@@ -227,7 +241,7 @@ function ingestExchange(
 // SDK warm session
 // ---------------------------------------------------------------------------
 
-function bootSession(conversationId: string, stable: string, sig: string): SessionState {
+function bootSession(conversationId: string, stable: string, sig: string, personaDoc: string | null): SessionState {
   ensureCoreActions();
   ensureTaskActions();
 
@@ -246,7 +260,10 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
   const toolState = newTurnState();
   const server = buildJarvisSdkServer({ emit: (ev) => emitRef.current(ev), state: toolState });
 
-  const model = CLAUDE_MODEL || "claude-sonnet-5";
+  const model = claudeModel();
+  // S16: the owner's own external MCP servers, enabled in the Jarvis MCP tab. An
+  // unreadable config throws here (named file), rather than silently dropping them.
+  const external = sdkServers();
   const q = query({
     prompt: input,
     options: {
@@ -259,13 +276,35 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
       // preset's native Bash/Write/Edit would bypass every capability gate,
       // the Human-Gate, and the §9.4 taint rule (review finding 2026-08-27).
       // Belt and braces: allowlist the MCP server AND deny the native suite.
-      allowedTools: ["mcp__agentos"],
+      allowedTools: ["mcp__agentos", ...Object.keys(external).map((n) => `mcp__${n}`)],
       disallowedTools: [
         "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "Task",
         "WebFetch", "WebSearch", "Read", "Glob", "Grep", "TodoWrite",
         "KillShell", "BashOutput",
       ],
-      mcpServers: { agentos: server },
+      mcpServers: { agentos: server, ...external },
+      // S16 taint rule for external MCP tools (they bypass Jarvis's own gates):
+      // on a turn tainted by integration content they are denied, and anything an
+      // external tool returns is itself outside content, so it taints the turn and
+      // Jarvis's own writes are gated after it (the §9.4 rule, extended).
+      hooks: {
+        PreToolUse: [{
+          hooks: [async (hookInput) => {
+            const name = (hookInput as { tool_name?: string }).tool_name ?? "";
+            if (isExternalMcpTool(name) && toolState.integrationTainted) {
+              return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `${name} refused: this turn carries integration content, and external MCP tools are not allowed to act on it` } };
+            }
+            return {};
+          }],
+        }],
+        PostToolUse: [{
+          hooks: [async (hookInput) => {
+            const name = (hookInput as { tool_name?: string }).tool_name ?? "";
+            if (isExternalMcpTool(name)) toolState.integrationTainted = true;
+            return {};
+          }],
+        }],
+      },
       env: Object.fromEntries(
         Object.entries(sanitizeSpawnEnv({ ...process.env, NO_COLOR: "1" })).filter(
           ([k, v]) =>
@@ -287,6 +326,7 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
     model,
     stableHash: stable,
     toolsSig: sig,
+    personaDoc,
     conversationId,
     toolState,
     emitRef,
@@ -300,29 +340,47 @@ async function askSdk(
   input: JarvisAskInput,
   onEvent: (ev: JarvisAskEvent) => void,
   signal?: AbortSignal,
-): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number }> {
-  const stable = buildStableSystemPrompt();
+): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number; sessionRebuilt: string | null }> {
+  // The persona document is PINNED for the life of a warm session. Every turn is
+  // ingested into memory fire-and-forget, and a finished ingest can rewrite the
+  // persona (queue.ts post-COMPLETED personaTrigger: a full generation when none
+  // exists yet, incremental after). Read fresh each turn, that rewrite changed the
+  // stable prompt and threw the warm session away mid-conversation whenever the
+  // ingest happened to finish before the next message (smoke-jarvis-brain "turn 2
+  // reused the warm session", intermittent, 2026-09-28). A new conversation or any
+  // other rebuild picks up the current persona.
+  const prior = g.__jarvisBrainV2 ?? null;
+  const personaDoc = prior && prior.conversationId === conv.id ? prior.personaDoc : currentPersonaDoc();
+  const stable = buildStableSystemPrompt({ personaDocContent: personaDoc });
   const sig = toolsSignature();
 
-  let session = g.__jarvisBrainV2 ?? null;
-  const stale =
-    !session ||
-    session.stableHash !== stable ||
-    session.toolsSig !== sig ||
-    session.conversationId !== conv.id;
+  let session = prior;
+  // Why a warm session is rebuilt, reported on the done event (sessionRebuilt) so a
+  // turn that loses its warm session says which key moved instead of guessing.
+  const rebuildReason: string | null =
+    !session ? "no-session"
+    : session.conversationId !== conv.id ? "conversation"
+    : session.stableHash !== stable ? "system-prompt"
+    : session.toolsSig !== sig ? "tools"
+    : null;
+  const stale = rebuildReason !== null;
   let resumed = false;
   if (stale) {
     if (session) {
       resumed = session.conversationId !== conv.id; // conversation switch/resume
       await resetJarvisBrain();
     }
-    session = bootSession(conv.id, stable, sig);
+    // A rebuild for another reason re-reads the persona so the new session starts current.
+    const freshPersona = rebuildReason === "conversation" || rebuildReason === "no-session" ? personaDoc : currentPersonaDoc();
+    const freshStable = freshPersona === personaDoc ? stable : buildStableSystemPrompt({ personaDocContent: freshPersona });
+    session = bootSession(conv.id, freshStable, sig, freshPersona);
     resumed = true; // fresh session — replay any prior history for this conversation
   }
   const b = session!;
 
   // Per-turn wiring: tool events flow straight into this turn's stream.
   b.toolState.toolCalls = [];
+  b.toolState.uiRequest = input.uiRequest;
   b.toolState.conversationId = conv.id; // Human-Gate approvals thread back to this conversation
   b.emitRef.current = (ev) => onEvent(ev);
 
@@ -355,7 +413,21 @@ async function askSdk(
   };
 
   try {
-    for await (const msg of b.q) {
+    // Explicit next(): a `break` out of `for await` calls the query's return(),
+    // which the SDK implements as cleanup() — it killed the warm session at the
+    // end of EVERY first turn, so turn two iterated a closed stream and came back
+    // "(no reply)" in 1 ms (11 such rows in jarvis_messages, 2026-09-08).
+    let sawMessage = false;
+    while (true) {
+      const step = await b.q.next();
+      if (step.done) {
+        g.__jarvisBrainV2 = null;
+        throw new Error(sawMessage
+          ? "Jarvis session ended before a result; ask again (session rebuilt)"
+          : "Jarvis session was already closed; ask again (session rebuilt)");
+      }
+      const msg = step.value;
+      sawMessage = true;
       if (msg.type === "stream_event") {
         const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };
         if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") {
@@ -369,7 +441,12 @@ async function askSdk(
         }
       } else if (msg.type === "result") {
         cost = "total_cost_usd" in msg ? ((msg as { total_cost_usd?: number }).total_cost_usd ?? null) : null;
-        break;
+        const r = msg as { is_error?: boolean; subtype?: string; errors?: string[] };
+        if (r.is_error && sentences.length === 0 && !buf.text.trim()) {
+          // An error result with no text is a failure, not an empty answer.
+          throw new Error(`SDK ${r.subtype ?? "error"}${r.errors?.length ? `: ${r.errors.join("; ").slice(0, 200)}` : ""}`);
+        }
+        break; // out of the while — does NOT call q.return()
       }
     }
   } catch (err) {
@@ -390,6 +467,7 @@ async function askSdk(
     tainted: b.toolState.integrationTainted,
     costUsd: cost,
     turns: b.turns,
+    sessionRebuilt: rebuildReason,
   };
 }
 
@@ -517,14 +595,15 @@ export async function askJarvisV2(
     });
     ingestExchange(conv.id, text, answer, run.tainted);
 
-    const done: { type: "done"; costUsd?: number | null; turns?: number; durationMs: number } = {
+    const done: { type: "done"; costUsd?: number | null; turns?: number; sessionRebuilt?: string | null; durationMs: number } = {
       type: "done",
       durationMs: Date.now() - started,
     };
     if (engine === "sdk") {
-      const sdkRun = run as { costUsd?: number | null; turns?: number };
+      const sdkRun = run as { costUsd?: number | null; turns?: number; sessionRebuilt?: string | null };
       if (typeof sdkRun.costUsd === "number") done.costUsd = sdkRun.costUsd;
       if (typeof sdkRun.turns === "number") done.turns = sdkRun.turns;
+      done.sessionRebuilt = sdkRun.sessionRebuilt ?? null;
     }
     onEvent(done);
     return { conversationId: conv.id };

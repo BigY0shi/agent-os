@@ -6,7 +6,7 @@
 // fetch-on-mount + usePollWhileVisible, dark palette, no new deps.
 
 import { useCallback, useState } from "react";
-import { Hammer, Plus, X } from "lucide-react";
+import { Hammer, Plus, Wand2, X } from "lucide-react";
 import ConfigMenu, { useSettings } from "@/components/ConfigMenu";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import { useJarvisPageContext } from "@/lib/v2/jarvis/pageContext";
@@ -14,12 +14,15 @@ import { WEBMCP_ACCENT, EmptyState, inputStyle, monoStyle, type PkgSummary } fro
 import PackageList from "./PackageList";
 import PackageEditor from "./PackageEditor";
 import WebmcpSettings from "./WebmcpSettings";
+import WizardPanel from "./WizardPanel";
 
 export default function WebmcpView() {
   const [packages, setPackages] = useState<PkgSummary[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  // S7: the wizard replaces the builder body (describe -> clarify -> approve -> emit).
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [newSlug, setNewSlug] = useState("");
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -32,7 +35,7 @@ export default function WebmcpView() {
   useJarvisPageContext({
     route: "/webmcp",
     title: "WebMCP",
-    summary: `WebMCP builder — ${packages?.length ?? 0} package(s), ${published} published${selected ? `, editing '${selected}'` : ""}.`,
+    summary: `WebMCP builder — ${packages?.length ?? 0} package(s), ${published} published${selected ? `, editing '${selected}'` : ""}${wizardOpen ? ", wizard open" : ""}.`,
   });
 
   const refresh = useCallback(async () => {
@@ -103,6 +106,18 @@ export default function WebmcpView() {
 
         <div className="ml-auto flex items-center gap-2">
           <button
+            onClick={() => setWizardOpen((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[12px] font-medium transition"
+            style={{
+              border: `1px solid ${wizardOpen ? WEBMCP_ACCENT : `${WEBMCP_ACCENT}55`}`,
+              color: WEBMCP_ACCENT,
+              background: wizardOpen ? `${WEBMCP_ACCENT}14` : "var(--panel, rgba(255,255,255,0.02))",
+            }}
+            title="Describe the server, approve the proposed tools, then emit the JSON"
+          >
+            <Wand2 size={13} /> {wizardOpen ? "Builder" : "Wizard"}
+          </button>
+          <button
             onClick={() => setCreateOpen((v) => !v)}
             className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[12px] font-medium transition"
             style={{
@@ -155,6 +170,15 @@ export default function WebmcpView() {
       )}
 
       {/* body */}
+      {wizardOpen ? (
+        <WizardPanel
+          onOpenPackage={(slug) => {
+            setWizardOpen(false);
+            setSelected(slug);
+            refresh();
+          }}
+        />
+      ) : (
       <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "280px 1fr" }}>
         <div className="min-w-0">
           <PackageList packages={packages ?? []} selected={selected} onSelect={setSelected} />
@@ -174,6 +198,7 @@ export default function WebmcpView() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

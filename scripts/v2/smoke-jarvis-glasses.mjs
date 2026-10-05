@@ -27,6 +27,7 @@ process.env.AGENTIC_OS_DB = path.join(tmp, "agentos.db");
 process.env.AGENTIC_OS_SETTINGS = path.join(tmp, "settings.json");
 process.env.AGENTIC_OS_GLASSES_TOKEN = path.join(tmp, "jarvis-glasses.token");
 process.env.AGENTIC_OS_WEBMCP_DIR = path.join(tmp, "webmcp");
+process.env.AGENTIC_OS_JARVIS_DIR = path.join(tmp, "jarvis"); // S16: brain reads Jarvis's MCP servers
 process.env.AGENTIC_OS_NEWSLETTER_DIR = path.join(tmp, "newsletter");
 process.env.AGENTIC_OS_AGENTMAIL_DIR = path.join(tmp, "agentmail");
 process.env.AGENTOS_MOCK_LLM = "1";

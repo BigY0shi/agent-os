@@ -5,6 +5,7 @@ import {
   listMessages,
   renameConversation,
   archiveConversation,
+  restoreConversation,
 } from "@/lib/v2/jarvis/conversations";
 
 export const runtime = "nodejs";
@@ -17,7 +18,8 @@ type Ctx = { params: Promise<{ id: string }> };
 /**
  * SPEC-C C3.6 — one conversation.
  *  GET    → { conversation, messages } (messages incl. toolCalls from tool_calls_json)
- *  PATCH  { title } → { conversation }
+ *  PATCH  { title } → { conversation }   rename
+ *  PATCH  { archived: false } → { conversation }   restore an archived one (S13)
  *  DELETE → archive semantics, NEVER hard delete (archived_at flag; rows kept)
  */
 export async function GET(_req: NextRequest, ctx: Ctx) {
@@ -33,9 +35,14 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 export async function PATCH(req: NextRequest, ctx: Ctx) {
   ensureV2();
   const { id } = await ctx.params;
-  const body = (await req.json().catch(() => null)) as { title?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { title?: unknown; archived?: unknown } | null;
+  if (body && body.archived === false && body.title === undefined) {
+    const restored = restoreConversation(id);
+    if (!restored) return NextResponse.json({ error: "conversation not found" }, { status: 404, ...noStore });
+    return NextResponse.json({ conversation: restored }, noStore);
+  }
   if (!body || typeof body.title !== "string" || !body.title.trim()) {
-    return NextResponse.json({ error: "body needs { title }" }, { status: 400, ...noStore });
+    return NextResponse.json({ error: "body needs { title } or { archived: false }" }, { status: 400, ...noStore });
   }
   const conversation = renameConversation(id, body.title);
   if (!conversation) {

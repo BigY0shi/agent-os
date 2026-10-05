@@ -7,6 +7,7 @@ import {
   RotateCw, Radio, Wand2,
 } from "lucide-react";
 import VoiceButton from "./VoiceButton";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#5eead4"; // local teal/mint
 const HISTORY_KEY = "agentic-os/local/history/v1";
@@ -221,7 +222,7 @@ export default function LocalView() {
         <div className="min-w-0">
           <div className="text-[15px] font-semibold text-[var(--cream)] leading-none flex items-center gap-2">Local <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: `${ACCENT}1e`, color: ACCENT, border: `1px solid ${ACCENT}40` }}><WifiOff size={9} /> offline</span></div>
           <div className="text-[10.5px] text-[var(--cream-mute)] mt-1 flex items-center gap-1.5">
-            {modelName || "local model"} · 100% on your Mac · free
+            {modelName || "local model"} · 100% on your machine · free
             {lastTps != null && <span className="inline-flex items-center gap-0.5" style={{ color: ACCENT }}><Zap size={10} /> {lastTps} tok/s</span>}
           </div>
         </div>
@@ -250,7 +251,7 @@ export default function LocalView() {
                 <div>
                   <Cpu size={24} style={{ color: ACCENT }} className="mx-auto mb-2 opacity-70" />
                   <div className="text-[13.5px] text-[var(--cream)]">Build with your voice — 100% local.</div>
-                  <div className="text-[11.5px] text-[var(--cream-mute)] mt-1 max-w-[360px]">Hit the mic and say &ldquo;build me a neon landing page&rdquo; — it writes a full HTML doc and previews it live. Nothing leaves your Mac.</div>
+                  <div className="text-[11.5px] text-[var(--cream-mute)] mt-1 max-w-[360px]">Hit the mic and say &ldquo;build me a neon landing page&rdquo; — it writes a full HTML doc and previews it live. Nothing leaves your machine.</div>
                 </div>
               </div>
             )}
@@ -303,7 +304,7 @@ export default function LocalView() {
               </button>
               <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={2}
                 onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send(); }}
-                placeholder="Speak or type — &ldquo;build a snake game&rdquo;, &ldquo;make a pricing page&rdquo;…  (⌘+Enter)"
+                placeholder={`Speak or type — &ldquo;build a snake game&rdquo;, &ldquo;make a pricing page&rdquo;…  (${MOD}+Enter)`}
                 className="flex-1 resize-none bg-[var(--bg-mid)] border border-[var(--line-soft)] rounded-xl px-3 py-2 text-[13.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] focus:outline-none" />
               {streaming
                 ? <button onClick={stop} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold bg-rose-500/20 border border-rose-400/40 text-rose-300"><Square size={14} /> Stop</button>
@@ -357,7 +358,7 @@ export default function LocalView() {
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--line-soft)] shrink-0">
             <FolderOpen size={14} style={{ color: ACCENT }} />
             <span className="text-[12.5px] text-[var(--cream)] font-medium">Workspace</span>
-            <span className="text-[10.5px] text-[var(--cream-mute)]">{artifacts.length} build{artifacts.length === 1 ? "" : "s"} · saved on your Mac</span>
+            <span className="text-[10.5px] text-[var(--cream-mute)]">{artifacts.length} build{artifacts.length === 1 ? "" : "s"} · saved on your machine</span>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto scroll p-3 space-y-2">
             {artifacts.length === 0 && (

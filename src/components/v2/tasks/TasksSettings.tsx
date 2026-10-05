@@ -162,6 +162,19 @@ export default function TasksSettings() {
         </select>
       </Field>
 
+      <Field label="Run mode" hint="How an approved plan is carried out. 'steps' walks the drafted steps one by one. 'sdk' hands the whole plan to one Claude Agent SDK session with the same guardrails: plan approval first, max steps as the turn cap, the run timeout, STOP in the runs tray, and only the gated exec / files / coding tools.">
+        <select
+          value={tasks.runMode === "sdk" ? "sdk" : "steps"}
+          onChange={(e) => void save({ tasks: { ...tasks, runMode: e.target.value } })}
+          disabled={saving}
+          className="w-full text-[12.5px] rounded-md px-2.5 py-1.5 outline-none"
+          style={{ background: "var(--panel, rgba(255,255,255,0.02))", border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg, #e8e2f0)" }}
+        >
+          <option value="steps">steps (bounded step walker)</option>
+          <option value="sdk">sdk (one Agent SDK session, same guardrails)</option>
+        </select>
+      </Field>
+
       <Field label="Auto-approve categories" hint="Comma-separated task categories (metadata.category) that skip plan approval — seeds use 'brief' and 'planning'.">
         <TextInput value={draft.autoApproveCategories} onChange={(e) => setDraft({ ...draft, autoApproveCategories: e.target.value })} placeholder="brief, planning" />
       </Field>

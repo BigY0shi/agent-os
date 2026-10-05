@@ -26,6 +26,10 @@ start "Paperclip Server" "%~dp0Start Paperclip Server.bat"
 ::      it isn't installed or is already running.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0kokoro-start.ps1"
 
+:: 2c - Start the local Parakeet speech-to-text server (dictation, free/offline) - no-op if
+::      it isn't installed or is already running.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0parakeet-start.ps1"
+
 :: 3 · Install Dependencies on First Run
 if not exist node_modules (
   echo   📦 First run — installing dependencies...

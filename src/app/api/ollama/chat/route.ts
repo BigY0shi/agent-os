@@ -6,14 +6,11 @@ export const dynamic = "force-dynamic";
 // routes we talk to the HTTP API directly and relay deltas in the envelope the
 // agent views expect:  {"t":"d","c":"chunk"} · {"t":"done"} · {"t":"error","m":"…"}
 //
-// Auth: OLLAMA_API_KEY (set in .env.local). Host override: OLLAMA_CLOUD_HOST.
-const HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
-const DEFAULT_MODEL = process.env.OLLAMA_CLOUD_MODEL || "qwen3-coder:480b";
-
-function ollamaKey(): string | null {
-  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
-  return k ? k.trim() : null;
-}
+// Key, host and the no-model-sent default come from settings.ollama (the page's gear), with
+// OLLAMA_API_KEY / OLLAMA_CLOUD_HOST / OLLAMA_CLOUD_MODEL as the environment fallback
+// (lib/ollamaCloud.ts, read per request). The last-resort model stays qwen3-coder:480b.
+import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
+const LAST_RESORT_MODEL = "qwen3-coder:480b";
 
 interface ChatMsg { role: "user" | "assistant"; text: string; }
 
@@ -21,8 +18,9 @@ export async function POST(req: Request) {
   const { prompt, history = [], model } = (await req.json()) as {
     prompt: string; history?: ChatMsg[]; model?: string;
   };
-  const useModel = (typeof model === "string" && model.trim()) ? model.trim() : DEFAULT_MODEL;
-  const key = ollamaKey();
+  const useModel = (typeof model === "string" && model.trim()) ? model.trim() : ollamaCloudDefaultModel(LAST_RESORT_MODEL);
+  const key = ollamaCloudKey();
+  const host = ollamaCloudHost();
   const enc = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -30,7 +28,7 @@ export async function POST(req: Request) {
       const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
       const finish = () => { send({ t: "done" }); controller.close(); };
       if (!key) {
-        send({ t: "error", m: "No Ollama Cloud key. Set OLLAMA_API_KEY in .env.local, then restart the dashboard." });
+        send({ t: "error", m: "No Ollama Cloud key. Add it in this page's gear (Ollama settings), or set OLLAMA_API_KEY in .env.local and restart." });
         return finish();
       }
       if (typeof prompt !== "string" || !prompt.trim()) {
@@ -43,7 +41,7 @@ export async function POST(req: Request) {
         { role: "user", content: prompt },
       ];
       try {
-        const r = await fetch(`${HOST}/api/chat`, {
+        const r = await fetch(`${host}/api/chat`, {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({ model: useModel, messages, stream: true }),
