@@ -20,7 +20,7 @@
 
 import { query, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import os from "node:os";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { personaPrompt } from "@/lib/jarvisPersona";
 import { sanitizeSpawnEnv } from "@/lib/spawnEnv";
 
@@ -58,7 +58,7 @@ function boot(): BrainState {
     }
   })();
 
-  const model = CLAUDE_MODEL || "claude-sonnet-5";
+  const model = claudeModel();
   const q = query({
     prompt: input,
     options: {

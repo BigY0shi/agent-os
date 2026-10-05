@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
 import { useJarvisPageContext } from "@/lib/v2/jarvis/pageContext";
+import { useSettings } from "@/components/ConfigMenu";
+import HomeGrid from "@/components/v2/home/HomeGrid";
 import Editor, { TaskStatusContext, type SaveOutcome } from "./Editor";
 import PageHeader from "./PageHeader";
 import CommentBubbles from "./CommentBubble";
@@ -17,9 +19,20 @@ import {
 // ── ScratchpadView (SPEC-B B5) — the /today page shell ───────────────────────
 // Daily page per date (find-or-create via GET /api/v2/pages?date=), TipTap
 // editor with rev-CAS autosave, comment bubbles anchored beside their
-// paragraphs, prev/next/today navigation, Widgets placeholder (H phase).
+// paragraphs, prev/next/today navigation, and (S32) the Widgets panel: the
+// Mission Control grid with Today's own cells (settings.home.todayCells), its
+// open state persisted at settings.home.todayShowWidgets.
 
 export default function ScratchpadView() {
+  const { settings, save } = useSettings();
+  const widgetsOpen: boolean | null = settings
+    ? ((settings.home as { todayShowWidgets?: boolean } | undefined)?.todayShowWidgets === true)
+    : null;
+  const toggleWidgets = useCallback(() => {
+    if (widgetsOpen === null) return;
+    void save({ home: { todayShowWidgets: !widgetsOpen } });
+  }, [widgetsOpen, save]);
+
   const [page, setPage] = useState<PageClient | null>(null);
   const [todayDate, setTodayDate] = useState<string | null>(null);
   const [comments, setComments] = useState<PageCommentClient[]>([]);
@@ -122,7 +135,18 @@ export default function ScratchpadView() {
         onPrev={() => page?.date && void loadPage(shiftDate(page.date, -1))}
         onNext={() => page?.date && void loadPage(shiftDate(page.date, 1))}
         onToday={() => void loadPage()}
+        widgetsOpen={widgetsOpen}
+        onToggleWidgets={toggleWidgets}
       />
+
+      {widgetsOpen && (
+        <div className="mb-4" aria-label="Today widgets">
+          <HomeGrid
+            cellsKey="todayCells"
+            emptyHint="No widgets on Today yet. Customize, then Add widget: the same catalog as Mission Control, with its own layout here."
+          />
+        </div>
+      )}
 
       <div className="relative xl:mr-[292px]">
         <div

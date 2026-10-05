@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ensureV2 } from "@/lib/v2/boot";
 import { askJarvisV2, jarvisAskStatus, type JarvisAskEvent } from "@/lib/v2/jarvis/brain";
 import { sanitizePageContext } from "@/lib/v2/jarvis/context";
+import { requestUi } from "@/lib/v2/jarvis/uiRequests";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   ensureV2();
-  let body: { text?: unknown; conversationId?: unknown; pageContext?: unknown };
+  let body: { text?: unknown; conversationId?: unknown; pageContext?: unknown; uiControl?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -44,7 +45,12 @@ export async function POST(req: Request) {
   const pageContext = sanitizePageContext(body.pageContext);
 
   const enc = new TextEncoder();
+  const uiAbort = new AbortController();
+  const onAbort = () => uiAbort.abort();
+  req.signal.addEventListener("abort", onAbort, { once: true });
+  if (req.signal.aborted) uiAbort.abort();
   const stream = new ReadableStream({
+    cancel() { uiAbort.abort(); },
     async start(controller) {
       let closed = false;
       const send = (ev: JarvisAskEvent) => {
@@ -56,11 +62,16 @@ export async function POST(req: Request) {
         }
       };
       try {
-        await askJarvisV2({ text, conversationId, pageContext, channel: "overlay" }, send, {
+        await askJarvisV2({ text, conversationId, pageContext, channel: "overlay",
+          uiRequest: body.uiControl === true ? (command) => requestUi(command, send, uiAbort.signal) : undefined,
+        }, send, {
           signal: req.signal,
         });
       } catch (e) {
         send({ type: "error", message: e instanceof Error ? e.message.slice(0, 300) : "brain failure" });
+      } finally {
+        uiAbort.abort();
+        req.signal.removeEventListener("abort", onAbort);
       }
       try {
         controller.close();

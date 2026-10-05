@@ -896,6 +896,67 @@ ALTER TABLE newsletter_emails ADD COLUMN source TEXT NOT NULL DEFAULT 'gmail';
 CREATE INDEX IF NOT EXISTS idx_nl_emails_source ON newsletter_emails(source, received_at DESC);
 `;
 
+// S5 (2026-09-02) legacy memory backfill: one row per episode per backfill run.
+// An episode with a derived/nothing row is never picked again, which is what
+// makes the run idempotent without touching content_hash dedup. Memory band
+// (1-3 foundations), next free number.
+const M004_MEMORY_BACKFILL_LOG = `
+CREATE TABLE IF NOT EXISTS memory_backfill_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id        TEXT NOT NULL,
+  episode_uuid  TEXT NOT NULL,
+  model         TEXT NOT NULL,
+  outcome       TEXT NOT NULL CHECK (outcome IN ('derived','nothing','failed')),
+  statements    INTEGER NOT NULL DEFAULT 0,
+  voice_aspects INTEGER NOT NULL DEFAULT 0,
+  error         TEXT,
+  ms            INTEGER,
+  at            TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mbl_episode ON memory_backfill_log(episode_uuid, at DESC);
+CREATE INDEX IF NOT EXISTS idx_mbl_run ON memory_backfill_log(run_id, id);
+`;
+
+// 045 — Rabbit R1 bridge (/rabbit): OpenAI-compatible chat sessions served to
+// the R1 through the owner's claude CLI. last_assistant_hash is how a
+// stateless client's next request re-links to its session (store.linkSession).
+// Archive is a soft flag; rows are never destroyed.
+// NOT 044: the owner's live DB already carries a `44 webmcp_wizard_drafts` row
+// (applied 2026-09-03, since removed from this array), and the applied-set
+// runner skips any number it has seen — 044 silently created nothing. Before
+// picking a number, check the live `migrations` table, not just this file.
+const M045_RABBIT_BRIDGE = `
+CREATE TABLE IF NOT EXISTS rabbit_sessions (
+  id                  TEXT PRIMARY KEY,
+  title               TEXT NOT NULL DEFAULT '',
+  model               TEXT NOT NULL DEFAULT '',
+  client              TEXT NOT NULL DEFAULT '',
+  message_count       INTEGER NOT NULL DEFAULT 0,
+  input_tokens        INTEGER NOT NULL DEFAULT 0,
+  output_tokens       INTEGER NOT NULL DEFAULT 0,
+  last_assistant_hash TEXT,
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL,
+  archived_at         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_rabbit_sessions_updated ON rabbit_sessions(archived_at, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rabbit_sessions_hash    ON rabbit_sessions(last_assistant_hash);
+
+CREATE TABLE IF NOT EXISTS rabbit_messages (
+  id            TEXT PRIMARY KEY,
+  session_id    TEXT NOT NULL REFERENCES rabbit_sessions(id),
+  role          TEXT NOT NULL CHECK (role IN ('user','assistant','system')),
+  content       TEXT NOT NULL,
+  model         TEXT,
+  input_tokens  INTEGER,
+  output_tokens INTEGER,
+  duration_ms   INTEGER,
+  error         TEXT,
+  created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rabbit_messages_session ON rabbit_messages(session_id, created_at);
+`;
+
 export const MIGRATIONS: Migration[] = [
   {
     version: 1,
@@ -931,6 +992,13 @@ export const MIGRATIONS: Migration[] = [
       // a crash mid-ingest can be recovered (stale PROCESSING → PENDING) and
       // claims can be made atomically (UPDATE ... WHERE status='PENDING').
       db.exec("ALTER TABLE ingestion_queue ADD COLUMN processing_started_at TEXT");
+    },
+  },
+  {
+    version: 4,
+    name: "memory_backfill_log",
+    up: (db) => {
+      db.exec(M004_MEMORY_BACKFILL_LOG);
     },
   },
   {
@@ -1017,6 +1085,17 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 35,
+    name: "jarvis_conversation_origin",
+    up: (db) => {
+      // Where a conversation was started: NULL = the dashboard, 'glasses' = the
+      // Even Realities G2 custom-agent lane (/api/glasses). A plain column rather
+      // than widening the channel CHECK, which would need a table rebuild under
+      // jarvis_messages' ON DELETE CASCADE.
+      db.exec("ALTER TABLE jarvis_conversations ADD COLUMN origin TEXT");
+    },
+  },
+  {
     version: 40,
     name: "integrations_core",
     up: (db) => {
@@ -1081,6 +1160,53 @@ export const MIGRATIONS: Migration[] = [
         `CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_rule_event
            ON automation_runs(rule_id, event_id) WHERE event_id IS NOT NULL`,
       );
+    },
+  },
+  {
+    version: 44,
+    name: "webmcp_wizard",
+    up: (db) => {
+      // S7 WebMCP wizard drafts: the describe -> clarify -> approve -> emit
+      // conversation survives a refresh. state_json carries description,
+      // questions, proposal, emitted spec, own-mode text + proofread. Discard
+      // sets archived_at (rows are never deleted).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS webmcp_wizard_drafts (
+          id           TEXT PRIMARY KEY,
+          mode         TEXT NOT NULL DEFAULT 'wizard' CHECK (mode IN ('wizard','own')),
+          step         TEXT NOT NULL DEFAULT 'describe' CHECK (step IN ('describe','clarify','approved','emitted')),
+          title        TEXT NOT NULL DEFAULT '',
+          state_json   TEXT NOT NULL DEFAULT '{}',
+          applied_slug TEXT,
+          created_at   TEXT NOT NULL,
+          updated_at   TEXT NOT NULL,
+          archived_at  TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_webmcp_wizard_drafts_updated ON webmcp_wizard_drafts(archived_at, updated_at);
+      `);
+    },
+  },
+  {
+    version: 45,
+    name: "rabbit_bridge",
+    up: (db) => {
+      db.exec(M045_RABBIT_BRIDGE);
+    },
+  },
+  {
+    // 046 — bring webmcp_wizard_drafts to the S7 shape on DBs where 044 already ran. The owner's
+    // live DB recorded `44 webmcp_wizard_drafts` on 2026-09-03 from a killed S7 cycle with an
+    // older table (no applied_slug, no archived_at), so S7's 044 never runs there and its
+    // queries would fail with "no such column". Additive and idempotent: adds only what is
+    // missing; on a fresh DB (044 already created the S7 shape) it changes nothing.
+    version: 46,
+    name: "webmcp_wizard_drafts_columns",
+    up: (db) => {
+      const cols = new Set((db.prepare("PRAGMA table_info(webmcp_wizard_drafts)").all() as { name: string }[]).map((c) => c.name));
+      if (cols.size === 0) return; // no table at all: 044 creates it
+      if (!cols.has("applied_slug")) db.exec("ALTER TABLE webmcp_wizard_drafts ADD COLUMN applied_slug TEXT");
+      if (!cols.has("archived_at")) db.exec("ALTER TABLE webmcp_wizard_drafts ADD COLUMN archived_at TEXT");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_webmcp_wizard_drafts_updated ON webmcp_wizard_drafts(archived_at, updated_at)");
     },
   },
   {

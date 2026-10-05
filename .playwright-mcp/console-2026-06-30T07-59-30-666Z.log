@@ -1,4 +1,0 @@
-[     940ms] [VERBOSE] [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) %o @ http://localhost:3737/login:0
-[    1055ms] [ERROR] Failed to load resource: the server responded with a status of 401 (Unauthorized) @ http://localhost:3737/api/config:0
-[    1410ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3737/_next/static/chunks/143pzfno84m4i.js:0
-[   18308ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3737/_next/static/chunks/143pzfno84m4i.js:0

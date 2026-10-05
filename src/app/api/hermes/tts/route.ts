@@ -4,15 +4,24 @@ import path from "node:path";
 import os from "node:os";
 import { minimaxToken } from "@/lib/hermesStudio";
 import { readHermesEnv } from "@/lib/hermesPhone";
-import { readSettings, JARVIS_TTS_VOICE_ID } from "@/lib/settings";
+import { readSettings, JARVIS_TTS_VOICE_ID, ORACLE_ELEVEN_VOICE_ID } from "@/lib/settings";
+import { voiceboxSynthesize } from "@/lib/voicebox";
+import { openaiTtsModel } from "@/lib/jarvisVoiceModels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// POST /api/hermes/tts  { text, voiceId?, provider? }  → { audio: dataURI } | { error }
-// Speaks arbitrary text. provider:
+// POST /api/hermes/tts  { text, voiceId?, provider?, module? }  → { audio: dataURI } | { error }
+// Speaks arbitrary text. `module` ("oracle"; anything else = Jarvis) picks WHOSE
+// settings govern the Voicebox backup (rule 20: a fallback is that module's own
+// choice, and the reply labels it). provider:
+//   "voicebox"                    — the local Voicebox studio (lib/voicebox.ts), cloned
+//                                   profiles; voiceId is a profile id or name. The voice
+//                                   engine since 2026-09-02. Never falls back.
 //   "local"                       — Kokoro-82M on this machine (~/.agentic-os/kokoro-tts,
 //                                   port 8880, British bm_george). Free, offline, GPU-fast.
+//   "kokoro"                      — the same Kokoro server for the Oracle, with the
+//                                   Oracle's own labelled backup (oracle.voice.fallback).
 //   "auto"                        — local first, then ElevenLabs, then OpenAI — the first
 //                                   backend that actually produces audio wins.
 //   "openai" (default for Jarvis) — gpt-4o-mini-tts, steered to a refined English butler.
@@ -42,7 +51,7 @@ async function openaiTts(text: string, voiceId: string): Promise<NextResponse> {
   const r = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "gpt-4o-mini-tts", voice, input: text.slice(0, 2000), instructions: BUTLER_INSTRUCTIONS, response_format: "mp3" }),
+    body: JSON.stringify({ model: openaiTtsModel(), voice, input: text.slice(0, 2000), instructions: BUTLER_INSTRUCTIONS, response_format: "mp3" }),
   });
   if (!r.ok) {
     const detail = await r.text().catch(() => "");
@@ -133,13 +142,89 @@ async function localTts(text: string, voiceId: string): Promise<NextResponse> {
   return NextResponse.json({ audio: j.audio });
 }
 
+// Who speaks when Voicebox fails, and in which ElevenLabs voice. The Oracle
+// has its own gear (oracle.voice.fallback + elevenVoiceId, so the backup is
+// the Sage, not Alfred); everything else is Jarvis's setting, with a blank
+// voice so elevenTts resolves Jarvis's configured reply voice as before.
+interface FallbackPolicy { fallback: "elevenlabs" | "none"; voiceId: string }
+function fallbackPolicy(module: string): FallbackPolicy {
+  const s = readSettings();
+  if (module === "oracle") {
+    const v = s.oracle?.voice ?? {};
+    return { fallback: v.fallback ?? "elevenlabs", voiceId: v.elevenVoiceId ?? ORACLE_ELEVEN_VOICE_ID };
+  }
+  return { fallback: s.jarvis?.voice?.ttsFallback ?? "elevenlabs", voiceId: "" };
+}
+
+// Voicebox: voiceId is a profile id or name; blank = settings.voicebox.profile,
+// then the studio's first profile. When the studio fails, the owner's chosen
+// backup for THAT module (default ElevenLabs) speaks instead and the response
+// SAYS so: provider is the one that actually produced audio,
+// fellBackFrom/fallbackReason carry what went wrong. Never a quiet substitution.
+async function voiceboxTts(text: string, profileRef: string, module: string): Promise<NextResponse> {
+  let reason: string;
+  try {
+    const out = await voiceboxSynthesize(text, { profile: profileRef || null });
+    return NextResponse.json({ audio: out.audio, provider: "voicebox", generationId: out.generationId, durationSec: out.durationSec });
+  } catch (e) {
+    reason = String((e as Error)?.message ?? e);
+  }
+  const policy = fallbackPolicy(module);
+  if (policy.fallback !== "elevenlabs") {
+    return NextResponse.json({ error: reason, provider: "voicebox" }, { status: 502 });
+  }
+  console.warn(`[tts] Voicebox failed (${reason}); falling back to ElevenLabs as configured for ${module || "jarvis"}`);
+  const r = await elevenTts(text, policy.voiceId);
+  const j = (await r.json().catch(() => ({}))) as { audio?: string; error?: string; detail?: string };
+  if (r.ok && j.audio) {
+    console.warn(`[tts] ElevenLabs backup spoke for ${module || "jarvis"} (${text.length} chars)`);
+    return NextResponse.json({ audio: j.audio, provider: "elevenlabs", fellBackFrom: "voicebox", fallbackReason: reason });
+  }
+  console.warn(`[tts] ElevenLabs backup ALSO failed for ${module || "jarvis"}: ${j.error ?? r.status} ${j.detail ?? ""}`.trim());
+  return NextResponse.json(
+    { error: `Voicebox failed (${reason}); ElevenLabs backup also failed (${j.error ?? r.status})`, provider: "voicebox", fallbackTried: "elevenlabs" },
+    { status: 502 },
+  );
+}
+
+// Kokoro for the Oracle (owner, 2026-09-30: "Add kokoro"). The Oracle's own backup choice
+// (oracle.voice.fallback, rule 20) covers Kokoro the same way it covers Voicebox: when the
+// local server fails, ElevenLabs speaks only if the owner chose it, and the reply says so.
+// Jarvis's "local" path is unchanged (no fallback there).
+async function oracleKokoroTts(text: string, voice: string): Promise<NextResponse> {
+  let reason: string;
+  try {
+    const r = await localTts(text, voice);
+    const j = (await r.clone().json().catch(() => ({}))) as { audio?: string; error?: string; detail?: string };
+    if (r.ok && j.audio) return NextResponse.json({ audio: j.audio, provider: "kokoro" });
+    reason = `${j.error ?? `local TTS ${r.status}`}${j.detail ? ` (${j.detail})` : ""}`;
+  } catch (e) {
+    reason = `Kokoro is not answering (${String((e as Error)?.message ?? e)})`;
+  }
+  const policy = fallbackPolicy("oracle");
+  if (policy.fallback !== "elevenlabs") {
+    return NextResponse.json({ error: reason, provider: "kokoro" }, { status: 502 });
+  }
+  console.warn(`[tts] Kokoro failed (${reason}); falling back to ElevenLabs as configured for oracle`);
+  const r = await elevenTts(text, policy.voiceId);
+  const j = (await r.json().catch(() => ({}))) as { audio?: string; error?: string };
+  if (r.ok && j.audio) return NextResponse.json({ audio: j.audio, provider: "elevenlabs", fellBackFrom: "kokoro", fallbackReason: reason });
+  return NextResponse.json(
+    { error: `Kokoro failed (${reason}); ElevenLabs backup also failed (${j.error ?? r.status})`, provider: "kokoro", fallbackTried: "elevenlabs" },
+    { status: 502 },
+  );
+}
+
 export async function POST(req: Request) {
-  const { text, voiceId, provider } = await req.json();
+  const { text, voiceId, provider, module } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
     return NextResponse.json({ error: "missing text" }, { status: 400 });
   }
   try {
     const v = typeof voiceId === "string" ? voiceId : "";
+    const mod = typeof module === "string" ? module : "";
+    if (provider === "voicebox") return await voiceboxTts(text, v, mod);
+    if (provider === "kokoro" || (provider === "local" && mod === "oracle")) return await oracleKokoroTts(text, v);
     if (provider === "local") return await localTts(text, v);
     if (provider === "auto") {
       // First backend that actually yields audio wins: free local Kokoro, then

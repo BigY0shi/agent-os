@@ -15,8 +15,11 @@ export default function AgentsSettings() {
   const agents = (settings?.agents ?? {}) as {
     requireTestRun?: boolean;
     askUser?: { enabled?: boolean; heuristic?: boolean; timeoutMin?: number };
+    spendCap?: { enabled?: boolean; maxUsd?: number; maxTokens?: number };
   };
   const askUser = agents.askUser ?? {};
+  const spendCap = agents.spendCap ?? {};
+  const capOn = spendCap.enabled !== false;
 
   const [pollDraft, setPollDraft] = useState<string | null>(null);
   const [askDraft, setAskDraft] = useState<string | null>(null);
@@ -76,6 +79,42 @@ export default function AgentsSettings() {
           />
           Hard-block deploys until a test run finishes done
         </label>
+      </Field>
+
+      <Field label="Per-run spend ceiling"
+        hint="Checked at every harness loop boundary, so a run that hits it STOPS holding the work it already produced instead of starting an iteration it cannot pay for. Iteration count was already capped at 50; this caps what those iterations are allowed to cost. Switch it off for a deliberately long-horizon run."
+      >
+        <label className="flex items-center gap-2 text-[12.5px] cursor-pointer" style={{ color: "var(--fg-dim)" }}>
+          <input
+            type="checkbox"
+            checked={capOn}
+            onChange={(e) => void save({ agents: { ...agents, spendCap: { ...spendCap, enabled: e.target.checked } } })}
+          />
+          Stop a run once it reaches the ceiling
+        </label>
+        <div className="mt-2 flex gap-2 items-center pl-5">
+          <span className="text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>Dollars</span>
+          <TextInput
+            value={String(spendCap.maxUsd ?? 5)}
+            disabled={!capOn}
+            onChange={(v) => {
+              const n = Number(v);
+              if (Number.isFinite(n)) void save({ agents: { ...agents, spendCap: { ...spendCap, maxUsd: n } } });
+            }}
+          />
+          <span className="text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>Tokens</span>
+          <TextInput
+            value={String(spendCap.maxTokens ?? 2000000)}
+            disabled={!capOn}
+            onChange={(v) => {
+              const n = Number(v);
+              if (Number.isFinite(n)) void save({ agents: { ...agents, spendCap: { ...spendCap, maxTokens: n } } });
+            }}
+          />
+        </div>
+        <p className="mt-1.5 pl-5 text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>
+          Either at 0 leaves that one unbounded. Tokens count input, output and both cache buckets, because cache reads are billed too.
+        </p>
       </Field>
 
       <Field label="Let a run ask you a question"

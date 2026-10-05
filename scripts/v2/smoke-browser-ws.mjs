@@ -36,6 +36,11 @@ const settingsFile = path.join(settingsDir, "settings.json");
 process.env.AGENTIC_OS_SETTINGS = settingsFile;
 const profilesRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), "agentos-ws-profiles-"));
 process.env.AGENTIC_OS_BROWSER_PROFILES = profilesRootTmp;
+// The browser tool layer resolves a CALLER PRINCIPAL (callerRef -> 
+// ensureAgentPrincipal), which registers an agent on first sight. Without
+// this line a tool-driving smoke mints principals in the owner's real
+// ~/.agentic-os/principals.json.
+process.env.AGENTIC_OS_PRINCIPALS = path.join(profilesRootTmp, "principals.json");
 process.env.AGENTIC_OS_WS_SECRET = path.join(settingsDir, "ws-secret");
 process.env.AGENTOS_PASSWORD = "smoke-ws-password";
 process.env.OLLAMA_URL = "http://127.0.0.1:1"; // dead port — nothing may call out

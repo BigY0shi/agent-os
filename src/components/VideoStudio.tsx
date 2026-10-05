@@ -8,6 +8,7 @@ import {
   Eye, Clapperboard,
 } from "lucide-react";
 import VideoDirector from "./VideoDirector";
+import { MOD } from "@/lib/modKey";
 
 // ─── VideoStudio — three sub-tabs ──────────────────────────────────────────
 //   Create    : HyperFrames CLI render workflow
@@ -212,7 +213,7 @@ function CreateTab() {
           className="w-full p-2.5 rounded-md text-[12.5px] resize-none mt-1"
           style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--panel-border)", color: "var(--cream)" }} />
         <div className="flex items-center justify-between mt-2">
-          <div className="text-[10px] text-[var(--cream-mute)]">⌘+Enter to launch · scaffolds + renders</div>
+          <div className="text-[10px] text-[var(--cream-mute)]">{MOD}+Enter to launch · scaffolds + renders</div>
           <button onClick={createAndRender} disabled={busy || !prompt.trim()}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition"
             style={{
@@ -675,7 +676,9 @@ function WorkspaceTab() {
   useEffect(() => {
     if (!open) { setTextContent(""); return; }
     const k = fileKind(open.name);
-    if (k === "text" || k === "json") {
+    // html too: its Source view reads textContent (it used to be skipped here, so Source
+    // sat on "Loading source…" forever).
+    if (k === "text" || k === "json" || k === "html") {
       fetch(open.url).then((r) => r.text()).then((t) => {
         // Cap at 200KB so a giant package-lock doesn't lock the UI
         setTextContent(t.length > 200_000 ? t.slice(0, 200_000) + "\n\n…(truncated)" : t);

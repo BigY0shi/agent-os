@@ -4,27 +4,26 @@
 // each agent sees what was said before it, so they actually talk to each other.
 
 import { readFileSync, existsSync } from "node:fs";
-import { writeFile, mkdir, readFile, readdir, unlink } from "node:fs/promises";
+import { writeFile, mkdir, readFile, readdir } from "node:fs/promises";
+import { exileFile } from "@/lib/exileFile";
 import path from "node:path";
 import os from "node:os";
 import { searchNotes, recentNotes, searchOmi, readNote, VAULT_AVAILABLE } from "@/lib/vault";
 import { AGENTIC_DIR } from "@/lib/vaultWriter";
 import { uniqueSlug, writeItem, type PipelineItem } from "@/lib/pipeline";
-import { config } from "@/lib/config";
+import { config, isAgentInstalled } from "@/lib/config";
 import { cliComplete, LOOP_CLI_AGENTS } from "@/lib/loopEngine";
 import { personaPrompt, type Persona } from "@/lib/personas";
+import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
+import { readSettings, type RoomAgentOverride } from "@/lib/settings";
 
 const HOME = os.homedir();
 // Ollama Cloud is reached DIRECTLY over the hosted API (same as /api/ollama/chat) —
 // no local daemon required. The room used to post to localhost:11434, so whenever the
 // local daemon wasn't running (the normal case here) every Ollama agent failed.
-// If no cloud key is set we fall back to a local daemon, for a local-only setup.
-const OLLAMA_CLOUD_HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
-const OLLAMA_LOCAL = process.env.OLLAMA_HOST || "http://localhost:11434";
-function ollamaCloudKey(): string | null {
-  const k = process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY;
-  return k ? k.trim() : null;
-}
+// There is no local daemon on this machine (owner, 2026-09-30), so there is no localhost
+// fallback: with no cloud key an Ollama agent fails and says so. Key and host come from
+// settings.ollama (the Ollama page's gear), then the environment (lib/ollamaCloud.ts).
 
 // ── Durable group-chat history — saved to the vault so it survives browser clears
 // and shows on any device (localStorage in the browser is only a fast cache). ──
@@ -59,12 +58,15 @@ export async function listConversations(): Promise<RoomConvo[]> {
 
 export async function deleteConversation(id: string): Promise<boolean> {
   if (!CONVOS_DIR) return false;
-  try { await unlink(path.join(CONVOS_DIR, `${safeConvoId(id)}.json`)); return true; } catch { return false; }
+  // Exiled, never deleted: the thread moves to <convos>/.exile/<stamp>/.
+  try { return !!(await exileFile(path.join(CONVOS_DIR, `${safeConvoId(id)}.json`), CONVOS_DIR)); } catch { return false; }
 }
 
 export interface RoomAgent {
   id: string; name: string; color: string;
-  provider: "openrouter" | "ollama" | "openai" | "cli";
+  // No "openrouter": provider routing is CLI / Ollama Cloud / an explicit OpenAI-compatible
+  // endpoint only (owner, 2026-09-29). A config override naming openrouter is ignored.
+  provider: "ollama" | "openai" | "cli";
   model: string;
   persona: string;
   noReasoning?: boolean;  // snappy chat agents (GLM 5.2) skip chain-of-thought so a short reply is never starved
@@ -72,9 +74,8 @@ export interface RoomAgent {
   apiKeyEnv?: string;     // provider:"openai" → env var (or active Hermes profile .env key) holding the API key
 }
 
-// Each agent is authentically itself. CLI agents (cursor/pi/antigravity) run on the user's
-// real CLI subscription (no API key); claude/codex/hermes/openclaw run via OpenRouter;
-// ollama/fcc run on the local Ollama daemon.
+// Each agent is authentically itself. The CLI agents run on the user's real CLI
+// subscriptions (no API key); openclaw/ollama/fcc run on Ollama Cloud.
 export const ROOM_AGENTS: RoomAgent[] = [
   { id: "claude", name: "Claude", color: "#d97757", provider: "cli", model: "",
     persona: "You are Claude — thoughtful, careful, balanced. You weigh trade-offs, bring nuance, and give a calm, precise take. You gently flag risks others miss." },
@@ -105,27 +106,55 @@ export const ROOM_AGENTS: RoomAgent[] = [
     persona: "You are Free Claude Code — scrappy and resourceful, running locally for free. You love the clever low-cost solution and remind everyone it doesn't have to be expensive." },
 ];
 
-// Power users can repoint any room agent WITHOUT editing source — set "roomAgents"
-// in ~/.agentic-os/config.json, keyed by agent id. e.g. route GLM to your z.ai key:
-//   "roomAgents": { "glm": { "provider": "openai", "baseUrl": "https://api.z.ai/api/paas/v4",
-//                            "apiKeyEnv": "GLM_API_KEY", "model": "glm-4.6" },
-//                   "gemini": { "model": "google/gemini-3-pro-preview" },
-//                   "codex": { "provider": "ollama" } }
-function applyOverride(a: RoomAgent): RoomAgent {
-  const o = (config.roomAgents ?? {})[a.id];
-  const explicitModel = !!(o && typeof o.model === "string" && o.model);
-  const m: RoomAgent = o ? {
+// Any room agent can be repointed WITHOUT editing source. Since S30 (owner 2026-09-30: "every
+// parameter in settings") the overrides live in settings.room.agents, keyed by agent id and
+// edited in the Room gear, read per request. e.g. route an agent to your z.ai key:
+//   room.agents.glm = { provider: "openai", baseUrl: "https://api.z.ai/api/paas/v4",
+//                       apiKeyEnv: "GLM_API_KEY", model: "glm-4.6" }
+// `roomAgents` in ~/.agentic-os/config.json is the OLD home of the same map. It is read ONLY
+// while settings holds no override at all, as a one-time fallback for an install that
+// configured it there; the first override saved in the gear takes over completely (the two
+// are never merged), and roomOverrides().source tells the gear which one is in force.
+const hasFields = (v: unknown): v is RoomAgentOverride => {
+  if (!v || typeof v !== "object") return false;
+  const o = v as Record<string, unknown>;
+  return ["model", "provider", "baseUrl", "apiKeyEnv"].some((k) => typeof o[k] === "string" && (o[k] as string).trim() !== "")
+    || typeof o.noReasoning === "boolean";
+};
+const liveEntries = (map: Record<string, unknown> | undefined): Record<string, RoomAgentOverride> =>
+  Object.fromEntries(Object.entries(map ?? {}).filter(([, v]) => hasFields(v))) as Record<string, RoomAgentOverride>;
+
+export function roomOverrides(): { source: "settings" | "config.json" | "none"; agents: Record<string, RoomAgentOverride> } {
+  const fromSettings = liveEntries((readSettings().room?.agents ?? {}) as Record<string, unknown>);
+  if (Object.keys(fromSettings).length) return { source: "settings", agents: fromSettings };
+  const legacy = liveEntries(config.roomAgents as Record<string, unknown> | undefined);
+  return Object.keys(legacy).length ? { source: "config.json", agents: legacy } : { source: "none", agents: {} };
+}
+
+function applyOverride(a: RoomAgent, overrides: Record<string, RoomAgentOverride>): RoomAgent {
+  const o = overrides[a.id];
+  if (!o) return a;
+  const explicitModel = typeof o.model === "string" && o.model.trim() !== "";
+  // No "openrouter" (owner 2026-09-29): any other provider word is ignored, the agent keeps its own.
+  const provider = o.provider === "ollama" || o.provider === "openai" || o.provider === "cli" ? o.provider : undefined;
+  return {
     ...a,
-    ...(explicitModel ? { model: o.model as string } : {}),
-    ...(o.provider === "openrouter" || o.provider === "ollama" || o.provider === "openai" ? { provider: o.provider } : {}),
-    ...(typeof o.baseUrl === "string" && o.baseUrl ? { baseUrl: o.baseUrl } : {}),
-    ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv ? { apiKeyEnv: o.apiKeyEnv } : {}),
+    ...(explicitModel ? { model: (o.model as string).trim() } : {}),
+    ...(provider ? { provider } : {}),
+    ...(typeof o.baseUrl === "string" && o.baseUrl.trim() ? { baseUrl: o.baseUrl.trim() } : {}),
+    ...(typeof o.apiKeyEnv === "string" && o.apiKeyEnv.trim() ? { apiKeyEnv: o.apiKeyEnv.trim() } : {}),
     ...(typeof o.noReasoning === "boolean" ? { noReasoning: o.noReasoning } : {}),
-  } : a;
-  return m;
+  };
 }
 export function roomAgents(): RoomAgent[] {
-  return ROOM_AGENTS.map(applyOverride);
+  const { agents } = roomOverrides();
+  return ROOM_AGENTS.map((a) => applyOverride(a, agents));
+}
+
+/** How long a CLI agent may take per room turn: settings.room.cliTimeoutSec (default 90 s). */
+export function roomCliTimeoutMs(): number {
+  const s = Number(readSettings().room?.cliTimeoutSec);
+  return Number.isFinite(s) && s > 0 ? Math.round(s) * 1000 : 90_000;
 }
 export function getAgent(id: string): RoomAgent | undefined {
   return roomAgents().find((a) => a.id === id);
@@ -149,17 +178,6 @@ function profileEnvKey(name: string): string | null {
   }
   return process.env[name]?.trim() || null;
 }
-function openRouterKey(): string | null {
-  return profileEnvKey("OPENROUTER_API_KEY");
-}
-function hermesDefaultModel(): string {
-  try {
-    const cfg = readFileSync(path.join(HOME, ".hermes", "profiles", activeProfile(), "config.yaml"), "utf8");
-    const m = cfg.match(/^\s*default:\s*([^\s#]+)/m);
-    if (m) return m[1].trim();
-  } catch {}
-  return "anthropic/claude-opus-4.8";
-}
 // Room agents with model "auto" pick a model by the kind of task in play: a coder for
 // coding talk, a strong generalist otherwise. These used to be hardcoded to
 // minimax-m3 / kimi-k2.6 — MiniMax isn't provisioned here, and a hardcoded tag breaks
@@ -180,9 +198,10 @@ let _models: string[] | null = null;
 async function availableModels(): Promise<string[]> {
   if (_models) return _models;
   const key = ollamaCloudKey();
+  if (!key) return []; // not cached: a key added later is picked up on the next call
   try {
-    const r = await fetch(`${key ? OLLAMA_CLOUD_HOST : OLLAMA_LOCAL}/api/tags`, {
-      headers: key ? { Authorization: `Bearer ${key}` } : {},
+    const r = await fetch(`${ollamaCloudHost()}/api/tags`, {
+      headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
     });
     if (!r.ok) return (_models = []);
@@ -200,9 +219,11 @@ async function roomTaskModel(transcript: RoomTurn[]): Promise<string> {
     const hit = models.find((m) => re.test(m));
     if (hit) return hit;
   }
-  // Nothing matched (or the list couldn't be fetched) — fall back to the env default,
-  // then the first available model.
-  return process.env.OLLAMA_CLOUD_MODEL || models[0] || "qwen3-coder:480b";
+  // Nothing matched: the default model from settings.ollama (or OLLAMA_CLOUD_MODEL), then the
+  // first model the account really has. No model tag is written into the code as a last resort.
+  const pick = ollamaCloudDefaultModel() || models[0];
+  if (!pick) throw new Error("Ollama Cloud listed no models for this account (or /api/tags failed), so there is no model to use.");
+  return pick;
 }
 
 const ROOM_SYSTEM =
@@ -246,15 +267,12 @@ async function openaiChat(baseUrl: string, model: string, sys: string, user: str
   if (!r.ok || !j?.choices?.[0]) throw new Error(j?.error?.message || `HTTP ${r.status}`);
   return String(j.choices[0].message?.content ?? "").trim();
 }
-function orComplete(model: string, sys: string, user: string, key: string, signal?: AbortSignal, opts?: { noReasoning?: boolean }): Promise<string> {
-  return openaiChat("https://openrouter.ai/api/v1", model, sys, user, key, signal, opts);
-}
 async function ollamaComplete(model: string, sys: string, user: string, signal?: AbortSignal): Promise<string> {
   const key = ollamaCloudKey();
-  const base = key ? OLLAMA_CLOUD_HOST : OLLAMA_LOCAL;
-  const r = await fetch(`${base}/api/chat`, {
+  if (!key) throw new Error("No Ollama Cloud key: add it in the Ollama page's gear or set OLLAMA_API_KEY (there is no local Ollama to fall back to).");
+  const r = await fetch(`${ollamaCloudHost()}/api/chat`, {
     method: "POST",
-    headers: { "content-type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+    headers: { "content-type": "application/json", Authorization: `Bearer ${key}` },
     signal,
     // think:false — kimi/minimax are reasoning models; without this they spend the
     // whole token budget in a hidden "thinking" field and return empty content.
@@ -263,11 +281,7 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
   });
   if (!r.ok) {
     const detail = await r.text().catch(() => "");
-    throw new Error(
-      key
-        ? `Ollama Cloud ${r.status} for "${model}"${detail ? ` — ${detail.slice(0, 160)}` : ""}`
-        : `Ollama ${r.status} for "${model}" — no OLLAMA_API_KEY set and the local daemon at ${OLLAMA_LOCAL} didn't accept it.`,
-    );
+    throw new Error(`Ollama Cloud ${r.status} for "${model}"${detail ? ` — ${detail.slice(0, 160)}` : ""}`);
   }
   const j = await r.json();
   // Reasoning models (minimax-m3, kimi) can emit a hidden <think> block — strip it.
@@ -279,7 +293,7 @@ async function ollamaComplete(model: string, sys: string, user: string, signal?:
 async function roomCli(id: string, sys: string, user: string, incognito?: boolean): Promise<string> {
   const prompt = `${sys}\n\n${user}`;
   if ((LOOP_CLI_AGENTS as readonly string[]).includes(id)) {
-    return cliComplete(id, prompt, { timeoutMs: 90_000, incognito });
+    return cliComplete(id, prompt, { timeoutMs: roomCliTimeoutMs(), incognito, module: "room" });
   }
   throw new Error(`No room CLI runner for ${id}`);
 }
@@ -350,8 +364,9 @@ export async function executeRoomActions(text: string): Promise<{ clean: string;
   return { clean: clean || text, actions };
 }
 
-// One agent's reply, given the transcript + the user's vault context. Cloud agents
-// fall back to the Hermes default model if their model errors — never stalls.
+// One agent's reply, given the transcript + the user's vault context. A failure is an
+// error that names the agent and the reason; nothing is invented and nothing switches
+// provider behind the user's back (AGENTS.md "Fail loudly", rule 20).
 export async function roomReply(
   agent: RoomAgent,
   transcript: RoomTurn[],
@@ -374,10 +389,12 @@ export async function roomReply(
     return roomCli(agent.id, sys, user, incognito);
   }
   if (agent.provider === "ollama") {
+    if (!ollamaCloudKey()) throw new Error(`${agent.name}: no Ollama Cloud key. Add it in the Ollama page's gear or set OLLAMA_API_KEY (there is no local Ollama to fall back to).`);
     const model = (agent.model === "auto" || !agent.model) ? await roomTaskModel(transcript) : agent.model;
     let out = await ollamaComplete(model, sys, user, signal);
     if (!out && !signal?.aborted) out = await ollamaComplete(model, sys, user, signal);  // cloud model cold-start can return empty
-    return out || "I'm here — running locally and ready when you are.";
+    if (!out) throw new Error(`${agent.name} got an empty reply from Ollama Cloud (${model}), twice.`);
+    return out;
   }
   // Native OpenAI-compatible endpoint (config override) — e.g. GLM via your z.ai key.
   if (agent.provider === "openai") {
@@ -387,15 +404,7 @@ export async function roomReply(
     if (!k) throw new Error(`No API key for ${agent.name} — set ${envName} (env var or your active Hermes profile .env).`);
     return await openaiChat(base, agent.model, sys, user, k, signal, { noReasoning: agent.noReasoning });
   }
-  const key = openRouterKey();
-  if (!key) throw new Error("No OpenRouter key in the active Hermes profile.");
-  try { return await orComplete(agent.model, sys, user, key, signal, { noReasoning: agent.noReasoning }); }
-  catch (e) {
-    if (signal?.aborted) throw e;
-    const fallback = hermesDefaultModel();
-    if (fallback && fallback !== agent.model) { try { return await orComplete(fallback, sys, user, key, signal); } catch {} }
-    throw e;
-  }
+  throw new Error(`${agent.name} has no supported provider (CLI, Ollama Cloud or an OpenAI-compatible endpoint).`);
 }
 
 // Pull @mentions (e.g. "@claude @gemini") from a message → agent ids, if any.
@@ -403,4 +412,40 @@ export function mentionedIds(message: string): string[] {
   const ids = roomAgents().map((a) => a.id);
   const found = (message.toLowerCase().match(/@([a-z]+)/g) || []).map((m) => m.slice(1));
   return ids.filter((id) => found.includes(id));
+}
+
+// ── S25 Mastermind: live status per specialist ───────────────────────────────
+// working now  = a reply from this agent is in flight in this server process
+// unreachable  = what it needs to answer is missing (CLI not installed, no key)
+// active today = it spoke in a room or one-on-one conversation saved today
+// ready        = none of the above
+const g25 = globalThis as unknown as { __agentosRoomWorking?: Map<string, number> };
+const working = () => (g25.__agentosRoomWorking ??= new Map());
+export function markWorking(id: string, delta: 1 | -1): void {
+  const n = Math.max(0, (working().get(id) ?? 0) + delta);
+  if (n) working().set(id, n); else working().delete(id);
+}
+export function isWorking(id: string): boolean { return (working().get(id) ?? 0) > 0; }
+
+export function agentReachability(a: RoomAgent): { ok: boolean; why: string } {
+  if (a.provider === "cli") {
+    const key = a.id === "antigravity" ? "antigravity" : a.id;
+    const known = ["claude", "codex", "cursor", "pi", "hermes", "antigravity", "openclaw", "kimi"] as const;
+    const k = known.find((x) => x === key);
+    if (!k) return { ok: false, why: `no CLI mapping for ${a.id}` };
+    return isAgentInstalled(k) ? { ok: true, why: `${a.id} CLI installed` } : { ok: false, why: `the ${a.id} CLI is not installed` };
+  }
+  if (a.provider === "ollama") return ollamaCloudKey() ? { ok: true, why: "Ollama Cloud key set" } : { ok: false, why: "no Ollama Cloud key (Ollama page gear, or OLLAMA_API_KEY); there is no local Ollama" };
+  if (a.provider === "openai") { const env = a.apiKeyEnv || "OPENAI_API_KEY"; return profileEnvKey(env) ? { ok: true, why: `${env} set` } : { ok: false, why: `${env} is not set` }; }
+  return { ok: false, why: "no supported provider (CLI, Ollama Cloud or OpenAI-compatible)" };
+}
+
+export async function activeTodayIds(): Promise<Set<string>> {
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const ids = new Set<string>();
+  for (const c of await listConversations()) {
+    if ((c.ts || 0) < start.getTime()) continue;
+    for (const m of c.msgs) if (m.who && m.who !== "you" && m.who !== "system") ids.add(m.who);
+  }
+  return ids;
 }

@@ -106,8 +106,10 @@ check("end drop zone appends (Sidebar '__end__' pattern)", grid.includes("__end_
 check("size cycle S→M→L→S from SIZE_SPAN sizes", grid.includes("NEXT_SIZE") && /S: "M", M: "L", L: "S"/.test(grid));
 check("remove drops the cell from the layout (filter, never a data delete)",
   grid.includes("onRemove") && grid.includes("cur.filter((c) => c.id !== cell.id)"));
-check("layout saves DEBOUNCED 800ms via useSettings().save({home:{cells}})",
-  grid.includes("SAVE_DEBOUNCE_MS = 800") && grid.includes("save({ home: { cells: next } })"));
+// S32: the grid saves under settings.home[cellsKey] ("cells" for Mission
+// Control, "todayCells" for the Today page) through the same debounced path.
+check("layout saves DEBOUNCED 800ms via useSettings().save({home:{[cellsKey]}})",
+  grid.includes("SAVE_DEBOUNCE_MS = 800") && grid.includes("save({ home: { [cellsKey]: next } })") && grid.includes('cellsKey = "cells"'));
 check("Done flushes the pending save; Cancel restores the enter-time snapshot",
   grid.includes("const done") && grid.includes("const cancel") && grid.includes("snapshotRef"));
 check("WidgetShell exposes the edit controls (gear · size cycle · remove) + drag grip",

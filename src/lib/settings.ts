@@ -11,6 +11,8 @@
 // pastes themselves into a config field (e.g. an optional Suno third-party key).
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { DEFAULT_HERMES3D } from "./v2/hermes3d/sceneDefaults";
+import { defaultLaunchOptions, type LaunchModule, type LaunchOptions } from "./launchOptions";
 import path from "node:path";
 import os from "node:os";
 
@@ -24,6 +26,37 @@ import os from "node:os";
  */
 export const JARVIS_TTS_VOICE_ID = "I53oUivy0XU4VvbHHiX6";
 
+/**
+ * The Oracle's ElevenLabs voice: "Hermes, The Oracle", the owner's own sage
+ * voice. Used only when oracle.voice.provider is "elevenlabs", or as the
+ * labelled backup voice when Voicebox fails and oracle.voice.fallback allows
+ * it. It used to be hardcoded in OracleView.tsx (S8 moved it here).
+ */
+export const ORACLE_ELEVEN_VOICE_ID = "Bu13R3bywbVy3lQswSJo";
+
+/**
+ * The Voicebox profile the Oracle speaks with by default. The owner cloned it
+ * on 2026-09-02. A missing profile is an error that names the available ones
+ * (lib/voicebox.ts resolveVoiceboxProfile), never a quiet swap to the studio's
+ * first profile.
+ */
+export const ORACLE_VOICEBOX_PROFILE = "The Sage";
+
+/**
+ * The Kokoro voice the Oracle speaks with by default (local Kokoro TTS on :8880, British
+ * pipeline). bm_lewis keeps it distinct from Jarvis's bm_george. Changed in the Oracle's gear.
+ */
+export const ORACLE_KOKORO_VOICE = "bm_lewis";
+
+/** One room agent's repointing (settings.room.agents[id]); every field optional, blank = the agent's own default. */
+export interface RoomAgentOverride {
+  model?: string;
+  provider?: "ollama" | "openai" | "cli";
+  baseUrl?: string;
+  apiKeyEnv?: string;
+  noReasoning?: boolean;
+}
+
 export interface SeoSite {
   label: string;
   url: string;        // the live site / repo this SEO content targets
@@ -36,7 +69,37 @@ export interface Settings {
   // The CLI agent a module reaches for when it just needs "an agent" (id from /api/agents/list).
   defaultAgent: string;
 
-  loop: { builder?: string; judge?: string };
+  // Ultracode (owner 2026-09-30): the Claude model + effort its missions run with, set from the
+  // Ultracode tab's pickers. Validated in lib/ultracodeModels.ts.
+  ultracode: { model?: string; effort?: string };
+  // The Claude chat model (S30): what every `claude -p --model` call outside Ultracode uses
+  // (chat, Deal Desk, Hire, Idea Engine, SEO, video, the Loop builder, Jarvis's brain, a blank
+  // "Deep tier" or writer field). Picked on the Claude page's gear; read per request through
+  // lib/claudeModel.ts. AGENTIC_OS_CLAUDE_MODEL / config.json claudeModel still override it
+  // for back-compat (the gear says so when they do).
+  claude: { model?: string };
+  // Agent Room / Mastermind (S30). agents: per-agent repointing, keyed by room agent id
+  // (claude, codex, cursor, pi, hermes, antigravity, openclaw, ollama, fcc): model, provider
+  // (cli / ollama / openai), baseUrl + apiKeyEnv for an OpenAI-compatible endpoint, noReasoning.
+  // Edited in the Room gear; read per request by lib/agentRoom.ts. `roomAgents` in
+  // ~/.agentic-os/config.json is read ONLY while this holds no override (labelled fallback).
+  // cliTimeoutSec: how long a CLI agent may take per room turn (was a 90 s literal).
+  room: { agents?: Record<string, RoomAgentOverride>; cliTimeoutSec?: number };
+  // Artifacts (rule 16, 2026-10-01): the dedicated Netlify site publishes go to, set from the
+  // gear on the Claude page's Artifacts tab. siteId is Netlify's site ID (not a secret),
+  // baseUrl the site's public https origin. ~/.agentic-os/artifacts-site.json is read only
+  // when siteId is blank here (lib/claudeArtifacts.ts, a labelled back-compat fallback).
+  artifacts: { siteId?: string; name?: string; baseUrl?: string };
+  // Loop (rule 16 + owner 2026-09-30 "every parameter in settings"). builder/judge are the
+  // page's defaults (cli:<agent>, or "ollama-cloud" for the judge); judgeFallback is the
+  // owner's own choice of who grades when a CLI judge returns nothing usable (rule 20:
+  // labelled in the verdict); ollamaModel is the Ollama Cloud model for that judge (blank =
+  // picked from the account's model list by the model policy); the rest are run limits.
+  loop: {
+    builder?: string; judge?: string;
+    judgeFallback?: "none" | "ollama-cloud"; ollamaModel?: string;
+    maxRounds?: number; builderTimeoutSec?: number; judgeTimeoutSec?: number;
+  };
 
   seo: {
     sites: SeoSite[];
@@ -92,9 +155,24 @@ export interface Settings {
 
   // Per-module default agent overrides for the lighter modules.
   games: { agent?: string };
-  thumbnails: { agent?: string; backend?: "cli" | "gpt-image" };
+  // thumbnails.promptModel (S30): the OpenAI chat model that writes the image prompt from the
+  // reference (lib/thumbnailPrompt.ts); blank = gpt-4o-mini, the old literal.
+  thumbnails: { agent?: string; backend?: "cli" | "gpt-image"; promptModel?: string };
   notebook: { agent?: string; nlmBin?: string; notebookId?: string };
   kanban: { agent?: string; board?: string };
+
+  // Deal Desk (S4). maxAgeDays: listings posted longer ago than this are dropped
+  // when a scrape or a feed pull lands (the feed was pulling 3-4 week old jobs);
+  // the age shows on every card. Rule 16: edited in the Deal Desk gear.
+  deals: {
+    maxAgeDays?: number;
+    /** Model for the quick pass/not screen; falls back to the Claude model setting when unset. */
+    screenModel?: string;
+    /** Screen the unjudged leads automatically after a feed pull. */
+    screenOnPull?: boolean;
+    /** Model for the dossier pass; falls back to the Claude model setting when unset. */
+    dossierModel?: string;
+  };
 
   // Operating skills (~/.agentic-os/skills/<name>/SKILL.md) injected into agent prompts.
   // "global" = every agent call platform-wide; "modules" = extra skills per module key
@@ -118,6 +196,17 @@ export interface Settings {
     buzzChannel?: string;    // Buzz channel name or UUID (default: marketing-ideas)
   };
 
+  // Ollama, shared by every module that talks to it (S30, owner 2026-09-30: "every parameter
+  // in settings"). Read through lib/ollamaCloud.ts, never process.env directly. apiKey is the
+  // Ollama Cloud key, write-only: masked in every /api/settings reply (settingsRedact.ts), and
+  // it WINS over OLLAMA_API_KEY / OLLAMA_CLOUD_KEY in the environment, which stay the fallback
+  // so an existing .env.local keeps working. host blank = OLLAMA_CLOUD_HOST, else
+  // https://ollama.com. defaultModel blank = OLLAMA_CLOUD_MODEL, else each caller's own last
+  // resort (the Ollama page: qwen3-coder:480b; a Room "auto" agent: the account's first model).
+  // localUrl is the local daemon for Memory/Agents/Free Claude Code: blank = OLLAMA_URL, else
+  // http://127.0.0.1:11434. Edited in the Ollama Cloud page's gear.
+  ollama: { apiKey?: string; host?: string; defaultModel?: string; localUrl?: string };
+
   // Pipeline: which provider (Ollama / CLI agent / MiniMax) drives the shape → reason → artifact flow.
   pipeline: {
     provider?: "ollama" | "cli" | "minimax";
@@ -130,8 +219,10 @@ export interface Settings {
   // ── Model dials for the 2026-07 modules ─────────────────────────────────────
   // User model policy: Kimi K2.6 for chat/agentic seats, K2.7 Code for coding.
   // Empty string = the module's built-in default (blank kimiModel = auto-resolve
-  // preferring k2.6; blank claude models = the pinned CLAUDE_MODEL).
-  brainstorm: { kimiModel?: string };                       // the council's Kimi seat
+  // preferring k2.6; blank claude models = the Claude model setting, lib/claudeModel.ts).
+  // Brainstorm: the council's Kimi seat, plus (S30) the per-seat time limits that were 240 s /
+  // 180 s literals (a launch-drawer timeout still wins for that run).
+  brainstorm: { kimiModel?: string; seatTimeoutSec?: number; kimiTimeoutSec?: number };
   // Jarvis: Kimi brain model + SPEC-C C2/C2b voice-capture + hotkey knobs
   // (all surfaced in the Jarvis gear — rule 16).
   jarvis: {
@@ -142,20 +233,77 @@ export interface Settings {
     engine?: "sdk" | "cli";
     cliAgent?: string;     // cli-lane agent id (claude/codex/cursor/… per cliComplete matrix)
     voice?: {
-      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
+      provider?: "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox" | "parakeet";
       autoSend?: boolean;    // C2b: mic release auto-sends — default FALSE (review-first)
       pushToTalk?: boolean;  // true = hold-to-record; false = click-to-toggle
       // The ELEVENLABS reply voice. Distinct from `provider` above, which picks
       // the live-voice BACKEND. Lives in settings rather than component state
       // because it previously reset to the hardcoded default on every remount.
       ttsVoiceId?: string;
+      // Which backend SPEAKS the reply. "voicebox" is the local studio (the
+      // voice engine since 2026-09-02); "auto" is the old cascade in
+      // /api/hermes/tts. Never silently substituted: a down provider errors.
+      ttsProvider?: "voicebox" | "auto" | "local" | "elevenlabs" | "openai";
+      // What happens when Voicebox fails. Yoshi's call (2026-09-02): keep
+      // ElevenLabs as the backup. It is a CHOSEN fallback, and the TTS response
+      // labels it (provider + fellBackFrom + fallbackReason); "none" = report.
+      ttsFallback?: "elevenlabs" | "none";
+      // S30: the model ids behind the hosted voice lanes, which were literals in the routes.
+      // Blank = the lane's own default (lib/jarvisVoiceModels.ts; Gemini also honours
+      // GEMINI_LIVE_MODEL from the environment first, as before).
+      geminiLiveModel?: string;       // gemini-live-2.5-flash-preview
+      openaiRealtimeModel?: string;   // gpt-realtime
+      openaiTranscribeModel?: string; // gpt-4o-mini-transcribe
+      openaiTtsModel?: string;        // gpt-4o-mini-tts
     };
     hotkey?: {
       key?: string;          // in-app fallback keybind (default "F13")
       enabled?: boolean;     // in-app keydown listener on/off
     };
+    // Even Realities G2 custom-agent lane (/api/glasses — OpenAI chat-completions
+    // shape, bearer token in ~/.agentic-os/jarvis-glasses.token, never here).
+    glasses?: {
+      enabled?: boolean;        // default FALSE — the lane answers 403 until switched on
+      maxWords?: number;        // reply cap on the lens (~15 short lines)
+      idleMinutes?: number;     // silence longer than this starts a fresh conversation
+      timeoutSeconds?: number;  // give up (504) before the Even app gives up on us
+    };
   };
   contentEngine: { kimiModel?: string };                    // the kimi slot in the generation rotation
+  // The Oracle's voice (S8; rule 16: every field in the Oracle's own gear).
+  // provider picks who speaks; voiceboxProfile is a studio profile id or name;
+  // elevenVoiceId is the ElevenLabs voice for provider "elevenlabs" AND for the
+  // labelled backup. fallback is the Oracle's OWN choice (rule 20), independent
+  // of jarvis.voice.ttsFallback: the TTS route reads it when the request says
+  // module: "oracle".
+  oracle: {
+    voice?: {
+      // kokoro = local Kokoro TTS (default since 2026-09-30); voicebox is retired
+      // (2026-09-08) and kept only so a saved value stays visible.
+      provider?: "kokoro" | "voicebox" | "elevenlabs";
+      kokoroVoice?: string;
+      voiceboxProfile?: string;
+      elevenVoiceId?: string;
+      fallback?: "elevenlabs" | "none";
+    };
+  };
+  // Voicebox, the local AI vocal studio (lib/voicebox.ts). url is asserted
+  // loopback in code; profile is an id or a name (blank = first profile);
+  // engine blank = the profile's own default; timeoutMs bounds one synthesis
+  // (CPU boxes load a model on first use, which can take minutes).
+  voicebox: { url?: string; profile?: string; engine?: string; timeoutMs?: number };
+  // Parakeet, the local speech-to-text server (lib/parakeet.ts). url is asserted
+  // loopback in code; the default is 127.0.0.1:8881 (parakeet-start.ps1).
+  stt: { parakeetUrl?: string };
+  // The corner tray that keeps module runs visible after their page is gone
+  // (components/RunsTray.tsx). autoDismissSec 0 = keep finished runs until
+  // dismissed by hand. Gear lives in the tray itself.
+  runsTray: { enabled?: boolean; autoDismissSec?: number };
+
+  // Pre-launch drawer (S3): the last-used launch options per module, so the
+  // drawer opens pre-filled. Shape and validation live in lib/launchOptions.ts;
+  // the route honors the body, and the drawer persists here on Launch (rule 16).
+  launch: Partial<Record<LaunchModule, LaunchOptions>>;
   // The Agents module's intelligence dial → concrete claude model ids.
   agentsModels: { fast?: string; standard?: string; deep?: string };
   // Hire Engine analysis models: cheap triage sweep + full brief/pitch writer
@@ -163,9 +311,16 @@ export interface Settings {
   hire: { triageModel?: string; briefModel?: string; draftModel?: string };
   // Idea Engine: model dials per seat tier + radar/daily config.
   ideaEngine: {
-    kimiModel?: string;        // sizing/clustering seat (Ollama Cloud)
+    kimiModel?: string;        // the Ollama Cloud model when a seat's agent is "kimi"
+    // Seat agents (owner 2026-09-30: "default to Claude, fallback to codex"): a CLI agent
+    // (claude/codex/cursor/pi/hermes) or "kimi" (Ollama Cloud). fallbackAgent answers when a
+    // seat's agent fails ("none" = the seat fails); every fallback is recorded in the run.
+    sizingAgent?: string;      // sizing seat (evidence-only, no web)
+    clusterAgent?: string;     // radar: clustering fresh signals into candidates
+    killAgent?: string;        // kill pass; keep it a different lineage from claude (spec #5)
+    fallbackAgent?: string;
     researchModel?: string;    // web research + judge (claude)
-    writerModel?: string;      // dossier writer; blank = pinned CLAUDE_MODEL
+    writerModel?: string;      // dossier writer; blank = the Claude model setting
     redditSubs?: string;       // comma-separated, radar pain mining
     seedTerms?: string;        // comma-separated seeds for trends/autocomplete
     dailyEnabled?: boolean;
@@ -174,7 +329,7 @@ export interface Settings {
 
   // ---- V2 foundations (SPEC-A; ultraplan/CONVENTIONS.md) ----
   memory?: {
-    provider?: "ollama-cloud" | "ollama-local" | "cli" | "minimax";
+    provider?: "ollama-cloud" | "ollama-local" | "cli" | "minimax" | "openai-compat";
     modelLow?: string;
     modelMedium?: string;
     embedProvider?: "ollama-local" | "ollama-cloud";
@@ -184,6 +339,26 @@ export interface Settings {
     personaAutoUpdate?: boolean;
     tokenBudget?: number;
     labelRouterThreshold?: number;
+    // S5 legacy backfill (gear): how many undrived legacy episodes one run
+    // takes, and which LOCAL Ollama chat model derives them. Never a hosted model.
+    backfillLimit?: number;
+    backfillModel?: string;
+    // Which server derives them. 'ollama-local' is Ollama on :11434;
+    // 'openai-compat' is any OpenAI-wire server (LM Studio, llama.cpp, vLLM) at
+    // openaiCompatUrl - the path for models Ollama cannot serve at all, such as
+    // Bonsai 27B, which needs a llama.cpp fork. Embeddings stay on Ollama
+    // either way (embedProvider above), so a real run needs Ollama up too.
+    backfillProvider?: "ollama-local" | "openai-compat";
+    // Base URL of the OpenAI-compatible server, /v1 segment included.
+    // A key, if the server wants one, comes from OPENAI_COMPAT_API_KEY in the
+    // environment and is never stored here.
+    openaiCompatUrl?: string;
+    // How hard a reasoning model may think before answering, sent as
+    // `reasoning_effort`. Measured on bonsai-27b 2026-09-03: left alone it
+    // spends ~1900 reasoning tokens (26 s) to produce a 51-token answer, and
+    // "none" gives the same facts in 1.2 s. Empty string = send nothing and
+    // let the server decide. Servers that do not know the field ignore it.
+    openaiCompatReasoningEffort?: "" | "none" | "minimal" | "low" | "medium" | "high";
   };
   capability?: {
     folders?: { path: string; scopes: ("files" | "coding" | "exec")[] }[];
@@ -203,7 +378,7 @@ export interface Settings {
     autoApprove?: { categories?: string[]; maxSteps?: number }; // per-category skip (task metadata.category)
     maxStepsPerRun?: number;   // hard cap on plan steps executed per run (default 12)
     runTimeoutMin?: number;    // wall-clock budget per run + boot stuck-recovery threshold (default 30)
-    runMode?: "steps" | "sdk"; // 'sdk' is a NOT_IMPLEMENTED seam for chunk 3+
+    runMode?: "steps" | "sdk"; // 'steps' = bounded walker; 'sdk' = one Agent SDK session with the same guardrails (S32)
     emptyTaskGc?: boolean;     // buffer-expiry GC of abandoned Untitled daily tasks (default true)
     // B3 recurring seed tasks: per-seed enable toggle (default false — nothing
     // fires until enabled in the Tasks gear). Keys match seeds.ts settingsKey.
@@ -218,6 +393,10 @@ export interface Settings {
     sandboxTimeoutMs?: number; // 'js' handler wall-clock cap (default 5000)
     allowJsHandlers?: boolean; // gates creation of 'js' handler tools (default true — single-user box)
     llmGetActions?: boolean;   // D1.5: LLM-filtered getActions (default true; off = keyword scorer)
+    // S7 wizard: which CLI agent digests/emits/proofreads (default claude) and the
+    // owner-chosen, labelled fallback (default codex; "none" = fail loudly). Rule 20.
+    wizardAgent?: string;
+    wizardFallback?: string;
   };
   // SPEC-D G2 integrations runtime (gear panel lands with the G1 /integrations UI).
   integrations?: {
@@ -247,6 +426,16 @@ export interface Settings {
       config?: Record<string, unknown>;
     }>;
     showScratchpad?: boolean;  // H1.1 (chunk 2) Overview ScratchpadSlot toggle
+    // S32: the Today page's own widget panel (same grid, same registry, its own
+    // cells list) and whether the panel is open. Unset = empty and closed.
+    todayCells?: Array<{
+      id: string;
+      widgetSlug: string;
+      size: "S" | "M" | "L";
+      order: number;
+      config?: Record<string, unknown>;
+    }>;
+    todayShowWidgets?: boolean;
   };
   // SPEC-E E1 browser workstream (every field surfaced in the /browser gear — rule 16).
   // NO "opera" browserType option, ever: Opera is Yoshi's daily browser and the agent
@@ -279,6 +468,12 @@ export interface Settings {
   // the Agents gear.
   agents?: {
     requireTestRun?: boolean;
+    /** Per-run ceiling in dollars and tokens. `enabled: false` lifts both, which
+     *  is a real setting for a long-horizon run rather than a loophole; a limit
+     *  <= 0 leaves that one dimension unbounded. Enforced at the harness loop
+     *  boundary so a run that trips it KEEPS its work and says why it stopped.
+     *  See lib/v2/agents/spendCap.ts. */
+    spendCap?: { enabled?: boolean; maxUsd?: number; maxTokens?: number };
     // A background run has no chat window; when an agent needs a decision only
     // the user can make it emits the ASK-USER marker and the run parks on the
     // approvals queue until you reply.
@@ -295,6 +490,21 @@ export interface Settings {
     jarvisAgent?: string;      // AgentPicker id routed through cliComplete (rule 11: no silent fallback)
     defaultStatus?: "inbox" | "kept" | "archived"; // status a fresh capture lands in
     maxSnapshotChars?: number; // cap on the stored content_md snapshot
+  };
+  // Rabbit R1 bridge (/rabbit). Every knob here has a gear (RabbitSettings).
+  // The bearer secret is NOT here — it lives in ~/.agentic-os/rabbit.secret
+  // and leaves only through the cookie-gated GET /api/rabbit/setup.
+  rabbit?: {
+    enabled?: boolean;           // OFF = /api/rabbit/v1/* answers 503 (default true)
+    requireKey?: boolean;        // ON = bearer/x-api-key must match ~/.agentic-os/rabbit.secret; OFF (default, owner's call) = open on the LAN
+    defaultModel?: string;       // model id served for "agentos-claude" / no model (default: the Claude chat model, settings.claude.model)
+    persona?: string;            // system prompt prefix; empty = built-in R1 persona
+    historyTurns?: number;       // prior turns packed into each claude -p prompt (default 24)
+    sessionGapMinutes?: number;  // idle gap after which an echoed reply no longer re-links a session (default 120)
+    retentionDays?: number;      // "Archive idle" button threshold (default 30; 0 = archive everything idle now)
+    mastermindAgents?: string[]; // room agent ids that answer when the R1 picks "agentos-mastermind" (default claude, codex, cursor)
+    mastermindSequential?: boolean; // true (default) = agents build on each other like /room; false = all at once, faster
+    publicBaseUrl?: string;      // where the R1 reaches this box from anywhere (e.g. https://desktop.hair-halfmoon.ts.net via tailscale funnel); empty = the origin the gear was opened at
   };
   // SPEC-F K — Newsletter. Rule 16: every knob here gets an in-app gear
   // (NewsletterSettings, chunk 4). NOTHING secret lives here — the addy.io key
@@ -327,7 +537,22 @@ export interface Settings {
     shadows?: boolean;
     talkingHoldMs?: number;              // how long "talking" holds after a response (default 4000)
     quality?: "full" | "lite";           // lite: no env lighting, half pixelRatio
+    seatedCount?: number;                // idle bodies on chairs (default 4); 0 = office alone
     clips?: Record<string, string[]>;    // state -> eligible clip slugs
+  };
+
+  // S9 OpenMontage (Artist's Corner). Rule 16: every knob is in the gear
+  // (OpenMontageSettings). The checkout is the owner's own clone; a pipeline run
+  // is the configured CLI agent driving that checkout (AGENT_GUIDE.md Rule Zero:
+  // the agent IS the orchestrator, there is no Python entry point for a pipeline).
+  // Python is used for the preflight (tool registry) and the dependency check.
+  openmontage?: {
+    repoPath?: string;     // the OpenMontage checkout; "" = <home>/Documents/OpenMontage
+    pythonBin?: string;    // "python" on Windows (never python3); or the checkout's .venv python
+    outputDir?: string;    // where projects/<id>/ are written and listed; "" = <repo>/projects
+    agent?: string;        // CLI agent that drives a pipeline run (default claude)
+    fallbackAgent?: "codex" | "none"; // rule 20: owner-chosen, labelled; used only when the primary cannot start
+    timeoutMin?: number;   // a pipeline run is killed after this many minutes (default 90)
   };
 
   [extra: string]: unknown;
@@ -338,9 +563,14 @@ export const DEFAULT_SETTINGS: Settings = {
   // src/lib/v2/hermes3d/clips.ts is the single source of truth, so an untouched
   // install picks up new clips as they are baked instead of freezing the pool
   // into a settings file written months ago.
-  hermes3d: { showFps: false, shadows: false, talkingHoldMs: 4000, quality: "full" },
+  hermes3d: { ...DEFAULT_HERMES3D },
+  openmontage: { repoPath: "", pythonBin: "python", outputDir: "", agent: "claude", fallbackAgent: "codex", timeoutMin: 90 },
   defaultAgent: "claude",
-  loop: {},
+  ultracode: { model: "claude-opus-5-5", effort: "xhigh" },
+  claude: { model: "claude-opus-4-8" },
+  room: { agents: {}, cliTimeoutSec: 90 },
+  artifacts: { siteId: "", name: "", baseUrl: "" },
+  loop: { builder: "cli:claude", judge: "cli:claude", judgeFallback: "none", ollamaModel: "", maxRounds: 4, builderTimeoutSec: 240, judgeTimeoutSec: 180 },
   seo: { sites: [], brand: "", author: "", audience: "", agent: "claude" },
   leads: { agent: "claude", dataProvider: "ai" },
   video: { backend: "eidolon", eidolonUrl: "", comfyUrl: "http://127.0.0.1:8188", model: "ltx", agent: "claude" },
@@ -348,10 +578,12 @@ export const DEFAULT_SETTINGS: Settings = {
   opendesign: { webUrl: "http://127.0.0.1:7456", daemonUrl: "http://127.0.0.1:7455", launchCmd: "", stopCmd: "", installPath: "" },
   paperclip: { url: "" },
   games: { agent: "claude" },
-  thumbnails: { agent: "claude", backend: "cli" },
+  thumbnails: { agent: "claude", backend: "cli", promptModel: "" },
   notebook: { agent: "claude", nlmBin: "", notebookId: "" },
   kanban: { agent: "claude", board: "" },
+  ollama: { apiKey: "", host: "", defaultModel: "", localUrl: "" },
   pipeline: { provider: "ollama", model: "", ollamaUrl: "", agent: "claude", minimaxKey: "" },
+  deals: { maxAgeDays: 5, screenOnPull: true },
   skills: {
     global: ["better-agent"],
     modules: {
@@ -361,19 +593,30 @@ export const DEFAULT_SETTINGS: Settings = {
     },
   },
   marketing: { agent: "claude", council: true, criticAgent: "codex", textPlatforms: ["linkedin", "x", "facebook"], ideateBackend: "local", buzzChannel: "marketing-ideas" },
-  brainstorm: { kimiModel: "kimi-k2.6" },
+  brainstorm: { kimiModel: "kimi-k2.6", seatTimeoutSec: 240, kimiTimeoutSec: 180 },
   jarvis: {
     kimiModel: "kimi-k2.6",
     engine: "sdk",
     cliAgent: "claude",
-    voice: { provider: "webspeech", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID },
+    voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs",
+      geminiLiveModel: "", openaiRealtimeModel: "", openaiTranscribeModel: "", openaiTtsModel: "" },
     hotkey: { key: "F13", enabled: true },
+    glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
+  oracle: { voice: { provider: "kokoro", kokoroVoice: ORACLE_KOKORO_VOICE, voiceboxProfile: ORACLE_VOICEBOX_PROFILE, elevenVoiceId: ORACLE_ELEVEN_VOICE_ID, fallback: "elevenlabs" } },
+  voicebox: { url: "http://127.0.0.1:17493", profile: "", engine: "", timeoutMs: 120_000 },
+  stt: { parakeetUrl: "http://127.0.0.1:8881" },
+  runsTray: { enabled: true, autoDismissSec: 45 },
+  launch: { "content-engine": defaultLaunchOptions("content-engine"), "agent-kanban": defaultLaunchOptions("agent-kanban") },
   agentsModels: { fast: "claude-haiku-4-5", standard: "claude-sonnet-5", deep: "" },
   hire: { triageModel: "claude-haiku-4-5", briefModel: "", draftModel: "claude-sonnet-5" },
   ideaEngine: {
     kimiModel: "kimi-k2.6",
+    sizingAgent: "claude",
+    clusterAgent: "claude",
+    killAgent: "codex",
+    fallbackAgent: "codex",
     researchModel: "claude-sonnet-5",
     writerModel: "",
     redditSubs: "smallbusiness,Entrepreneur,SaaS,sweatystartup,agency",
@@ -392,6 +635,11 @@ export const DEFAULT_SETTINGS: Settings = {
     personaAutoUpdate: true,
     tokenBudget: 10000,
     labelRouterThreshold: 0.7,
+    backfillLimit: 20,
+    backfillModel: "bonsai:27b",
+    backfillProvider: "ollama-local",
+    openaiCompatUrl: "http://127.0.0.1:1234/v1",
+    openaiCompatReasoningEffort: "none",
   },
   capability: { folders: [], execAllow: [], execDeny: [], browserEnabled: false },
   mcp: {},
@@ -426,6 +674,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agentsPage: { heroPollMs: 4000 },
   agents: {
     requireTestRun: true,
+    spendCap: { enabled: true, maxUsd: 5, maxTokens: 2_000_000 },
     // heuristic defaults OFF: a rhetorical closing question is common in agent
     // reports, and a false positive parks a finished run instead of completing
     // it. The marker is the reliable signal; the heuristic is the opt-in net.
@@ -436,6 +685,18 @@ export const DEFAULT_SETTINGS: Settings = {
     jarvisAgent: "claude",
     defaultStatus: "inbox",
     maxSnapshotChars: 24000,
+  },
+  rabbit: {
+    enabled: true,
+    requireKey: false,
+    defaultModel: "agentos-claude",
+    persona: "",
+    historyTurns: 24,
+    sessionGapMinutes: 120,
+    retentionDays: 30,
+    mastermindAgents: ["claude", "codex", "cursor"],
+    mastermindSequential: true,
+    publicBaseUrl: "",
   },
   newsletter: {
     syncEnabled: true,

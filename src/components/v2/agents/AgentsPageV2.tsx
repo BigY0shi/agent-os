@@ -113,7 +113,7 @@ export default function AgentsPageV2() {
             fields={[
               { key: "fast", label: "Fast tier", placeholder: "claude-haiku-4-5", hint: "Cheap triage/routing runs." },
               { key: "standard", label: "Standard tier", placeholder: "claude-sonnet-5", hint: "The default for most agents; also the curator." },
-              { key: "deep", label: "Deep tier", placeholder: "blank = pinned CLAUDE_MODEL", hint: "Research and judgment-heavy agents." },
+              { key: "deep", label: "Deep tier", placeholder: "blank = the Claude model (Claude page gear)", hint: "Research and judgment-heavy agents." },
             ]} />
           <ConfigMenu title="Agents page" accent={AGENTS_ACCENT}>
             <AgentsSettings />

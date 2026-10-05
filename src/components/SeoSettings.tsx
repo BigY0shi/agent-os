@@ -61,7 +61,7 @@ export default function SeoSettings() {
             <TextInput placeholder="Label (e.g. My Blog)" value={s.label} onChange={(e) => update(i, { label: e.target.value })} className="mb-1.5" />
             <TextInput placeholder="https://yoursite.com" value={s.url} onChange={(e) => update(i, { url: e.target.value })} className="mb-1.5" />
             <TextInput placeholder="Local repo dir (optional, e.g. C:\\Users\\you\\mysite)" value={s.dir || ""} onChange={(e) => update(i, { dir: e.target.value })} className="mb-1.5" />
-            <TextInput placeholder="Deploy command (optional, run from the repo dir)" value={s.deployCmd || ""} onChange={(e) => update(i, { deployCmd: e.target.value })} />
+            <TextInput placeholder="Deploy command (saved, not used yet: Deploy always runs 11ty + netlify)" value={s.deployCmd || ""} onChange={(e) => update(i, { deployCmd: e.target.value })} />
           </div>
         ))}
       </div>

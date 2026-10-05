@@ -8,10 +8,19 @@ interface Column { key: DealStatus; label: string; accent: string }
 interface DeskStore {
   deals: Deal[];
   columns: Column[];
+  /** S4 (f): the age gate (settings.deals.maxAgeDays) the cards are shown against. */
+  maxAgeDays: number;
+  /** How many leads the gate is withholding right now, and whether we asked to see them. */
+  agedOut: number;
+  showStale: boolean;
+  setShowStale: (v: boolean) => void;
   loading: boolean;
   error: string | null;
   fetchDeals: () => Promise<void>;
   move: (id: string, status: DealStatus) => Promise<void>;
+  /** S4 (b): one status for many cards in one write (bulk deny from the board face). */
+  /** `sweep` clears a whole stale column: the cards move, but no memory episodes are written. */
+  moveMany: (ids: string[], status: DealStatus, opts?: { sweep?: boolean }) => Promise<boolean>;
   saveNotes: (id: string, notes: string) => Promise<void>;
   toggleNeedsInfo: (id: string) => Promise<void>;
   savePitch: (id: string, pitch: string) => Promise<void>;
@@ -36,22 +45,47 @@ interface DeskStore {
   briefBatchResult: string | null;
   briefTop: () => Promise<void>;
   pollBriefs: () => Promise<void>;
+  /** The quick pass/not screen over every lead nothing has judged yet. */
+  screening: boolean;
+  screenResult: string | null;
+  screenAll: () => Promise<void>;
+  pollScreen: () => Promise<void>;
   pullingFeeds: boolean;
   feedsResult: string | null;
   pullFeeds: () => Promise<void>;
+  /** S4 (e): the research pass (enrich + brief + open questions) as a module run; the card carries the state. */
+  research: (id: string, steps?: string[]) => Promise<boolean>;
+  pollResearch: (id: string) => void;
+  /** S4 (a): pasted Upwork job URLs -> cards through the normal pipeline. */
+  intaking: boolean;
+  intakeResult: string | null;
+  intake: (text: string) => Promise<boolean>;
 }
 
-async function post(action: string, id: string, value?: unknown): Promise<void> {
-  await fetch("/api/deals/action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, action, value }),
-  });
+// A write reports whether the server kept it. Until 2026-09-28 this ignored the reply,
+// and the callers painted the new value first, so a rejected save looked saved (and
+// Jarvis, reading the store, would have told the owner "saved").
+async function post(action: string, id: string, value?: unknown): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch("/api/deals/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, value }),
+    });
+    const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!r.ok || j.ok === false) return { ok: false, error: j.error || `save rejected (${r.status})` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }
 
 export const useDesk = create<DeskStore>((set, get) => ({
   deals: [],
   columns: [],
+  maxAgeDays: 5,
+  agedOut: 0,
+  showStale: false,
   loading: false,
   error: null,
   cookie: { set: false, hint: "" },
@@ -59,19 +93,60 @@ export const useDesk = create<DeskStore>((set, get) => ({
   enrichResult: null,
   refilling: false,
   refillResult: null,
+  screening: false,
+  screenResult: null,
   scraping: false,
   scrapeResult: null,
   briefingBatch: false,
   briefBatchResult: null,
   pullingFeeds: false,
   feedsResult: null,
+  intaking: false,
+  intakeResult: null,
+
+  intake: async (text) => {
+    set({ intaking: true, intakeResult: null });
+    try {
+      const r = await fetch("/api/deals/intake", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: text }),
+      });
+      const j = await r.json();
+      const rej = (j.rejected || []) as { input: string; reason: string }[];
+      const rejText = rej.length ? ` · rejected ${rej.length}: ${rej.map((x) => `${x.input} (${x.reason})`).join("; ")}` : "";
+      if (!j.ok) {
+        set({ intakeResult: j.stopped ? "Intake stopped." : `${j.error || "Intake failed"}${rejText}` });
+        if (j.stopped) await get().fetchDeals();
+        return false;
+      }
+      const skipped = (j.skipped || []).length;
+      const wall = j.stopped === "login" ? ` · stopped at the Upwork login wall, ${(j.needsLogin || []).length} marked needs login` : "";
+      set({ intakeResult: `Took in ${j.ids?.length ?? 0} listing(s) (scraped ${j.scraped}, pitched ${j.pitched})${skipped ? ` · ${skipped} already on the desk` : ""}${wall}${rejText}` });
+      await get().fetchDeals();
+      return true;
+    } catch (e) {
+      set({ intakeResult: (e as Error).message });
+      return false;
+    } finally {
+      set({ intaking: false });
+    }
+  },
+
+  setShowStale: (v) => { set({ showStale: v }); void get().fetchDeals(); },
 
   fetchDeals: async () => {
     set({ loading: true, error: null });
     try {
-      const r = await fetch("/api/deals/list", { cache: "no-store" });
+      // The gate lives on the server, so "show the aged-out ones" is a request for a
+      // different answer, not a client-side unfilter: the count has to come from the
+      // same place that did the withholding or the two can disagree.
+      const r = await fetch(`/api/deals/list${get().showStale ? "?stale=1" : ""}`, { cache: "no-store" });
       const j = await r.json();
-      if (j.ok) set({ deals: j.deals, columns: j.columns });
+      if (j.ok) set({
+        deals: j.deals,
+        columns: j.columns,
+        maxAgeDays: typeof j.maxAgeDays === "number" ? j.maxAgeDays : get().maxAgeDays,
+        agedOut: typeof j.ageGate?.hidden === "number" ? j.ageGate.hidden : 0,
+      });
       else set({ error: j.error || "Failed to load deals" });
     } catch (e) {
       set({ error: (e as Error).message });
@@ -80,14 +155,35 @@ export const useDesk = create<DeskStore>((set, get) => ({
     }
   },
 
+  // Status, notes and pitch change in the store only after the server kept them.
   move: async (id, status) => {
-    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, status } : d)) }));
-    await post("status", id, status);
+    const res = await post("status", id, status);
+    if (!res.ok) { set({ error: `Status not saved: ${res.error}` }); return; }
+    set((s) => ({ error: null, deals: s.deals.map((d) => (d.id === id ? { ...d, status } : d)) }));
+  },
+
+  moveMany: async (ids, status, opts) => {
+    const want = new Set(ids);
+    set((s) => ({ deals: s.deals.map((d) => (want.has(d.id) ? { ...d, status } : d)) }));
+    try {
+      const r = await fetch("/api/deals/action", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkStatus", ids, value: status, sweep: opts?.sweep }),
+      });
+      const j = await r.json();
+      if (!j.ok) { set({ error: j.error || "Bulk move failed" }); await get().fetchDeals(); return false; }
+      return true;
+    } catch (e) {
+      set({ error: (e as Error).message });
+      await get().fetchDeals();
+      return false;
+    }
   },
 
   saveNotes: async (id, notes) => {
-    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, notes } : d)) }));
-    await post("notes", id, notes);
+    const res = await post("notes", id, notes);
+    if (!res.ok) { set({ error: `Notes not saved: ${res.error}` }); return; }
+    set((s) => ({ error: null, deals: s.deals.map((d) => (d.id === id ? { ...d, notes } : d)) }));
   },
 
   toggleNeedsInfo: async (id) => {
@@ -99,12 +195,56 @@ export const useDesk = create<DeskStore>((set, get) => ({
         return { ...d, needsInfo: next };
       }),
     }));
-    await post("needsInfo", id, next);
+    const res = await post("needsInfo", id, next);
+    if (!res.ok) {
+      // Put the flag back: the server did not keep it, and the research pass must not start.
+      set((s) => ({ error: `"Need more info" not saved: ${res.error}`, deals: s.deals.map((d) => (d.id === id ? { ...d, needsInfo: !next } : d)) }));
+      return;
+    }
+    // S4 (e): the flag fires work. Turning it ON starts the research pass;
+    // turning it off leaves whatever ran on the card.
+    if (next) await get().research(id);
+  },
+
+  research: async (id, steps) => {
+    // Mark it running locally at once so the card shows the spinner before the
+    // first poll; the server overwrites with its own state on the next fetch.
+    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, research: { status: "running", at: Date.now(), steps } } : d)) }));
+    try {
+      const r = await fetch("/api/deals/research", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, steps }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, research: { status: "error", at: Date.now(), note: j.error || "could not start" } } : d)) }));
+        if (j.runId) get().pollResearch(id); // 409: a pass is already running; follow it
+        return false;
+      }
+      get().pollResearch(id);
+      return true;
+    } catch (e) {
+      set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, research: { status: "error", at: Date.now(), note: (e as Error).message } } : d)) }));
+      return false;
+    }
+  },
+
+  pollResearch: (id) => {
+    // Self-rescheduling like pollScrape; stops when the card's research settles
+    // or the card is gone. Capped at ~12 minutes of polling.
+    let ticks = 0;
+    const tick = async () => {
+      await get().fetchDeals();
+      const d = get().deals.find((x) => x.id === id);
+      if (!d || d.research?.status !== "running" || ++ticks > 144) return;
+      setTimeout(tick, 5000);
+    };
+    setTimeout(tick, 4000);
   },
 
   savePitch: async (id, pitch) => {
-    set((s) => ({ deals: s.deals.map((d) => (d.id === id ? { ...d, pitch, editedPitch: pitch } : d)) }));
-    await post("editPitch", id, pitch);
+    const res = await post("editPitch", id, pitch);
+    if (!res.ok) { set({ error: `Proposal not saved: ${res.error}` }); return; }
+    set((s) => ({ error: null, deals: s.deals.map((d) => (d.id === id ? { ...d, pitch, editedPitch: pitch } : d)) }));
   },
 
   draftProposal: async (id) => {
@@ -167,7 +307,12 @@ export const useDesk = create<DeskStore>((set, get) => ({
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cookie }),
       });
       const j = await r.json();
-      if (j.ok) { set({ cookie: { set: !!j.set, hint: j.hint || "" } }); return true; }
+      if (j.ok) {
+        set({ cookie: { set: !!j.set, hint: j.hint || "" } });
+        // A fresh cookie clears the needs-login flags server-side; show that.
+        if (j.clearedNeedsLogin) await get().fetchDeals();
+        return true;
+      }
       return false;
     } catch { return false; }
   },
@@ -175,12 +320,18 @@ export const useDesk = create<DeskStore>((set, get) => ({
   enrichApproved: async () => {
     set({ enriching: true, enrichResult: null });
     try {
-      const r = await fetch("/api/deals/enrich", {
+      // S4 (d): the gated runner. A login wall stops the run, flags the cards it
+      // did not reach, and the board shows the banner with the re-login link.
+      const r = await fetch("/api/deals/enrichment", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}),
       });
       const j = await r.json();
       if (j.ok) {
-        set({ enrichResult: `Enriched ${j.enriched}/${j.attempted}${j.stopped ? ` — stopped on ${j.stopped}` : ""}` });
+        const wall = j.stopped === "login" ? ` — stopped at the Upwork login wall, ${(j.needsLogin || []).length} card(s) need login` : j.stopped ? ` — stopped on ${j.stopped}` : "";
+        set({ enrichResult: `Enriched ${j.enriched}/${j.attempted}${wall}` });
+        await get().fetchDeals();
+      } else if (j.stopped) {
+        set({ enrichResult: "Enrichment stopped." });
         await get().fetchDeals();
       } else {
         set({ enrichResult: j.error || "Enrichment failed" });
@@ -297,6 +448,49 @@ export const useDesk = create<DeskStore>((set, get) => ({
     tick();
   },
 
+  screenAll: async () => {
+    set({ screening: true, screenResult: null });
+    try {
+      const r = await fetch("/api/deals/screen", { method: "POST" });
+      const j = await r.json();
+      if (j.ok && j.started) {
+        set({ screenResult: `Screening ${j.total} unjudged leads…` });
+        get().pollScreen();
+      } else if (j.ok) {
+        // "nothing to screen" is the good outcome, not a failure.
+        set({ screening: false, screenResult: j.reason === "nothing to screen" ? "Every lead already has a call." : j.reason || "Nothing to screen." });
+      } else {
+        set({ screening: false, screenResult: j.error || "Screen pass failed" });
+      }
+    } catch (e) {
+      set({ screening: false, screenResult: (e as Error).message });
+    }
+  },
+
+  pollScreen: async () => {
+    const tick = async () => {
+      try {
+        const j = await (await fetch("/api/deals/screen", { cache: "no-store" })).json();
+        if (j.running) {
+          set({ screening: true, screenResult: `Screening leads… ${j.done}/${j.total}` });
+          setTimeout(tick, 4000);
+          return;
+        }
+        if (!j.total) { set({ screening: false }); return; }
+        // The failed count is not noise to hide: those cards are still NA, and the
+        // operator needs to know the board is not fully judged.
+        set({
+          screening: false,
+          screenResult: `Screened ${j.succeeded} of ${j.total} leads${j.failed ? ` · ${j.failed} left NA` : ""}.`,
+        });
+        await get().fetchDeals();
+      } catch {
+        set({ screening: false });
+      }
+    };
+    tick();
+  },
+
   pullFeeds: async () => {
     set({ pullingFeeds: true, feedsResult: null });
     try {
@@ -304,11 +498,15 @@ export const useDesk = create<DeskStore>((set, get) => ({
       const j = await r.json();
       if (j.ok) {
         const bs = j.bySource || {};
-        set({ feedsResult: `Pulled ${j.relevant} remote leads (RemoteOK ${bs.remoteok || 0} · WWR ${bs.wwr || 0} · Reddit ${bs.reddit || 0})` });
+        const gate = j.ageGate?.dropped ? ` · dropped ${j.ageGate.dropped} older than ${j.ageGate.maxAgeDays}d` : "";
+        set({ feedsResult: `Pulled ${j.relevant} remote leads (RemoteOK ${bs.remoteok || 0} · WWR ${bs.wwr || 0} · Reddit ${bs.reddit || 0})${gate}` });
         await get().fetchDeals();
         // The pull now kicks off a brief pass server-side; follow it so the cards
         // visibly fill in rather than appearing blank and silently changing later.
         if (j.briefing) { set({ briefingBatch: true, briefBatchResult: `Analysing ${j.briefing} new leads…` }); get().pollBriefs(); }
+        // The screen is what stops the leads under the brief cap from rendering a
+        // band nobody produced, so follow it the same way.
+        if (j.screening) { set({ screening: true, screenResult: `Screening ${j.screening} leads…` }); get().pollScreen(); }
       } else {
         set({ feedsResult: j.error || "Feed pull failed" });
       }

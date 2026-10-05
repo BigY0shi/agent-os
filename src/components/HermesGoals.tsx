@@ -7,6 +7,7 @@ import {
   Download, Eye, X as XIcon, Image as ImageIcon,
 } from "lucide-react";
 import { usePollWhileVisible } from "@/lib/usePollWhileVisible";
+import { MOD } from "@/lib/modKey";
 
 // Hermes Goal Mode — set a long-horizon goal, walk away, Hermes loops until done.
 // Mirrors the Codex Goal pattern but spawns `hermes chat -q ... --yolo --max-turns 50`.
@@ -223,7 +224,7 @@ export default function HermesGoals() {
               className="w-full p-2.5 rounded-md text-[12.5px] resize-none"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--panel-border)", color: "var(--cream)" }} />
             <div className="flex items-center justify-between">
-              <div className="text-[10px] text-[var(--cream-mute)]">⌘+Enter to launch</div>
+              <div className="text-[10px] text-[var(--cream-mute)]">{MOD}+Enter to launch</div>
               <button onClick={create} disabled={busy || !prompt.trim()}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition"
                 style={{

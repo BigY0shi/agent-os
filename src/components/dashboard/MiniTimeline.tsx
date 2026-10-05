@@ -31,12 +31,14 @@ const toneClass = {
 } as const;
 
 function shortTime(iso: string) {
+  // "" = the source line carried no time (never invented; see /api/activity).
+  if (!iso) return "--:--:--";
   const d = new Date(iso);
   return d.toLocaleTimeString("en-GB", { hour12: false });
 }
 
 interface ActivityEntry {
-  ts: number;
+  ts: number | null;
   agent: string;
   text: string;
   level?: string;
@@ -62,7 +64,7 @@ export function MiniTimeline() {
         setEvents(
           entries.slice(0, 8).map((e, i) => ({
             id: `${e.agent}-${e.ts}-${i}`,
-            ts: new Date(e.ts).toISOString(),
+            ts: e.ts == null ? "" : new Date(e.ts).toISOString(),
             level: toLevel(e.level),
             category: "agent" as const,
             agentName: e.agent,

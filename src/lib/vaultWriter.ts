@@ -30,7 +30,7 @@ async function fileExists(p: string): Promise<boolean> {
 // ─── MEMORIES ───────────────────────────────────────────────────────
 // One file per day under Agentic OS/Memories/YYYY-MM-DD.md
 export async function appendMemory(entry: {
-  agent: "claude" | "openclaw" | "hermes" | "user" | "system";
+  agent: "claude" | "openclaw" | "hermes" | "antigravity" | "user" | "system";
   kind: "chat" | "goal" | "journal" | "note";
   user?: string;
   reply?: string;

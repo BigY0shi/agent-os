@@ -15,8 +15,7 @@ import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 import { readSettings } from "./settings";
-import { seatComplete, resolveKimiModel } from "./brainstorm";
-import { cliComplete } from "./loopEngine";
+import { ideaAgents, runSeat } from "./ideaSeats";
 import { IDEA_DIR } from "./ideaEngine";
 import type { RawSignal, Score, TrendCandidate } from "./ideaEngineTypes";
 
@@ -365,22 +364,28 @@ export async function startScan(): Promise<{ started: boolean; reason?: string }
       await mkdir(IDEA_DIR, { recursive: true });
       await writeFile(SIGNALS_FILE, JSON.stringify(allSignals, null, 1), "utf8");
 
-      // Cluster the fresh signals (cheap tier: kimi, codex fallback).
+      // Cluster the fresh signals. Agent + fallback from settings (default Claude, then
+      // Codex); the scan's cluster chip says who did it and whether it was the fallback.
       const candidates = await readCandidates();
       if (fresh.length >= 5) {
         job.sources.cluster = "running…";   // model call — the slow tail of the scan
         const prompt = clusterPrompt(fresh, candidates);
-        let raw: string;
+        const ag = ideaAgents(s);
+        let raw = "";
+        let clusteredBy = "";
         try {
-          const km = await resolveKimiModel(s.kimiModel);
-          raw = await seatComplete("kimi", prompt, km);
-        } catch {
-          raw = await cliComplete("codex", prompt, { timeoutMs: 240_000 });
+          const seat = await runSeat(ag.cluster, ag.fallback, prompt, { timeoutMs: 240_000, kimiModel: s.kimiModel });
+          raw = seat.text;
+          clusteredBy = seat.used;
+        } catch (e) {
+          job.sources.cluster = `failed: ${String((e as Error)?.message || e).slice(0, 240)}`;
         }
         interface ClusterOut { assign?: { candidateId?: string; signalIds?: string[] }[]; create?: { topic?: string; thesis?: string; signalIds?: string[] }[] }
         let plan: ClusterOut = {};
-        try { plan = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]) as ClusterOut; }
-        catch { job.sources.cluster = "failed: unparseable clustering output"; }
+        if (raw) {
+          try { plan = JSON.parse((raw.match(/\{[\s\S]*\}/) || ["{}"])[0]) as ClusterOut; }
+          catch { job.sources.cluster = `failed: unparseable clustering output (${clusteredBy})`; }
+        }
 
         const byId = new Map(allSignals.map((x) => [x.id, x]));
         for (const a of plan.assign ?? []) {
@@ -403,7 +408,7 @@ export async function startScan(): Promise<{ started: boolean; reason?: string }
         }
         await writeFile(CANDIDATES_FILE, JSON.stringify(candidates, null, 1), "utf8");
         if (job.sources.cluster === "running…") {
-          job.sources.cluster = `ok: ${(plan.assign?.length ?? 0)} assigned, ${(plan.create?.length ?? 0)} new`;
+          job.sources.cluster = `ok: ${(plan.assign?.length ?? 0)} assigned, ${(plan.create?.length ?? 0)} new · by ${clusteredBy}`;
         }
       }
       job.candidates = candidates.length;

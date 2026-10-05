@@ -1,4 +1,6 @@
-import { config, CLAUDE_MODEL } from "@/lib/config";
+import { config } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
+import { ollamaCloudDefaultModel, ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,14 +19,16 @@ function agent(
 }
 
 export async function GET() {
-  const ollamaKey = !!(process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY);
+  // settings.ollama first, then the environment (lib/ollamaCloud.ts); the card shows the model
+  // the Ollama page would use when none is picked.
+  const ollamaKey = !!ollamaCloudKey();
 
   const agents = [
-    agent("claude", "Claude", "Reasoning + code", "Anthropic CLI", "claude-cli", CLAUDE_MODEL, "spiral", "#d97757", "#f2b8a2", !!config.claude),
+    agent("claude", "Claude", "Reasoning + code", "Anthropic CLI", "claude-cli", claudeModel(), "spiral", "#d97757", "#f2b8a2", !!config.claude),
     agent("codex", "Codex", "OpenAI coding agent", "codex exec", "claude-cli", "gpt-5.5", "hex-orbit", "#22c55e", "#86efac", !!config.codex),
     agent("hermes", "Hermes", "Tool-using agent", "multi-step jobs", "claude-cli", "openrouter", "ring-cross", "#60a5fa", "#bfdbfe", !!config.hermes),
     agent("antigravity", "Antigravity", "Gemini successor", "agy CLI", "claude-cli", "agy", "dual-cone", "#7c3aed", "#c4b5fd", !!config.antigravity),
-    agent("ollama", "Ollama Cloud", "Hosted open models", "ollama.com", "remote-http", "qwen3-coder:480b", "fractal", "#6CA8FF", "#bcd6ff", ollamaKey, "https://ollama.com"),
+    agent("ollama", "Ollama Cloud", "Hosted open models", "ollama.com", "remote-http", ollamaCloudDefaultModel("qwen3-coder:480b"), "fractal", "#6CA8FF", "#bcd6ff", ollamaKey, ollamaCloudHost()),
     agent("cursor", "Cursor", "Cursor coding agent", "cursor-agent CLI", "claude-cli", "composer", "hex-orbit", "#cbd5e1", "#e2e8f0", !!config.cursor),
     agent("pi", "Pi", "AI coding CLI", "pi CLI", "claude-cli", "glm-5.2:cloud", "spiral", "#fbbf24", "#fde68a", !!config.pi),
     agent("openclaw", "OpenClaw", "OpenClaw agent", "local agent", "claude-cli", "openclaw", "triangle-stack", "#f472b6", "#fbcfe8", !!config.openclaw),
