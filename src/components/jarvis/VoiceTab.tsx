@@ -57,6 +57,9 @@ export default function VoiceTab() {
   const [turns, setTurns] = useState<Record<string, Turn[]>>({});
   const [face, setFace] = useState<FaceState>("idle");
   const [text, setText] = useState("");
+  // Typed while the agent is busy or speaking: queued, sent in order when it is free.
+  const [queue, setQueue] = useState<{ id: number; text: string }[]>([]);
+  const queueIdRef = useRef(0);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [mute, setMute] = useState(false);
@@ -64,6 +67,16 @@ export default function VoiceTab() {
   const jarvisConv = useRef<string | undefined>(undefined);
   const levelRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Stop / interrupt (2026-10-08): the running ask's controller, and a counter that a stop
+  // bumps so a voice that arrives after it never plays. Talking, Space and Stop all use it.
+  const askAbortRef = useRef<AbortController | null>(null);
+  const speakGenRef = useRef(0);
+  const stopAll = useCallback(() => {
+    askAbortRef.current?.abort(); askAbortRef.current = null;
+    speakGenRef.current++;
+    const a = audioRef.current; if (a) { a.onended = null; a.pause(); }
+    levelRef.current = 0; setBusy(false); setFace("idle");
+  }, []);
   const endRef = useRef<HTMLDivElement>(null);
 
   // Roster: Jarvis, the Oracle, every Mastermind specialist, every crew agent.
@@ -91,9 +104,11 @@ export default function VoiceTab() {
   // Speak a reply through Kokoro, feeding the face its real audio level.
   const speak = useCallback(async (reply: string, who: Member) => {
     if (mute || !reply.trim()) { setFace("idle"); return; }
+    const gen = speakGenRef.current;
     setFace("working");
     const r = await fetch("/api/hermes/tts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: reply.slice(0, 1200), provider: "local", ...(who.voiceId ? { voiceId: who.voiceId } : {}) }) });
     const j = await r.json().catch(() => ({}));
+    if (gen !== speakGenRef.current) return; // stopped while the voice was being made
     if (!r.ok || !j.audio) { setFace("error"); setErr(`Could not speak the reply: ${j.error ?? r.status}`); return; }
     const audio = new Audio(j.audio as string);
     audioRef.current = audio;
@@ -110,12 +125,14 @@ export default function VoiceTab() {
   }, [mute]);
 
   const ask = useCallback(async (said: string, who: Member) => {
+    stopAll(); // a new utterance interrupts whatever was running
+    const ac = new AbortController(); askAbortRef.current = ac;
     push(who.key, { who: "you", name: "You", text: said, at: Date.now() });
     setBusy(true); setErr(null); setFace("thinking");
     try {
       let reply = "";
       if (who.lane === "jarvis") {
-        const r = await fetch("/api/v2/jarvis/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: said, conversationId: jarvisConv.current }) });
+        const r = await fetch("/api/v2/jarvis/ask", { method: "POST", signal: ac.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ text: said, conversationId: jarvisConv.current }) });
         if (!r.ok || !r.body) throw new Error(`Jarvis answered ${r.status}`);
         const parts: string[] = [];
         await readSse(r, (ev) => {
@@ -151,14 +168,16 @@ export default function VoiceTab() {
           await new Promise((res) => setTimeout(res, 3000));
         }
       }
+      if (ac.signal.aborted) return;
       if (!reply.trim()) throw new Error("the reply came back empty");
       push(who.key, { who: "agent", name: who.name, text: reply, at: Date.now() });
       await speak(reply, who);
     } catch (e) {
+      if (ac.signal.aborted) { push(who.key, { who: "system", name: "", text: "Stopped.", at: Date.now() }); return; }
       setFace("error"); setErr((e as Error).message);
       push(who.key, { who: "system", name: "", text: `No reply: ${(e as Error).message}`, at: Date.now() });
-    } finally { setBusy(false); }
-  }, [push, speak, turns]);
+    } finally { if (askAbortRef.current === ac) { askAbortRef.current = null; setBusy(false); } }
+  }, [push, speak, turns, stopAll]);
 
   // "talk to Hermes" switches who you are talking to instead of sending.
   const handleUtterance = useCallback((said: string) => {
@@ -175,6 +194,14 @@ export default function VoiceTab() {
   }, [members, m, ask]);
 
   const capture = useVoiceCapture({ provider: "parakeet", onFinalChunk: handleUtterance });
+  // Drain the typed queue once the agent is idle; Stop puts queued text back in the box.
+  useEffect(() => {
+    if (!queue.length || busy || recording || face === "speaking" || face === "working" || face === "thinking") return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    handleUtterance(next.text);
+  }, [queue, busy, face]); // eslint-disable-line react-hooks/exhaustive-deps
+  const holdQueue = () => setQueue((q) => { if (q.length) setText((cur) => [cur, ...q.map((x) => x.text)].filter(Boolean).join(" ")); return []; });
   const recording = capture.status === "recording";
   useEffect(() => { if (recording) setFace("listening"); else if (face === "listening") setFace("idle"); }, [recording]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -183,7 +210,8 @@ export default function VoiceTab() {
     const typing = (e: KeyboardEvent) => { const el = e.target as HTMLElement | null; return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable); };
     const down = (e: KeyboardEvent) => {
       if (typing(e)) return;
-      if (e.code === "Space" && !e.repeat && !busy) { e.preventDefault(); audioRef.current?.pause(); capture.start(); }
+      if (e.code === "Space" && !e.repeat) { e.preventDefault(); stopAll(); capture.start(); }
+      if (e.key === "Escape") { holdQueue(); stopAll(); }
       if (e.key === "ArrowLeft") rotate(-1);
       if (e.key === "ArrowRight") rotate(1);
     };
@@ -229,8 +257,8 @@ export default function VoiceTab() {
         <section className="glass relative flex flex-col items-center px-6 py-6" aria-label={`${m.name}'s face`}>
           <AgentFace variant={m.face} state={face} getLevel={() => levelRef.current} label={`${m.name}, ${face}`} style={{ width: "min(420px, 100%)", aspectRatio: "1 / 1" }} />
           <div className="mt-2 text-[11.5px] text-[var(--fg-dimmer)]">{face === "listening" ? "Listening…" : face === "thinking" ? `${m.name} is thinking…` : face === "speaking" ? `${m.name} is speaking` : face === "working" ? "Getting the voice ready…" : face === "error" ? "Something went wrong (below)" : `Voice: ${m.voiceLabel}`}</div>
-          <button type="button" disabled={busy || capture.available !== true}
-            onPointerDown={() => { audioRef.current?.pause(); capture.start(); }} onPointerUp={() => capture.stop()} onPointerLeave={() => { if (recording) capture.stop(); }}
+          <button type="button" disabled={capture.available !== true}
+            onPointerDown={() => { stopAll(); capture.start(); }} onPointerUp={() => capture.stop()} onPointerLeave={() => { if (recording) capture.stop(); }}
             className={`mt-4 inline-flex items-center gap-2 rounded-full px-6 py-3 text-[13px] glass ${recording ? "neon-ring" : ""} disabled:opacity-40`} aria-pressed={recording}>
             {recording ? <Square size={14} /> : <Mic size={14} />} {recording ? "Release to send" : "Hold to talk"}
           </button>
@@ -252,13 +280,22 @@ export default function VoiceTab() {
               </div>
             ))}
             {busy && <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--fg-dim)]"><Loader2 size={12} className="animate-spin" /> {m.name} is {m.lane === "crew" ? "running" : "thinking"}…</div>}
+            {(busy || face === "speaking") && <button type="button" onClick={() => { holdQueue(); stopAll(); }} title="Stop (Esc)" className="self-start rounded-lg border border-red-400/50 px-2.5 py-1 text-[11.5px] text-red-300 hover:border-red-400">Stop</button>}
+            {queue.map((q, i) => (
+              <div key={q.id} className="flex items-center gap-2 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] text-[var(--fg-dim)]">
+                <span className="shrink-0 text-[10.5px] uppercase tracking-wide text-[var(--fg-dimmer)]">{i === 0 ? "Next" : `Queued ${i + 1}`}</span>
+                <span className="min-w-0 flex-1 truncate" title={q.text}>{q.text}</span>
+                <button type="button" onClick={() => { setQueue((x) => x.filter((y) => y.id !== q.id)); handleUtterance(q.text); }} className="shrink-0 rounded-md border border-white/10 px-2 py-0.5 text-[11px] hover:bg-white/5" title="Interrupt and send this now">Send now</button>
+                <button type="button" aria-label="Remove queued message" onClick={() => setQueue((x) => x.filter((y) => y.id !== q.id))} className="shrink-0 rounded p-0.5 text-[12px] hover:bg-white/5">×</button>
+              </div>
+            ))}
             <div ref={endRef} />
           </div>
           {notice && <p className="px-5 text-[11.5px] text-[var(--fg-dim)]">{notice}</p>}
           {err && <p role="alert" className="px-5 text-[11.5px] text-red-300">{err}</p>}
-          <form className="flex gap-2 border-t border-white/5 px-4 py-3" onSubmit={(e) => { e.preventDefault(); const t = text; setText(""); handleUtterance(t); }}>
+          <form className="flex gap-2 border-t border-white/5 px-4 py-3" onSubmit={(e) => { e.preventDefault(); const t = text.trim(); setText(""); if (!t) return; if (busy || face === "speaking" || face === "working" || queue.length) { setQueue((q) => [...q, { id: ++queueIdRef.current, text: t }]); return; } handleUtterance(t); }}>
             <input value={text} onChange={(e) => setText(e.target.value)} placeholder={`Type to ${m.name}, or "talk to …"`} aria-label={`Message ${m.name}`} className="flex-1 rounded-xl px-3 py-2 text-[13px] outline-none glass-inset" />
-            <button type="submit" disabled={busy || !text.trim()} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] glass neon-ring disabled:opacity-40"><Send size={13} /> Send</button>
+            <button type="submit" disabled={!text.trim()} title={busy ? "Busy: this is queued and goes out when the reply is done" : undefined} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] glass neon-ring disabled:opacity-40"><Send size={13} /> Send</button>
           </form>
         </section>
       </div>

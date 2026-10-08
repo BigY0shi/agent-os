@@ -1,5 +1,28 @@
 # Agent OS — Dev Journal
 
+## 2026-10-08 - Jarvis can be stopped, interrupted and queued (v2.60.2)
+
+Owner: "once jarvis gets going, I cannot interrupt or even stop him", then "make sure queueing
+messages works". The brain already cancels a turn when its request is aborted
+(api/v2/jarvis/ask passes req.signal; brain.ts interrupts the SDK query on abort), but:
+- JarvisView.tsx: `if (!p || busyRef.current) return;` dropped every message sent while busy
+  (the box's own placeholder promises "type any time, even mid-conversation"); the ask fetch
+  had no signal; nothing ever paused the reply audio; no Stop control.
+- jarvis/VoiceTab.tsx: Hold to talk / Space disabled while busy; no abort; typed Send disabled.
+- v2/jarvis/ChatboxOverlay.tsx: had Stop, but Send was disabled while busy (text stuck).
+Fix: Console gets stopJarvis (abort + pause + speak generation so a late voice never plays),
+a Stop button and Esc; tapping the face or talking interrupts; a typed message while busy is
+QUEUED (chips: Send now = interrupt and send, x = remove) and drains one at a time when idle;
+Stop puts queued text back in the box, nothing auto-sent. Voice tab: talk/Space/Esc/Stop
+interrupt, typed messages queue. Overlay: Send queues while busy, drains after read-aloud,
+Stop actions holds the queue, an abort reads "(stopped)" not an error.
+Still not done: voice barge-in during playback in hands-free Live (the mic is closed while
+Jarvis speaks); Stop, Esc or tapping the face are the ways in.
+Verified: new smoke-jarvis-stop-queue 22/22; ./test.sh 121 passed, 0 failed (a first run hit a
+native node crash in smoke-anynotes-ui, which passes alone and on the rerun). Live check is the
+owner's after rebuild + restart.
+Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - Browser tools: the audit-degraded notice actually reaches the caller (v2.60.1)
 
 Copilot's review of PR #18 (2026-10-01) flagged `withAuditWarning` in src/lib/v2/browser/tools.ts:

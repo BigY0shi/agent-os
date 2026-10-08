@@ -10,7 +10,7 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 
 | Control | What it does |
 |---|---|
-| Face ("Tap to talk") | Starts or stops listening. The phase label shows ONLINE, LISTENING, THINKING, ACTING, SPEAKING or BUILDING. |
+| Face ("Tap to talk") | Starts or stops listening. Tapping it while Jarvis is thinking or speaking interrupts him and starts listening. The phase label shows ONLINE, LISTENING, THINKING, ACTING, SPEAKING or BUILDING. |
 | **Realtime ON/OFF** | Opens the speech-to-speech panel with **GPT Realtime**, **Gemini Live** or **Kimi**. The tooltip notes GPT Realtime needs `OPENAI_API_KEY`. |
 | **Live ON/OFF** | Hands-free: listens continuously. Disabled while Realtime is on. |
 | **Wake word ON/OFF** | Listens for "Jarvis". Disabled while Realtime is on. |
@@ -18,8 +18,10 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | **Briefing** | A vault-grounded rundown (suggested focus, open action items, done this week, activity, themes, worked on, on your mind, headlines). The panel has **daily** / **weekly**, a history button ("Past briefings") and a Dismiss X. |
 | Reply voice select | Picks the reply voice and saves it to settings. |
 | **Configure** (gear, tooltip "Jarvis models") | Sets "Kimi voice brain (Ollama Cloud)", and the models behind the hosted voice lanes: **Gemini Live model** (blank = `GEMINI_LIVE_MODEL`, else `gemini-live-2.5-flash-preview`), **GPT Realtime model** (`gpt-realtime`), **GPT Realtime transcription model** (`gpt-4o-mini-transcribe`) and **OpenAI reply voice model** (`gpt-4o-mini-tts`). Saved to `settings.jarvis` and used by the next session or reply. |
-| **Wall mode** | Full-screen HUD; Esc exits. |
-| Text box, **Send** | Type any time and press Enter. |
+| **Wall mode** | Full-screen HUD; Esc exits (when Jarvis is thinking or speaking, the first Esc stops him instead). |
+| Text box, **Send** | Type any time and press Enter. While Jarvis is busy or speaking the message is queued and goes out when he is done. |
+| **Stop** (or Esc) | Shown while Jarvis is thinking or speaking. Cancels the reply and silences the voice; queued messages go back into the text box, nothing is sent. |
+| Queued messages: **Send now**, remove (x) | Each queued message in order ("Next", "Queued 2", ...). **Send now** interrupts Jarvis and sends it at once (disabled while a build or briefing runs, which cannot be cancelled). |
 | Built with Hermes-Jarvis | Gallery of pages Jarvis built; each opens in a preview. |
 
 ### Voice
@@ -27,9 +29,10 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | Control | What it does |
 |---|---|
 | Dial, **Previous** / **Next**, arrow keys | Picks who you talk to: Jarvis, Oracle, Mastermind specialists and crew agents. Saying "talk to <name>" also switches. |
-| **Hold to talk** (or hold Space) | Records through Parakeet while held, sends on release. |
+| **Hold to talk** (or hold Space) | Records through Parakeet while held, sends on release. Works while the agent is busy: it stops the reply and the voice first. |
+| **Stop** (or Esc) | Shown while the agent is thinking or speaking. Stops it; queued messages go back into the text box. |
 | **Replies spoken** / **Replies muted** | Speaks replies through Kokoro, or not. |
-| Prompt chips, text box, **Send** | Typed messages to the same agent. |
+| Prompt chips, text box, **Send** | Typed messages to the same agent. Sent while it is busy, a message is queued (**Send now** to interrupt, x to remove). |
 
 ### Oracle
 

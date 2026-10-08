@@ -107,6 +107,12 @@ export default function ChatboxOverlay({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const askAbortRef = useRef<AbortController | null>(null);
+  // Messages sent while Jarvis is busy wait here and go out in order when he is free
+  // (owner, 2026-10-08: "make sure queueing messages works"). They used to stay stuck in
+  // the box behind a disabled Send button.
+  const [queue, setQueue] = useState<{ id: number; text: string }[]>([]);
+  const queueIdRef = useRef(0);
+  const dispatchRef = useRef<(text: string) => Promise<void>>(async () => {});
   const [turns, setTurns] = useState<SessionTurn[]>([]);
   const router = useRouter();
   // Conversation thread for this overlay session (handed back by the meta event).
@@ -201,10 +207,16 @@ export default function ChatboxOverlay({
       capture.cancel();
     }
     const text = valueRef.current.trim();
-    if (!text || busyRef.current) return;
-    speechRef.current.stop();
+    if (!text) return;
     valueRef.current = "";
     setValue("");
+    if (busyRef.current) { setQueue((q) => [...q, { id: ++queueIdRef.current, text }]); return; }
+    await dispatchRef.current(text);
+  }, [capture, splice]);
+
+  // One ask to the brain. Called by sendBuffer and by the queue drain.
+  const dispatchText = useCallback(async (text: string) => {
+    speechRef.current.stop();
     busyRef.current = true;
     setBusy(true);
     const askAbort = new AbortController();
@@ -296,12 +308,28 @@ export default function ChatboxOverlay({
       if (readRepliesRef.current && answer) void speechRef.current.read(answer);
     } catch (e) {
       setTurns((t) =>
-        t.map((x) => (x.id === jId ? { ...x, text: "Error reaching the Jarvis brain: " + String(e), working: false } : x)),
+        t.map((x) => (x.id === jId ? { ...x, text: askAbort.signal.aborted ? (x.text ? x.text + " (stopped)" : "(stopped)") : "Error reaching the Jarvis brain: " + String(e), working: false } : x)),
       );
     }
     busyRef.current = false;
     setBusy(false);
-  }, [capture, splice, router]);
+  }, [router]);
+  dispatchRef.current = dispatchText;
+
+  // Drain: the next queued message goes out once Jarvis is idle and done reading aloud.
+  useEffect(() => {
+    if (!queue.length || busy || speech.speaking) return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    void dispatchText(next.text);
+  }, [queue, busy, speech.speaking, dispatchText]);
+  // Stop keeps what was typed: queued messages go back into the box, nothing is sent.
+  const holdQueue = useCallback(() => {
+    setQueue((q) => {
+      if (q.length) { const v = [valueRef.current, ...q.map((m) => m.text)].filter(Boolean).join(" "); valueRef.current = v; setValue(v); }
+      return [];
+    });
+  }, []);
 
   // ── Human-Gate: resolve one approval card (Approve executes server-side) ───
   const resolveApprovalCard = useCallback(async (approvalId: string, action: "approve" | "deny") => {
@@ -525,7 +553,7 @@ export default function ChatboxOverlay({
                 </span>
               )}
               <div className="ml-auto flex items-center gap-1.5">
-                {busy && <button type="button" onClick={() => { askAbortRef.current?.abort(); speech.stop(); }}
+                {busy && <button type="button" onClick={() => { holdQueue(); askAbortRef.current?.abort(); speech.stop(); }}
                   className="text-[11px] px-2 py-1 rounded hover:bg-white/5">Stop actions</button>}
                 <button type="button" aria-pressed={readReplies}
                   onClick={() => { setReadReplies(v => !v); speech.stop(); }}
@@ -712,6 +740,18 @@ export default function ChatboxOverlay({
                 }}
               />
 
+              {queue.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1" aria-label="Queued messages">
+                  {queue.map((m, i) => (
+                    <div key={m.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1 text-[12px]" style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
+                      <span className="shrink-0 text-[10.5px] uppercase tracking-wide" style={{ color: "var(--fg-dimmer, #6b6478)" }}>{i === 0 ? "Next" : `Queued ${i + 1}`}</span>
+                      <span className="min-w-0 flex-1 truncate" title={m.text}>{m.text}</span>
+                      <button type="button" title="Remove from the queue" aria-label="Remove queued message" onClick={() => setQueue((q) => q.filter((x) => x.id !== m.id))} className="shrink-0 rounded p-0.5 hover:bg-white/5"><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* footer */}
               <div className="mt-2.5 flex items-center gap-2">
                 <button
@@ -741,7 +781,8 @@ export default function ChatboxOverlay({
                 </span>
                 <button
                   onClick={() => sendBuffer()}
-                  disabled={busy || !value.trim()}
+                  disabled={!value.trim()}
+                  title={busy ? "Jarvis is busy: this is queued and goes out when he is done" : undefined}
                   className="inline-flex items-center gap-1.5 px-3.5 h-9 rounded-xl text-[12.5px] font-medium transition disabled:opacity-30"
                   style={{ border: `1px solid ${ACCENT}66`, background: `${ACCENT}18`, color: ACCENT }}
                 >
