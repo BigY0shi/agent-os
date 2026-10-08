@@ -214,6 +214,47 @@ Not seen in a browser (harness session): the owner looks at a crew agent's mark 
 Rollback: `git revert <this commit>`; the stored seeds under settings.agents.faces are inert data
 and can stay.
 
+## 2026-10-01 - S36: Fleet stats on Mission Control (v2.61.0)
+
+Harness session, worktree `fleet-stats`, branch feat/s36-fleet-stats, feature feat-s36-fleet-stats
+(Nexora C9; owner: "it doesn't need to be hourly. Maybe bidaily or so. But yes, we will need these
+metrics."). Mission Control is the Cockpit view in Overview.tsx (S18), which already shows fleet data,
+so the strip sits there, right under the telemetry band.
+- `src/lib/v2/fleetStats/stats.ts`: pure math (`bucketize`, `heatmap`, `buildFleetStats`) plus the
+  collector `collectFleetSources` and `readFleetStats`. "You" = your messages in jarvis_messages,
+  rabbit_messages and v2_messages (role user, user_type human, not ephemeral), agent runs with an
+  owner trigger (manual, crew-chat: the Crew convention `OWNER_TRIGGERS`), missions you created.
+  "Agents" = assistant replies in those three tables, agent run records (`agents/<id>/runs/*.meta.json`),
+  module runs (`module-runs.json`; the registry keeps the last 50 finished and the label says so),
+  mission steps that started, Ultracode runs. Hand-offs = mission events of kind `handoff`, with
+  `from` = the seats of the steps it depended on, else Jarvis. Sessions per source, last 24 h and
+  total. Hermes is listed `tracked:false` with the reason "Hermes keeps its own state.db; Agent OS
+  does not read it": nothing in src/lib opens that file, so it is "not tracked", never 0.
+- Buckets are aligned to local midnight in the Tasks timezone (`zonedMidnight`), so a 12 h bucket is
+  a morning or an afternoon in the owner's day; the heatmap is weekday x hour in the same zone.
+- Settings (rule 16): `fleetStats.bucketHours` (6/12/24/48, default 12) and `fleetStats.windowDays`
+  (7/14/30/60, default 14) in the strip's gear, saved through useSettings and read per request
+  (`fleetStatsOptions`), so the next count re-buckets with no rebuild; a value outside the choices or
+  an unknown zone falls back to the default AND reports it in `errors`, shown amber on the card.
+  Timezone is `tasks.timezone`, the single timezone source; no second zone knob.
+- Route `GET /api/v2/home/fleet-stats`; component `src/components/v2/home/FleetStats.tsx` (four
+  cards: Activity over time, When the fleet is busy, Recent hand-offs, Sessions), mounted in
+  Overview.tsx after `<CockpitBand />`. Doc rows in docs/modules/mission-control.md.
+- Smoke `scripts/v2/smoke-fleet-stats.mjs`, 43 checks, every store redirected to a temp dir
+  (DB, settings, agents, principals, runs, missions, ultracode-runs, crew, webmcp, agentmail,
+  newsletter). A: the math on fixed instants in America/Chicago (local-midnight alignment, all four
+  bucket sizes over the same events, heat cells, empty fleet all zeros, the not-tracked row carries no
+  number, bad settings fall back loudly). B: seeded rows across every source give exactly the seeded
+  counts (you 5, agents 9, sessions 8 / 10, two hand-offs newest first), and writing
+  `fleetStats.bucketHours: 24` to settings.json halves the buckets on the next read. C: wiring greps.
+  Found by the smoke's first run: the missions store only lists ids matching `^m_[a-z0-9]{8,40}$`
+  (store.ts:99), so the seed id had to be `m_fleetstats0001`; the code was right.
+- Gate: ./test.sh 121 passed, 0 failed (tsc clean). Version 2.60.0 -> 2.61.0 (minor).
+- Rollback: `git revert <this commit>`; the new files are additive, `fleetStats` in settings.json is
+  ignored by older code, and no migration was added.
+- Not seen in a browser (the harness cannot sign in): the owner's check is the strip on `/` after a
+  rebuild, the gear's two selects, and that the Hermes row reads "not tracked".
+
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
 Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,
