@@ -20,6 +20,7 @@ import { ensureAutomations } from "./automations/engine";
 import { ensureBrowserActions } from "./mcp/browserActions";
 import { seedBrowserDrivingSkill } from "./browser/skillSeed";
 import { ensureBrowserWs } from "./browser/wsBridge";
+import { ensureSnapshotJobs } from "./snapshots/jobs";
 
 /**
  * V2 foundations boot — called once from instrumentation register().
@@ -97,6 +98,7 @@ export function ensureV2(): void {
   try {
     ensureDb();
     registerCoreJobs();
+    ensureSnapshotJobs(); // S37: 'snapshots.take' handler + the core:snapshots job at settings.snapshots.cadence
     registerTaskWakeHandler(); // SPEC-B B1: wake jobs survive restarts, handler re-registers at boot
     recoverStuckTasks(); // SPEC-B B2: Working tasks orphaned by a dead process → Waiting + attention.flag
     ensureTaskSeeds(); // SPEC-B B3: recurring seed tasks (idempotent by metadata.seedKey, disabled by default)

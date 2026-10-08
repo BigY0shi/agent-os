@@ -591,6 +591,16 @@ export interface Settings {
     timeoutMin?: number;   // a pipeline run is killed after this many minutes (default 90)
   };
 
+  // S37 Snapshots (Nexora C10). Rule 16: every knob is in the Snapshots card's gear on
+  // Mission Control > Health (SnapshotsCard). Read per call by src/lib/v2/snapshots/config.ts;
+  // the cadence drives the `core:snapshots` scheduler job (re-synced on save).
+  snapshots?: {
+    cadence?: "weekly" | "biweekly" | "monthly" | "off"; // owner 2026-10-01: weekly by default
+    dir?: string;            // snapshot folder, outside ~/.agentic-os; "" = <home>/AgentOS-snapshots
+    keep?: number;           // keep-last-N; older snapshots are moved to <dir>/.exile (default 8)
+    includeSecrets?: boolean; // off: key files and secret fields stay out (list in snapshots/config.ts)
+  };
+
   [extra: string]: unknown;
 }
 
@@ -750,6 +760,7 @@ export const DEFAULT_SETTINGS: Settings = {
     gmailLabel: "",
   },
   fleetStats: { bucketHours: 12, windowDays: 14 },
+  snapshots: { cadence: "weekly", dir: "", keep: 8, includeSecrets: false },
 };
 
 function settingsPath(): string {

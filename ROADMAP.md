@@ -59,6 +59,8 @@ is one line; the journal carries the rest.
 
 - [x] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9). Landed 2026-10-01, v2.61.0 (see Done).
 - [ ] **S37. Snapshots and restore**: weekly by default (setting: weekly / 2 weeks / monthly), old ones exiled (Nexora C10).
+
+- [x] **S37. Snapshots and restore** (done 2026-10-01, v2.61.0, gate green): weekly by default (setting: weekly / 2 weeks / monthly / off), old ones exiled (Nexora C10). Snapshots card on Mission Control > Health; job in Standing orders.
 - Held: **C8 Appearance** waits for the complete visual overhaul at the end. Dropped: **C11 voice cast** (not needed).
 ## Next
 
@@ -142,6 +144,7 @@ is one line; the journal carries the rest.
 
 - 2026-10-01 · v2.61.0 · S36 Fleet stats on Mission Control (Nexora C9): a strip under the telemetry band with two-line sparklines (you vs agents) per bucket, a weekday-by-hour heatmap in the Tasks timezone, the newest mission hand-offs (from seat to seat, with Jarvis as the origin), and per-source session counts for 24 h and all time; Hermes reads "not tracked" (no reader for its state.db). Bucket (6/12/24/48 h, default 12) and window (7/14/30/60 d, default 14) are gear settings read per request, so a change re-buckets with no rebuild. Every number is a stored record: Jarvis, Rabbit and task-chat rows, agent run records, module runs, missions, Ultracode runs. smoke-fleet-stats 43 checks.
 
+- 2026-10-01 · v2.61.0 · S37 Snapshots and restore: `src/lib/v2/snapshots/`; a snapshot = backup-API DB copy + `~/.agentic-os` (secrets out by default, listed in the manifest) + manifest (sizes, sha256) + restore.ps1 (stops Agent OS, exiles the current state, carries secrets over, verifies); keep-last-N exiles; `core:snapshots` job at weekly / 2 weeks / monthly / off; Snapshots card with gear on Health. smoke-snapshots 56 checks.
 - 2026-10-01 · v2.56.0-v2.59.0 · S30 Settings sweep (merged v2.60.0, gate green): audit of every hardcoded parameter per module; `settings.ollama` (masked key, host, default model, local URL) shared by the Ollama page, Room, Brainstorm, Loop judge, Memory, Agents, Free Claude Code; `settings.claude.model` with a picker replacing the start-time CLAUDE_MODEL constant in 25 files; `settings.room.agents` + CLI turn limit with a Room gear; Brainstorm seat limits, Jarvis voice-lane models, Thumbnails prompt model. smoke-settings-sweep 38 checks.
 
 - 2026-10-01 · v2.56.0 · S31 Artifacts deploy on Windows: netlify (an npm .cmd shim here) is resolved to node + its entry with a clean arg array (lib/platform.ts resolveCli), the SEO deploy route resolves npx/netlify the same way, the Artifacts site lives in settings.artifacts behind a gear on the tab (artifacts-site.json is a labelled fallback), a missing site or CLI is a clear error naming the gear or the install line, and the v2.54.3 rollback holds. smoke-artifacts-deploy 35 checks. Owner to publish one page for real (AWAITING USER VERIFY in agent-progress.md).

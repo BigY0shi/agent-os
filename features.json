@@ -318,8 +318,8 @@
         "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
         "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "Done 2026-10-01 (v2.61.0). src/lib/v2/snapshots/{config,take,jobs}.ts: snapshot = <folder>/<stamp>/ with agentos.db (better-sqlite3 backup API, then journal_mode=DELETE so the copy is one file), agentic-os/ (state minus backups/, .exile/, lock, heygen-cache/, live DB files), manifest.json (size+sha256 per file, secretsLeftOut, redacted fields, source paths), restore.ps1 (ASCII; refuses a listening 3737 and calls Stop Agent OS.bat when found; moves current state to <folder>/.exile/<stamp>/before-restore/; carries left-out secret files and removed secret fields back; verifies hashes). Secrets out by default (list in config.ts; settings.json/config.json kept with secret fields removed); includeSecrets setting. Retention keep-last-N (default 8) via exileFile, nothing deleted. Job core:snapshots (kind snapshots.take) at cadence weekly (default, Sun 04:00) / biweekly / monthly / off, re-synced at boot, on Save and after a run; listed in Standing orders. Gear: Snapshots card on Mission Control > Health (Snapshot now, Configure: Cadence, Snapshot folder, Keep last, Include secrets) over /api/v2/snapshots GET/POST/PATCH. smoke-snapshots 56 checks incl. a real restore.ps1 run against a temp target (pwsh, port 1). Docs: mission-control.md. ./test.sh green (see DEV-JOURNAL)."
     },
     {
       "id": "feat-s38-jarvis-ptt-hotkey",
