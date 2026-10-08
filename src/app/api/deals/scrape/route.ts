@@ -1,8 +1,9 @@
 import { LEADS_DIR, pruneLeadsFileByAge } from "@/lib/upworkDesk";
-import { clampMaxAgeDays } from "@/lib/dealDeskControl";
+import { clampMaxAgeDays, crawlerInput } from "@/lib/dealDeskControl";
+import { readUpworkCookie } from "@/lib/upworkAuth";
 import { readSettings } from "@/lib/settings";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export const runtime = "nodejs";
@@ -39,6 +40,8 @@ const SHORTLIST = path.join(LEADS_DIR, "shortlist.json");
 const BOARD = path.join(LEADS_DIR, "board.json");
 const IDS_FILE = path.join(LEADS_DIR, ".shortlist-ids.json");
 const DATASET_DIR = path.join(ACTOR_DIR, "storage", "datasets", "default");
+const INPUT_FILE = path.join(ACTOR_DIR, "storage", "key_value_stores", "default", "INPUT.json");
+
 
 type Stage = "idle" | "scraping" | "scoring" | "pitching" | "done" | "failed";
 
@@ -82,10 +85,10 @@ function shortlistIds(): string[] {
 
 /** Spawn node directly rather than `npm start` — on Windows the npm .cmd shim is not
  *  executable by spawn without a shell, and a shell would complicate killing the tree. */
-function runStage(stage: Stage, entry: string, cwd: string, args: string[] = []): Promise<void> {
+function runStage(stage: Stage, entry: string, cwd: string, args: string[] = [], extraEnv: Record<string, string> = {}): Promise<void> {
   return new Promise((resolve, reject) => {
     job.stage = stage;
-    const child = spawn(process.execPath, [entry, ...args], { cwd, env: process.env });
+    const child = spawn(process.execPath, [entry, ...args], { cwd, env: { ...process.env, ...extraEnv } });
     job.child = child;
     child.stdout.on("data", (d) => String(d).split("\n").forEach(note));
     // Crawlee logs progress to stderr; that is information, not failure.
@@ -142,7 +145,19 @@ export async function POST(req: Request) {
     try {
       // NOTE: Crawlee purges its default storage on start, so each run is a clean
       // scrape rather than a top-up. That is why stage 2 can just read the dataset.
-      await runStage("scraping", ACTOR_ENTRY, ACTOR_DIR);
+      // Searches, pages and the age gate come from the gear, written fresh each run.
+      let existing: Record<string, unknown> = {};
+      try { existing = JSON.parse(readFileSync(INPUT_FILE, "utf8")) as Record<string, unknown>; } catch { /* first run */ }
+      const input = crawlerInput(existing, readSettings().deals);
+      mkdirSync(path.dirname(INPUT_FILE), { recursive: true });
+      writeFileSync(INPUT_FILE, JSON.stringify(input, null, 2), "utf8");
+      note(`searching ${(input.queries as string[]).length} topics, ${input.maxPagesPerQuery} page(s) each, skipping jobs older than ${input.maxAgeDays}d`);
+      // Logged out, Upwork ignores newest-first and mixes in weeks-old jobs; the saved
+      // cookie was handed to enrich/research but never to the scrape (fixed 2026-10-08).
+      // Secret via env, never argv or INPUT.json.
+      const cookie = readUpworkCookie();
+      if (!cookie) note("WARNING: no Upwork cookie saved, so the scrape runs logged out and Upwork ignores newest-first. Set it with the cookie button in the Deal Desk.");
+      await runStage("scraping", ACTOR_ENTRY, ACTOR_DIR, [], cookie ? { UPWORK_COOKIE: cookie } : {});
       await runStage("scoring", SCORE_SCRIPT, LEADS_DIR);
       // S4 (f): the age gate lands here, between scoring and pitching, so an old
       // listing is neither pitched (a claude call each) nor shown. Dropped rows

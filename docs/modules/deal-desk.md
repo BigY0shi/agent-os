@@ -12,7 +12,7 @@ A triage board for inbound job leads. It reads scraped listings, asks an agent t
 |---|---|
 | **Enrich approved** | Posts to `/api/deals/enrichment` to pull real proposal counts on Approved cards through your Upwork session. Disabled when nothing is approved. |
 | **cookie** / **set cookie** | Opens the Upwork session cookie box. Reads "set cookie" in amber when none is saved. |
-| **Configure** | The Deal Desk settings gear: **Max listing age (days)**, **Screen model**, **Screen after a feed pull** (**Screen automatically**), **Dossier model**, then **Save**. Saving reloads the board. |
+| **Configure** | The Deal Desk settings gear: **Max listing age (days)**, **Search topics (one per line)**, **Pages per search**, **Screen model**, **Screen after a feed pull** (**Screen automatically**), **Dossier model**, then **Save**. Saving reloads the board; topics and pages are used from the next scrape. |
 | **Screen NA leads** | Posts to `/api/deals/screen`: a quick pass/pursue check on every lead showing NA. Leads it cannot judge stay NA. |
 | **Clear passed & refill** | Posts to `/api/deals/refill` with a target of 20: dismisses leads you did not approve, pitches the next best into New, and briefs unanalysed feed leads. |
 | **Paste URLs** | Opens a box for Upwork job URLs, one per line (max 20). **Take them in** posts them to `/api/deals/intake`. |
@@ -99,7 +99,9 @@ Every card leads with the evaluator's own pass-or-pursue sentence, banded **purs
 
 ## The age gate (S4)
 
-`deals.maxAgeDays` (gear, default 5) drops listings posted longer ago than that when a scrape or a feed pull lands: `board.json` and `shortlist.json` after scoring and before pitching, `feeds.json` after the pull and before the brief pass. Dropped rows are written beside the file as `<name>.dropped-<date>.json`, never discarded; undated rows are kept. Cards already on the board are not re-gated. Each card shows its age and turns amber with OLD past the gate.
+**The scrape itself skips old jobs (2026-10-08).** Before every Upwork scrape the route writes the crawler's `INPUT.json` from the gear: `deals.searchQueries` (default: the 24 searches it used before), `deals.pagesPerQuery` (default 2) and `deals.maxAgeDays`. The crawler reads each search result's "Posted ... ago" and never opens a job older than the gate, and stops paging a search once a whole newest-first page is past it. The saved Upwork cookie is handed to the crawler (logged out, Upwork ignores newest-first); without one the run log says so.
+
+`deals.maxAgeDays` (gear, default 5) also drops listings posted longer ago than that when a scrape or a feed pull lands: `board.json` and `shortlist.json` after scoring and before pitching, `feeds.json` after the pull and before the brief pass. Dropped rows are written beside the file as `<name>.dropped-<date>.json`, never discarded; undated rows are kept. Cards already on the board are not re-gated. Each card shows its age and turns amber with OLD past the gate.
 
 ## "Need more info" does work now (S4)
 

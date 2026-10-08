@@ -166,6 +166,11 @@ export interface Settings {
   // the age shows on every card. Rule 16: edited in the Deal Desk gear.
   deals: {
     maxAgeDays?: number;
+    /** What the Upwork scrape searches for, one search each; unset = DEFAULT_SEARCH_QUERIES
+     *  in lib/dealDeskControl.ts. Written into the crawler's INPUT.json before every run. */
+    searchQueries?: string[];
+    /** Search result pages read per search (1-10, default 2). */
+    pagesPerQuery?: number;
     /** Model for the quick pass/not screen; falls back to the Claude model setting when unset. */
     screenModel?: string;
     /** Screen the unjudged leads automatically after a feed pull. */

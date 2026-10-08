@@ -271,6 +271,57 @@ ${t.slice(-TAIL_KEEP)}`;
 // time cannot be resolved is KEPT, never dropped: an unknown date is not an old one.
 
 export const DEFAULT_MAX_AGE_DAYS = 5;
+
+// What the Upwork scrape searches for (owner, 2026-10-08: "a space in the configuration
+// settings to set the topic/keywords"). These defaults are the 24 searches the crawler's
+// hand-edited INPUT.json held that day, so nothing changes until the gear is edited; the
+// scrape route now writes them into INPUT.json before every run.
+export const DEFAULT_SEARCH_QUERIES: readonly string[] = [
+  "hubspot automation", "gohighlevel", "salesforce administrator", "zapier automation",
+  "make.com automation", "n8n automation", "ai agent development", "ai chatbot development",
+  "klaviyo email marketing", "shopify klaviyo", "shopify developer", "webflow",
+  "wordpress developer", "next js developer", "react developer", "crm setup", "ai seo",
+  "power bi dashboard", "airtable automation", "saas ui ux design", "app development",
+  "custom app development", "generative engine optimization", "workflow optimization",
+];
+export const DEFAULT_PAGES_PER_QUERY = 2;
+export const MAX_SEARCH_QUERIES = 60;
+
+/** Searches from whatever the settings hold (an array, or one-per-line / comma text):
+ *  trimmed, case-insensitively deduped, 1-80 chars each, at most MAX_SEARCH_QUERIES.
+ *  Nothing usable -> the defaults (an empty search list would make the scrape throw). */
+export function cleanSearchQueries(v: unknown): string[] {
+  const raw = Array.isArray(v) ? v : typeof v === "string" ? v.split(/[\n,]/) : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of raw) {
+    const q = String(x ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!q || seen.has(q.toLowerCase())) continue;
+    seen.add(q.toLowerCase());
+    out.push(q);
+    if (out.length >= MAX_SEARCH_QUERIES) break;
+  }
+  return out.length ? out : [...DEFAULT_SEARCH_QUERIES];
+}
+
+/** Result pages read per search: 1..10, default 2 (about 10 jobs a page). */
+export function clampPagesPerQuery(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n < 1) return DEFAULT_PAGES_PER_QUERY;
+  return Math.min(10, Math.round(n));
+}
+
+/** The crawler input for this run, from the Deal Desk gear (2026-10-08). Keys the gear does
+ *  not own (headless, maxConcurrency, dedupe, ...) are kept from the existing file. */
+export function crawlerInput(existing: Record<string, unknown>, deals: { searchQueries?: unknown; pagesPerQuery?: unknown; maxAgeDays?: unknown } | undefined): Record<string, unknown> {
+  return {
+    ...existing,
+    queries: cleanSearchQueries(deals?.searchQueries),
+    maxPagesPerQuery: clampPagesPerQuery(deals?.pagesPerQuery),
+    // The age gate now runs on the search page too, so an old job is never opened.
+    maxAgeDays: clampMaxAgeDays(deals?.maxAgeDays),
+  };
+}
 const DAY_MS = 86_400_000;
 
 /** Whole days since `postedAt`; null when the instant is unknown. */

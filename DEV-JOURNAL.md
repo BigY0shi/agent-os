@@ -1,5 +1,28 @@
 # Agent OS — Dev Journal
 
+## 2026-10-08 - Deal Desk scrape: old jobs never opened; search topics in the gear (v2.61.0)
+
+Owner: a scrape takes about an hour, a working queue of 200+ ends with about 40 kept, and jobs
+of 4 weeks, 10 days, 1 week still come in despite the 5-day gate; and "a space in the
+configuration settings to set the topic/keywords". Evidence: the in-progress run's dataset
+(Upwork-Leads/actor/storage/datasets/default, 2026-10-08 01:21) held 254 fully-read jobs,
+146 <=5d, 91 6-14d, 17 15d+. Causes: (1) the age gate ran only after scrape + scoring
+(api/deals/scrape route, pruneLeadsFileByAge); (2) the scrape spawned the crawler without
+UPWORK_COOKIE (enrich/research pass it, the scrape never did), so it ran logged out, where
+Upwork ignores newest-first (the crawler's own note, verified 2026-09-12); (3) the 24
+searches lived only in a hand-edited INPUT.json.
+Fix: settings.deals.searchQueries + pagesPerQuery (defaults = the 24 searches, 2 pages)
+edited in the Deal Desk gear; the scrape route writes INPUT.json from them plus maxAgeDays
+before every run and hands the saved cookie over via env (a missing cookie is logged). The
+crawler (Upwork-Leads, see its journal) skips a search tile older than the gate before
+opening it and stops paging a newest-first query once a whole page is past it. The landing
+prune stays as a backstop.
+Verified: new smoke-deal-desk-scrape 20/20 (runs the crawler's real age parser on Upwork's
+phrases); smoke-deal-desk-control still passes; ./test.sh 122 passed, 0 failed. The running
+scrape was left alone; the change applies from the next one. Timing is the owner's to see.
+Rollback: `git revert <this commit>`; for the crawler, copy
+Upwork-Leads/.exile/2026-10-08_dealdesk-age-gate/ back.
+
 ## 2026-10-08 - Jarvis can be stopped, interrupted and queued (v2.60.2)
 
 Owner: "once jarvis gets going, I cannot interrupt or even stop him", then "make sure queueing
