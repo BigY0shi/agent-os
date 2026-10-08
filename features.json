@@ -273,8 +273,8 @@
         "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
         "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "PASSING 2026-10-01 (worktree agent-faces, v2.61.0): lib/agentFaces.ts generates mirror-symmetric inkblot marks (seeded from the id, FNV-1a + mulberry32) for every agent id AgentAvatar has no hand-drawn mark for; the 13 hand-drawn marks are byte-identical (smoke C1-C4). Marks drawn in Crew (roster, chat header), Voice dial, Mission Control Orchestration, Agents cards, hero chips, registry rows, agent header. New shape / Reset shape on /agents/<id> store the seed in settings.agents.faces.seeds via POST /api/v2/agent-faces; Mark detail knob in the Agents gear. smoke-agent-faces 53 checks: determinism, symmetry on 300 marks, re-roll persisted and read by a fresh module instance, reset, route 400s, docs rows. ./test.sh 121 passed, 0 failed. Not seen in a browser; owner to look after a rebuild."
     },
     {
       "id": "feat-s36-fleet-stats",

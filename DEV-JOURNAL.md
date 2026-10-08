@@ -174,6 +174,46 @@ Not seen in a browser (owner to look after a rebuild: the header name and pencil
 leave it applied, the old code ignores the columns. Attached images stay on disk under the
 attachment folder and can be exiled by hand.
 
+## 2026-10-01 - S35: Agent faces, a Rorschach mark for every agent (v2.61.0)
+
+Harness session, worktree `agent-faces`, feature feat-s35-agent-faces. Owner 2026-10-01: "each agent
+should be getting a rorschach type shape, like Codex and Claude currently have."
+Found first: AgentAvatar.tsx knew 13 hand-drawn CLI marks and its fallback object had no `glyph`,
+so any other id would have thrown; Crew, the Voice dial, Mission Control's Orchestration list, the
+Agents cards, hero chips, registry rows and the agent header drew agents as a status dot and a name,
+with no mark at all. Hermes 3D seats hold idle bodies the HUD calls "not agents" (run state is not
+wired there), so there is no agent to mark on that surface yet; left as is.
+- `src/lib/agentFaces.ts` (pure, no node imports): `generateMark(id, {seed, detail})` draws 2-4
+  smooth blob lobes plus ink-spot pairs in a 24x24 viewBox. Each lobe is Catmull-Rom smoothed from
+  right-half points and the left half is the same segments mirrored and walked back, so every path is
+  mirror-symmetric about x=12 by construction (`isMirrorSymmetric` proves it on the emitted `d`).
+  Seed = FNV-1a of the id (mulberry32 PRNG), or the stored override; colour comes from the id alone,
+  so "New shape" changes the shape and keeps the accent. White on the accent gradient, like the
+  hand-drawn marks. The 13 hand-drawn marks are byte-identical (smoke C2-C4 check the path strings).
+- AgentAvatar accepts any id (`AgentKey | string`, plus `name` and `seed`); an unknown id renders
+  `GeneratedAvatar`; `agentColor/agentBg/agentLabel` answer for any id. Marks added on: Crew roster
+  cards and chat header, Voice dial cards (crew and room lanes), Cockpit Orchestration rows (agents
+  only; mission seats keep their dot), Agents cards, hero chips, Registry rows, agent header.
+- Seeds are data in `settings.agents.faces.seeds` (rule 16, survives restarts, redirected by
+  AGENTIC_OS_SETTINGS); Reset writes null because deepMerge cannot drop a key, and the reader treats
+  null as "no override". `/api/v2/agent-faces` GET lists seeds + detail; POST {id, action} re-rolls
+  or resets (400 on a bad id or action). One shared client cache (`agentFacesClient.ts`,
+  useSyncExternalStore) so a page of forty avatars makes one request.
+- Controls: **New shape** / **Reset shape** on `/agents/<id>` (Reset shows only when a seed is
+  stored); Agents gear **Mark detail** low / medium / high (default medium). Docs: agents-page.md,
+  jarvis.md (Crew), mission-control.md (Orchestration).
+- `scripts/v2/smoke-agent-faces.mjs`, 53 checks: determinism (same id and seed, same JSON; no clock
+  or Math.random), 300 marks symmetric and inside the box, detail counts, hand-drawn marks untouched,
+  re-roll persisted on disk and read back by a fresh module instance (the restart case), reset,
+  the route's 200s and 400s, every surface and doc row.
+Gate: ./test.sh 121 passed, 0 failed (first run tripped smoke-memory-ui because a scratch file I
+exiled created `.exile/` in this fresh worktree; the folder moved to .harness-logs and the gate
+re-ran clean). Version 2.60.0 -> 2.61.0 (minor).
+Not seen in a browser (harness session): the owner looks at a crew agent's mark in Crew, on
+`/agents`, and presses New shape then Reset shape on its page after a rebuild.
+Rollback: `git revert <this commit>`; the stored seeds under settings.agents.faces are inert data
+and can stay.
+
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
 Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,

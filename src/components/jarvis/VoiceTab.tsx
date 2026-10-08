@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Loader2, Mic, Send, Square, Volume2, VolumeX } from "lucide-react";
 import { AgentFace, type FaceState, type FaceVariant } from "@/components/faces/AgentFace";
+import AgentAvatar from "@/components/AgentAvatar";
 import { useVoiceCapture } from "@/lib/v2/jarvis/useVoiceCapture";
 
 type Lane = "jarvis" | "oracle" | "room" | "crew";
@@ -244,7 +245,7 @@ export default function VoiceTab() {
             <button key={x.key} id={`voice-${x.key}`} type="button" role="option" aria-selected={i === sel} onClick={() => setSel(i)}
               className={`absolute w-[150px] -translate-x-1/2 -translate-y-1/2 rounded-2xl px-3 py-2 text-left transition-all duration-500 ${i === sel ? "glass neon-ring" : "glass-inset"}`}
               style={{ left: `${left}%`, top: `${top}%`, transform: `translate(-50%, -50%) scale(${scale})`, opacity, zIndex }}>
-              <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: x.color }} /><span className="truncate text-[13px]">{x.name}</span></div>
+              <div className="flex items-center gap-2">{x.lane === "crew" || x.lane === "room" ? <AgentAvatar agent={x.id} name={x.name} size={20} /> : <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: x.color }} />}<span className="truncate text-[13px]">{x.name}</span></div>
               <div className="mt-0.5 truncate text-[10.5px] text-[var(--fg-dimmer)]">{LANE_WORD[x.lane]}{x.status ? ` · ${x.status}` : ""}</div>
             </button>
           ))}

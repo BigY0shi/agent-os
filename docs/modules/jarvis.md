@@ -89,7 +89,7 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | Control | What it does |
 |---|---|
 | **Deploy agent** | Wizard: pick a prepared role or **Write your own**, Name, Role, Instructions, a tier (fast, standard, deep), then **Deploy** (posts to `/api/agents`). |
-| Agent City, ring, **Roster** | Pick an agent to open its chat. |
+| Agent City, ring, **Roster** | Pick an agent to open its chat. Roster cards and the chat header carry the agent's mark (the same generated Rorschach mark as on the Agents page). |
 | Chat box, **Send** | Starts a real run of that agent. |
 | **When the crew speaks** | Heatmap, **24h** / **7d**, **both** / **you** / **agents**. |
 

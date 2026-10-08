@@ -11,17 +11,17 @@ Reusable background agents that run on your machine and your subscriptions. The 
 | Control | What it does |
 |---|---|
 | **Configure** (gear, tooltip "Agents intelligence dial") | Sets the model for the **Fast tier**, **Standard tier** and **Deep tier** (blank Deep = the Claude model from the Claude page's gear). |
-| **Configure** (gear, tooltip "Agents page") | **Hero poll interval (ms)**, **Default harness**, **Deploy gate: require a test run**, **Per-run spend ceiling** (Dollars, Tokens), **Let a run ask you a question**, **Also park when a turn merely ends in a question mark**, **Question timeout (minutes)**. |
+| **Configure** (gear, tooltip "Agents page") | **Hero poll interval (ms)**, **Default harness**, **Mark detail** (how busy every generated agent mark is: low, medium, high; default medium), **Deploy gate: require a test run**, **Per-run spend ceiling** (Dollars, Tokens), **Let a run ask you a question**, **Also park when a turn merely ends in a question mark**, **Question timeout (minutes)**. |
 | **New agent** | Opens the Forge wizard. |
-| Live status strip | One chip per agent with its live status (running, waiting, idle, error, offline). Uses the live feed, falling back to polling. |
+| Live status strip | One chip per agent with its mark and its live status (running, waiting, idle, error, offline). Uses the live feed, falling back to polling. |
 | **Deploy Agent** | Opens the wizard at its review step, listing agents still in Test so you can promote one. |
 | **Forge Agent** | Opens the Forge wizard. |
 | **Forge Harness** | Opens the harness library. |
 | **Registry & Runs** | Scrolls to the registry list at the bottom. |
 | Approvals strip, **Approve** / **Deny**, answer box | Pending tool approvals and questions from running agents. An answer goes straight back into the run (Ctrl+Enter). A notice says if a decision resolved nothing. |
-| Agent cards | Name, harness, trigger summary, last run. Click to open `/agents/<id>`. |
+| Agent cards | Mark, name, harness, trigger summary, last run. Click to open `/agents/<id>`. Every agent has a mark: the CLI agents keep their hand-drawn ones, every other agent gets a generated Rorschach-style inkblot (mirror-symmetric, white on the agent's own accent, derived from its id so it never changes on its own). |
 | **Forge the first one** | Shown when there are no agents. |
-| Registry & Runs rows | Last run per agent (trigger, status, age). Click opens `/agents/<id>?tab=runs`. |
+| Registry & Runs rows | Mark and last run per agent (trigger, status, age). Click opens `/agents/<id>?tab=runs`. |
 
 ### Forge wizard
 
@@ -53,6 +53,8 @@ Steps: **Idea**, **Persona**, **Harness**, **Tools**, **Connectors**, **Permissi
 |---|---|
 | **Agents** | Back to the list. |
 | **Run now** | Starts a manual run. |
+| **New shape** | Draws a new generated mark for this agent and stores its seed, so the new shape survives reloads and server restarts. Only agents without a hand-drawn mark have one. |
+| **Reset shape** | Shown once a New shape was stored: returns the mark to the shape derived from the agent's id. |
 | **Pause** / **Resume** | Disables or enables the agent. |
 | **Overview** | Lifecycle, harness and persona cards, **Run now**, **Exile agent**. |
 | **Runs** | Run list with transcript, browser sessions this agent drove, status history. |
