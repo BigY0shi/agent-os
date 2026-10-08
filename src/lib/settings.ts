@@ -271,6 +271,16 @@ export interface Settings {
       // from the screen). The mouse mic button keeps voice.autoSend (default false).
       sendOnRelease?: boolean;
     };
+    // S34 chat upgrades (Nexora C6 on Jarvis). defaultEffort seeds a NEW
+    // conversation's thinking level ("" = the model's default); each session
+    // then keeps its own on the conversation row. Attachments (images only,
+    // png/jpg/webp by magic bytes) are refused above attachmentMaxMb and stored
+    // under attachmentDir ("" = ~/.agentic-os/jarvis/attachments).
+    chat?: {
+      defaultEffort?: "" | "low" | "medium" | "high" | "xhigh" | "max";
+      attachmentMaxMb?: number;
+      attachmentDir?: string;
+    };
     // Even Realities G2 custom-agent lane (/api/glasses — OpenAI chat-completions
     // shape, bearer token in ~/.agentic-os/jarvis-glasses.token, never here).
     glasses?: {
@@ -612,6 +622,7 @@ export const DEFAULT_SETTINGS: Settings = {
     voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs",
       geminiLiveModel: "", openaiRealtimeModel: "", openaiTranscribeModel: "", openaiTtsModel: "" },
     hotkey: { key: "F13", enabled: true, mode: "hold", sendOnRelease: true },
+    chat: { defaultEffort: "", attachmentMaxMb: 4, attachmentDir: "" },
     glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },

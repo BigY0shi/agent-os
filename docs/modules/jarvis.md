@@ -152,9 +152,25 @@ Mini USB keyboards and F13 to F24: most keyboards have no F13 key, which is what
 
 Browser limits, stated honestly: the helper fronts the browser window, but it cannot pick the tab, so the Agent OS tab must be the active tab in that window. The mic starts in a window that was just fronted only if mic permission is already granted for the site (allow it once from the address bar; over Tailscale the site must be HTTPS, see the start page). The reply plays only if you have clicked in that tab since it loaded, a browser autoplay rule; a tab that was never touched stays silent and the text still arrives. Nothing in Agent OS can lift these; the gear says so.
 
+### Orb chat (the overlay on every page)
+
+Opened from the orb in the corner, the hotkey, or **Resume in overlay** on the Sessions tab. The current session comes back after a page reload; the chat itself is stored on the server, the browser keeps only its id.
+
+| Control | What it does |
+|---|---|
+| Session name (header), pencil | The session's name; the first words you send name it. Click the pencil to rename. The Sessions tab shows the same name. |
+| History, **New conversation** | The drawer lists past sessions; pick one to continue it. New conversation starts a fresh one and keeps the previous one listed and resumable. Nothing is deleted. |
+| Archive (in the drawer) | Hides a session; Restore on the Sessions tab brings it back. |
+| **think:** select | The thinking effort for this session (default, low, medium, high, xhigh, max). Saved on the session, so it survives a reload and a server restart. |
+| Paperclip, or paste an image | Attaches one image (png, jpeg or webp, decided by the file bytes) to the next message. Shown as a chip above the text box with an X to drop it. A file that is not an image or is over the cap is refused with the reason and nothing is sent. The image reaches the brain as an image block and goes nowhere else. Needs the sdk engine; the cli engine is text-only and says so. |
+| **Send** while Jarvis is busy | Queues the message (with its image, if one is attached) above the box; queued messages go out in order once he is done and has finished reading aloud. x removes one. |
+| **Stop actions** | Shown while Jarvis works. Cancels the reply; queued messages go back into the text box (and a queued image back to the attach slot), nothing is sent. |
+| Gear: **Chat** block | **Default thinking effort** for a new conversation, **Attachment size cap (MB)** (default 4), **Attachment folder** (blank = `~/.agentic-os/jarvis/attachments`). |
+
 ## How it works
 
-- The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`.
+- The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`, each with its own thinking effort; a changed effort rebuilds the warm session (the done event says `sessionRebuilt: "effort"`).
+- Attachments: `POST /api/v2/jarvis/attachments` stores one image under the attachment folder and answers an id; the ask carries `attachments: [{ id }]` and the brain reads the file back into an image content block for that turn only. Earlier images are not replayed when a session resumes, their names are.
 - Voice: Parakeet for dictation, Kokoro for replies via `/api/hermes/tts`.
 - Missions live in `~/.agentic-os/missions/<id>/`; each seat works in its own scratch folder.
 - Oracle keeps consultations in `~/.agentic-os/oracle`, News Radar in `~/.agentic-os/news`, Outreach in `~/.agentic-os/outreach/`, Jarvis MCP servers in `~/.agentic-os/jarvis/mcp-servers.json`. File saves keep the previous version in `~/.agentic-os/file-versions/`.

@@ -11,6 +11,24 @@ export type JarvisChannel = "overlay" | "page";
 /** Where the conversation was started from (migration 035). null = the dashboard. */
 export type JarvisOrigin = "glasses";
 
+/** S34: the per-session thinking level handed to the SDK as `effort`. null = the model's default. */
+export type JarvisEffort = "low" | "medium" | "high" | "xhigh" | "max";
+export const JARVIS_EFFORTS: readonly JarvisEffort[] = ["low", "medium", "high", "xhigh", "max"];
+
+export function parseEffort(v: unknown): JarvisEffort | null | undefined {
+  if (v === null || v === "") return null;
+  if (typeof v === "string" && (JARVIS_EFFORTS as readonly string[]).includes(v)) return v as JarvisEffort;
+  return undefined; // not a valid effort
+}
+
+/** S34: an image a user turn carried. The bytes live under the attachments dir, keyed by id. */
+export interface JarvisAttachmentRef {
+  id: string;
+  name: string;
+  mime: "image/png" | "image/jpeg" | "image/webp";
+  bytes: number;
+}
+
 export interface JarvisConversation {
   id: string;
   title: string;
@@ -20,6 +38,8 @@ export interface JarvisConversation {
   updatedAt: string;
   /** C3.6: non-null = archived (soft delete — rows are never destroyed). */
   archivedAt: string | null;
+  /** S34: thinking level for every turn of this session (migration 036). */
+  effort: JarvisEffort | null;
 }
 
 export interface JarvisConversationSummary extends JarvisConversation {
@@ -36,6 +56,8 @@ export interface JarvisMessage {
    *  a tainted message into a fresh session must re-taint it — the warm-session
    *  taint flag alone dies with the process (review finding, 2026-08-27). */
   tainted?: boolean;
+  /** S34: images this (user) turn carried; null when none. */
+  attachments: JarvisAttachmentRef[] | null;
   createdAt: string;
 }
 
@@ -57,6 +79,7 @@ interface ConvRow {
   created_at: string;
   updated_at: string;
   archived_at?: string | null;
+  effort?: string | null;
 }
 interface MsgRow {
   id: string;
@@ -64,6 +87,7 @@ interface MsgRow {
   role: "user" | "assistant" | "system";
   content: string;
   tool_calls_json: string | null;
+  attachments_json?: string | null;
   created_at: string;
 }
 
@@ -78,7 +102,23 @@ function mapConv(r: ConvRow): JarvisConversation {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     archivedAt: r.archived_at ?? null,
+    effort: parseEffort(r.effort ?? null) ?? null,
   };
+}
+
+function parseAttachments(json: string | null | undefined): JarvisAttachmentRef[] | null {
+  if (!json) return null;
+  try {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed)) return null;
+    const refs = parsed.filter(
+      (a): a is JarvisAttachmentRef =>
+        !!a && typeof a.id === "string" && typeof a.name === "string" && typeof a.mime === "string" && typeof a.bytes === "number",
+    );
+    return refs.length ? refs : null;
+  } catch {
+    return null; // malformed tolerated — surfaces as null
+  }
 }
 
 function mapMsg(r: MsgRow): JarvisMessage {
@@ -108,12 +148,13 @@ function mapMsg(r: MsgRow): JarvisMessage {
     content: r.content,
     toolCalls,
     ...(tainted ? { tainted: true } : {}),
+    attachments: parseAttachments(r.attachments_json),
     createdAt: r.created_at,
   };
 }
 
 export function createConversation(
-  input: { title?: string; channel?: JarvisChannel; origin?: JarvisOrigin } = {},
+  input: { title?: string; channel?: JarvisChannel; origin?: JarvisOrigin; effort?: JarvisEffort | null } = {},
 ): JarvisConversation {
   const ts = now();
   const row: ConvRow = {
@@ -123,13 +164,22 @@ export function createConversation(
     origin: input.origin ?? null,
     created_at: ts,
     updated_at: ts,
+    effort: input.effort ?? null,
   };
   getDb()
     .prepare(
-      "INSERT INTO jarvis_conversations (id, title, channel, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT INTO jarvis_conversations (id, title, channel, origin, created_at, updated_at, effort) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
-    .run(row.id, row.title, row.channel, row.origin, row.created_at, row.updated_at);
+    .run(row.id, row.title, row.channel, row.origin, row.created_at, row.updated_at, row.effort);
   return mapConv(row);
+}
+
+/** S34: set (or clear, with null) the session's thinking level. Returns null for an
+ *  unknown id. Does not bump updated_at: changing a knob is not activity. */
+export function setConversationEffort(id: string, effort: JarvisEffort | null): JarvisConversation | null {
+  const info = getDb().prepare("UPDATE jarvis_conversations SET effort = ? WHERE id = ?").run(effort, id);
+  if (info.changes === 0) return null;
+  return getConversation(id);
 }
 
 export function getConversation(id: string): JarvisConversation | null {
@@ -181,7 +231,7 @@ export function archiveConversation(id: string): JarvisConversation | null {
  *  First user text seeds the title. */
 export function ensureConversation(
   id: string | undefined,
-  opts: { titleSeed?: string; channel?: JarvisChannel; origin?: JarvisOrigin } = {},
+  opts: { titleSeed?: string; channel?: JarvisChannel; origin?: JarvisOrigin; effort?: JarvisEffort | null } = {},
 ): JarvisConversation {
   if (id) {
     const existing = getConversation(id);
@@ -191,6 +241,7 @@ export function ensureConversation(
     title: opts.titleSeed?.trim().slice(0, TITLE_CAP),
     channel: opts.channel,
     origin: opts.origin,
+    effort: opts.effort,
   });
 }
 
@@ -211,6 +262,8 @@ export function appendJarvisMessage(input: {
   content: string;
   toolCalls?: JarvisToolCallSummary[] | null;
   tainted?: boolean;
+  /** S34: image refs this turn carried (user turns). */
+  attachments?: JarvisAttachmentRef[] | null;
 }): JarvisMessage {
   const ts = now();
   const serialized = input.tainted
@@ -222,12 +275,13 @@ export function appendJarvisMessage(input: {
     role: input.role,
     content: input.content,
     tool_calls_json: serialized.length ? JSON.stringify(serialized) : null,
+    attachments_json: input.attachments?.length ? JSON.stringify(input.attachments) : null,
     created_at: ts,
   };
   const db = getDb();
   db.prepare(
-    "INSERT INTO jarvis_messages (id, conversation_id, role, content, tool_calls_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-  ).run(row.id, row.conversation_id, row.role, row.content, row.tool_calls_json, row.created_at);
+    "INSERT INTO jarvis_messages (id, conversation_id, role, content, tool_calls_json, attachments_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).run(row.id, row.conversation_id, row.role, row.content, row.tool_calls_json, row.attachments_json, row.created_at);
   db.prepare("UPDATE jarvis_conversations SET updated_at = ? WHERE id = ?").run(ts, input.conversationId);
   return mapMsg(row);
 }

@@ -28,15 +28,18 @@ import { handleUiEvent } from "@/lib/v2/jarvis/uiClient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Send, Settings as Gear, X, Loader2, History, Plus, Archive } from "lucide-react";
+import { Mic, Send, Settings as Gear, X, Loader2, History, Plus, Archive, Paperclip, Pencil } from "lucide-react";
 import type { Settings } from "@/components/ConfigMenu";
 import { useVoiceCapture, providerInfo } from "@/lib/v2/jarvis/useVoiceCapture";
 import { getEffectivePageContext } from "@/lib/v2/jarvis/pageContext";
 import { useReadAloud } from "@/lib/v2/jarvis/useReadAloud";
-import JarvisSettings from "./JarvisSettings";
+import JarvisSettings, { EFFORT_OPTIONS } from "./JarvisSettings";
 
 const ACCENT = "#22d3ee";
 const DISCARD_CONFIRM_CHARS = 80;
+/** S34: the overlay's current session survives a page reload (the row itself is server-side). */
+const OVERLAY_SESSION_KEY = "agentos.jarvis.overlay.conversation";
+const TITLE_CAP = 80;
 
 interface SessionTurn {
   id: number;
@@ -47,6 +50,15 @@ interface SessionTurn {
   tools?: string[];
   /** Human-Gate approval cards streamed during this turn. */
   approvals?: ApprovalCard[];
+  /** S34: image names this user turn carried. */
+  attachments?: string[];
+}
+
+/** S34: one stored image, waiting to ride the next send. */
+interface PendingAttachment {
+  id: string;
+  name: string;
+  bytes: number;
 }
 
 interface ApprovalCard {
@@ -91,6 +103,7 @@ export default function ChatboxOverlay({
   const jarvis = (settings?.jarvis ?? {}) as {
     voice?: { provider?: string; autoSend?: boolean; pushToTalk?: boolean; ttsProvider?: string };
     hotkey?: { key?: string; mode?: "hold" | "open"; sendOnRelease?: boolean };
+    chat?: { defaultEffort?: string; attachmentMaxMb?: number };
   };
   // S38: the hotkey release sends by default (the owner is away from the screen);
   // the MOUSE mic button keeps voice.autoSend (default off) — two separate knobs.
@@ -99,6 +112,7 @@ export default function ChatboxOverlay({
   hotkeySendRef.current = hotkeySendOnRelease;
   const hotkeyKeyLabel = jarvis.hotkey?.key ?? "F13";
   const provider = jarvis.voice?.provider ?? "webspeech";
+  const defaultEffort = jarvis.chat?.defaultEffort ?? "";
   const speech = useReadAloud(jarvis.voice?.ttsProvider ?? "voicebox");
   const [readReplies, setReadReplies] = useState(true);
   const readRepliesRef = useRef(readReplies);
@@ -120,14 +134,28 @@ export default function ChatboxOverlay({
   // Messages sent while Jarvis is busy wait here and go out in order when he is free
   // (owner, 2026-10-08: "make sure queueing messages works"). They used to stay stuck in
   // the box behind a disabled Send button.
-  const [queue, setQueue] = useState<{ id: number; text: string }[]>([]);
+  // A queued message keeps the image it was sent with (S34 x queue, merged 2026-10-08).
+  const [queue, setQueue] = useState<{ id: number; text: string; attachment: PendingAttachment | null }[]>([]);
   const queueIdRef = useRef(0);
-  const dispatchRef = useRef<(text: string) => Promise<void>>(async () => {});
+  const dispatchRef = useRef<(text: string, pending: PendingAttachment | null) => Promise<void>>(async () => {});
   const [turns, setTurns] = useState<SessionTurn[]>([]);
   const router = useRouter();
   // Conversation thread for this overlay session (handed back by the meta event).
   const conversationIdRef = useRef<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  // S34: the named session (null = nothing sent yet), its thinking level, one pending image.
+  const [sessionTitle, setSessionTitle] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [effort, setEffort] = useState<string>(defaultEffort);
+  const effortRef = useRef(effort);
+  effortRef.current = effort;
+  const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+  const attachmentRef = useRef<PendingAttachment | null>(null);
+  attachmentRef.current = attachment;
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // C3.6 transcript drawer state.
   const [showHistory, setShowHistory] = useState(false);
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
@@ -220,12 +248,17 @@ export default function ChatboxOverlay({
     if (!text) return;
     valueRef.current = "";
     setValue("");
-    if (busyRef.current) { setQueue((q) => [...q, { id: ++queueIdRef.current, text }]); return; }
-    await dispatchRef.current(text);
+    // The image attached right now belongs to THIS message, queued or not.
+    const pending = attachmentRef.current;
+    attachmentRef.current = null;
+    setAttachment(null);
+    setAttachError(null);
+    if (busyRef.current) { setQueue((q) => [...q, { id: ++queueIdRef.current, text, attachment: pending }]); return; }
+    await dispatchRef.current(text, pending);
   }, [capture, splice]);
 
   // One ask to the brain. Called by sendBuffer and by the queue drain.
-  const dispatchText = useCallback(async (text: string) => {
+  const dispatchText = useCallback(async (text: string, pending: PendingAttachment | null) => {
     speechRef.current.stop();
     busyRef.current = true;
     setBusy(true);
@@ -233,7 +266,13 @@ export default function ChatboxOverlay({
     askAbortRef.current = askAbort;
     const userId = ++idRef.current;
     const jId = ++idRef.current;
-    setTurns((t) => [...t, { id: userId, role: "user", text }, { id: jId, role: "jarvis", text: "", working: true }]);
+    // S34: the pending image rides this send and only this send (taken at Send time).
+    const firstTurn = conversationIdRef.current === null;
+    setTurns((t) => [
+      ...t,
+      { id: userId, role: "user", text, ...(pending ? { attachments: [pending.name] } : {}) },
+      { id: jId, role: "jarvis", text: "", working: true },
+    ]);
     try {
       const res = await fetch("/api/v2/jarvis/ask", {
         signal: askAbort.signal,
@@ -245,6 +284,9 @@ export default function ChatboxOverlay({
           // C5: what the user currently sees, captured at SEND time (per-request only).
           pageContext: getEffectivePageContext() ?? undefined,
           uiControl: true,
+          // S34: the session's thinking level ("" = model default) and the image ref.
+          effort: effortRef.current || "",
+          ...(pending ? { attachments: [{ id: pending.id, name: pending.name }] } : {}),
         }),
       });
       if (!res.ok || !res.body) throw new Error(`brain ${res.status}`);
@@ -282,7 +324,13 @@ export default function ChatboxOverlay({
             };
             if (await handleUiEvent(ev, (route) => router.push(route))) continue;
             if (ev.type === "meta") {
-              if (ev.conversationId) conversationIdRef.current = ev.conversationId;
+              if (ev.conversationId) {
+                conversationIdRef.current = ev.conversationId;
+                // S34: remember the session so a reload comes back to it; the server
+                // seeds the title from the first text the same way (80 chars).
+                try { window.localStorage.setItem(OVERLAY_SESSION_KEY, ev.conversationId); } catch { /* storage off */ }
+                if (firstTurn) setSessionTitle((cur) => cur ?? text.slice(0, TITLE_CAP));
+              }
               if (ev.note) setTurns((t) => t.map((x) => (x.id === jId ? { ...x, tools: [...(x.tools ?? []), ev.note!] } : x)));
             } else if (ev.type === "sentence" && ev.text) {
               answer += (answer ? " " : "") + ev.text;
@@ -331,12 +379,15 @@ export default function ChatboxOverlay({
     if (!queue.length || busy || speech.speaking) return;
     const [next, ...rest] = queue;
     setQueue(rest);
-    void dispatchText(next.text);
+    void dispatchText(next.text, next.attachment);
   }, [queue, busy, speech.speaking, dispatchText]);
   // Stop keeps what was typed: queued messages go back into the box, nothing is sent.
   const holdQueue = useCallback(() => {
     setQueue((q) => {
       if (q.length) { const v = [valueRef.current, ...q.map((m) => m.text)].filter(Boolean).join(" "); valueRef.current = v; setValue(v); }
+      // An image that was queued goes back to the attach slot (only one fits; the first wins).
+      const img = q.find((m) => m.attachment)?.attachment ?? null;
+      if (img && !attachmentRef.current) { attachmentRef.current = img; setAttachment(img); }
       return [];
     });
   }, []);
@@ -407,15 +458,27 @@ export default function ChatboxOverlay({
     });
   }, [loadConversations]);
 
-  /** Open a past conversation: thread its id into the next ask + show its transcript. */
-  const openConversation = useCallback(async (id: string) => {
+  /** Open a past conversation: thread its id into the next ask + show its transcript.
+   *  Resolves true when it loaded (S34: the reload path forgets a session that is gone). */
+  const openConversation = useCallback(async (id: string): Promise<boolean> => {
     try {
       const res = await fetch(`/api/v2/jarvis/conversations/${id}`);
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const data = (await res.json()) as {
-        messages?: { role: string; content: string; toolCalls?: { name: string; summary: string; ok: boolean }[] | null }[];
+        conversation?: { title?: string; effort?: string | null; archivedAt?: string | null };
+        messages?: {
+          role: string;
+          content: string;
+          toolCalls?: { name: string; summary: string; ok: boolean }[] | null;
+          attachments?: { name: string }[] | null;
+        }[];
       };
+      // An archived session is not resumed here (S13: restore it first in Sessions).
+      if (data.conversation?.archivedAt) return false;
       conversationIdRef.current = id;
+      try { window.localStorage.setItem(OVERLAY_SESSION_KEY, id); } catch { /* storage off */ }
+      setSessionTitle(data.conversation?.title ?? null);
+      setEffort(data.conversation?.effort ?? "");
       const mapped: SessionTurn[] = (data.messages ?? []).map((m) => ({
         id: ++idRef.current,
         role: m.role === "user" ? "user" : "jarvis",
@@ -423,11 +486,13 @@ export default function ChatboxOverlay({
         tools: m.toolCalls?.length
           ? m.toolCalls.map((tc) => `⚙ ${tc.name}${tc.ok ? "" : " ✗"}${tc.summary ? ` — ${tc.summary}` : ""}`)
           : undefined,
+        attachments: m.attachments?.length ? m.attachments.map((a) => a.name) : undefined,
       }));
       setTurns(mapped);
       setShowHistory(false);
+      return true;
     } catch {
-      /* drawer stays open on failure */
+      return false; /* drawer stays open on failure */
     }
   }, []);
 
@@ -437,10 +502,97 @@ export default function ChatboxOverlay({
     void openConversation(resumeId).finally(() => onResumed?.());
   }, [open, resumeId, openConversation, onResumed]);
 
+  // S34: after a reload, come back to the session this overlay was on. The row is
+  // server-side; only its id is kept in the browser. A session that is gone or
+  // archived is forgotten, nothing is created.
+  useEffect(() => {
+    if (!open || resumeId || conversationIdRef.current) return;
+    let stored: string | null = null;
+    try { stored = window.localStorage.getItem(OVERLAY_SESSION_KEY); } catch { /* storage off */ }
+    if (!stored) return;
+    void openConversation(stored).then((ok) => {
+      if (!ok) { try { window.localStorage.removeItem(OVERLAY_SESSION_KEY); } catch { /* storage off */ } }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  /** S34 "New conversation": start fresh. The previous session stays listed and
+   *  resumable (nothing is archived or deleted here). */
   const newConversation = useCallback(() => {
     conversationIdRef.current = null;
+    try { window.localStorage.removeItem(OVERLAY_SESSION_KEY); } catch { /* storage off */ }
+    setSessionTitle(null);
+    setRenaming(false);
+    setEffort(defaultEffort);
+    setAttachment(null);
+    setAttachError(null);
     setTurns([]);
     setShowHistory(false);
+  }, [defaultEffort]);
+
+  // S34: rename the current session (PATCH { title }); the Sessions tab shows the same name.
+  const commitRename = useCallback(async () => {
+    const id = conversationIdRef.current;
+    const title = titleDraft.trim().slice(0, TITLE_CAP);
+    setRenaming(false);
+    if (!id || !title || title === sessionTitle) return;
+    try {
+      const res = await fetch(`/api/v2/jarvis/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const data = (await res.json().catch(() => null)) as { conversation?: { title?: string }; error?: string } | null;
+      if (res.ok && data?.conversation?.title !== undefined) setSessionTitle(data.conversation.title);
+      else setAttachError(`Rename failed: ${data?.error ?? res.status}`);
+    } catch (e) {
+      setAttachError("Rename failed: " + String(e));
+    }
+  }, [titleDraft, sessionTitle]);
+
+  // S34: the session's thinking level. Saved on the row at once when the session
+  // exists, otherwise it rides the first send; either way it survives a reload.
+  const changeEffort = useCallback(async (next: string) => {
+    setEffort(next);
+    const id = conversationIdRef.current;
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/v2/jarvis/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ effort: next }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setAttachError(`Thinking level not saved: ${data?.error ?? res.status}`);
+      }
+    } catch (e) {
+      setAttachError("Thinking level not saved: " + String(e));
+    }
+  }, []);
+
+  // S34: store one image for the next send. The server decides by magic bytes and
+  // the size cap; a refusal is shown with its reason, nothing is sent.
+  const attachFile = useCallback(async (file: File) => {
+    setAttachError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name || "image");
+      const res = await fetch("/api/v2/jarvis/attachments", { method: "POST", body: fd });
+      const data = (await res.json().catch(() => null)) as
+        | { attachment?: { id: string; name: string; bytes: number }; error?: string }
+        | null;
+      if (!res.ok || !data?.attachment) {
+        setAttachError(`Attachment refused: ${data?.error ?? `HTTP ${res.status}`}`);
+        return;
+      }
+      setAttachment(data.attachment);
+    } catch (e) {
+      setAttachError("Attachment failed: " + String(e));
+    } finally {
+      setUploading(false);
+    }
   }, []);
 
   const archiveConversationRow = useCallback(
@@ -595,6 +747,35 @@ export default function ChatboxOverlay({
               >
                 {info.label}
               </span>
+              {/* S34: the session's name; click the pencil to rename (saved server-side). */}
+              {renaming ? (
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  maxLength={TITLE_CAP}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); void commitRename(); }
+                    if (e.key === "Escape") { e.stopPropagation(); setRenaming(false); }
+                  }}
+                  onBlur={() => void commitRename()}
+                  aria-label="Session name"
+                  className="min-w-0 flex-1 bg-[rgba(0,0,0,0.3)] rounded px-1.5 h-6 text-[11.5px] outline-none"
+                  style={{ border: `1px solid ${ACCENT}66`, color: "var(--fg, #e8e2f0)" }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { if (conversationIdRef.current) { setTitleDraft(sessionTitle ?? ""); setRenaming(true); } }}
+                  disabled={!conversationIdRef.current}
+                  title={conversationIdRef.current ? "Rename this session" : "Send a message first; the first words name the session"}
+                  className="min-w-0 flex-1 inline-flex items-center gap-1 text-[11.5px] truncate text-left disabled:cursor-default"
+                  style={{ color: "var(--fg-dim, #9aa)" }}
+                >
+                  <span className="truncate">{sessionTitle || (conversationIdRef.current ? "(untitled)" : "new conversation")}</span>
+                  {conversationIdRef.current && <Pencil size={10} className="shrink-0 opacity-60" />}
+                </button>
+              )}
               {recording && (
                 <span className="text-[10.5px] px-1.5 py-0.5 rounded animate-pulse" style={{ background: `${ACCENT}22`, color: ACCENT }}>
                   listening…
@@ -703,6 +884,11 @@ export default function ChatboxOverlay({
                       {t.role === "user" ? "you" : "jarvis"}
                     </span>
                     <span style={{ color: t.role === "user" ? "var(--fg-dim, #9aa)" : "var(--fg, #e8e2f0)" }}>
+                      {t.attachments?.map((name, i) => (
+                        <span key={`a${i}`} className="block text-[11px] font-mono" style={{ color: ACCENT }}>
+                          <Paperclip size={10} className="inline mr-1" />{name}
+                        </span>
+                      ))}
                       {t.tools?.map((line, i) => (
                         <span key={i} className="block text-[11px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
                           {line}
@@ -764,6 +950,20 @@ export default function ChatboxOverlay({
 
             {/* editable capture buffer */}
             <div className="p-4">
+              {/* S34: the pending image and any refusal, above the text box so neither is missed. */}
+              {attachment && (
+                <div className="mb-2 inline-flex items-center gap-1.5 px-2 h-6 rounded-lg text-[11px] font-mono" style={{ border: `1px solid ${ACCENT}55`, color: ACCENT }}>
+                  <Paperclip size={10} />
+                  <span className="truncate max-w-[220px]">{attachment.name}</span>
+                  <span style={{ color: "var(--fg-dimmer, #6b6478)" }}>{(attachment.bytes / 1024).toFixed(0)} KB</span>
+                  <button type="button" onClick={() => { setAttachment(null); setAttachError(null); }} title="Remove the attachment" aria-label="Remove the attachment" className="ml-0.5 rounded hover:bg-white/10">
+                    <X size={10} />
+                  </button>
+                </div>
+              )}
+              {attachError && (
+                <p role="alert" className="mb-2 text-[11.5px]" style={{ color: "#f87171" }}>{attachError}</p>
+              )}
               <textarea
                 ref={textareaRef}
                 value={value}
@@ -778,6 +978,11 @@ export default function ChatboxOverlay({
                     e.preventDefault();
                     sendBuffer(); // explicit Enter dispatch (C2b step 4)
                   }
+                }}
+                onPaste={(e) => {
+                  // S34: a pasted image (screenshot) becomes the pending attachment; text pastes as usual.
+                  const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
+                  if (f) { e.preventDefault(); void attachFile(f); }
                 }}
                 rows={3}
                 placeholder="Speak (mic) or type — review, edit, then Enter to send. Esc discards."
@@ -794,6 +999,7 @@ export default function ChatboxOverlay({
                     <div key={m.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1 text-[12px]" style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
                       <span className="shrink-0 text-[10.5px] uppercase tracking-wide" style={{ color: "var(--fg-dimmer, #6b6478)" }}>{i === 0 ? "Next" : `Queued ${i + 1}`}</span>
                       <span className="min-w-0 flex-1 truncate" title={m.text}>{m.text}</span>
+                      {m.attachment && <span className="shrink-0 text-[10.5px]" title={m.attachment.name} style={{ color: "var(--fg-dimmer, #6b6478)" }}>+ image</span>}
                       <button type="button" title="Remove from the queue" aria-label="Remove queued message" onClick={() => setQueue((q) => q.filter((x) => x.id !== m.id))} className="shrink-0 rounded p-0.5 hover:bg-white/5"><X size={12} /></button>
                     </div>
                   ))}
@@ -821,6 +1027,33 @@ export default function ChatboxOverlay({
                 >
                   <Mic size={16} className={recording ? "animate-pulse" : ""} />
                 </button>
+                {/* S34: attach one image (png/jpeg/webp, checked by bytes; cap in the gear). */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (f) void attachFile(f);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy || uploading}
+                  title={attachment ? `Attached: ${attachment.name} (replace)` : "Attach an image (png, jpeg, webp); or paste one into the text box"}
+                  aria-label="Attach an image"
+                  className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition disabled:opacity-35"
+                  style={{
+                    border: `1px solid ${attachment ? ACCENT : "var(--panel-border, #2a2436)"}`,
+                    background: attachment ? `${ACCENT}22` : "var(--panel, rgba(255,255,255,0.02))",
+                    color: attachment ? ACCENT : "var(--fg-dim, #9aa)",
+                  }}
+                >
+                  {uploading ? <Loader2 size={15} className="animate-spin" /> : <Paperclip size={15} />}
+                </button>
                 {capture.error && (
                   <span className="text-[11.5px]" style={{ color: "#fbbf24" }}>{capture.error}</span>
                 )}
@@ -835,8 +1068,22 @@ export default function ChatboxOverlay({
                       : `${hotkeyKeyLabel} held · opening mic`}
                   </span>
                 )}
-                <span className="ml-auto text-[10.5px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
-                  Esc discards · ⏎ sends{autoSend ? " · auto-send ON" : ""}{hotkeySendOnRelease ? ` · ${hotkeyKeyLabel} sends on release` : ""}
+                {/* S34: the session's thinking level; saved on the session, so it survives a reload. */}
+                <select
+                  value={effort}
+                  onChange={(e) => void changeEffort(e.target.value)}
+                  disabled={busy}
+                  aria-label="Thinking effort for this session"
+                  title="Thinking effort for this session (saved on the session). The gear sets the default for new ones."
+                  className="ml-auto h-7 rounded-lg px-1.5 text-[10.5px] font-mono outline-none bg-[rgba(0,0,0,0.3)]"
+                  style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dimmer, #6b6478)" }}
+                >
+                  {EFFORT_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>think: {o.id || "default"}</option>
+                  ))}
+                </select>
+                <span className="text-[10.5px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                  ⏎ sends{autoSend ? " · auto-send ON" : ""}{hotkeySendOnRelease ? ` · ${hotkeyKeyLabel} sends on release` : ""}
                 </span>
                 <button
                   onClick={() => sendBuffer()}

@@ -119,6 +119,61 @@ Gate: ./test.sh 120 passed, 0 failed, exit 0 (tsc clean). Not pushed to a PR; th
 Rollback: revert the S38 commit; settings.jarvis.hotkey.mode/sendOnRelease are ignored by older
 code (deepMerge keeps unknown keys harmlessly); an old helper's bare POST still opens the chat.
 
+## 2026-10-01 - S34: Jarvis chat upgrades, the Nexora C6 set built on Jarvis (v2.61.0)
+
+The owner moved Nexora's four Hermes chat upgrades to Jarvis ("yes to all of these, but
+they go to Jarvis, not Hermes"). Audit first, per the feature contract.
+
+**What Jarvis already had (S13 Sessions, v2.35.0; C3.6 before it).** Server-side history
+in `jarvis_conversations` / `jarvis_messages` (migrations 031, 035), titles seeded from the
+first words, list, search by title and body, rename, archive (soft), restore, the Sessions
+tab, resume into the Console (`/jarvis?c=`) or the overlay (window event), and the SDK
+brain replaying the last 20 turns when a conversation is resumed. The overlay's history
+drawer already had "New conversation", and it only cleared the thread; nothing was deleted.
+So (1) and (2) of the four were mostly there.
+
+**The gaps, which is all this slice built.**
+- Overlay persistence and naming: the overlay forgot its session on every page reload (the
+  id lived in a ref) and had no way to see or set the session's name. Now the id is kept in
+  localStorage (`agentos.jarvis.overlay.conversation`; the row itself stays on the server),
+  the overlay reopens that session when it opens, forgets it if the row is gone or archived,
+  and the header shows the name with a pencil to rename (PATCH `{ title }`, the same name the
+  Sessions tab shows). "New conversation" clears the id and the thread and touches no row.
+- Thinking effort per session: new column `jarvis_conversations.effort` (migration 036, the
+  jarvis 30s band; the runner applies by version so 36 runs on the owner's live DB after 63).
+  The overlay footer has a `think:` select; it rides every ask and PATCHes the row on change,
+  so it survives a reload and a server restart. The brain keys the warm SDK session on it: a
+  change reports `sessionRebuilt: "effort"` and the new level goes to the SDK as the `effort`
+  option (the SDK's own enum: low, medium, high, xhigh, max; unset = model default). The gear
+  gained **Default thinking effort** for new sessions.
+- Attachments: `src/lib/v2/jarvis/attachments.ts` + `POST /api/v2/jarvis/attachments`. One
+  image per message; png, jpeg, webp decided by magic bytes, never by name or declared type;
+  cap from the gear (**Attachment size cap**, default 4 MB; refused as 413 before the body is
+  read when the declared size is over, and again after sniffing); stored under
+  **Attachment folder** (blank = `~/.agentic-os/jarvis/attachments`, `AGENTIC_OS_JARVIS_DIR`
+  redirects it for smokes). The ask carries `attachments: [{ id, name }]`; the brain reads
+  the file back and pushes `[image block, text block]` on that turn only, and the user row
+  keeps the ref (`jarvis_messages.attachments_json`), not the bytes. A resumed session names
+  an earlier image in history and does not replay its bytes. Refusals carry the reason: not
+  an image (415), over the cap (413), unknown id (fails before anything persists), and the
+  cli engine says it is text-only instead of silently dropping the picture. The overlay has a
+  paperclip, accepts a pasted screenshot, shows the pending image as a chip with an X, and
+  prints a refusal in red above the text box.
+
+**Smoke.** `smoke-jarvis-chat-upgrades` (55 checks) swaps the SDK's `query()` for a fake
+through a new seam (`setJarvisQueryForTests`) that reads the brain's streaming-input
+generator and answers with stream events, so the assertion is on the real message the brain
+pushed: image block first with the stored file's base64, then the text. It also closes and
+reopens the DB handle and drops the warm session to stand in for a restart. One sibling smoke
+pinned the exact `bootSession(conv.id, freshStable, sig, freshPersona)` call; rather than
+widen it, bootSession reads the effort from the row itself. `./test.sh`: 121 passed, 0 failed.
+Not seen in a browser (owner to look after a rebuild: the header name and pencil, the
+`think:` select surviving F5, the paperclip with a png and with a .txt renamed to .png).
+
+**Rollback.** `git revert` the S34 commit. Migration 036 is additive (two nullable columns);
+leave it applied, the old code ignores the columns. Attached images stay on disk under the
+attachment folder and can be exiled by hand.
+
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
 Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,
