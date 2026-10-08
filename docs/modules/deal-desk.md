@@ -18,6 +18,7 @@ A triage board for inbound job leads. It reads scraped listings, asks an agent t
 | **Paste URLs** | Opens a box for Upwork job URLs, one per line (max 20). **Take them in** posts them to `/api/deals/intake`. |
 | **Pull feeds** | Posts to `/api/deals/feeds` to pull RemoteOK and We Work Remotely into the desk. |
 | **Re-scrape Upwork** | Posts to `/api/deals/scrape`. Opens a browser and takes 10 to 20 minutes; a reload re-attaches to a scrape in flight. |
+| **Stop** | Shown while a scrape runs. Ends it at once, browser included (`DELETE /api/deals/scrape`), and nothing after it runs. Stopped while scraping or scoring, the board stays as it was; stopped while pitching, the rebuilt board keeps the pitches done so far. |
 | **Reload** | Re-reads the board from `/api/deals/list`. |
 | **Open Upwork login** / **Update cookie** | Shown in the red banner when cards are flagged `needs login`. |
 | **Show them anyway** / **Hide the old ones** | Shown when leads are hidden by the age gate. Toggles `?stale=1` on the list call. |

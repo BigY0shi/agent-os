@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste, ScanLine, ClipboardList,
+  CheckCircle2, RefreshCw, ExternalLink, HelpCircle, Sparkles, X, AlertTriangle, Loader2, Settings, Zap, ListRestart, Rss, Download, ClipboardPaste, ScanLine, ClipboardList, Square,
 } from "lucide-react";
 import { useDesk } from "@/lib/upworkDeskStore";
 import type { Deal, DealStatus } from "@/lib/upworkDesk";
@@ -516,7 +516,7 @@ export default function DealDesk() {
     const ok = await intake(pasteText);
     if (ok) { setPasteText(""); setShowPaste(false); }
   };
-  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, briefBatchResult, pollBriefs, screenAll, screening, screenResult, maxAgeDays, agedOut, showStale, setShowStale } = useDesk();
+  const { deals, columns, loading, error, fetchDeals, move, moveMany, fetchCookie, cookie, enriching, enrichResult, enrichApproved, refill, refilling, refillResult, pullFeeds, pullingFeeds, feedsResult, startScrape, scraping, scrapeResult, pollScrape, stopScrape, briefBatchResult, pollBriefs, screenAll, screening, screenResult, maxAgeDays, agedOut, showStale, setShowStale } = useDesk();
   const [open, setOpen] = useState<Deal | null>(null);
   const [showCookie, setShowCookie] = useState(false);
   const [srcTab, setSrcTab] = useState<string>("all"); // source filter for the first (New) column
@@ -637,6 +637,14 @@ export default function DealDesk() {
             title="Re-scrape Upwork and rebuild the board (opens a browser, takes 10–20 minutes)">
             {scraping ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Re-scrape Upwork
           </button>
+          {scraping && (
+            <button onClick={stopScrape}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium"
+              style={{ background: "rgba(248,113,113,0.16)", color: "#f87171" }}
+              title="Stop the scrape now: closes its browser; nothing after it runs, and the board stays as it was">
+              <Square size={12} /> Stop
+            </button>
+          )}
           <button onClick={fetchDeals} disabled={loading} aria-busy={loading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] panel hover:brightness-110 disabled:opacity-60"
             style={loading ? { color: "#fbbf24" } : undefined}>

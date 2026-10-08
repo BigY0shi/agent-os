@@ -87,5 +87,26 @@ check("E1 the gear has Search topics (one per line) and Pages per search, saved 
   /label="Search topics \(one per line\)"/.test(g) && /label="Pages per search"/.test(g) && /save\(\{ deals: \{ maxAgeDays, searchQueries, pagesPerQuery,/.test(g));
 check("E2 settings.ts declares both", /searchQueries\?: string\[\];/.test(read("src/lib/settings.ts")) && /pagesPerQuery\?: number;/.test(read("src/lib/settings.ts")));
 
+// ── F: Stop (owner, 2026-10-08: "I also don't have any functionality to stop it") ──
+// The route's job lives on globalThis, so a fake running stage can be planted and the real
+// DELETE handler called. No process is spawned: the fake child has no pid, so the stop takes
+// the kill() path and records it.
+const route = await import("../../src/app/api/deals/scrape/route.ts");
+let res = route.DELETE();
+check("F1 Stop with nothing running: 409, said plainly", res.status === 409 && /No scrape is running/.test(await res.text()));
+let killed = 0;
+const jobRef = globalThis.__agentosScrape;
+Object.assign(jobRef, { stage: "scraping", startedAt: Date.now(), finishedAt: null, error: null, tail: [], stopRequested: false, child: { pid: undefined, kill: () => { killed++; return true; } } });
+res = route.DELETE();
+const body = await res.json();
+check("F2 Stop while scraping: ok, the stage's process is ended, the stop is remembered", res.status === 200 && body.stopping === true && killed === 1 && jobRef.stopRequested === true, { body, killed });
+const rs = read("src/app/api/deals/scrape/route.ts");
+check("F3 the process TREE is ended on Windows (the crawler's browser too)", /spawn\("taskkill", \["\/PID", String\(child\.pid\), "\/T", "\/F"\]/.test(rs));
+check("F4 no later stage starts after a stop (checked before scoring, after scoring, before pitching)", (rs.match(/stopCheck\(\);/g) || []).length === 3);
+check("F5 a stop ends as 'stopped', not 'failed'", /job\.stage = "stopped";/.test(rs));
+const st = read("src/lib/upworkDeskStore.ts"), dd = read("src/components/DealDesk.tsx");
+check("F6 the desk shows Stop while scraping and calls DELETE", /\{scraping && \(\s*<button onClick=\{stopScrape\}/.test(dd) && /fetch\("\/api\/deals\/scrape", \{ method: "DELETE" \}\)/.test(st) && /j\.stage === "stopped"/.test(st));
+Object.assign(jobRef, { stage: "idle", child: null, stopRequested: false });
+
 console.log(failures ? `\n${failures} failure(s)` : "\nALL PASS");
 process.exit(failures ? 1 : 0);

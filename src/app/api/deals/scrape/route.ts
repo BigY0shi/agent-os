@@ -43,7 +43,7 @@ const DATASET_DIR = path.join(ACTOR_DIR, "storage", "datasets", "default");
 const INPUT_FILE = path.join(ACTOR_DIR, "storage", "key_value_stores", "default", "INPUT.json");
 
 
-type Stage = "idle" | "scraping" | "scoring" | "pitching" | "done" | "failed";
+type Stage = "idle" | "scraping" | "scoring" | "pitching" | "done" | "failed" | "stopped";
 
 interface Job {
   stage: Stage;
@@ -52,6 +52,7 @@ interface Job {
   error: string | null;
   tail: string[];        // last few lines, so the UI can show progress
   child: ChildProcess | null;
+  stopRequested?: boolean; // set by DELETE; checked between stages so nothing later starts
 }
 
 // Survives the stateless route handler and dev hot-reload, same reasoning as the
@@ -66,6 +67,20 @@ function note(line: string) {
   if (!t) return;
   job.tail.push(t);
   if (job.tail.length > 12) job.tail.shift();
+}
+
+/** End a stage and everything it started. The crawler drives a real browser, and a bare
+ *  child.kill() on Windows leaves the browser windows running, so taskkill /T takes the tree. */
+function killStageTree(child: ChildProcess) {
+  if (process.platform === "win32" && child.pid) {
+    spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).unref();
+  } else {
+    try { child.kill("SIGTERM"); } catch { /* already gone */ }
+  }
+}
+
+function stopCheck() {
+  if (job.stopRequested) throw new Error("STOPPED");
 }
 
 function datasetCount(): number {
@@ -138,6 +153,7 @@ export async function POST(req: Request) {
   job.finishedAt = null;
   job.error = null;
   job.tail = [];
+  job.stopRequested = false;
 
   // Fire and forget: the client polls GET. Awaiting here would hold the request open
   // for the whole run and hit every timeout between here and the browser.
@@ -158,7 +174,9 @@ export async function POST(req: Request) {
       const cookie = readUpworkCookie();
       if (!cookie) note("WARNING: no Upwork cookie saved, so the scrape runs logged out and Upwork ignores newest-first. Set it with the cookie button in the Deal Desk.");
       await runStage("scraping", ACTOR_ENTRY, ACTOR_DIR, [], cookie ? { UPWORK_COOKIE: cookie } : {});
+      stopCheck();
       await runStage("scoring", SCORE_SCRIPT, LEADS_DIR);
+      stopCheck();
       // S4 (f): the age gate lands here, between scoring and pitching, so an old
       // listing is neither pitched (a claude call each) nor shown. Dropped rows
       // are kept beside the file, never discarded.
@@ -172,6 +190,7 @@ export async function POST(req: Request) {
         const ids = shortlistIds();
         if (ids.length) {
           writeFileSync(IDS_FILE, JSON.stringify(ids));
+          stopCheck();
           note(`pitching ${ids.length} shortlisted leads`);
           await runStage("pitching", PITCH_SCRIPT, LEADS_DIR, [IDS_FILE]);
         } else {
@@ -180,12 +199,33 @@ export async function POST(req: Request) {
       }
       job.stage = "done";
     } catch (e) {
-      job.stage = "failed";
-      job.error = e instanceof Error ? e.message : String(e);
+      if (job.stopRequested) {
+        job.stage = "stopped";
+        job.error = null;
+        note("stopped by you; the board was left as it was before this scrape");
+      } else {
+        job.stage = "failed";
+        job.error = e instanceof Error ? e.message : String(e);
+      }
     } finally {
       job.finishedAt = Date.now();
     }
   })();
 
   return Response.json({ ok: true, started: true, stage: job.stage });
+}
+
+// DELETE /api/deals/scrape -> stop the running scrape (owner, 2026-10-08: "I also don't have
+// any functionality to stop it"). Ends the current stage's process tree (crawler + browser,
+// or the scorer / pitcher) and no later stage starts. Stopped while scraping, the board is
+// untouched: it is only rebuilt by the scoring stage. Stopped while pitching, the board is
+// already rebuilt and the leads pitched so far keep their pitches.
+export function DELETE() {
+  const running = job.stage === "scraping" || job.stage === "scoring" || job.stage === "pitching";
+  if (!running) return Response.json({ ok: false, error: "No scrape is running.", stage: job.stage }, { status: 409 });
+  job.stopRequested = true;
+  const stage = job.stage;
+  if (job.child) killStageTree(job.child);
+  note(`stop requested during ${stage}`);
+  return Response.json({ ok: true, stopping: true, stage });
 }

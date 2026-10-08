@@ -1,5 +1,22 @@
 # Agent OS — Dev Journal
 
+## 2026-10-08 - Deal Desk: a Stop for the Upwork scrape (v2.62.0)
+
+Owner: "I also don't have any functionality to stop it", during a scrape running 1h35m
+(started 00:14, 374 jobs read, mostly a week+ old by then). Added DELETE /api/deals/scrape:
+sets stopRequested, ends the current stage's process tree (taskkill /T /F on Windows, so the
+crawler's browser goes too), stopCheck() before scoring, after scoring and before pitching so
+nothing later starts, and the run ends as "stopped" (not "failed"). The desk shows a red Stop
+next to Re-scrape Upwork while scraping; a reload re-attaches as before. Stopped while scraping
+or scoring the board is untouched (only scoring rebuilds it).
+The run in progress was on the old build (no DELETE), so at the owner's request it was ended by
+hand: PID 3936 (`node ...Upwork-Leads\actor\src\main.js`, parent = the 3737 server 29180)
+via `taskkill /PID 3936 /T /F`, 15 processes; the server stayed up. Its desk status will read
+"scraping exited with code 1"; the board is as it was.
+Verified: smoke-deal-desk-scrape F1-F6 (the real DELETE handler against a planted running job:
+409 when idle, 200 + kill + stopRequested when running); ./test.sh 122 passed, 0 failed.
+Rollback: `git revert <this commit>`.
+
 ## 2026-10-08 - Deal Desk scrape: old jobs never opened; search topics in the gear (v2.61.0)
 
 Owner: a scrape takes about an hour, a working queue of 200+ ends with about 40 kept, and jobs

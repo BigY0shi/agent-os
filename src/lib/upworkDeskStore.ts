@@ -41,6 +41,7 @@ interface DeskStore {
   scrapeResult: string | null;
   startScrape: () => Promise<void>;
   pollScrape: () => Promise<void>;
+  stopScrape: () => Promise<void>;
   briefingBatch: boolean;
   briefBatchResult: string | null;
   briefTop: () => Promise<void>;
@@ -400,7 +401,9 @@ export const useDesk = create<DeskStore>((set, get) => ({
           scraping: false,
           scrapeResult: j.stage === "done"
             ? `Board rebuilt from ${j.scraped} freshly scraped jobs.`
-            : j.error || "Scrape stopped unexpectedly.",
+            : j.stage === "stopped"
+              ? "Scrape stopped. The board is as it was before it started (or, if it was pitching, rebuilt with the pitches done so far)."
+              : j.error || "Scrape stopped unexpectedly.",
         });
         if (j.stage === "done") await get().fetchDeals();
       } catch {
@@ -408,6 +411,17 @@ export const useDesk = create<DeskStore>((set, get) => ({
       }
     };
     tick();
+  },
+
+  stopScrape: async () => {
+    try {
+      const r = await fetch("/api/deals/scrape", { method: "DELETE" });
+      const j = await r.json();
+      if (!j.ok) { set({ scrapeResult: j.error || "Could not stop the scrape" }); return; }
+      set({ scrapeResult: "Stopping the scrape…" }); // the poll picks up the final state
+    } catch (e) {
+      set({ scrapeResult: (e as Error).message });
+    }
   },
 
   briefTop: async () => {
