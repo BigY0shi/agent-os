@@ -132,6 +132,26 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | **Insights** | Runs by module, agents, skills in use. |
 | **Settings** | Each settings block as JSON; **Save <block>**, **Open <module>**. Secrets are masked. |
 
+### Orb chat and hotkey
+
+The orb (bottom right of every page) opens the chat overlay. Its gear holds the voice and hotkey settings (`settings.jarvis.voice` and `settings.jarvis.hotkey`).
+
+| Control | What it does |
+|---|---|
+| Mic button (hold or click, per **Hold to talk**) | Records into the text box at the cursor. Release stops; nothing is sent unless **Auto-send on release** is on. Unchanged by the hotkey. |
+| Text box, **Send**, Enter | Sends. Esc discards the draft and closes. |
+| **In-app keybind** | The mapped key also works when an Agent OS tab has focus, with or without the helper. |
+| **Key** | The mapped key, as a `KeyboardEvent.key` and AutoHotkey key name: `F13` by default; `F13` to `F24`, `F9`, `CapsLock`. The helper re-reads it within 30 s. |
+| **Mode** | **hold to talk** (default): holding the key opens the chat if closed, fronts the page and starts the mic; releasing stops it. **press to open**: a press only opens the chat (the behaviour before push-to-talk). |
+| **Send on release** | On (default): releasing the key sends what you said and the reply is read aloud. Off: releasing only stops the mic; Enter sends. The mouse mic button follows **Auto-send on release** instead. |
+| **OS-global helper install** | Opens `/api/jarvis/hotkey/setup`, which writes the shared secret and returns the AutoHotkey v2 helper script with install steps. The status line shows whether the secret exists and when the helper last fired. |
+
+How the hotkey works: the AutoHotkey helper (`scripts/v2/jarvis-hotkey.ahk`) posts key down and key up to `POST /api/jarvis/hotkey` with the shared secret; the page receives them over `/api/jarvis/hotkey/stream`. The helper asks `GET /api/jarvis/hotkey/config` (secret-gated, returns the key and mode only) at start and every 30 s, so the gear is the one place to change the key. The helper assumes Agent OS on `http://127.0.0.1:3737`; only edit its `AppUrl` line if yours is elsewhere. With no Agent OS tab connected, a press opens one with `?jarvis=1`; the release of that first hold is lost because the page was not connected yet, so hold again.
+
+Mini USB keyboards and F13 to F24: most keyboards have no F13 key, which is what makes F13 to F24 ideal: nothing else uses them. Map a spare key on a macro pad or mini USB keyboard to one of them with the keyboard's own tool (VIA, QMK, the vendor app), type that name into **Key**, and the helper picks it up. Without such a tool, `CapsLock` or `F9` works too; when the key is `CapsLock` the helper parks the caps state so it stops toggling.
+
+Browser limits, stated honestly: the helper fronts the browser window, but it cannot pick the tab, so the Agent OS tab must be the active tab in that window. The mic starts in a window that was just fronted only if mic permission is already granted for the site (allow it once from the address bar; over Tailscale the site must be HTTPS, see the start page). The reply plays only if you have clicked in that tab since it loaded, a browser autoplay rule; a tab that was never touched stays silent and the text still arrives. Nothing in Agent OS can lift these; the gear says so.
+
 ## How it works
 
 - The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`.

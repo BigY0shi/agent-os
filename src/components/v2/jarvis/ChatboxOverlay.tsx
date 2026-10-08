@@ -75,6 +75,7 @@ export default function ChatboxOverlay({
   saving,
   resumeId,
   onResumed,
+  pttHeld = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -84,10 +85,19 @@ export default function ChatboxOverlay({
   /** S13: conversation to open (from the Sessions tab). Cleared via onResumed. */
   resumeId?: string | null;
   onResumed?: () => void;
+  /** S38: the mapped hotkey is held (helper "down" over SSE, or the in-app keybind). */
+  pttHeld?: boolean;
 }) {
   const jarvis = (settings?.jarvis ?? {}) as {
     voice?: { provider?: string; autoSend?: boolean; pushToTalk?: boolean; ttsProvider?: string };
+    hotkey?: { key?: string; mode?: "hold" | "open"; sendOnRelease?: boolean };
   };
+  // S38: the hotkey release sends by default (the owner is away from the screen);
+  // the MOUSE mic button keeps voice.autoSend (default off) — two separate knobs.
+  const hotkeySendOnRelease = jarvis.hotkey?.sendOnRelease ?? true;
+  const hotkeySendRef = useRef(hotkeySendOnRelease);
+  hotkeySendRef.current = hotkeySendOnRelease;
+  const hotkeyKeyLabel = jarvis.hotkey?.key ?? "F13";
   const provider = jarvis.voice?.provider ?? "webspeech";
   const speech = useReadAloud(jarvis.voice?.ttsProvider ?? "voicebox");
   const [readReplies, setReadReplies] = useState(true);
@@ -447,16 +457,25 @@ export default function ChatboxOverlay({
   );
 
   // ── C2b step 6: the ONLY auto-send path — gated on the settings toggle ─────
+  // S38: set when a HOTKEY release stopped the recording and sendOnRelease is on;
+  // consumed on the recording→idle transition (the transcript has landed by then
+  // for both the recorder lanes and Web Speech), so the send carries the text.
+  const pttSendPendingRef = useRef(false);
+  // True while a recording was started by the held hotkey (not the mouse mic).
+  const pttActiveRef = useRef(false);
   const prevCaptureStatusRef = useRef(captureStatus);
   useEffect(() => {
     const prev = prevCaptureStatusRef.current;
     prevCaptureStatusRef.current = captureStatus;
+    if (captureStatus === "error") pttSendPendingRef.current = false;
     if (prev === "recording" && captureStatus === "idle") {
+      const pttSend = pttSendPendingRef.current;
+      pttSendPendingRef.current = false;
       if (suppressAutoSendRef.current) {
         suppressAutoSendRef.current = false;
         return;
       }
-      if (autoSendRef.current) sendBuffer(); // autoSend ON (non-default) → release sends
+      if (autoSendRef.current || pttSend) sendBuffer(); // autoSend ON (non-default) or a hotkey release → send
     }
   }, [captureStatus, sendBuffer]);
 
@@ -481,9 +500,38 @@ export default function ChatboxOverlay({
     }
     suppressAutoSendRef.current = true;
     capture.cancel();
+    pttActiveRef.current = false;
+    pttSendPendingRef.current = false;
     setShowSettings(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // ── S38 push-to-talk: the held hotkey drives the mic ───────────────────────
+  // Held → start capture (unless the mouse mic already is, which is left alone).
+  // Released → stop capture; a release before the mic actually opened (a tap,
+  // or getUserMedia still pending) cancels instead, so nothing records forever.
+  // The mouse mic button's own handlers below are untouched.
+  const { start: captureStart, stop: captureStop, cancel: captureCancel } = capture;
+  useEffect(() => {
+    if (!open) return;
+    if (pttHeld) {
+      if (pttActiveRef.current || captureStatus === "recording") return;
+      pttActiveRef.current = true;
+      speechRef.current.stop();
+      captureStart();
+      return;
+    }
+    if (!pttActiveRef.current) return;
+    pttActiveRef.current = false;
+    if (captureStatus === "recording") {
+      pttSendPendingRef.current = hotkeySendRef.current;
+      captureStop();
+    } else if (captureStatus !== "error") {
+      captureCancel(); // an error ("Mic blocked") stays on screen; cancel would clear it
+    }
+    // captureStatus is read, not watched: a status change alone must not re-run the hold.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pttHeld, captureStart, captureStop, captureCancel]);
 
   // ── Mic button behavior (hold vs toggle per settings) ──────────────────────
   const recording = captureStatus === "recording";
@@ -776,8 +824,19 @@ export default function ChatboxOverlay({
                 {capture.error && (
                   <span className="text-[11.5px]" style={{ color: "#fbbf24" }}>{capture.error}</span>
                 )}
+                {pttHeld && !capture.error && (
+                  <span
+                    className="text-[11px] px-2 h-6 inline-flex items-center rounded-md"
+                    style={{ border: `1px solid ${ACCENT}55`, color: ACCENT, background: `${ACCENT}14` }}
+                    title={`${hotkeyKeyLabel} is held. ${hotkeySendOnRelease ? "Release to send." : "Release to stop; Enter sends."}`}
+                  >
+                    {recording
+                      ? `${hotkeyKeyLabel} held · ${hotkeySendOnRelease ? "release to send" : "release to stop"}`
+                      : `${hotkeyKeyLabel} held · opening mic`}
+                  </span>
+                )}
                 <span className="ml-auto text-[10.5px] font-mono" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
-                  Esc discards · ⏎ sends{autoSend ? " · auto-send ON" : ""}
+                  Esc discards · ⏎ sends{autoSend ? " · auto-send ON" : ""}{hotkeySendOnRelease ? ` · ${hotkeyKeyLabel} sends on release` : ""}
                 </span>
                 <button
                   onClick={() => sendBuffer()}

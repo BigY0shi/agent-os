@@ -342,8 +342,8 @@
         "Every new knob is a gear setting (rule 16; defaults as stated in the description) and every new control is in its docs/modules/*.md controls table; smoke-guide passes",
         "./test.sh exits 0; version bumped (minor); DEV-JOURNAL entry with a rollback line; ROADMAP slice ticked and roadmap page re-rendered"
       ],
-      "status": "failing",
-      "notes": ""
+      "status": "passing",
+      "notes": "2026-10-01 v2.61.0: hold = orb chat opens + page fronts + mic records, release = stop + send (jarvis.hotkey.mode hold|open, sendOnRelease default on, both in the orb gear with the Key); mouse mic unchanged (voice.autoSend); HotkeyEvent.action press|down|up through POST /api/jarvis/hotkey (400 on unknown), the bus and the SSE stream; new secret-gated GET /api/jarvis/hotkey/config returns {key, mode} only (proxy-exempt for GET with the header); AHK helper reads it at start + every 30 s and rebinds, posts down/up, AppUrl 3737; in-app keybind holds (keydown/keyup, autorepeat ignored). Docs: jarvis.md 'Orb chat and hotkey' (controls table, F13..F24 + mini USB remap, browser limits stated), around-every-page.md. Evidence: smoke-jarvis-hotkey 49 checks (settings + secret redirected to temp), smoke-jarvis-ui +10, smoke-guide green; ./test.sh 120 passed 0 failed exit 0. NOT seen in a browser or on a keyboard: the live mini-keyboard test is the AWAITING USER VERIFY checklist at the end of agent-progress.md."
     },
     {
       "id": "fix-s31-artifacts-windows-deploy",

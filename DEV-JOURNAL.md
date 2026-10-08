@@ -79,6 +79,46 @@ which call the function and inspect the output. ./test.sh 120/120. PR #18 descri
 cover the whole branch (it still described only the first four commits).
 Rollback: `git revert <this commit>`.
 
+## 2026-10-01 - S38: Jarvis push-to-talk on a mappable global hotkey (v2.61.0)
+
+Harness session, worktree `ptt-hotkey`, feature feat-s38-jarvis-ptt-hotkey. The owner uses the orb
+chat from across the room with a mini USB keyboard; the OS-global key only OPENED the chat, and the
+AutoHotkey helper posted to 127.0.0.1:3033 while Agent OS listens on 3737 (read in the script's
+AppUrl line), so it never reached the app at all.
+- Settings (`jarvis.hotkey`): `mode` "hold" (push-to-talk, default) | "open" (press opens, as
+  before) and `sendOnRelease` (default true: the owner is away from the screen). Both in the orb
+  chat's gear (JarvisSettings: Mode select, Send on release tick, the Key hint now names F13..F24 and
+  the 30 s helper refresh). The mouse mic keeps `voice.autoSend` (default off); two knobs on purpose.
+- Bus + routes: `HotkeyEvent.action` "press" | "down" | "up" (no action = press, so an old helper
+  still works); `POST /api/jarvis/hotkey` validates it (400 on anything else) and echoes it; the SSE
+  stream carries it unchanged. New `GET /api/jarvis/hotkey/config` (secret header, same timing-safe
+  check, proxy-exempt for GET with the header only) returns `{key, mode}` and nothing else, from
+  `lib/v2/jarvis/hotkeyConfig.ts`; `/setup` now names the key + mode and says to change them in the
+  gear.
+- Helper (`scripts/v2/jarvis-hotkey.ahk`): AppUrl 3737; reads key + mode from /config at start and
+  every 30 s (SetTimer) and rebinds (`Hotkey key` + `Hotkey key " up"`); a Held flag swallows Windows
+  autorepeat; hold mode posts down/up, open mode posts press; the release never opens a tab or fronts.
+  Unreachable server = keep the current binding; 401/503 = tray tip.
+- Page: JarvisOmnipresence turns SSE down/up (and the in-app keydown/keyup, autorepeat ignored, blur
+  releases a keybind hold) into a `pttHeld` prop; on a down it fronts the page BEFORE the mic starts.
+  ChatboxOverlay: held = `capture.start()` (unless the mouse mic is already recording), released =
+  `capture.stop()` with a pending send consumed on the recording-to-idle transition (the transcript
+  has landed by then for Parakeet and Web Speech alike); a release before the mic opened cancels
+  instead, so a tap never records forever; a mic error stays on screen. A pill beside the mic reads
+  "F13 held · release to send". The mouse mic handlers are untouched (asserted by smoke-jarvis-ui).
+- Browser limits, stated in the gear and in docs/modules/jarvis.md "Orb chat and hotkey": the helper
+  fronts the window but cannot pick the tab; mic permission must already be granted; the spoken reply
+  plays only if the tab was clicked since it loaded (autoplay). Docs also cover F13..F24 and remapping
+  a spare key on a mini USB keyboard; around-every-page.md's F13 row updated.
+- Smokes: smoke-jarvis-hotkey 49 checks (settings redirected to a temp file, rule 19; down/up through
+  the bus and a real read of the SSE stream route; config GET 401/503/key+mode only/follows the gear;
+  the helper's contents); smoke-jarvis-ui + 10 S38 checks (defaults, proxy exemption, overlay and
+  omnipresence wiring, mouse mic unchanged). smoke-guide green (no dashes, controls table).
+- Not seen in a browser or on a keyboard: the live checklist is at the end of agent-progress.md.
+Gate: ./test.sh 120 passed, 0 failed, exit 0 (tsc clean). Not pushed to a PR; the commit is on feat/s38-jarvis-ptt-hotkey.
+Rollback: revert the S38 commit; settings.jarvis.hotkey.mode/sendOnRelease are ignored by older
+code (deepMerge keeps unknown keys harmlessly); an old helper's bare POST still opens the chat.
+
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
 Integration branch integrate/s30-s32-s7-s9 off 9f698b1, one --no-ff merge per slice in that order,
