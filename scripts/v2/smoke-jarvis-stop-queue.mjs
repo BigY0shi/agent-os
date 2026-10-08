@@ -41,7 +41,8 @@ check("B5 typed while busy is queued and drained; Stop button + Esc hold the que
 
 // ── C ───────────────────────────────────────────────────────────────────────
 const o = read("src/components/v2/jarvis/ChatboxOverlay.tsx");
-check("C1 sending while busy queues instead of doing nothing", /if \(busyRef\.current\) \{ setQueue\(\(q\) => \[\.\.\.q, \{ id: \+\+queueIdRef\.current, text \}\]\); return; \}/.test(o) && !/if \(!text \|\| busyRef\.current\) return;/.test(o));
+check("C1 sending while busy queues instead of doing nothing", /if \(busyRef\.current\) \{ setQueue\(\(q\) => \[\.\.\.q, \{ id: \+\+queueIdRef\.current, text, attachment: pending \}\]\); return; \}/.test(o) && !/if \(!text \|\| busyRef\.current\) return;/.test(o));
+check("C1b a queued message keeps the image it was sent with (S34 merge): taken at Send, carried by the drain", /const pending = attachmentRef\.current;\s*attachmentRef\.current = null;/.test(o) && /void dispatchText\(next\.text, next\.attachment\);/.test(o) && !/const pending = attachmentRef\.current;[\s\S]{0,40}\/\/ S34: the pending image rides this send and only this send\./.test(o));
 check("C2 the queue drains when idle and done reading aloud", /if \(!queue\.length \|\| busy \|\| speech\.speaking\) return;/.test(o));
 check("C3 Send stays enabled while busy", !/disabled=\{busy \|\| !value\.trim\(\)\}/.test(o));
 check("C4 Stop actions holds the queue and an abort reads (stopped)", /holdQueue\(\); askAbortRef\.current\?\.abort\(\)/.test(o) && /askAbort\.signal\.aborted \?/.test(o));

@@ -1,5 +1,24 @@
 # Agent OS — Dev Journal
 
+## 2026-10-08 - S34-S38 merged into the PR branch (v2.63.0)
+
+Owner: "Yeah merge". The five 2026-10-01 harness slices (S38 push-to-talk hotkey, S34 Jarvis chat
+upgrades, S35 agent faces, S36 fleet stats, S37 snapshots), each built and gate-green on its own
+branch, merged into integrate/s34-s38 (worktree agent-os-worktrees/integrate) with --no-ff, one at
+a time, then fast-forwarded onto feat/v2-hermes3d-and-versioning. Bookkeeping conflicts
+(package files: ours, version bumped once here; journal / roadmap / progress / docs: both sides)
+by a resolver script. Code conflicts, all additive: settings.ts (jarvis.hotkey + jarvis.chat;
+fleetStats + snapshots), Cockpit.tsx (AgentAvatar + SnapshotsCard imports), ChatboxOverlay.tsx
+(footer keeps S38's hotkey hint and S34's thinking-effort picker; S34 had moved "Esc discards"
+into the placeholder, Esc still discards). One real interaction fixed: S34 took the attached image
+at dispatch, so a message queued by today's v2.60.2 would have picked up whatever image was
+attached when it finally went out; the image is now taken at Send and carried with the queued
+message (Stop puts it back in the attach slot). smoke-jarvis-stop-queue gains C1b. ROADMAP:
+the union had doubled the S34-S38 lines (one ticked, one not), deduped; today's work added to Done;
+two unscheduled items added (live Jarvis voice, Deal Desk reuse of read jobs).
+Verified: tsc clean after every merge; ./test.sh 126 passed, 0 failed on the merged tree.
+Rollback: `git revert -m 1 <merge>` per slice, or reset the branch to b64eaf0 (owner's call).
+
 ## 2026-10-08 - Deal Desk: a Stop for the Upwork scrape (v2.62.0)
 
 Owner: "I also don't have any functionality to stop it", during a scrape running 1h35m
