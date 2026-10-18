@@ -14,8 +14,6 @@ The home page. It greets you, shows measured telemetry for the machine and the a
 | **Runs** card | Ring with the count of recent module runs and the success rate, "running now", "average run", and a strip of the last finished runs (done, stopped, failed). Says which window it counts over. |
 | **Missions** card | Queued, Running, Review and Parked counts, how many are waiting on you, and how many were delivered. **Open** goes to `/jarvis?tab=goals` (the Jarvis Missions tab). |
 | **Orchestration** card | Jarvis and every configured agent under him with its mark and live status, plus CLIs with running mission seats. "No agents configured." when empty. |
-
-| **Orchestration** card | Jarvis and every configured agent under him with its live status, plus CLIs with running mission seats. "No agents configured." when empty. |
 | **Fleet stats** strip | Under the telemetry band (S36). Its header names the bucket, the window and the timezone in use. **Count again** re-reads the records now; it also refreshes every 60 s while visible. |
 | **Fleet stats** gear | Opens the two settings. **Bucket**: 6 h, 12 h (twice a day, the default), 24 h or 48 h per sparkline point. **Window**: 7, 14 (default), 30 or 60 days. Both save to `fleetStats` in the runtime settings and apply on the next count, with no rebuild. The heatmap's timezone is the Tasks timezone (Tasks gear), the single timezone source. |
 | **Activity over time** card | Two lines per bucket: you (purple) and agents (blue), with each line's total. Buckets start at local midnight at the window's start, so a 12 h bucket is a morning or an afternoon in your zone. "Nothing recorded in this window." when empty. The basis of each line is printed under it. |
