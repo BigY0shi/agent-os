@@ -103,6 +103,29 @@ What remains is ordinary feature work in your own codebase — a handful of endp
 plus a package definition. Budget it as "a few endpoints and a spec sheet", not as
 "building an MCP server".
 
+**That budget assumes Program X already has a server.** "Add a few endpoints" needs a
+long-lived process to add them to. Plenty of software we own has none: a mobile app
+holding its own database on each device, an offline desktop tool, a spreadsheet with
+macros. For those, S0 is not an endpoint; it is a **new tier**, a shared system of record
+that Program X syncs to and the package talks to. That is product work in Program X
+(a sync layer, conflict handling, a machine that stays on), and it must be priced and
+scheduled as such.
+
+Recognise it in Phase 1: no listener anywhere in the program (P6 finds nothing), and
+the data store lives per device or per install. When both hold:
+
+- **Say so in writing at the seam checkpoint (§5, checkpoint 2)**, because it changes the
+  price and the schedule of the engagement, not just the design.
+- **Do not put the endpoint on the device.** A server embedded in a phone or a laptop
+  sleeps, changes address, and still leaves one database per device. It scores 2 on
+  Stability at best.
+- **Check whether the business already has the problem.** N devices with N private
+  databases usually means N disagreeing copies of the truth today. The tier often pays
+  for itself before any tool is bound to it. That is the case to make to the operator.
+
+*Provenance: the first real run (2026-10-18) targeted an Android app with one SQLite
+database per phone and no backend. "A few endpoints" would have been wrong by a tier.*
+
 ### 2.2 Seam scoring
 
 A target often has several seams. Score each on six axes, 1–5, and take the highest
@@ -191,8 +214,8 @@ advance until its gate passes. Gates are checkable by a machine wherever possibl
 |---|---|---|---|---|
 | 0 | Intake & authorization | operator | `TargetBrief` | target named; ≥1 verb; **right to integrate confirmed** |
 | 1 | Recon | agent | `SeamReport` | ≥1 seam S0–S7 with evidence, or explicit abort |
-| 2 | Capability map | agent | `CapabilityMap` | every verb classified reachable / compound / unreachable |
-| 3 | Tool spec | agent + operator | `ToolSpec[]` | ≤ budget; 3-sentence descriptions; danger set by a human |
+| 2 | Capability map | agent | `CapabilityMap` | every verb classified reachable / compound / unreachable; write paths audited against Rules |
+| 3 | Tool spec | agent + operator | `ToolSpec[]`, `RuleMap[]` | ≤ budget; 3-sentence descriptions; danger set by a human; every Rule has an enforcement point |
 | 4 | Binding | agent | draft package | schemas valid; no secret values in `handlerConfig` |
 | 5 | Harness | agent | stub + smoke | smoke passes offline **and fails when broken** |
 | 6 | Gate & publish | agent + operator | published snapshot | high-danger tools gated; smoke green |
@@ -211,8 +234,14 @@ Verbs:       3–10 things you want done, in plain language
 Audience:    the ONE role this package serves (see §3) — service, sales, warehouse…
 Users:       who will actually be typing at this, and what they know
 Environment: local / our server / the client's machine
+Client:      the app the users will actually talk through — Agent OS Jarvis, their own
+             MCP-capable app, a chat built into Program X
 Rules:       what must never happen
 ```
+
+**Client is not optional.** It decides whether the users can ever see an approval card
+(they cannot through `/api/mcp`; see Phase 3) and what Phase 7 has to ship. A brief that
+leaves it blank gets it asked, not assumed.
 
 **Authorization is a gate, not a formality.** Before any recon on software we do not own:
 
@@ -236,7 +265,7 @@ Cost ascends down the ladder; P0–P1 can end the project in minutes.
 |---|---|---|
 | **P0** | Does an MCP server already cover Program X **for this audience**? | done — install or subset it |
 | **P1** | Does a community bridge / automation library exist? | collapses S4/S5/S7 → S1 |
-| **P2** | **Do we own Program X?** | S0 — consider adding the seam |
+| **P2** | **Do we own Program X?** Does it have a server tier? (§2.1) | S0 — consider adding the seam, or the tier |
 | **P3** | Official docs: API, webhooks, integration guide | S1 |
 | **P4** | `<binary> --help`, `--version`, man page | S2 |
 | **P5** | Package registries for an official/maintained SDK | S3 |
@@ -287,7 +316,22 @@ Three outcomes per verb, all recorded:
 - **unreachable** — the seam cannot do it. Report it; never silently drop it. On a paid
   engagement an unreported dropped verb is a dispute at delivery.
 
-**Gate:** no verb unclassified.
+**Audit every write path against the Rules before binding to it.** A tool that writes
+through an existing flow inherits whatever that flow already does wrong. For each
+reachable or compound write verb, read the code path behind it when we own Program X,
+or exercise it against a test record when we do not. Then check it against every Rule
+in the brief: placeholder defaults that a hurried user can submit, fallbacks that fire
+without saying so, a value that becomes zero when it fails to parse, a navigation
+action with a side effect, AI-generated values standing in for missing real ones.
+Each violation found is a **Phase 4 prerequisite**, fixed in Program X before the tool
+is bound. It is not a follow-up, because once the tool ships the agent will drive that
+defect at speed.
+
+*Provenance: on the first real run, pressing Back on the target's sale screen marked the
+vehicle sold, and the sale form came pre-filled with a fictional buyer.*
+
+**Gate:** no verb unclassified; every write path audited, and no verb bound over a path
+with an open Rule violation.
 
 ### Phase 3 — Tool spec
 
@@ -326,7 +370,34 @@ On client engagements, "externally visible" is broader than it looks: anything a
 a regulator, or an auditor could see is high, regardless of how easy it is to undo
 internally.
 
-**Gate:** budget respected; three-sentence descriptions; danger set by a human.
+#### `requiresApproval` is a run gate, not a verification screen
+
+Check what the approval step actually is before a Rule leans on it. As of 2026-10-18:
+
+| Fact | Where | Consequence |
+|---|---|---|
+| The card shows the tool name plus `JSON.stringify(redactedArgs).slice(0, 300)` in monospace, with one Approve and one Deny | `src/components/v2/jarvis/ChatboxOverlay.tsx:645` | Good for "may this run?". Useless for "check each of these fields": long records are cut off, and the user sees JSON. |
+| Only interactive callers get a card. Strict and non-interactive callers, which includes everything through `/api/mcp`, hard-refuse with "requires human approval and cannot run non-interactively" | `src/lib/v2/webmcp/execute.ts:286-287` | Users on their own MCP client never see an approval. To them, every gated tool is simply broken, and the message is jargon. |
+| `redactArgs` masks any key matching `/pass\|token\|secret\|key\|auth/i` in the card and in the call log | `src/lib/v2/redact.ts:10` | `passport_number`, `authorized_signer` and `key_tag` show as `[redacted]`. The approver approves what they cannot see. Name business fields to avoid those substrings. |
+
+So when a Rule says a person must **verify, confirm, check off or sign** something,
+enforce it in Program X's system of record, not in the agent's approval step:
+
+1. Program X refuses the state change until a verification record exists.
+2. That record is created on a human surface Program X controls (a screen with one
+   checkbox per item, the person's name, and a hash of the values, so a later edit
+   clears it).
+3. The package's credentials lack the scope to create it, so no model can tick the boxes.
+4. The tool reports what is still missing in plain words, and stops.
+
+The Rule then holds whichever client is in use, and when no agent is involved at all.
+The approval gate stays what it is: a second key on high-danger tools, layered on top.
+
+Record where each Rule is enforced: Program X, the handler, or the approval gate. A Rule
+with no enforcement point is a wish.
+
+**Gate:** budget respected; three-sentence descriptions; danger set by a human; every Rule
+in the brief mapped to an enforcement point.
 
 ### Phase 4 — Binding
 
@@ -380,6 +451,12 @@ operator has seen the tool list.
 For client delivery, `exporter.ts` client mode rewrites `{{secret:NAME}}` to
 `${config:NAME}` and emits the config manifest. Secret **values** are never embedded in
 either mode.
+
+**The export is not an MCP server.** It implements the IntegrationCLI contract
+(`spec` / `get-tools` / `call-tool`, NDJSON on stdout), not MCP over stdio. If the brief's
+Client is the users' own MCP-capable app, Phase 7 ships either the hosted `/api/mcp`
+endpoint (with the approval caveat in Phase 3) or a thin MCP wrapper over the export.
+Decide which at Phase 0, not at handover.
 
 Ship with a **runbook**, not just an export:
 
@@ -468,7 +545,8 @@ Consistent with INDEX.md's checkpoint convention, the wizard stops and waits at:
 
 1. **Authorization (Phase 0)** — the right to integrate third-party software.
 2. **Seam confirmation (end of Phase 1)** — a wrong seam wastes the whole build. Includes
-   the S0 decision: are we willing to change Program X?
+   the S0 decision: are we willing to change Program X? If it has no server tier, this is
+   also where the operator agrees to add one, priced as product work (§2.1).
 3. **Danger classification (Phase 3)** — only the operator knows what is expensive to get
    wrong in their setup. Never infer this.
 4. **Bridge authorship (S4/S5/S7)** — running our code *inside* Program X is a materially
@@ -498,10 +576,11 @@ Stop and report rather than degrade:
 One row per wizard run:
 
 ```
-TargetBrief   { target, version, os, ownership, environment, verbs[], users[], rules[], authorization }
+TargetBrief   { target, version, os, ownership, environment, client, verbs[], users[], rules[], authorization }
 SeamReport    { candidates[]: { seam, evidence[], scores{...}, lane }, recommended, abort? }
 CapabilityMap { entries[]: { verb, status: reachable|compound|unreachable, address, args[], returns } }
 ToolSpec      { name, description, inputSchema, danger, handlerKind, handlerConfig }
+RuleMap       { rule, enforcedAt: program|handler|approval, mechanism, evidence }
 Enablement    { capabilityCard, promptPatterns[], boundaries[], errorTable[], signOff? }
 RunState      { phase, gateResults[], parkedAt?, operatorDecisions[] }
 ```
