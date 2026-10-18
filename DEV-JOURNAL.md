@@ -1,5 +1,39 @@
 # Agent OS — Dev Journal
 
+## 2026-10-18 - Restart/Stop Agent OS kill only THIS repo's Next server (v2.63.3)
+
+Follow-up to the "Open, not done" line in the entry below. The node sweep in `agentos-restart.ps1`
+and `agentos-stop.ps1` (`CommandLine -match 'next.dist.bin.next"?\s+start'`) matched any
+`next start` on the machine, so Restart or Stop Agent OS would have killed another project's Next
+server (two other projects use 3000/3001). Changes:
+- Both sweeps now also require `[regex]::Escape(<repo folder>) + '[\\/]node_modules[\\/]'` in the
+  command line (`$repoNext`, repo folder = `$PSScriptRoot`). Requiring `\node_modules\` right after
+  the repo folder also keeps out a sibling like `agent-os-old` and checkouts under
+  `.claude\worktrees\`. The port-3737 listener lookup is unchanged.
+- `agentos-restart.ps1` launches Next by absolute path (`Join-Path $dir 'node_modules\next\dist\bin\next'`),
+  wrapped in literal quotes because Start-Process joins `-ArgumentList` with spaces and quotes nothing.
+
+Verified without running either script (`sweep-test.ps1` in the session scratchpad, run under
+Windows PowerShell 5.1 like the .bat files). The `$repoNext` expression and the Where-Object filter
+were pulled out of each edited file's AST and run against 9 command lines. Match: the bat-launched
+`"node"   "C:\...\agent-os\node_modules\.bin\\..\next\dist\bin\next" start -H 0.0.0.0`, the new
+absolute restart form, the repo path in other casing. No match: another project's `next start` and
+`next dev`, this repo's `next dev`, `agent-os-old`, a `.claude\worktrees` checkout, the old relative
+restart form. The edited Start-Process statement was also run against a fake repo whose folder name
+has a space (a 4-second sleeper as `next`, binds no port). Windows recorded
+`"C:\Program Files\nodejs\node.exe" "<fake repo>\node_modules\next\dist\bin\next" start -H 0.0.0.0 -p 3737`,
+node received the path as one argument, the sweep scoped to the fake repo matched it and the one
+scoped to agent-os did not. Both files parse with 0 errors.
+
+Known gap: a server started by the OLD restart script has a relative command line
+(`node_modules\next\dist\bin\next start ...`) with no repo folder in it. Once it listens on 3737 the
+port lookup still finds it; only one still booting (not yet listening) would be missed. That form is
+gone after the first restart with the new script. Also checked live (read-only): the running
+dashboard, PID 29944 (bat-launched), is still selected by the new filter.
+
+**Rollback.** Originals in `.exile/2026-10-18_105647/` (`agentos-restart.ps1`, `agentos-stop.ps1`);
+copy them back over the edited files.
+
 ## 2026-10-18 - "Stop Paperclip.bat" no longer kills the Agent OS dashboard (v2.63.1)
 
 Owner: "finish what's started" on the uncommitted 2026-09-13 launcher work (the two entries

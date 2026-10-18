@@ -2,10 +2,13 @@
 # "next start" node process that stopped listening (a true zombie). Scoped so it
 # never touches your CLI agents, Paperclip, or other node apps.
 $ErrorActionPreference = 'SilentlyContinue'
+# 2026-10-18: a "next start" counts as ours only if its command line names THIS
+# repo's node_modules. The bare pattern also matched other projects' Next servers.
+$repoNext = [regex]::Escape($PSScriptRoot) + '[\\/]node_modules[\\/]'
 
 $ids = @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Expand OwningProcess -Unique)
 $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-  Where-Object { $_.CommandLine -match 'next.dist.bin.next"?\s+start' } |
+  Where-Object { $_.CommandLine -match 'next.dist.bin.next"?\s+start' -and $_.CommandLine -match $repoNext } |
   Select-Object -Expand ProcessId)
 # Kokoro local TTS rides the same lifecycle — port-scoped so only OUR server dies.
 $ids += @(Get-NetTCPConnection -LocalPort 8880 -State Listen | Select-Object -Expand OwningProcess -Unique)
