@@ -10,7 +10,7 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 
 | Control | What it does |
 |---|---|
-| Face ("Tap to talk") | Starts or stops listening. The phase label shows ONLINE, LISTENING, THINKING, ACTING, SPEAKING or BUILDING. |
+| Face ("Tap to talk") | Starts or stops listening. Tapping it while Jarvis is thinking or speaking interrupts him and starts listening. The phase label shows ONLINE, LISTENING, THINKING, ACTING, SPEAKING or BUILDING. |
 | **Realtime ON/OFF** | Opens the speech-to-speech panel with **GPT Realtime**, **Gemini Live** or **Kimi**. The tooltip notes GPT Realtime needs `OPENAI_API_KEY`. |
 | **Live ON/OFF** | Hands-free: listens continuously. Disabled while Realtime is on. |
 | **Wake word ON/OFF** | Listens for "Jarvis". Disabled while Realtime is on. |
@@ -18,8 +18,10 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | **Briefing** | A vault-grounded rundown (suggested focus, open action items, done this week, activity, themes, worked on, on your mind, headlines). The panel has **daily** / **weekly**, a history button ("Past briefings") and a Dismiss X. |
 | Reply voice select | Picks the reply voice and saves it to settings. |
 | **Configure** (gear, tooltip "Jarvis models") | Sets "Kimi voice brain (Ollama Cloud)", and the models behind the hosted voice lanes: **Gemini Live model** (blank = `GEMINI_LIVE_MODEL`, else `gemini-live-2.5-flash-preview`), **GPT Realtime model** (`gpt-realtime`), **GPT Realtime transcription model** (`gpt-4o-mini-transcribe`) and **OpenAI reply voice model** (`gpt-4o-mini-tts`). Saved to `settings.jarvis` and used by the next session or reply. |
-| **Wall mode** | Full-screen HUD; Esc exits. |
-| Text box, **Send** | Type any time and press Enter. |
+| **Wall mode** | Full-screen HUD; Esc exits (when Jarvis is thinking or speaking, the first Esc stops him instead). |
+| Text box, **Send** | Type any time and press Enter. While Jarvis is busy or speaking the message is queued and goes out when he is done. |
+| **Stop** (or Esc) | Shown while Jarvis is thinking or speaking. Cancels the reply and silences the voice; queued messages go back into the text box, nothing is sent. |
+| Queued messages: **Send now**, remove (x) | Each queued message in order ("Next", "Queued 2", ...). **Send now** interrupts Jarvis and sends it at once (disabled while a build or briefing runs, which cannot be cancelled). |
 | Built with Hermes-Jarvis | Gallery of pages Jarvis built; each opens in a preview. |
 
 ### Voice
@@ -27,9 +29,10 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | Control | What it does |
 |---|---|
 | Dial, **Previous** / **Next**, arrow keys | Picks who you talk to: Jarvis, Oracle, Mastermind specialists and crew agents. Saying "talk to <name>" also switches. |
-| **Hold to talk** (or hold Space) | Records through Parakeet while held, sends on release. |
+| **Hold to talk** (or hold Space) | Records through Parakeet while held, sends on release. Works while the agent is busy: it stops the reply and the voice first. |
+| **Stop** (or Esc) | Shown while the agent is thinking or speaking. Stops it; queued messages go back into the text box. |
 | **Replies spoken** / **Replies muted** | Speaks replies through Kokoro, or not. |
-| Prompt chips, text box, **Send** | Typed messages to the same agent. |
+| Prompt chips, text box, **Send** | Typed messages to the same agent. Sent while it is busy, a message is queued (**Send now** to interrupt, x to remove). |
 
 ### Oracle
 
@@ -86,7 +89,7 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | Control | What it does |
 |---|---|
 | **Deploy agent** | Wizard: pick a prepared role or **Write your own**, Name, Role, Instructions, a tier (fast, standard, deep), then **Deploy** (posts to `/api/agents`). |
-| Agent City, ring, **Roster** | Pick an agent to open its chat. |
+| Agent City, ring, **Roster** | Pick an agent to open its chat. Roster cards and the chat header carry the agent's mark (the same generated Rorschach mark as on the Agents page). |
 | Chat box, **Send** | Starts a real run of that agent. |
 | **When the crew speaks** | Heatmap, **24h** / **7d**, **both** / **you** / **agents**. |
 
@@ -129,9 +132,45 @@ Jarvis is the resident orchestrator agent. The page is a tab bar; the active tab
 | **Insights** | Runs by module, agents, skills in use. |
 | **Settings** | Each settings block as JSON; **Save <block>**, **Open <module>**. Secrets are masked. |
 
+### Orb chat and hotkey
+
+The orb (bottom right of every page) opens the chat overlay. Its gear holds the voice and hotkey settings (`settings.jarvis.voice` and `settings.jarvis.hotkey`).
+
+| Control | What it does |
+|---|---|
+| Mic button (hold or click, per **Hold to talk**) | Records into the text box at the cursor. Release stops; nothing is sent unless **Auto-send on release** is on. Unchanged by the hotkey. |
+| Text box, **Send**, Enter | Sends. Esc discards the draft and closes. |
+| **In-app keybind** | The mapped key also works when an Agent OS tab has focus, with or without the helper. |
+| **Key** | The mapped key, as a `KeyboardEvent.key` and AutoHotkey key name: `F13` by default; `F13` to `F24`, `F9`, `CapsLock`. The helper re-reads it within 30 s. |
+| **Mode** | **hold to talk** (default): holding the key opens the chat if closed, fronts the page and starts the mic; releasing stops it. **press to open**: a press only opens the chat (the behaviour before push-to-talk). |
+| **Send on release** | On (default): releasing the key sends what you said and the reply is read aloud. Off: releasing only stops the mic; Enter sends. The mouse mic button follows **Auto-send on release** instead. |
+| **OS-global helper install** | Opens `/api/jarvis/hotkey/setup`, which writes the shared secret and returns the AutoHotkey v2 helper script with install steps. The status line shows whether the secret exists and when the helper last fired. |
+
+How the hotkey works: the AutoHotkey helper (`scripts/v2/jarvis-hotkey.ahk`) posts key down and key up to `POST /api/jarvis/hotkey` with the shared secret; the page receives them over `/api/jarvis/hotkey/stream`. The helper asks `GET /api/jarvis/hotkey/config` (secret-gated, returns the key and mode only) at start and every 30 s, so the gear is the one place to change the key. The helper assumes Agent OS on `http://127.0.0.1:3737`; only edit its `AppUrl` line if yours is elsewhere. With no Agent OS tab connected, a press opens one with `?jarvis=1`; the release of that first hold is lost because the page was not connected yet, so hold again.
+
+Mini USB keyboards and F13 to F24: most keyboards have no F13 key, which is what makes F13 to F24 ideal: nothing else uses them. Map a spare key on a macro pad or mini USB keyboard to one of them with the keyboard's own tool (VIA, QMK, the vendor app), type that name into **Key**, and the helper picks it up. Without such a tool, `CapsLock` or `F9` works too; when the key is `CapsLock` the helper parks the caps state so it stops toggling.
+
+Browser limits, stated honestly: the helper fronts the browser window, but it cannot pick the tab, so the Agent OS tab must be the active tab in that window. The mic starts in a window that was just fronted only if mic permission is already granted for the site (allow it once from the address bar; over Tailscale the site must be HTTPS, see the start page). The reply plays only if you have clicked in that tab since it loaded, a browser autoplay rule; a tab that was never touched stays silent and the text still arrives. Nothing in Agent OS can lift these; the gear says so.
+
+### Orb chat (the overlay on every page)
+
+Opened from the orb in the corner, the hotkey, or **Resume in overlay** on the Sessions tab. The current session comes back after a page reload; the chat itself is stored on the server, the browser keeps only its id.
+
+| Control | What it does |
+|---|---|
+| Session name (header), pencil | The session's name; the first words you send name it. Click the pencil to rename. The Sessions tab shows the same name. |
+| History, **New conversation** | The drawer lists past sessions; pick one to continue it. New conversation starts a fresh one and keeps the previous one listed and resumable. Nothing is deleted. |
+| Archive (in the drawer) | Hides a session; Restore on the Sessions tab brings it back. |
+| **think:** select | The thinking effort for this session (default, low, medium, high, xhigh, max). Saved on the session, so it survives a reload and a server restart. |
+| Paperclip, or paste an image | Attaches one image (png, jpeg or webp, decided by the file bytes) to the next message. Shown as a chip above the text box with an X to drop it. A file that is not an image or is over the cap is refused with the reason and nothing is sent. The image reaches the brain as an image block and goes nowhere else. Needs the sdk engine; the cli engine is text-only and says so. |
+| **Send** while Jarvis is busy | Queues the message (with its image, if one is attached) above the box; queued messages go out in order once he is done and has finished reading aloud. x removes one. |
+| **Stop actions** | Shown while Jarvis works. Cancels the reply; queued messages go back into the text box (and a queued image back to the attach slot), nothing is sent. |
+| Gear: **Chat** block | **Default thinking effort** for a new conversation, **Attachment size cap (MB)** (default 4), **Attachment folder** (blank = `~/.agentic-os/jarvis/attachments`). |
+
 ## How it works
 
-- The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`.
+- The brain is `POST /api/v2/jarvis/ask` (`src/lib/v2/jarvis/brain.ts`). Engine `sdk` (default) runs one Claude Agent SDK session with tools; engine `cli` is answer-only. Conversations are stored in the SQLite DB at `~/.agentic-os/agentos.db`, each with its own thinking effort; a changed effort rebuilds the warm session (the done event says `sessionRebuilt: "effort"`).
+- Attachments: `POST /api/v2/jarvis/attachments` stores one image under the attachment folder and answers an id; the ask carries `attachments: [{ id }]` and the brain reads the file back into an image content block for that turn only. Earlier images are not replayed when a session resumes, their names are.
 - Voice: Parakeet for dictation, Kokoro for replies via `/api/hermes/tts`.
 - Missions live in `~/.agentic-os/missions/<id>/`; each seat works in its own scratch folder.
 - Oracle keeps consultations in `~/.agentic-os/oracle`, News Radar in `~/.agentic-os/news`, Outreach in `~/.agentic-os/outreach/`, Jarvis MCP servers in `~/.agentic-os/jarvis/mcp-servers.json`. File saves keep the previous version in `~/.agentic-os/file-versions/`.

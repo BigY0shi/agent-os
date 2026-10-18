@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, X, Loader2, Send, ChevronLeft, ChevronRight, Check, Rocket } from "lucide-react";
 import dynamic from "next/dynamic";
+import AgentAvatar from "@/components/AgentAvatar";
 
 const AgentCity = dynamic(() => import("./AgentCity"), { ssr: false, loading: () => <div className="glass grid h-[420px] place-items-center text-[12.5px] text-[var(--fg-dimmer)]">Building the city…</div> });
 
@@ -170,7 +171,7 @@ export function CrewChat({ agent, onClose, onSent }: { agent: CrewAgent; onClose
     <section className="glass-strong flex h-[460px] flex-col" aria-label={`Conversation with ${agent.name}`} data-crew-chat={agent.id}>
       <header className="flex items-center justify-between gap-3 border-b border-white/5 px-5 py-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: BAND_TINT[agent.status] }} aria-hidden /><span className="truncate text-[14px]">{agent.name}</span><span className="text-[11px] text-[var(--fg-dimmer)]">{BAND_WORD[agent.status]}</span></div>
+          <div className="flex items-center gap-2"><AgentAvatar agent={agent.id} name={agent.name} size={28} pulse={agent.status === "running"} /><span className="h-2.5 w-2.5 rounded-full" style={{ background: BAND_TINT[agent.status] }} aria-hidden /><span className="truncate text-[14px]">{agent.name}</span><span className="text-[11px] text-[var(--fg-dimmer)]">{BAND_WORD[agent.status]}</span></div>
           <div className="truncate text-[11.5px] text-[var(--fg-dim)]">{agent.description}</div>
         </div>
         <button type="button" aria-label="Close conversation" onClick={onClose} className="rounded-lg p-1.5 hover:bg-white/5"><X size={15} /></button>
@@ -208,7 +209,7 @@ function Roster({ agents, selected, onSelect }: { agents: CrewAgent[]; selected:
         {agents.map((a) => (
           <button key={a.id} type="button" onClick={() => onSelect(a.id)} aria-pressed={a.id === selected}
             className={`w-[220px] shrink-0 snap-start rounded-xl px-4 py-3 text-left ${a.id === selected ? "glass neon-ring" : "glass-inset"}`}>
-            <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ background: BAND_TINT[a.status] }} aria-hidden /><span className="truncate text-[13px]">{a.name}</span></div>
+            <div className="flex items-center gap-2"><AgentAvatar agent={a.id} name={a.name} size={22} /><span className="h-2 w-2 rounded-full" style={{ background: BAND_TINT[a.status] }} aria-hidden /><span className="truncate text-[13px]">{a.name}</span></div>
             <div className="mt-0.5 truncate text-[11px] text-[var(--fg-dim)]">{BAND_WORD[a.status]}{a.detail ? ` · ${a.detail}` : ""}</div>
             <div className="mt-2 grid grid-cols-3 gap-1 text-[10.5px] text-[var(--fg-dimmer)]">
               <div><div className="type-figure text-[14px] text-[var(--fg)]">{a.runs7d}</div>runs, 7d</div>

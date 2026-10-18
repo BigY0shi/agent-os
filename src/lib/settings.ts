@@ -166,6 +166,11 @@ export interface Settings {
   // the age shows on every card. Rule 16: edited in the Deal Desk gear.
   deals: {
     maxAgeDays?: number;
+    /** What the Upwork scrape searches for, one search each; unset = DEFAULT_SEARCH_QUERIES
+     *  in lib/dealDeskControl.ts. Written into the crawler's INPUT.json before every run. */
+    searchQueries?: string[];
+    /** Search result pages read per search (1-10, default 2). */
+    pagesPerQuery?: number;
     /** Model for the quick pass/not screen; falls back to the Claude model setting when unset. */
     screenModel?: string;
     /** Screen the unjudged leads automatically after a feed pull. */
@@ -257,8 +262,24 @@ export interface Settings {
       openaiTtsModel?: string;        // gpt-4o-mini-tts
     };
     hotkey?: {
-      key?: string;          // in-app fallback keybind (default "F13")
+      key?: string;          // the mapped key, in-app AND in the AHK helper (default "F13")
       enabled?: boolean;     // in-app keydown listener on/off
+      // S38: what the key does. "hold" = push-to-talk (hold opens the orb chat and
+      // records, release stops); "open" = press opens the chat, as before S38.
+      mode?: "hold" | "open";
+      // S38: on a hotkey release, send the transcript (default TRUE: the owner is away
+      // from the screen). The mouse mic button keeps voice.autoSend (default false).
+      sendOnRelease?: boolean;
+    };
+    // S34 chat upgrades (Nexora C6 on Jarvis). defaultEffort seeds a NEW
+    // conversation's thinking level ("" = the model's default); each session
+    // then keeps its own on the conversation row. Attachments (images only,
+    // png/jpg/webp by magic bytes) are refused above attachmentMaxMb and stored
+    // under attachmentDir ("" = ~/.agentic-os/jarvis/attachments).
+    chat?: {
+      defaultEffort?: "" | "low" | "medium" | "high" | "xhigh" | "max";
+      attachmentMaxMb?: number;
+      attachmentDir?: string;
     };
     // Even Realities G2 custom-agent lane (/api/glasses — OpenAI chat-completions
     // shape, bearer token in ~/.agentic-os/jarvis-glasses.token, never here).
@@ -414,6 +435,13 @@ export interface Settings {
   automations?: {
     enabled?: boolean;         // kill switch: false = rules never fire (default true; /test dry-runs still work)
   };
+  // S36 Fleet stats on Mission Control (Nexora C9). Both knobs live in the card's gear
+  // (rule 16) and are read per request, so a change re-buckets with no rebuild. The
+  // heatmap's timezone is tasks.timezone, the single timezone source (CONVENTIONS §10).
+  fleetStats?: {
+    bucketHours?: 6 | 12 | 24 | 48;  // sparkline bucket; default 12 = twice a day (owner: "bidaily or so")
+    windowDays?: 7 | 14 | 30 | 60;   // how far back the sparklines and heatmap look; default 14
+  };
   // SPEC-D H2 home widget grid. `cells` unset = the DEFAULT_HOME_CELLS const in
   // src/lib/v2/widgets/types.ts (fallback at read time so default-layout changes
   // reach untouched installs — deliberately NOT copied into DEFAULT_SETTINGS).
@@ -481,6 +509,14 @@ export interface Settings {
       enabled?: boolean;    // default true — inject the protocol + park on the marker
       heuristic?: boolean;  // default FALSE — also park when a turn merely ENDS in "?"
       timeoutMin?: number;  // default 240 (4h, matching the approval park)
+    };
+    // S35 Agent faces (lib/agentFaces.ts). `detail` is the Agents gear's "Mark detail"
+    // (lobes and spot pairs of every generated mark; default medium). `seeds` holds one
+    // entry per agent the owner pressed "New shape" on; null = Reset (deepMerge cannot
+    // drop a key, so null is how "back to the id-derived shape" is spelled on disk).
+    faces?: {
+      detail?: "low" | "medium" | "high";
+      seeds?: Record<string, number | null>;
     };
   };
   // SPEC-F I — AnyNotes. Rule 16: every knob here gets an in-app gear
@@ -555,6 +591,16 @@ export interface Settings {
     timeoutMin?: number;   // a pipeline run is killed after this many minutes (default 90)
   };
 
+  // S37 Snapshots (Nexora C10). Rule 16: every knob is in the Snapshots card's gear on
+  // Mission Control > Health (SnapshotsCard). Read per call by src/lib/v2/snapshots/config.ts;
+  // the cadence drives the `core:snapshots` scheduler job (re-synced on save).
+  snapshots?: {
+    cadence?: "weekly" | "biweekly" | "monthly" | "off"; // owner 2026-10-01: weekly by default
+    dir?: string;            // snapshot folder, outside ~/.agentic-os; "" = <home>/AgentOS-snapshots
+    keep?: number;           // keep-last-N; older snapshots are moved to <dir>/.exile (default 8)
+    includeSecrets?: boolean; // off: key files and secret fields stay out (list in snapshots/config.ts)
+  };
+
   [extra: string]: unknown;
 }
 
@@ -600,7 +646,8 @@ export const DEFAULT_SETTINGS: Settings = {
     cliAgent: "claude",
     voice: { provider: "parakeet", autoSend: false, pushToTalk: true, ttsVoiceId: JARVIS_TTS_VOICE_ID, ttsProvider: "local", ttsFallback: "elevenlabs",
       geminiLiveModel: "", openaiRealtimeModel: "", openaiTranscribeModel: "", openaiTtsModel: "" },
-    hotkey: { key: "F13", enabled: true },
+    hotkey: { key: "F13", enabled: true, mode: "hold", sendOnRelease: true },
+    chat: { defaultEffort: "", attachmentMaxMb: 4, attachmentDir: "" },
     glasses: { enabled: false, maxWords: 60, idleMinutes: 10, timeoutSeconds: 40 },
   },
   contentEngine: { kimiModel: "kimi-k2.6" },
@@ -679,6 +726,7 @@ export const DEFAULT_SETTINGS: Settings = {
     // reports, and a false positive parks a finished run instead of completing
     // it. The marker is the reliable signal; the heuristic is the opt-in net.
     askUser: { enabled: true, heuristic: false, timeoutMin: 240 },
+    faces: { detail: "medium", seeds: {} },
   },
   anynotes: {
     autoIngest: true,
@@ -711,6 +759,8 @@ export const DEFAULT_SETTINGS: Settings = {
     addyDomain: "",
     gmailLabel: "",
   },
+  fleetStats: { bucketHours: 12, windowDays: 14 },
+  snapshots: { cadence: "weekly", dir: "", keep: 8, includeSecrets: false },
 };
 
 function settingsPath(): string {

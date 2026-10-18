@@ -3,6 +3,7 @@ import { ensureV2 } from "@/lib/v2/boot";
 import { askJarvisV2, jarvisAskStatus, type JarvisAskEvent } from "@/lib/v2/jarvis/brain";
 import { sanitizePageContext } from "@/lib/v2/jarvis/context";
 import { requestUi } from "@/lib/v2/jarvis/uiRequests";
+import { parseEffort, JARVIS_EFFORTS, type JarvisAttachmentRef } from "@/lib/v2/jarvis/conversations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,14 @@ export async function GET() {
 
 export async function POST(req: Request) {
   ensureV2();
-  let body: { text?: unknown; conversationId?: unknown; pageContext?: unknown; uiControl?: unknown };
+  let body: {
+    text?: unknown;
+    conversationId?: unknown;
+    pageContext?: unknown;
+    uiControl?: unknown;
+    effort?: unknown;
+    attachments?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -43,6 +51,31 @@ export async function POST(req: Request) {
       ? body.conversationId.trim()
       : undefined;
   const pageContext = sanitizePageContext(body.pageContext);
+  // S34: effort absent = leave the session's own; "" or null = model default; else one of the levels.
+  let effort: ReturnType<typeof parseEffort> = undefined;
+  if (body.effort !== undefined) {
+    effort = parseEffort(body.effort);
+    if (effort === undefined) {
+      return NextResponse.json({ error: `effort must be one of ${JARVIS_EFFORTS.join(", ")} or empty` }, { status: 400, headers: NO_STORE });
+    }
+  }
+  // S34: attachment refs from POST /api/v2/jarvis/attachments (ids; names are display only).
+  let attachments: JarvisAttachmentRef[] | undefined;
+  if (body.attachments !== undefined) {
+    if (!Array.isArray(body.attachments)) {
+      return NextResponse.json({ error: "attachments must be an array of { id, name? }" }, { status: 400, headers: NO_STORE });
+    }
+    attachments = [];
+    for (const a of body.attachments as unknown[]) {
+      const id = typeof a === "string" ? a : a && typeof a === "object" && typeof (a as { id?: unknown }).id === "string" ? (a as { id: string }).id : "";
+      if (!id.trim()) return NextResponse.json({ error: "attachment needs an id" }, { status: 400, headers: NO_STORE });
+      const name = a && typeof a === "object" && typeof (a as { name?: unknown }).name === "string" ? (a as { name: string }).name : "";
+      attachments.push({ id: id.trim(), name, mime: "image/png", bytes: 0 }); // mime/bytes re-read from disk by the brain
+    }
+    if (attachments.length > 1) {
+      return NextResponse.json({ error: "one image per message" }, { status: 400, headers: NO_STORE });
+    }
+  }
 
   const enc = new TextEncoder();
   const uiAbort = new AbortController();
@@ -62,7 +95,7 @@ export async function POST(req: Request) {
         }
       };
       try {
-        await askJarvisV2({ text, conversationId, pageContext, channel: "overlay",
+        await askJarvisV2({ text, conversationId, pageContext, channel: "overlay", effort, attachments,
           uiRequest: body.uiControl === true ? (command) => requestUi(command, send, uiAbort.signal) : undefined,
         }, send, {
           signal: req.signal,

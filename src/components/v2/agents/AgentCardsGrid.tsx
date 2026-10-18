@@ -9,6 +9,7 @@ import Link from "next/link";
 import type { AgentTrigger, BandStatus } from "@/lib/agentsTypes";
 import { MODE_META } from "@/lib/agentsTypes";
 import StatusBand from "@/components/v2/StatusBand";
+import AgentAvatar from "@/components/AgentAvatar";
 import { ago } from "@/components/AgentsView";
 import { LIFECYCLE_META, lifecycleOf, type AgentCardData } from "./shared";
 
@@ -54,7 +55,7 @@ export default function AgentCardsGrid({
             <StatusBand status={status} />
             <div className="p-4">
               <div className="flex items-center justify-between mb-1.5 gap-2">
-                <span className="text-[14px] font-medium truncate" style={{ color: "var(--fg)" }}>{a.name}</span>
+                <span className="flex items-center gap-2 min-w-0"><AgentAvatar agent={a.id} name={a.name} size={28} pulse={status === "running"} /><span className="text-[14px] font-medium truncate" style={{ color: "var(--fg)" }}>{a.name}</span></span>
                 <span className="flex items-center gap-1.5 shrink-0">
                   <span className="text-[9.5px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border"
                     style={{ borderColor: `${lcMeta.color}55`, color: lcMeta.color }}>

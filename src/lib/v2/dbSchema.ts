@@ -1096,6 +1096,19 @@ export const MIGRATIONS: Migration[] = [
     },
   },
   {
+    version: 36,
+    name: "jarvis_chat_upgrades",
+    up: (db) => {
+      // S34 (Nexora C6 on Jarvis, 2026-10-01). effort: the per-session thinking
+      // level (low|medium|high|xhigh|max, NULL = the model's default), kept on the
+      // row so it survives a reload and a server restart. attachments_json: the
+      // image refs a user turn carried ([{id,name,mime,bytes}]); the bytes live
+      // under the attachments dir (settings.jarvis.chat.attachmentDir), never here.
+      db.exec("ALTER TABLE jarvis_conversations ADD COLUMN effort TEXT");
+      db.exec("ALTER TABLE jarvis_messages ADD COLUMN attachments_json TEXT");
+    },
+  },
+  {
     version: 40,
     name: "integrations_core",
     up: (db) => {

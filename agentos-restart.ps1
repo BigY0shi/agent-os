@@ -10,17 +10,20 @@
 # state. The kill is now verified, and the launch is abandoned if it failed.
 $ErrorActionPreference = 'SilentlyContinue'
 $dir = $PSScriptRoot
+# 2026-10-18: a "next start" counts as ours only if its command line names THIS
+# repo's node_modules. The bare pattern also matched other projects' Next servers.
+$repoNext = [regex]::Escape($dir) + '[\\/]node_modules[\\/]'
 $logDir = Join-Path $env:USERPROFILE '.agentic-os'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 
 function Get-DashboardPids {
   # EVERY address family on 3737 - the 2026-08-29 split brain was one server on
-  # 0.0.0.0 and another on ::. Plus any next-start node process not yet
-  # listening (still booting), which would grab the port moments from now.
+  # 0.0.0.0 and another on ::. Plus any next-start node process of this repo not
+  # yet listening (still booting), which would grab the port moments from now.
   $ids = @()
   $ids += @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Expand OwningProcess -Unique)
   $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-    Where-Object { $_.CommandLine -match 'next.dist.bin.next start' } |
+    Where-Object { $_.CommandLine -match 'next.dist.bin.next"?\s+start' -and $_.CommandLine -match $repoNext } |
     Select-Object -Expand ProcessId)
   return @($ids | Where-Object { $_ } | Sort-Object -Unique)
 }
@@ -69,8 +72,11 @@ if ($survivors.Count -gt 0) {
 }
 
 Write-Host "  [2/3] Starting a fresh server in the background..."
+# Absolute path so the sweep above can see the repo folder in the command line.
+# Quoted by hand: Start-Process joins -ArgumentList with spaces and quotes nothing.
+$nextBin = Join-Path $dir 'node_modules\next\dist\bin\next'
 Start-Process -WindowStyle Hidden -FilePath 'node' `
-  -ArgumentList @('node_modules\next\dist\bin\next','start','-H','0.0.0.0','-p','3737') `
+  -ArgumentList @(('"' + $nextBin + '"'),'start','-H','0.0.0.0','-p','3737') `
   -WorkingDirectory $dir `
   -RedirectStandardOutput (Join-Path $logDir 'agentos-server.log') `
   -RedirectStandardError  (Join-Path $logDir 'agentos-server.err.log')

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ConfigMenu, { useSettings, Field, TextInput, SaveBar } from "./ConfigMenu";
-import { clampMaxAgeDays, DEFAULT_MAX_AGE_DAYS } from "@/lib/dealDeskControl";
+import { clampMaxAgeDays, DEFAULT_MAX_AGE_DAYS, cleanSearchQueries, clampPagesPerQuery, DEFAULT_PAGES_PER_QUERY, MAX_SEARCH_QUERIES } from "@/lib/dealDeskControl";
 
 const ACCENT = "#f59e0b";
 
@@ -15,11 +15,15 @@ export default function DealDeskSettings({ onSaved }: { onSaved?: () => void } =
   const [screenModel, setScreenModel] = useState("");
   const [screenOnPull, setScreenOnPull] = useState(true);
   const [dossierModel, setDossierModel] = useState("");
+  const [queries, setQueries] = useState("");
+  const [pages, setPages] = useState(String(DEFAULT_PAGES_PER_QUERY));
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!settings) return;
-    const d = (settings as { deals?: { maxAgeDays?: number; screenModel?: string; screenOnPull?: boolean; dossierModel?: string } }).deals || {};
+    const d = (settings as { deals?: { maxAgeDays?: number; screenModel?: string; screenOnPull?: boolean; dossierModel?: string; searchQueries?: string[]; pagesPerQuery?: number } }).deals || {};
+    setQueries(cleanSearchQueries(d.searchQueries).join("\n"));
+    setPages(String(clampPagesPerQuery(d.pagesPerQuery)));
     setMaxAge(String(clampMaxAgeDays(d.maxAgeDays)));
     setScreenModel(d.screenModel ?? "");
     setScreenOnPull(d.screenOnPull !== false);
@@ -31,7 +35,10 @@ export default function DealDeskSettings({ onSaved }: { onSaved?: () => void } =
     setMaxAge(String(maxAgeDays));
     // An empty model box means "use the configured Claude model", so it is stored as
     // undefined rather than an empty string a caller would have to re-check.
-    await save({ deals: { maxAgeDays, screenModel: screenModel.trim() || undefined, screenOnPull, dossierModel: dossierModel.trim() || undefined } });
+    const searchQueries = cleanSearchQueries(queries);
+    const pagesPerQuery = clampPagesPerQuery(pages);
+    setQueries(searchQueries.join("\n")); setPages(String(pagesPerQuery));
+    await save({ deals: { maxAgeDays, searchQueries, pagesPerQuery, screenModel: screenModel.trim() || undefined, screenOnPull, dossierModel: dossierModel.trim() || undefined } });
     setSaved(true); setTimeout(() => setSaved(false), 1800);
     onSaved?.();
   }
@@ -42,8 +49,18 @@ export default function DealDeskSettings({ onSaved }: { onSaved?: () => void } =
         Gates on what reaches the board. The Upwork cookie is set from the cookie button next to this gear.
       </p>
       <Field label="Max listing age (days)"
-        hint={`Listings posted longer ago than this are dropped when a scrape or a feed pull lands, and kept beside the file as <name>.dropped-<date>.json. Undated listings are kept. Default ${DEFAULT_MAX_AGE_DAYS}; 1 to 365.`}>
+        hint={`The Upwork scrape never opens a job posted longer ago than this, and anything older that still lands (feeds, undated rows that age) is dropped and kept beside the file as <name>.dropped-<date>.json. Undated listings are kept. Default ${DEFAULT_MAX_AGE_DAYS}; 1 to 365.`}>
         <TextInput type="number" min={1} max={365} value={maxAge} onChange={(e) => setMaxAge(e.target.value)} />
+      </Field>
+      <Field label="Search topics (one per line)"
+        hint={`What the Upwork scrape searches for, one search per line, newest jobs first. Each topic costs a search page plus one page per fresh job, so fewer, sharper topics make the scrape faster. Up to ${MAX_SEARCH_QUERIES}; an empty box goes back to the defaults. Used from the next scrape.`}>
+        <textarea value={queries} onChange={(e) => setQueries(e.target.value)} rows={8} spellCheck={false}
+          className="w-full text-[12.5px] rounded-md px-2.5 py-1.5 outline-none font-mono leading-relaxed"
+          style={{ background: "var(--panel, rgba(255,255,255,0.02))", border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg, #e8e2f0)" }} />
+      </Field>
+      <Field label="Pages per search"
+        hint={`Result pages read for each topic (about 10 jobs a page). A topic stops early once a whole page is older than the max age. Default ${DEFAULT_PAGES_PER_QUERY}; 1 to 10.`}>
+        <TextInput type="number" min={1} max={10} value={pages} onChange={(e) => setPages(e.target.value)} />
       </Field>
       <Field label="Screen model"
         hint="Model for the quick pass/pursue check that runs over every unjudged lead. It is one short call per lead, so a cheap fast model is the point. Blank uses the configured Claude model.">

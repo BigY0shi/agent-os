@@ -1,13 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { generateMark, accentFor, type AgentMark } from "@/lib/agentFaces";
+import { useAgentFaces } from "@/lib/agentFacesClient";
 
 export type AgentKey = "claude" | "openclaw" | "hermes" | "gemini" | "antigravity" | "fcc" | "codex" | "cursor" | "pi" | "ollama" | "kimi" | "glm" | "grok";
 
 interface Props {
-  agent: AgentKey;
+  /** A hand-drawn key draws its own mark below; any other id (a crew agent's UUID, a
+   *  room specialist, a Hermes profile) draws its generated Rorschach mark (S35). */
+  agent: AgentKey | string;
   size?: number;
   pulse?: boolean;
+  /** Accessible name for a generated mark; defaults to the id. */
+  name?: string;
+  /** Draw a generated mark from this seed instead of the stored/id-derived one (previews). */
+  seed?: number | null;
 }
 
 const STYLE: Record<AgentKey, {
@@ -228,15 +236,42 @@ const STYLE: Record<AgentKey, {
   },
 };
 
-export default function AgentAvatar({ agent, size = 36, pulse = false }: Props) {
-  // Unknown/missing agent ids (e.g. from an imported conversation) must never
-  // crash the view — fall back to a neutral style instead.
-  const s = STYLE[agent] ?? {
-    gradient: "linear-gradient(135deg, #6e6353, #2e2436)",
-    accent: "#a59783",
-    label: String(agent || "agent"),
-    icon: null,
-  };
+export default function AgentAvatar({ agent, size = 36, pulse = false, name, seed }: Props) {
+  const s = STYLE[agent as AgentKey];
+  // Any id without a hand-drawn mark (a crew agent, a room specialist, an imported
+  // conversation's agent) gets its generated Rorschach mark (S35): never a letter,
+  // never a blank, never a crash.
+  if (!s) return <GeneratedAvatar id={String(agent || "agent")} size={size} pulse={pulse} name={name} seed={seed} />;
+  return (
+    <Disc size={size} pulse={pulse} gradient={s.gradient} accent={s.accent} label={s.label}>
+      {s.glyph(size)}
+    </Disc>
+  );
+}
+
+/** The white inkblot on its accent gradient; seeds and the detail knob come from the shared cache. */
+function GeneratedAvatar({ id, size, pulse, name, seed }: { id: string; size: number; pulse: boolean; name?: string; seed?: number | null }) {
+  const faces = useAgentFaces();
+  const mark = generateMark(id, { seed: seed === undefined ? faces.seeds[id] ?? null : seed, detail: faces.detail });
+  return (
+    <Disc size={size} pulse={pulse} gradient={mark.gradient} accent={mark.accent} label={name ?? id}>
+      <MarkGlyph mark={mark} size={size} />
+    </Disc>
+  );
+}
+
+/** The mark alone (no disc), for previews and the agent header. */
+export function MarkGlyph({ mark, size }: { mark: AgentMark; size: number }) {
+  return (
+    <svg width={size * 0.62} height={size * 0.62} viewBox={mark.viewBox} fill="white" aria-hidden data-mark-seed={mark.seed} data-mark-derived={mark.derived ? "1" : "0"}>
+      {mark.paths.map((d, i) => <path key={i} d={d} opacity={0.96} />)}
+      {mark.spots.map((sp, i) => <circle key={`s${i}`} cx={sp.cx} cy={sp.cy} r={sp.r} opacity={0.9} />)}
+    </svg>
+  );
+}
+
+function Disc({ size, pulse, gradient, accent, label, children }: { size: number; pulse: boolean; gradient: string; accent: string; label: string; children: React.ReactNode }) {
+  const s = { gradient, accent };
   return (
     <motion.span
       initial={{ scale: 0.85, opacity: 0 }}
@@ -250,9 +285,9 @@ export default function AgentAvatar({ agent, size = 36, pulse = false }: Props) 
         background: s.gradient,
         boxShadow: `0 0 ${size}px -${size / 3}px ${s.accent}, inset 0 0 0 1px rgba(255,255,255,0.12)`,
       }}
-      aria-label={s.label}
+      aria-label={label}
     >
-      {s.glyph(size)}
+      {children}
       {pulse && (
         <span
           className="absolute inset-0 rounded-full pointer-events-none"
@@ -273,12 +308,14 @@ export default function AgentAvatar({ agent, size = 36, pulse = false }: Props) 
   );
 }
 
-export function agentColor(agent: AgentKey): string {
-  return STYLE[agent].accent;
+// Hand-drawn agents answer from STYLE; any other id answers from its generated
+// accent (lib/agentFaces.ts accentFor), so callers never hit an undefined style.
+export function agentColor(agent: AgentKey | string): string {
+  return STYLE[agent as AgentKey]?.accent ?? accentFor(String(agent)).accent;
 }
-export function agentBg(agent: AgentKey): string {
-  return STYLE[agent].bg;
+export function agentBg(agent: AgentKey | string): string {
+  return STYLE[agent as AgentKey]?.bg ?? accentFor(String(agent)).bg;
 }
-export function agentLabel(agent: AgentKey): string {
-  return STYLE[agent].label;
+export function agentLabel(agent: AgentKey | string): string {
+  return STYLE[agent as AgentKey]?.label ?? String(agent);
 }

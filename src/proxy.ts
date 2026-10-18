@@ -78,9 +78,18 @@ export function proxy(request: NextRequest) {
   // session cookie. POSTs carrying the hotkey secret header pass through for
   // the ROUTE to validate strictly (timing-safe compare, 401 on mismatch) —
   // same pattern as /api/mcp above. GET, /stream and /setup stay cookie-gated.
+  // S38: the helper also reads its key + mode from /api/jarvis/hotkey/config
+  // (GET, same header, same strict validation in the route).
   if (
     pathname === "/api/jarvis/hotkey" &&
     request.method === "POST" &&
+    request.headers.has("x-agentos-hotkey-secret")
+  ) {
+    return NextResponse.next();
+  }
+  if (
+    pathname === "/api/jarvis/hotkey/config" &&
+    request.method === "GET" &&
     request.headers.has("x-agentos-hotkey-secret")
   ) {
     return NextResponse.next();

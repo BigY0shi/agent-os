@@ -75,7 +75,10 @@ const overlay = read("src/components/v2/jarvis/ChatboxOverlay.tsx");
   check("onFinalChunk handler exists", finalIdx >= 0);
   check("onFinalChunk NEVER calls sendBuffer (insert-only)", finalBlock !== "" && !finalBlock.includes("sendBuffer"));
   check("Esc discard confirms long drafts (>80 chars)", /DISCARD_CONFIRM_CHARS = 80/.test(overlay) && /window\.confirm/.test(overlay));
-  check("autoSend branch is settings-gated (autoSendRef)", /if \(autoSendRef\.current\) sendBuffer\(\)/.test(overlay));
+  check("autoSend branch is settings-gated (autoSendRef, or an S38 hotkey release)", /if \(autoSendRef\.current \|\| pttSend\) sendBuffer\(\)/.test(overlay));
+  check("S38: the held hotkey starts the mic and the release stops it, in the overlay", /pttHeld/.test(overlay) && /pttSendPendingRef\.current = hotkeySendRef\.current/.test(overlay) && /captureStop\(\)/.test(overlay));
+  check("S38: the mouse mic handlers are unchanged (hold = pointer down/up, toggle = click)", /onPointerDown: \(e: React\.PointerEvent\)/.test(overlay) && /onPointerUp: \(\) => capture\.stop\(\)/.test(overlay) && /onClick: \(\) => \{ speech\.stop\(\); if \(recording\) capture\.stop\(\); else capture\.start\(\); \}/.test(overlay));
+  check("S38: hotkey sendOnRelease defaults ON in the overlay", /jarvis\.hotkey\?\.sendOnRelease \?\? true/.test(overlay));
   check("overlay uses the C3 V2 ask lane (POST /api/v2/jarvis/ask)", overlay.includes('fetch("/api/v2/jarvis/ask"'));
   check("overlay ships pageContext from the C5 registry at send time", overlay.includes("getEffectivePageContext()"));
   check("overlay threads the conversationId from the meta event", overlay.includes("conversationIdRef"));
@@ -112,7 +115,7 @@ const jv = read("src/components/JarvisView.tsx");
 const settings = read("src/lib/settings.ts");
 check("settings default autoSend: false", /autoSend: false/.test(settings));
 check("settings default pushToTalk: true", /pushToTalk: true/.test(settings));
-check("settings default hotkey F13 enabled", /hotkey: \{ key: "F13", enabled: true \}/.test(settings));
+check("settings default hotkey F13 enabled, hold mode, send on release (S38)", /hotkey: \{ key: "F13", enabled: true, mode: "hold", sendOnRelease: true \}/.test(settings));
 const jarvisSettingsCmp = read("src/components/v2/jarvis/JarvisSettings.tsx");
 check("JarvisSettings gear surfaces provider/autoSend/pushToTalk/hotkey",
   ["provider", "autoSend", "pushToTalk", "hotkey"].every((k) => jarvisSettingsCmp.includes(k)));
@@ -128,8 +131,8 @@ const ahk = read("scripts/v2/jarvis-hotkey.ahk");
   check("AHK sends the x-agentos-hotkey-secret header", ahk.includes("x-agentos-hotkey-secret"));
   check("AHK has the subscribers==0 → open-tab branch", /subscribers\s*=\s*0/.test(ahk) && ahk.includes("?jarvis=1"));
   check("AHK fronting is best-effort WinActivate", ahk.includes("WinActivate"));
-  check("AHK key is configurable at the top (F13 default + CapsLock example)",
-    /JarvisKey := "F13"/.test(ahk) && ahk.includes("CapsLock"));
+  check("AHK key fallback at the top is F13 (the gear's key wins) + CapsLock handled",
+    /JarvisKey\s+:= "F13"/.test(ahk) && ahk.includes("CapsLock"));
   check("AHK is v2 + single-instance", ahk.includes("#Requires AutoHotkey v2.0") && ahk.includes("#SingleInstance Force"));
   check("AHK non-204/200 failures TrayTip loudly", ahk.includes("TrayTip"));
 }
@@ -141,6 +144,18 @@ check("proxy.ts exempts POST /api/jarvis/hotkey with the secret header",
   proxy.includes('request.method === "POST"') &&
   proxy.includes('"x-agentos-hotkey-secret"'));
 check("proxy.ts does NOT exempt the SSE stream", !proxy.includes("/api/jarvis/hotkey/stream"));
+check("S38: proxy.ts exempts GET /api/jarvis/hotkey/config ONLY with the secret header",
+  /pathname === "\/api\/jarvis\/hotkey\/config" &&\s*request\.method === "GET" &&\s*request\.headers\.has\("x-agentos-hotkey-secret"\)/.test(proxy));
+check("S38: proxy.ts still does not exempt /setup", !proxy.includes("/api/jarvis/hotkey/setup"));
+{
+  const omni = read("src/components/v2/jarvis/JarvisOmnipresence.tsx");
+  check("S38: SSE down/up drive push-to-talk in hold mode (front the page before the mic)",
+    /action === "down"[\s\S]*frontSelf\(\);\s*pttDown\("hotkey"\)/.test(omni) && /action === "up"[\s\S]*pttUp\(\)/.test(omni));
+  check("S38: the in-app keybind holds too (keydown ignores autorepeat, keyup releases, blur releases a keybind hold)",
+    /if \(e\.repeat\) return/.test(omni) && /addEventListener\("keyup", onKeyUp\)/.test(omni) && /pttSourceRef\.current === "keybind"\) pttUp\(\)/.test(omni));
+  check("S38: the overlay receives pttHeld", /pttHeld=\{pttHeld\}/.test(omni));
+  check("S38: the gear has Mode (hold / open) and Send on release", /value="hold"/.test(jarvisSettingsCmp) && /value="open"/.test(jarvisSettingsCmp) && /sendOnRelease: e\.target\.checked/.test(jarvisSettingsCmp));
+}
 
 // ── fetch URLs ↔ real routes ────────────────────────────────────────────────
 const apiUrls = new Set();

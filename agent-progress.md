@@ -6,6 +6,48 @@ a cold-started session trusts. The roadmap itself is ROADMAP.md; the journal is
 DEV-JOURNAL.md (hyphen, not underscore).
 
 ## Now
+- BUILT 2026-10-01 in worktree ptt-hotkey (branch feat/s38-jarvis-ptt-hotkey, v2.61.0): feat-s38-jarvis-ptt-hotkey.
+  Hold the mapped key = orb chat opens, page fronts, mic records; release = stop + send (gear: Key, Mode
+  hold/open, Send on release, default on); the AHK helper reads key + mode from the secret-gated
+  `GET /api/jarvis/hotkey/config` every 30 s and posts down/up; AppUrl fixed to 3737. Mouse mic unchanged.
+  Offline evidence only (smoke-jarvis-hotkey 49 checks, smoke-jarvis-ui, smoke-guide); the live
+  mini-keyboard test is the owner's and is the AWAITING USER VERIFY checklist at the END of this file.
+  Status flipped on the green gate (the precedent: S4, S30-S32); the notes say plainly that no browser
+  saw it. The live test is the owner's.
+- QUEUED 2026-10-01 by the supervisor in worktree ptt-hotkey (branch feat/s38-jarvis-ptt-hotkey): work ONLY feat-s38-jarvis-ptt-hotkey (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. The owner uses this most; it ends with the owner-verify pause marker (see AGENTS.md 'Stopping early') holding the live mini-keyboard checklist.
+
+- DONE 2026-10-01 in worktree jarvis-chat (branch feat/s34-jarvis-chat-upgrades, v2.61.0):
+  feat-s34-jarvis-chat-upgrades is passing (./test.sh 121 passed, 0 failed;
+  smoke-jarvis-chat-upgrades 55 checks). Gap audit in features.json notes and the
+  DEV-JOURNAL entry: S13 already had sessions/list/rename/archive/restore/resume, so the slice
+  added only overlay reload persistence + naming, a per-session thinking effort (migration
+  036, the 30s band; the runner applies by version so it runs on the live DB after 63), and
+  one-image-per-message attachments by magic bytes. OWNER TO VERIFY after a rebuild: open the
+  orb chat, send a line, see its first words in the header and rename with the pencil; pick a
+  `think:` level, press F5, reopen the orb (same session, same level); paperclip a png (chip
+  appears, send, reply) and then a .txt renamed to .png (red "Attachment refused: not an
+  image"). The Sessions tab shows the same name. Nothing was deleted; archive stays soft.
+- QUEUED 2026-10-01 by the supervisor in worktree jarvis-chat (branch feat/s34-jarvis-chat-upgrades): work ONLY feat-s34-jarvis-chat-upgrades (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. Audit what Jarvis Sessions (S13) already does before building; build only the gaps.
+
+- SHIPPED 2026-10-01 in worktree agent-faces (branch feat/s35-agent-faces, v2.61.0): feat-s35-agent-faces
+  passing, gate 121/0 (see DEV-JOURNAL). OWNER TO LOOK after a rebuild: a crew agent's inkblot in Jarvis >
+  Crew (roster card and chat header), the marks on /agents cards and chips, then open one agent and press
+  **New shape** (shape changes, accent stays) and **Reset shape** (back to the id-derived one); the Agents
+  gear's **Mark detail**. Hermes 3D seats carry no mark because the scene still says "not agents" (run state
+  not wired there). The branch is not merged; merge like S30-S32.
+- (was) QUEUED 2026-10-01 by the supervisor in worktree agent-faces (branch feat/s35-agent-faces): work ONLY feat-s35-agent-faces (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. Keep every hand-drawn mark in AgentAvatar.tsx; generate only for agents without one.
+
+- DONE 2026-10-01 in worktree fleet-stats (branch feat/s36-fleet-stats): feat-s36-fleet-stats landed, v2.61.0, gate 121 passed / 0 failed. The Fleet stats strip sits under the Cockpit telemetry band on `/` (Overview.tsx): sparklines you vs agents per bucket, weekday x hour heatmap in the Tasks timezone, newest mission hand-offs, per-source session counts; Hermes reads "not tracked". Gear: Bucket 6/12/24/48 h (default 12), Window 7/14/30/60 d (default 14), under `settings.fleetStats`, read per request. Route `/api/v2/home/fleet-stats`, lib `src/lib/v2/fleetStats/stats.ts`, smoke-fleet-stats 43 checks. OWNER TO VERIFY after a rebuild (does not block a session): the strip renders on `/`, the gear's two selects change the bucket count on the next refresh, the Hermes row says "not tracked", an empty window says "Nothing recorded in this window." Not pushed by the session if the push fails; see the journal entry.
+- QUEUED 2026-10-01 by the supervisor in worktree fleet-stats (branch feat/s36-fleet-stats): work ONLY feat-s36-fleet-stats (run with --feature). Branched from the merged PR branch (S30/S31/S32/S7/S9 merged 2026-10-01, v2.60.0, gate green); holds none of the owner's uncommitted work (launcher .bat/.ps1 edits). node_modules is a junction to the main checkout: do not npm install here. Never start, stop or restart the server on 3737, and never run `npm run build` in the main checkout (a build under a live server breaks it). The Claude model is claudeModel() from lib/claudeModel.ts (S30), not a constant. New migrations: check the live `migrations` table numbers in dbSchema.ts comments before picking one (44 and 45 are taken, 46 is the wizard column fix). Owner rules: every knob is a gear setting; default Claude with Codex as the labelled fallback; no local Ollama; no OpenRouter; never fabricate state; exile, never delete. Default bucket 12 h (owner's 'bidaily' read as twice a day; it is a setting).
+
+- DONE 2026-10-01 in worktree snapshots (branch feat/s37-snapshots): feat-s37-snapshots passing,
+  v2.61.0, gate green (see DEV-JOURNAL). OWNER TO LOOK after a rebuild: Mission Control > Health >
+  Snapshots card: press Snapshot now, open the folder it names (default ~/AgentOS-snapshots) and see
+  agentos.db, agentic-os/, manifest.json, restore.ps1; Configure > Cadence; Jarvis > Standing orders
+  lists "Snapshot of Agent OS state" with its next run. Not done by design: no restore from the UI
+  (restore.ps1 runs with Agent OS stopped, so it is a script); the restore was exercised only against
+  a temp target in the smoke, never against the live ~/.agentic-os. Note for the merge: the job row
+  core:snapshots is created at boot in whichever DB the process opens.
 - MERGED 2026-10-01 by the supervisor on branch integrate/s30-s32-s7-s9 (then fast-forwarded into
   feat/v2-hermes3d-and-versioning, PR #18): S30 settings sweep, S31 artifacts deploy, S32
   placeholders, S7 WebMCP wizard, S9 OpenMontage. The three red smokes that kept S30/S31/S32
@@ -173,3 +215,28 @@ All PowerShell-safe. Rebuild first (the Artifacts tab and the gear are new UI).
    then flip fix-s31-artifacts-windows-deploy to "passing" in features.json (every other smoke passes; the
    per-smoke run is in the DEV-JOURNAL entry). smoke-memory-ui also needs the main checkout's .exile folder.
 6. Retitle this heading when done so the loop can continue (the marker grep is whole-file).
+
+## AWAITING USER VERIFY (2026-10-01) - S38 Jarvis push-to-talk on the mini USB keyboard
+
+Built and smoke-proven offline (down/up through the bus and the SSE stream, secret-gated config GET,
+the helper script's contents). No browser or keyboard saw it; that is this list. Rebuild first.
+1. In the app: orb chat > gear > Hotkey. Expect a Key field (F13), "Mode: hold to talk (push-to-talk)"
+   and "Send on release" ticked. Leave them, or set Key to the key your mini keyboard sends.
+2. Reload the helper: double-click `scripts\v2\jarvis-hotkey.ahk` (AutoHotkey v2; a running copy is
+   replaced, #SingleInstance Force). If the tray says "Secret missing", open
+   `http://127.0.0.1:3737/api/jarvis/hotkey/setup` in the signed-in browser once, then double-click again.
+   Expect a tray tip "Jarvis key: F13 · hold to talk" within a few seconds (that tip is the proof it read
+   the gear; the old script never spoke to 3737 at all).
+3. Mic permission: the Agent OS tab must already have Microphone allowed (the address-bar icon) and you
+   must have clicked anywhere in that tab since it loaded (browser autoplay rule for the spoken reply).
+   Leave that tab as the active tab in its browser window.
+4. From across the room: HOLD the key, say one sentence, RELEASE. Expect, in order: the orb chat opens
+   (if closed) and the window fronts; a pill "F13 held · release to send" beside the mic while you talk;
+   on release the text lands in the box and is sent; the reply streams and is read aloud.
+5. Mouse check: click-and-hold the mic button, talk, release. Expect the text in the box and NOTHING
+   sent (the mouse mic still follows "Auto-send on release", default off).
+6. Gear check: change Key to another key your pad sends (F14..F24), wait 30 s for the tray tip
+   "Jarvis key: F14 ...", hold that key. No script edit.
+7. Optional: set Mode to "press to open" and press once: the chat opens, nothing records.
+8. If any step fails, tell me which step and what the tray tip or the pill said. Retitle this heading
+   when done so the loop can continue (the marker grep is whole-file).

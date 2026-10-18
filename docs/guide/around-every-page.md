@@ -8,7 +8,7 @@ These are on every route (they are mounted once, in `src/app/layout.tsx` and `sr
 | **Skills & workflows** (top bar) | Opens the pop-up for the module you are on: switch skills and workflows on for this module or for every module, run a workflow in place, or add a new one. It says so when a module's agent calls do not read skills yet. Skills come from Agent OS, Claude Code and SkillDB. |
 | **Command palette** (top bar, Ctrl+K or Cmd+K) | Jump to any module or action by typing. |
 | **Jarvis orb** (bottom right) | Its glow follows Jarvis's status. Click it to open the Jarvis chat overlay on top of the page you are on, so he can read and drive that page while you keep using it. |
-| **F13** (or the key set in Jarvis settings) | Opens the Jarvis overlay from anywhere on the machine, through the global hotkey helper; an in-app keybind does the same when the page has focus. `?jarvis=1` in a URL opens it too. |
+| **F13** (or the key set in the Jarvis gear) | Push-to-talk from anywhere on the machine, through the global hotkey helper: hold the key to open the Jarvis overlay and record, release to stop and send (the reply is read aloud). The in-app keybind does the same when the page has focus. The gear can switch it to "press to open" instead. `?jarvis=1` in a URL opens the overlay too. See the Jarvis module page, "Orb chat and hotkey". |
 | **Runs tray** | Work that is running across modules (a brief being written, a digest being merged, a workflow): what it is, how long it has run, and STOP. |
 | **The particle field** | The moving background. It pauses when the tab is hidden and holds still if your system asks for reduced motion. |
 

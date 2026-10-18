@@ -6,6 +6,7 @@ import AttentionHero from "./v2/home/AttentionHero";
 import HomeGrid from "./v2/home/HomeGrid";
 import ScratchpadSlot from "./v2/home/ScratchpadSlot";
 import { CockpitBand, SystemPulse } from "./v2/home/Cockpit";
+import FleetStats from "./v2/home/FleetStats";
 
 // Jarvis is the homepage's centerpiece: the warm voice assistant gets the wide
 // slot right under the hero (it replaced the placeholder AssistantPanel), with
@@ -45,6 +46,7 @@ export default function Overview() {
       {view === "cockpit" && (
         <>
           <CockpitBand />
+          <FleetStats />
           <AttentionHero />
           <HomeGrid />
           <ScratchpadSlot />

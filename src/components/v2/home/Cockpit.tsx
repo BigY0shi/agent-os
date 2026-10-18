@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Loader2, RefreshCw } from "lucide-react";
+import AgentAvatar from "@/components/AgentAvatar";
+import { SnapshotsCard } from "./SnapshotsCard";
 
 interface Pulse {
   sampledAt: string;
@@ -101,8 +103,8 @@ export function CockpitBand() {
   const status = pulse.checks ? STATUS[pulse.checks.status] : null;
   const disk = h?.disks[0];
   const loads = [
-    ...pulse.agents.map((a) => ({ key: `a:${a.id}`, name: a.name, tint: AGENT_TINT[a.status] ?? "#64748b", label: a.status, load: a.status === "running" ? 1 : 0 })),
-    ...pulse.seatLoad.map((s) => ({ key: `s:${s.agent}`, name: `${s.agent} (mission seats)`, tint: AGENT_TINT.running, label: `${s.running} running`, load: s.running })),
+    ...pulse.agents.map((a) => ({ key: `a:${a.id}`, markId: a.id as string | null, name: a.name, tint: AGENT_TINT[a.status] ?? "#64748b", label: a.status, load: a.status === "running" ? 1 : 0 })),
+    ...pulse.seatLoad.map((s) => ({ key: `s:${s.agent}`, markId: null as string | null, name: `${s.agent} (mission seats)`, tint: AGENT_TINT.running, label: `${s.running} running`, load: s.running })),
   ];
   const maxLoad = Math.max(1, ...loads.map((l) => l.load));
   return (
@@ -160,7 +162,7 @@ export function CockpitBand() {
           {loads.map((l) => (
             <li key={l.key} className="text-[11.5px]">
               <div className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5"><span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: l.tint }} aria-hidden /><span className="truncate">{l.name}</span></span>
+                <span className="flex min-w-0 items-center gap-1.5">{l.markId ? <AgentAvatar agent={l.markId} name={l.name} size={16} /> : null}<span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: l.tint }} aria-hidden /><span className="truncate">{l.name}</span></span>
                 <span className="shrink-0 text-[10.5px] text-[var(--fg-dimmer)]">{l.label}</span>
               </div>
               <div className="mt-0.5 h-1 overflow-hidden rounded-full glass-inset" aria-hidden><div className="h-full rounded-full" style={{ width: `${(l.load / maxLoad) * 100}%`, background: l.tint }} /></div>
@@ -282,6 +284,8 @@ export function SystemPulse() {
           {(pulse.drives ?? h?.disks ?? []).map((d) => <Bar key={d.mount} label={d.mount} pct={Math.round(d.usedPercent)} detail={`${gb(d.freeBytes)} free of ${gb(d.totalBytes)}`} />)}
         </div>
       </section>
+
+      <SnapshotsCard />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <section className="glass px-5 py-4">

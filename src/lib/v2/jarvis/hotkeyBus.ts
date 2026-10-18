@@ -6,10 +6,18 @@
 // The subscriber count here is the HOTKEY STREAM's own count (NOT the shared
 // /api/v2/events sseSubscriberCount) — the helper uses it to decide whether to
 // open a browser tab (subscribers === 0 → nobody is listening → open a tab).
+//
+// S38: events carry an `action`. The push-to-talk helper sends "down" when the
+// key goes down and "up" when it is released; "press" is the pre-S38 single
+// event (press-to-open mode, or an old helper that sends no action at all).
+
+export type HotkeyAction = "press" | "down" | "up";
+export const HOTKEY_ACTIONS: readonly HotkeyAction[] = ["press", "down", "up"] as const;
 
 export interface HotkeyEvent {
   type: "hotkey";
   ts: string; // ISO
+  action: HotkeyAction;
   key?: string; // which physical key the helper reported (informational)
 }
 
@@ -39,10 +47,14 @@ export function subscribeHotkey(fn: HotkeySubscriber): () => void {
   return () => b.subscribers.delete(fn);
 }
 
+export function isHotkeyAction(v: unknown): v is HotkeyAction {
+  return typeof v === "string" && (HOTKEY_ACTIONS as readonly string[]).includes(v);
+}
+
 /** Fire a hotkey event to every connected stream. Returns the event. */
-export function fireHotkey(key?: string): HotkeyEvent {
+export function fireHotkey(key?: string, action: HotkeyAction = "press"): HotkeyEvent {
   const b = bus();
-  const ev: HotkeyEvent = { type: "hotkey", ts: new Date().toISOString(), ...(key ? { key } : {}) };
+  const ev: HotkeyEvent = { type: "hotkey", ts: new Date().toISOString(), action, ...(key ? { key } : {}) };
   b.lastFireAt = ev.ts;
   for (const fn of b.subscribers) {
     try {

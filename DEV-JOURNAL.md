@@ -1,5 +1,143 @@
 # Agent OS — Dev Journal
 
+## 2026-10-18 - Restart/Stop Agent OS kill only THIS repo's Next server (v2.63.3)
+
+Follow-up to the "Open, not done" line in the entry below. The node sweep in `agentos-restart.ps1`
+and `agentos-stop.ps1` (`CommandLine -match 'next.dist.bin.next"?\s+start'`) matched any
+`next start` on the machine, so Restart or Stop Agent OS would have killed another project's Next
+server (two other projects use 3000/3001). Changes:
+- Both sweeps now also require `[regex]::Escape(<repo folder>) + '[\\/]node_modules[\\/]'` in the
+  command line (`$repoNext`, repo folder = `$PSScriptRoot`). Requiring `\node_modules\` right after
+  the repo folder also keeps out a sibling like `agent-os-old` and checkouts under
+  `.claude\worktrees\`. The port-3737 listener lookup is unchanged.
+- `agentos-restart.ps1` launches Next by absolute path (`Join-Path $dir 'node_modules\next\dist\bin\next'`),
+  wrapped in literal quotes because Start-Process joins `-ArgumentList` with spaces and quotes nothing.
+
+Verified without running either script (`sweep-test.ps1` in the session scratchpad, run under
+Windows PowerShell 5.1 like the .bat files). The `$repoNext` expression and the Where-Object filter
+were pulled out of each edited file's AST and run against 9 command lines. Match: the bat-launched
+`"node"   "C:\...\agent-os\node_modules\.bin\\..\next\dist\bin\next" start -H 0.0.0.0`, the new
+absolute restart form, the repo path in other casing. No match: another project's `next start` and
+`next dev`, this repo's `next dev`, `agent-os-old`, a `.claude\worktrees` checkout, the old relative
+restart form. The edited Start-Process statement was also run against a fake repo whose folder name
+has a space (a 4-second sleeper as `next`, binds no port). Windows recorded
+`"C:\Program Files\nodejs\node.exe" "<fake repo>\node_modules\next\dist\bin\next" start -H 0.0.0.0 -p 3737`,
+node received the path as one argument, the sweep scoped to the fake repo matched it and the one
+scoped to agent-os did not. Both files parse with 0 errors.
+
+Known gap: a server started by the OLD restart script has a relative command line
+(`node_modules\next\dist\bin\next start ...`) with no repo folder in it. Once it listens on 3737 the
+port lookup still finds it; only one still booting (not yet listening) would be missed. That form is
+gone after the first restart with the new script. Also checked live (read-only): the running
+dashboard, PID 29944 (bat-launched), is still selected by the new filter.
+
+**Rollback.** Originals in `.exile/2026-10-18_105647/` (`agentos-restart.ps1`, `agentos-stop.ps1`);
+copy them back over the edited files.
+
+## 2026-10-18 - "Stop Paperclip.bat" no longer kills the Agent OS dashboard (v2.63.1)
+
+Owner: "finish what's started" on the uncommitted 2026-09-13 launcher work (the two entries
+dated 2026-09-13 below). Both were complete; one leftover found while checking them.
+`paperclip-stop.ps1` was a copy of `agentos-stop.ps1` and kept its node sweep:
+`CommandLine -match 'next.dist.bin.next start'`. Paperclip is Express (`npx paperclipai run`),
+so the only process that can match is the Agent OS dashboard. Regex test, this session: the
+command line `agentos-restart.ps1` launches (`node_modules\next\dist\bin\next start -H 0.0.0.0
+-p 3737`) matches it, so Stop Paperclip killed a dashboard started by the restart script; the
+bat-launched form (`...\next" start`, live PID 29944) does not. Sweep removed; the script is
+port-scoped to 3100 + 54329/54330 (embedded Postgres, per `Start Paperclip Server.bat` step 3).
+`Stop Paperclip.bat` said "the dashboard is stopped" and pointed at `Start Agent OS.bat` to bring
+Paperclip back, which stopped being true on 2026-09-13; both lines fixed.
+Also confirmed live: PID 29944's command line matches the 2026-09-13 restart/stop pattern
+`next.dist.bin.next"?\s+start` and not the old one.
+Open, not done: that pattern now matches ANY `next start` on the machine, not just this repo's
+(nothing else was running Next when checked). Scoping it to this repo also needs
+`agentos-restart.ps1` to launch Next by absolute path, since its relative command line carries
+no repo path to match on. Left for the owner to decide.
+
+**Rollback.** Originals in `.exile/2026-10-18_103524/` (`paperclip-stop.ps1`, `Stop Paperclip.bat`).
+
+## 2026-10-08 - S34-S38 merged into the PR branch (v2.63.0)
+
+Owner: "Yeah merge". The five 2026-10-01 harness slices (S38 push-to-talk hotkey, S34 Jarvis chat
+upgrades, S35 agent faces, S36 fleet stats, S37 snapshots), each built and gate-green on its own
+branch, merged into integrate/s34-s38 (worktree agent-os-worktrees/integrate) with --no-ff, one at
+a time, then fast-forwarded onto feat/v2-hermes3d-and-versioning. Bookkeeping conflicts
+(package files: ours, version bumped once here; journal / roadmap / progress / docs: both sides)
+by a resolver script. Code conflicts, all additive: settings.ts (jarvis.hotkey + jarvis.chat;
+fleetStats + snapshots), Cockpit.tsx (AgentAvatar + SnapshotsCard imports), ChatboxOverlay.tsx
+(footer keeps S38's hotkey hint and S34's thinking-effort picker; S34 had moved "Esc discards"
+into the placeholder, Esc still discards). One real interaction fixed: S34 took the attached image
+at dispatch, so a message queued by today's v2.60.2 would have picked up whatever image was
+attached when it finally went out; the image is now taken at Send and carried with the queued
+message (Stop puts it back in the attach slot). smoke-jarvis-stop-queue gains C1b. ROADMAP:
+the union had doubled the S34-S38 lines (one ticked, one not), deduped; today's work added to Done;
+two unscheduled items added (live Jarvis voice, Deal Desk reuse of read jobs).
+Verified: tsc clean after every merge; ./test.sh 126 passed, 0 failed on the merged tree.
+Rollback: `git revert -m 1 <merge>` per slice, or reset the branch to b64eaf0 (owner's call).
+
+## 2026-10-08 - Deal Desk: a Stop for the Upwork scrape (v2.62.0)
+
+Owner: "I also don't have any functionality to stop it", during a scrape running 1h35m
+(started 00:14, 374 jobs read, mostly a week+ old by then). Added DELETE /api/deals/scrape:
+sets stopRequested, ends the current stage's process tree (taskkill /T /F on Windows, so the
+crawler's browser goes too), stopCheck() before scoring, after scoring and before pitching so
+nothing later starts, and the run ends as "stopped" (not "failed"). The desk shows a red Stop
+next to Re-scrape Upwork while scraping; a reload re-attaches as before. Stopped while scraping
+or scoring the board is untouched (only scoring rebuilds it).
+The run in progress was on the old build (no DELETE), so at the owner's request it was ended by
+hand: PID 3936 (`node ...Upwork-Leads\actor\src\main.js`, parent = the 3737 server 29180)
+via `taskkill /PID 3936 /T /F`, 15 processes; the server stayed up. Its desk status will read
+"scraping exited with code 1"; the board is as it was.
+Verified: smoke-deal-desk-scrape F1-F6 (the real DELETE handler against a planted running job:
+409 when idle, 200 + kill + stopRequested when running); ./test.sh 122 passed, 0 failed.
+Rollback: `git revert <this commit>`.
+
+## 2026-10-08 - Deal Desk scrape: old jobs never opened; search topics in the gear (v2.61.0)
+
+Owner: a scrape takes about an hour, a working queue of 200+ ends with about 40 kept, and jobs
+of 4 weeks, 10 days, 1 week still come in despite the 5-day gate; and "a space in the
+configuration settings to set the topic/keywords". Evidence: the in-progress run's dataset
+(Upwork-Leads/actor/storage/datasets/default, 2026-10-08 01:21) held 254 fully-read jobs,
+146 <=5d, 91 6-14d, 17 15d+. Causes: (1) the age gate ran only after scrape + scoring
+(api/deals/scrape route, pruneLeadsFileByAge); (2) the scrape spawned the crawler without
+UPWORK_COOKIE (enrich/research pass it, the scrape never did), so it ran logged out, where
+Upwork ignores newest-first (the crawler's own note, verified 2026-09-12); (3) the 24
+searches lived only in a hand-edited INPUT.json.
+Fix: settings.deals.searchQueries + pagesPerQuery (defaults = the 24 searches, 2 pages)
+edited in the Deal Desk gear; the scrape route writes INPUT.json from them plus maxAgeDays
+before every run and hands the saved cookie over via env (a missing cookie is logged). The
+crawler (Upwork-Leads, see its journal) skips a search tile older than the gate before
+opening it and stops paging a newest-first query once a whole page is past it. The landing
+prune stays as a backstop.
+Verified: new smoke-deal-desk-scrape 20/20 (runs the crawler's real age parser on Upwork's
+phrases); smoke-deal-desk-control still passes; ./test.sh 122 passed, 0 failed. The running
+scrape was left alone; the change applies from the next one. Timing is the owner's to see.
+Rollback: `git revert <this commit>`; for the crawler, copy
+Upwork-Leads/.exile/2026-10-08_dealdesk-age-gate/ back.
+
+## 2026-10-08 - Jarvis can be stopped, interrupted and queued (v2.60.2)
+
+Owner: "once jarvis gets going, I cannot interrupt or even stop him", then "make sure queueing
+messages works". The brain already cancels a turn when its request is aborted
+(api/v2/jarvis/ask passes req.signal; brain.ts interrupts the SDK query on abort), but:
+- JarvisView.tsx: `if (!p || busyRef.current) return;` dropped every message sent while busy
+  (the box's own placeholder promises "type any time, even mid-conversation"); the ask fetch
+  had no signal; nothing ever paused the reply audio; no Stop control.
+- jarvis/VoiceTab.tsx: Hold to talk / Space disabled while busy; no abort; typed Send disabled.
+- v2/jarvis/ChatboxOverlay.tsx: had Stop, but Send was disabled while busy (text stuck).
+Fix: Console gets stopJarvis (abort + pause + speak generation so a late voice never plays),
+a Stop button and Esc; tapping the face or talking interrupts; a typed message while busy is
+QUEUED (chips: Send now = interrupt and send, x = remove) and drains one at a time when idle;
+Stop puts queued text back in the box, nothing auto-sent. Voice tab: talk/Space/Esc/Stop
+interrupt, typed messages queue. Overlay: Send queues while busy, drains after read-aloud,
+Stop actions holds the queue, an abort reads "(stopped)" not an error.
+Still not done: voice barge-in during playback in hands-free Live (the mic is closed while
+Jarvis speaks); Stop, Esc or tapping the face are the ways in.
+Verified: new smoke-jarvis-stop-queue 22/22; ./test.sh 121 passed, 0 failed (a first run hit a
+native node crash in smoke-anynotes-ui, which passes alone and on the rerun). Live check is the
+owner's after rebuild + restart.
+Rollback: `git revert <this commit>`.
+
 ## 2026-10-01 - Browser tools: the audit-degraded notice actually reaches the caller (v2.60.1)
 
 Copilot's review of PR #18 (2026-10-01) flagged `withAuditWarning` in src/lib/v2/browser/tools.ts:
@@ -15,6 +153,220 @@ message; both carry a top-level auditDegraded (optional on the type). K7 replace
 which call the function and inspect the output. ./test.sh 120/120. PR #18 description rewritten to
 cover the whole branch (it still described only the first four commits).
 Rollback: `git revert <this commit>`.
+
+## 2026-10-01 - S38: Jarvis push-to-talk on a mappable global hotkey (v2.61.0)
+
+Harness session, worktree `ptt-hotkey`, feature feat-s38-jarvis-ptt-hotkey. The owner uses the orb
+chat from across the room with a mini USB keyboard; the OS-global key only OPENED the chat, and the
+AutoHotkey helper posted to 127.0.0.1:3033 while Agent OS listens on 3737 (read in the script's
+AppUrl line), so it never reached the app at all.
+- Settings (`jarvis.hotkey`): `mode` "hold" (push-to-talk, default) | "open" (press opens, as
+  before) and `sendOnRelease` (default true: the owner is away from the screen). Both in the orb
+  chat's gear (JarvisSettings: Mode select, Send on release tick, the Key hint now names F13..F24 and
+  the 30 s helper refresh). The mouse mic keeps `voice.autoSend` (default off); two knobs on purpose.
+- Bus + routes: `HotkeyEvent.action` "press" | "down" | "up" (no action = press, so an old helper
+  still works); `POST /api/jarvis/hotkey` validates it (400 on anything else) and echoes it; the SSE
+  stream carries it unchanged. New `GET /api/jarvis/hotkey/config` (secret header, same timing-safe
+  check, proxy-exempt for GET with the header only) returns `{key, mode}` and nothing else, from
+  `lib/v2/jarvis/hotkeyConfig.ts`; `/setup` now names the key + mode and says to change them in the
+  gear.
+- Helper (`scripts/v2/jarvis-hotkey.ahk`): AppUrl 3737; reads key + mode from /config at start and
+  every 30 s (SetTimer) and rebinds (`Hotkey key` + `Hotkey key " up"`); a Held flag swallows Windows
+  autorepeat; hold mode posts down/up, open mode posts press; the release never opens a tab or fronts.
+  Unreachable server = keep the current binding; 401/503 = tray tip.
+- Page: JarvisOmnipresence turns SSE down/up (and the in-app keydown/keyup, autorepeat ignored, blur
+  releases a keybind hold) into a `pttHeld` prop; on a down it fronts the page BEFORE the mic starts.
+  ChatboxOverlay: held = `capture.start()` (unless the mouse mic is already recording), released =
+  `capture.stop()` with a pending send consumed on the recording-to-idle transition (the transcript
+  has landed by then for Parakeet and Web Speech alike); a release before the mic opened cancels
+  instead, so a tap never records forever; a mic error stays on screen. A pill beside the mic reads
+  "F13 held · release to send". The mouse mic handlers are untouched (asserted by smoke-jarvis-ui).
+- Browser limits, stated in the gear and in docs/modules/jarvis.md "Orb chat and hotkey": the helper
+  fronts the window but cannot pick the tab; mic permission must already be granted; the spoken reply
+  plays only if the tab was clicked since it loaded (autoplay). Docs also cover F13..F24 and remapping
+  a spare key on a mini USB keyboard; around-every-page.md's F13 row updated.
+- Smokes: smoke-jarvis-hotkey 49 checks (settings redirected to a temp file, rule 19; down/up through
+  the bus and a real read of the SSE stream route; config GET 401/503/key+mode only/follows the gear;
+  the helper's contents); smoke-jarvis-ui + 10 S38 checks (defaults, proxy exemption, overlay and
+  omnipresence wiring, mouse mic unchanged). smoke-guide green (no dashes, controls table).
+- Not seen in a browser or on a keyboard: the live checklist is at the end of agent-progress.md.
+Gate: ./test.sh 120 passed, 0 failed, exit 0 (tsc clean). Not pushed to a PR; the commit is on feat/s38-jarvis-ptt-hotkey.
+Rollback: revert the S38 commit; settings.jarvis.hotkey.mode/sendOnRelease are ignored by older
+code (deepMerge keeps unknown keys harmlessly); an old helper's bare POST still opens the chat.
+
+## 2026-10-01 - S34: Jarvis chat upgrades, the Nexora C6 set built on Jarvis (v2.61.0)
+
+The owner moved Nexora's four Hermes chat upgrades to Jarvis ("yes to all of these, but
+they go to Jarvis, not Hermes"). Audit first, per the feature contract.
+
+**What Jarvis already had (S13 Sessions, v2.35.0; C3.6 before it).** Server-side history
+in `jarvis_conversations` / `jarvis_messages` (migrations 031, 035), titles seeded from the
+first words, list, search by title and body, rename, archive (soft), restore, the Sessions
+tab, resume into the Console (`/jarvis?c=`) or the overlay (window event), and the SDK
+brain replaying the last 20 turns when a conversation is resumed. The overlay's history
+drawer already had "New conversation", and it only cleared the thread; nothing was deleted.
+So (1) and (2) of the four were mostly there.
+
+**The gaps, which is all this slice built.**
+- Overlay persistence and naming: the overlay forgot its session on every page reload (the
+  id lived in a ref) and had no way to see or set the session's name. Now the id is kept in
+  localStorage (`agentos.jarvis.overlay.conversation`; the row itself stays on the server),
+  the overlay reopens that session when it opens, forgets it if the row is gone or archived,
+  and the header shows the name with a pencil to rename (PATCH `{ title }`, the same name the
+  Sessions tab shows). "New conversation" clears the id and the thread and touches no row.
+- Thinking effort per session: new column `jarvis_conversations.effort` (migration 036, the
+  jarvis 30s band; the runner applies by version so 36 runs on the owner's live DB after 63).
+  The overlay footer has a `think:` select; it rides every ask and PATCHes the row on change,
+  so it survives a reload and a server restart. The brain keys the warm SDK session on it: a
+  change reports `sessionRebuilt: "effort"` and the new level goes to the SDK as the `effort`
+  option (the SDK's own enum: low, medium, high, xhigh, max; unset = model default). The gear
+  gained **Default thinking effort** for new sessions.
+- Attachments: `src/lib/v2/jarvis/attachments.ts` + `POST /api/v2/jarvis/attachments`. One
+  image per message; png, jpeg, webp decided by magic bytes, never by name or declared type;
+  cap from the gear (**Attachment size cap**, default 4 MB; refused as 413 before the body is
+  read when the declared size is over, and again after sniffing); stored under
+  **Attachment folder** (blank = `~/.agentic-os/jarvis/attachments`, `AGENTIC_OS_JARVIS_DIR`
+  redirects it for smokes). The ask carries `attachments: [{ id, name }]`; the brain reads
+  the file back and pushes `[image block, text block]` on that turn only, and the user row
+  keeps the ref (`jarvis_messages.attachments_json`), not the bytes. A resumed session names
+  an earlier image in history and does not replay its bytes. Refusals carry the reason: not
+  an image (415), over the cap (413), unknown id (fails before anything persists), and the
+  cli engine says it is text-only instead of silently dropping the picture. The overlay has a
+  paperclip, accepts a pasted screenshot, shows the pending image as a chip with an X, and
+  prints a refusal in red above the text box.
+
+**Smoke.** `smoke-jarvis-chat-upgrades` (55 checks) swaps the SDK's `query()` for a fake
+through a new seam (`setJarvisQueryForTests`) that reads the brain's streaming-input
+generator and answers with stream events, so the assertion is on the real message the brain
+pushed: image block first with the stored file's base64, then the text. It also closes and
+reopens the DB handle and drops the warm session to stand in for a restart. One sibling smoke
+pinned the exact `bootSession(conv.id, freshStable, sig, freshPersona)` call; rather than
+widen it, bootSession reads the effort from the row itself. `./test.sh`: 121 passed, 0 failed.
+Not seen in a browser (owner to look after a rebuild: the header name and pencil, the
+`think:` select surviving F5, the paperclip with a png and with a .txt renamed to .png).
+
+**Rollback.** `git revert` the S34 commit. Migration 036 is additive (two nullable columns);
+leave it applied, the old code ignores the columns. Attached images stay on disk under the
+attachment folder and can be exiled by hand.
+
+## 2026-10-01 - S35: Agent faces, a Rorschach mark for every agent (v2.61.0)
+
+Harness session, worktree `agent-faces`, feature feat-s35-agent-faces. Owner 2026-10-01: "each agent
+should be getting a rorschach type shape, like Codex and Claude currently have."
+Found first: AgentAvatar.tsx knew 13 hand-drawn CLI marks and its fallback object had no `glyph`,
+so any other id would have thrown; Crew, the Voice dial, Mission Control's Orchestration list, the
+Agents cards, hero chips, registry rows and the agent header drew agents as a status dot and a name,
+with no mark at all. Hermes 3D seats hold idle bodies the HUD calls "not agents" (run state is not
+wired there), so there is no agent to mark on that surface yet; left as is.
+- `src/lib/agentFaces.ts` (pure, no node imports): `generateMark(id, {seed, detail})` draws 2-4
+  smooth blob lobes plus ink-spot pairs in a 24x24 viewBox. Each lobe is Catmull-Rom smoothed from
+  right-half points and the left half is the same segments mirrored and walked back, so every path is
+  mirror-symmetric about x=12 by construction (`isMirrorSymmetric` proves it on the emitted `d`).
+  Seed = FNV-1a of the id (mulberry32 PRNG), or the stored override; colour comes from the id alone,
+  so "New shape" changes the shape and keeps the accent. White on the accent gradient, like the
+  hand-drawn marks. The 13 hand-drawn marks are byte-identical (smoke C2-C4 check the path strings).
+- AgentAvatar accepts any id (`AgentKey | string`, plus `name` and `seed`); an unknown id renders
+  `GeneratedAvatar`; `agentColor/agentBg/agentLabel` answer for any id. Marks added on: Crew roster
+  cards and chat header, Voice dial cards (crew and room lanes), Cockpit Orchestration rows (agents
+  only; mission seats keep their dot), Agents cards, hero chips, Registry rows, agent header.
+- Seeds are data in `settings.agents.faces.seeds` (rule 16, survives restarts, redirected by
+  AGENTIC_OS_SETTINGS); Reset writes null because deepMerge cannot drop a key, and the reader treats
+  null as "no override". `/api/v2/agent-faces` GET lists seeds + detail; POST {id, action} re-rolls
+  or resets (400 on a bad id or action). One shared client cache (`agentFacesClient.ts`,
+  useSyncExternalStore) so a page of forty avatars makes one request.
+- Controls: **New shape** / **Reset shape** on `/agents/<id>` (Reset shows only when a seed is
+  stored); Agents gear **Mark detail** low / medium / high (default medium). Docs: agents-page.md,
+  jarvis.md (Crew), mission-control.md (Orchestration).
+- `scripts/v2/smoke-agent-faces.mjs`, 53 checks: determinism (same id and seed, same JSON; no clock
+  or Math.random), 300 marks symmetric and inside the box, detail counts, hand-drawn marks untouched,
+  re-roll persisted on disk and read back by a fresh module instance (the restart case), reset,
+  the route's 200s and 400s, every surface and doc row.
+Gate: ./test.sh 121 passed, 0 failed (first run tripped smoke-memory-ui because a scratch file I
+exiled created `.exile/` in this fresh worktree; the folder moved to .harness-logs and the gate
+re-ran clean). Version 2.60.0 -> 2.61.0 (minor).
+Not seen in a browser (harness session): the owner looks at a crew agent's mark in Crew, on
+`/agents`, and presses New shape then Reset shape on its page after a rebuild.
+Rollback: `git revert <this commit>`; the stored seeds under settings.agents.faces are inert data
+and can stay.
+
+## 2026-10-01 - S36: Fleet stats on Mission Control (v2.61.0)
+
+Harness session, worktree `fleet-stats`, branch feat/s36-fleet-stats, feature feat-s36-fleet-stats
+(Nexora C9; owner: "it doesn't need to be hourly. Maybe bidaily or so. But yes, we will need these
+metrics."). Mission Control is the Cockpit view in Overview.tsx (S18), which already shows fleet data,
+so the strip sits there, right under the telemetry band.
+- `src/lib/v2/fleetStats/stats.ts`: pure math (`bucketize`, `heatmap`, `buildFleetStats`) plus the
+  collector `collectFleetSources` and `readFleetStats`. "You" = your messages in jarvis_messages,
+  rabbit_messages and v2_messages (role user, user_type human, not ephemeral), agent runs with an
+  owner trigger (manual, crew-chat: the Crew convention `OWNER_TRIGGERS`), missions you created.
+  "Agents" = assistant replies in those three tables, agent run records (`agents/<id>/runs/*.meta.json`),
+  module runs (`module-runs.json`; the registry keeps the last 50 finished and the label says so),
+  mission steps that started, Ultracode runs. Hand-offs = mission events of kind `handoff`, with
+  `from` = the seats of the steps it depended on, else Jarvis. Sessions per source, last 24 h and
+  total. Hermes is listed `tracked:false` with the reason "Hermes keeps its own state.db; Agent OS
+  does not read it": nothing in src/lib opens that file, so it is "not tracked", never 0.
+- Buckets are aligned to local midnight in the Tasks timezone (`zonedMidnight`), so a 12 h bucket is
+  a morning or an afternoon in the owner's day; the heatmap is weekday x hour in the same zone.
+- Settings (rule 16): `fleetStats.bucketHours` (6/12/24/48, default 12) and `fleetStats.windowDays`
+  (7/14/30/60, default 14) in the strip's gear, saved through useSettings and read per request
+  (`fleetStatsOptions`), so the next count re-buckets with no rebuild; a value outside the choices or
+  an unknown zone falls back to the default AND reports it in `errors`, shown amber on the card.
+  Timezone is `tasks.timezone`, the single timezone source; no second zone knob.
+- Route `GET /api/v2/home/fleet-stats`; component `src/components/v2/home/FleetStats.tsx` (four
+  cards: Activity over time, When the fleet is busy, Recent hand-offs, Sessions), mounted in
+  Overview.tsx after `<CockpitBand />`. Doc rows in docs/modules/mission-control.md.
+- Smoke `scripts/v2/smoke-fleet-stats.mjs`, 43 checks, every store redirected to a temp dir
+  (DB, settings, agents, principals, runs, missions, ultracode-runs, crew, webmcp, agentmail,
+  newsletter). A: the math on fixed instants in America/Chicago (local-midnight alignment, all four
+  bucket sizes over the same events, heat cells, empty fleet all zeros, the not-tracked row carries no
+  number, bad settings fall back loudly). B: seeded rows across every source give exactly the seeded
+  counts (you 5, agents 9, sessions 8 / 10, two hand-offs newest first), and writing
+  `fleetStats.bucketHours: 24` to settings.json halves the buckets on the next read. C: wiring greps.
+  Found by the smoke's first run: the missions store only lists ids matching `^m_[a-z0-9]{8,40}$`
+  (store.ts:99), so the seed id had to be `m_fleetstats0001`; the code was right.
+- Gate: ./test.sh 121 passed, 0 failed (tsc clean). Version 2.60.0 -> 2.61.0 (minor).
+- Rollback: `git revert <this commit>`; the new files are additive, `fleetStats` in settings.json is
+  ignored by older code, and no migration was added.
+- Not seen in a browser (the harness cannot sign in): the owner's check is the strip on `/` after a
+  rebuild, the gear's two selects, and that the Hermes row reads "not tracked".
+
+## 2026-10-01 - S37: Snapshots and restore (v2.61.0)
+
+Harness session, worktree `snapshots`, feature feat-s37-snapshots. Owner's cadence call (2026-10-01):
+"not nightly, maybe weekly is fine, or bi-monthly even."
+- `src/lib/v2/snapshots/` (config, take, jobs). One folder per snapshot under the gear's folder
+  (default `<home>/AgentOS-snapshots`; a folder inside `~/.agentic-os` is refused): `agentos.db`
+  through better-sqlite3's backup API, then `journal_mode=DELETE` on the COPY so it is one file
+  (the first smoke run showed -wal/-shm sidecars the moment the WAL-header copy was opened);
+  `agentic-os/` = the state folder minus backups/, .exile/, agentos.lock, heygen-cache/ and the
+  live DB files; `manifest.json` (size + sha256 per file, secrets left out, fields removed, source
+  paths, port, Agent OS version); `restore.ps1` (ASCII; refuses a listening 3737, runs the repo's
+  `Stop Agent OS.bat` first when it can find it, asks for "yes", moves the current state and DB to
+  `<folder>/.exile/<stamp>/before-restore/`, copies in, carries the left-out secret files and the
+  removed secret fields over from that exiled state, verifies every hash). Built under
+  `.partial-<stamp>`, renamed into place at the end.
+- Secrets out by default: secrets.json, session-secret.json, principals.json, agentos.key (the
+  integrations key, so tokens inside the DB copy stay unreadable), ws-secret, rabbit/hotkey/glasses
+  secrets, newsletter/config.json, agentmail/config.json, `*.env`, `*.secrets.json`,
+  `*.secret|token|key|pem`, browser-profiles/; settings.json and config.json are kept with their
+  secret fields removed (settingsRedact isSecretPath), named in the manifest. "Include secrets"
+  puts them all in.
+- Retention: keep-last-N (default 8); older snapshots and stale .partial-* folders go to
+  `<folder>/.exile/<stamp>/` through lib/exileFile. No unlink anywhere in the module (smoke F5).
+- Schedule: `core:snapshots` (kind `snapshots.take`) on the V2 scheduler; cadence weekly (Sunday
+  04:00, default) / every 2 weeks / monthly (1st, 04:00) / off (row kept, disabled). Re-synced at
+  boot, on Save in the gear, and after every run; appears in Jarvis > Standing orders.
+- Gear (rule 16): Snapshots card on Mission Control > Health (`SnapshotsCard.tsx`): last snapshot
+  from its own manifest, schedule + next run and last scheduled run from the job row, folder with
+  kept / exiled counts; Snapshot now; Configure (Cadence, Snapshot folder, Keep last, Include
+  secrets). `/api/v2/snapshots` GET / POST now (409 while running) / PATCH (validates; a folder
+  inside the state folder is refused before it is saved; lowering keep prunes at once).
+- smoke-snapshots: 56 checks, incl. a real `restore.ps1` run with pwsh against a temp target on
+  port 1 (SKIP off Windows). Docs: mission-control.md Health table + How it works. Gate result below.
+Rollback: `git revert <commit>`. The `snapshots` settings key is inert without the code; the
+`core:snapshots` job row is logged as "skipped: no handler" by the scheduler and can be held in
+Standing orders or removed with `DELETE FROM jobs WHERE id='core:snapshots'`. Snapshot folders
+already written stay where they are.
 
 ## 2026-10-01 - Merged S30, S31, S32, S7, S9 into the PR branch (v2.60.0)
 
@@ -2527,6 +2879,35 @@ next rebuild + boot (the running server still has the 044 code).
 
 **Rollback.** Same file list as the v2.32.0 entry below; `requireKey` can be
 flipped on in the gear without any code change.
+
+## 2026-09-13 - Launchers no longer start Paperclip
+
+Owner: "edit my restart/start/stop .bat's and .command's so that they do NOT start
+paperclip." Only one of them ever did: `Start Agent OS.bat` step 2 spawned
+`Start Paperclip Server.bat` in its own window. `Restart Agent OS.bat`,
+`Stop Agent OS.bat`, `agentos-restart.ps1`, `agentos-stop.ps1` and
+`Start Agent OS.command` never referenced it (grep, this session). Removed the
+launch from the start bat; kept the `set "PORT="` line because the stale-PORT
+trap it guards (2026-07-28) is about `npm start`, not Paperclip. The standalone
+`Start Paperclip Server.bat` / `Stop Paperclip.bat` are untouched for when he wants it.
+
+**Rollback.** Original at `.exile/2026-09-13_201941/Start Agent OS.bat`, or re-add
+`start "Paperclip Server" "%~dp0Start Paperclip Server.bat"` after `set "PORT="`.
+
+## 2026-09-13 - Restart/stop scripts could not see a server launched by "Start Agent OS.bat"
+
+Owner asked for a restart. Nothing listened on 3737, yet the new server refused
+with "already running as PID 12324, up since 8:16 PM". That PID was a real
+`next start -H 0.0.0.0` from the foreground start bat: it held the lock and the
+CDP bridge on 3738 but never got 3737 (half-dead). `agentos-restart.ps1` and
+`agentos-stop.ps1` find non-listening servers with
+`CommandLine -match 'next.dist.bin.next start'`; the bat-launched command line is
+`...\next\dist\bin\next" start` — a quote between `next` and `start` — so the
+match failed and only port-holders were ever killed. Pattern is now
+`next.dist.bin.next"?\s+start` in both scripts. Stopped 12324 by hand, restart
+succeeded, `/api/rabbit/v1/models` answers through the gate.
+
+**Rollback.** Originals in `.exile/2026-09-13_205711/` (both .ps1).
 
 ## 2026-09-13 - Rabbit R1 bridge: the handheld talks to the claude CLI through Agent OS (v2.32.0)
 

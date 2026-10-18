@@ -45,13 +45,15 @@ is one line; the journal carries the rest.
   added/removed); the only mid-run control is STOP. Deal Desk is the reference
   implementation to copy. Start with Content Engine and Kanban, the two he has
   run most.
-## Next (owner's picks, 2026-10-01)
+## Next (owner's picks, 2026-10-01; all five merged 2026-10-08 as v2.63.0)
 
-- [ ] **S38. Jarvis push-to-talk on a mappable global hotkey** (orb chat; mini USB keyboard from across the room). Also fixes the AHK helper's wrong port (3033).
-- [ ] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments.
-- [ ] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take).
-- [ ] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9).
-- [ ] **S37. Snapshots and restore**: weekly by default (setting: weekly / 2 weeks / monthly), old ones exiled (Nexora C10).
+- [x] **S38. Jarvis push-to-talk on a mappable global hotkey** (orb chat; mini USB keyboard from across the room). Also fixes the AHK helper's wrong port (3033). Shipped 2026-10-01 (v2.61.0): hold = open + record, release = stop + send (gear: Key, Mode, Send on release); the helper reads key + mode from `/api/jarvis/hotkey/config`. Owner to verify live with the mini keyboard (agent-progress.md).
+- [x] **S34. Jarvis chat upgrades** (Nexora C6, on Jarvis not Hermes): named sessions, new conversation without deleting, thinking flag that survives reload, image attachments. (2026-10-01, v2.61.0)
+- [x] **S35. Agent faces**: a generated Rorschach-style mark for every agent without a hand-drawn one (Nexora C7, owner's take). Shipped 2026-10-01 (see DEV-JOURNAL): lib/agentFaces.ts inkblots on every agent surface, New shape / Reset shape on the agent page, Mark detail in the Agents gear, smoke-agent-faces.
+- [x] **S36. Fleet stats**: sparklines bucketed every 12 h by default (setting), heatmap, handoffs, session counts (Nexora C9). Landed 2026-10-01, v2.61.0 (see Done).
+- [x] **S37. Snapshots and restore** (done 2026-10-01, v2.61.0, gate green): weekly by default (setting: weekly / 2 weeks / monthly / off), old ones exiled (Nexora C10). Snapshots card on Mission Control > Health; job in Standing orders.
+- [ ] **Live Jarvis voice (raised 2026-10-08, not scheduled).** Gemini Live (free tier, real barge-in) as the voice with Jarvis on Claude as the brain: hand-off, status, stop and "change of plan" tools so talking steers the running job. Today's lanes can be stopped and queued but not talked over in hands-free Live. Needs the owner's pick (Gemini voice + Jarvis brain, or local only) and a Gemini key.
+- [ ] **Deal Desk: reuse jobs read in an earlier scrape (raised 2026-10-08, not scheduled).** Skip re-opening a job page whose details are already on the board from the last run.
 - Held: **C8 Appearance** waits for the complete visual overhaul at the end. Dropped: **C11 voice cast** (not needed).
 ## Next
 
@@ -133,6 +135,14 @@ is one line; the journal carries the rest.
 
 (Slices move here with their commit and version when they land.)
 
+- 2026-10-08 · v2.63.0 · S34-S38 merged into the PR branch (integrate/s34-s38, five --no-ff merges): conflicts were bookkeeping plus three code spots, all additive (settings blocks, Cockpit imports, the orb-chat footer keeps both the hotkey hint and the thinking-effort picker). One real interaction fixed: a queued orb-chat message now keeps the image it was sent with. ./test.sh 126 passed.
+- 2026-10-08 · v2.62.0 · Deal Desk: Stop for the Upwork scrape (DELETE /api/deals/scrape ends the crawler and its browser; nothing after it runs).
+- 2026-10-08 · v2.61.0 · Deal Desk scrape: the crawler never opens a job past the age gate and stops paging a newest-first search once a page is past it; the saved Upwork cookie is now handed to the crawler (it ran logged out, so Upwork ignored newest-first); Search topics and Pages per search in the gear. Measured before: 254 jobs read, 108 past a 5-day gate.
+- 2026-10-08 · v2.60.2 · Jarvis: Stop button + Esc, talk or tap to interrupt, messages typed while busy are queued (Send now / remove), on the Console, the Voice tab and the orb chat.
+- 2026-10-01 · v2.56.1 · Rabbit R1 bridge: lean claude turns (--tools= --setting-sources=); a real weather turn went from 77s to 4.5s.
+- 2026-10-01 · v2.61.0 · S36 Fleet stats on Mission Control (Nexora C9): a strip under the telemetry band with two-line sparklines (you vs agents) per bucket, a weekday-by-hour heatmap in the Tasks timezone, the newest mission hand-offs (from seat to seat, with Jarvis as the origin), and per-source session counts for 24 h and all time; Hermes reads "not tracked" (no reader for its state.db). Bucket (6/12/24/48 h, default 12) and window (7/14/30/60 d, default 14) are gear settings read per request, so a change re-buckets with no rebuild. Every number is a stored record: Jarvis, Rabbit and task-chat rows, agent run records, module runs, missions, Ultracode runs. smoke-fleet-stats 43 checks.
+
+- 2026-10-01 · v2.61.0 · S37 Snapshots and restore: `src/lib/v2/snapshots/`; a snapshot = backup-API DB copy + `~/.agentic-os` (secrets out by default, listed in the manifest) + manifest (sizes, sha256) + restore.ps1 (stops Agent OS, exiles the current state, carries secrets over, verifies); keep-last-N exiles; `core:snapshots` job at weekly / 2 weeks / monthly / off; Snapshots card with gear on Health. smoke-snapshots 56 checks.
 - 2026-10-01 · v2.56.0-v2.59.0 · S30 Settings sweep (merged v2.60.0, gate green): audit of every hardcoded parameter per module; `settings.ollama` (masked key, host, default model, local URL) shared by the Ollama page, Room, Brainstorm, Loop judge, Memory, Agents, Free Claude Code; `settings.claude.model` with a picker replacing the start-time CLAUDE_MODEL constant in 25 files; `settings.room.agents` + CLI turn limit with a Room gear; Brainstorm seat limits, Jarvis voice-lane models, Thumbnails prompt model. smoke-settings-sweep 38 checks.
 
 - 2026-10-01 · v2.56.0 · S31 Artifacts deploy on Windows: netlify (an npm .cmd shim here) is resolved to node + its entry with a clean arg array (lib/platform.ts resolveCli), the SEO deploy route resolves npx/netlify the same way, the Artifacts site lives in settings.artifacts behind a gear on the tab (artifacts-site.json is a labelled fallback), a missing site or CLI is a clear error naming the gear or the install line, and the v2.54.3 rollback holds. smoke-artifacts-deploy 35 checks. Owner to publish one page for real (AWAITING USER VERIFY in agent-progress.md).
@@ -176,6 +186,8 @@ is one line; the journal carries the rest.
 - 2026-09-28 · v2.37.0 · Jarvis v3 S15 Control Room tab: measured host and local-service status with plain-words checks (Windows load average reported as unavailable, loopback-only probes), one skills/workflows matrix across every module, Claude Code plugins (global, next session, backup per change), insights from the run registry with its window stated, and every module's settings behind a new masked door (`/api/control/settings`). Found and queued: GET /api/settings returns key material. smoke-control-room 42 checks.
 
 - 2026-09-28 · config · Jarvis v3 S19: memory off Honcho. Claude Code uses Agent OS Memory V2 through the user-scope MCP server `agent-os` (memory_search / memory_ingest / memory_about_user, verified live); Honcho plugins disabled; global CLAUDE.md updated. Hermes not moved (its `mcp add` cannot send the auth header). No repo code changed.
+
+- 2026-10-01 · v2.61.0 · S34 Jarvis chat upgrades (Nexora C6 on Jarvis). Audit first: S13 already had server-side sessions, list/search/rename/archive/restore and resume. Added only the gaps: the orb overlay keeps its session across a reload (id in localStorage, row on the server) and names it in the header (rename via PATCH); a per-session thinking effort (`jarvis_conversations.effort`, migration 036) that rebuilds the warm SDK session when it changes; one image per message (`POST /api/v2/jarvis/attachments`, png/jpeg/webp by magic bytes, cap and folder in the gear) pushed to the brain as an image block, refused with the reason otherwise, cli engine says it is text-only. smoke-jarvis-chat-upgrades 55 checks against a fake SDK query.
 
 - 2026-09-28 · v2.36.0 · Jarvis v3 S14: skills and workflows on every module. A "Skills & workflows" pop-up in the TopBar (every page; Jarvis tabs are their own modules) switches each skill and workflow on per module or everywhere, runs workflows in place (module runs: runs tray, STOP) and creates new ones; Jarvis's `module_kit` tool does the same by voice (writes gated). Skills now reach 14 modules (cliComplete `module` option + Oracle + Jarvis's own); `moduleRegistry` says which, and the smoke proves it against the code. Workflows are new (`~/.agentic-os/workflows`, retire never deletes). `/api/skills` finally exists (the launch drawer's picker was always empty). Also fixed: Deal Desk saves painted success before the server answered. smoke-module-kit 73 checks.
 
