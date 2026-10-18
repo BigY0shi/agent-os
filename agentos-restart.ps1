@@ -20,7 +20,7 @@ function Get-DashboardPids {
   $ids = @()
   $ids += @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Expand OwningProcess -Unique)
   $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-    Where-Object { $_.CommandLine -match 'next.dist.bin.next start' } |
+    Where-Object { $_.CommandLine -match 'next.dist.bin.next"?\s+start' } |
     Select-Object -Expand ProcessId)
   return @($ids | Where-Object { $_ } | Sort-Object -Unique)
 }

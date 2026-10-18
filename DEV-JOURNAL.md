@@ -1,5 +1,27 @@
 # Agent OS — Dev Journal
 
+## 2026-10-18 - "Stop Paperclip.bat" no longer kills the Agent OS dashboard (v2.63.1)
+
+Owner: "finish what's started" on the uncommitted 2026-09-13 launcher work (the two entries
+dated 2026-09-13 below). Both were complete; one leftover found while checking them.
+`paperclip-stop.ps1` was a copy of `agentos-stop.ps1` and kept its node sweep:
+`CommandLine -match 'next.dist.bin.next start'`. Paperclip is Express (`npx paperclipai run`),
+so the only process that can match is the Agent OS dashboard. Regex test, this session: the
+command line `agentos-restart.ps1` launches (`node_modules\next\dist\bin\next start -H 0.0.0.0
+-p 3737`) matches it, so Stop Paperclip killed a dashboard started by the restart script; the
+bat-launched form (`...\next" start`, live PID 29944) does not. Sweep removed; the script is
+port-scoped to 3100 + 54329/54330 (embedded Postgres, per `Start Paperclip Server.bat` step 3).
+`Stop Paperclip.bat` said "the dashboard is stopped" and pointed at `Start Agent OS.bat` to bring
+Paperclip back, which stopped being true on 2026-09-13; both lines fixed.
+Also confirmed live: PID 29944's command line matches the 2026-09-13 restart/stop pattern
+`next.dist.bin.next"?\s+start` and not the old one.
+Open, not done: that pattern now matches ANY `next start` on the machine, not just this repo's
+(nothing else was running Next when checked). Scoping it to this repo also needs
+`agentos-restart.ps1` to launch Next by absolute path, since its relative command line carries
+no repo path to match on. Left for the owner to decide.
+
+**Rollback.** Originals in `.exile/2026-10-18_103524/` (`paperclip-stop.ps1`, `Stop Paperclip.bat`).
+
 ## 2026-10-08 - S34-S38 merged into the PR branch (v2.63.0)
 
 Owner: "Yeah merge". The five 2026-10-01 harness slices (S38 push-to-talk hotkey, S34 Jarvis chat
@@ -2823,6 +2845,35 @@ next rebuild + boot (the running server still has the 044 code).
 
 **Rollback.** Same file list as the v2.32.0 entry below; `requireKey` can be
 flipped on in the gear without any code change.
+
+## 2026-09-13 - Launchers no longer start Paperclip
+
+Owner: "edit my restart/start/stop .bat's and .command's so that they do NOT start
+paperclip." Only one of them ever did: `Start Agent OS.bat` step 2 spawned
+`Start Paperclip Server.bat` in its own window. `Restart Agent OS.bat`,
+`Stop Agent OS.bat`, `agentos-restart.ps1`, `agentos-stop.ps1` and
+`Start Agent OS.command` never referenced it (grep, this session). Removed the
+launch from the start bat; kept the `set "PORT="` line because the stale-PORT
+trap it guards (2026-07-28) is about `npm start`, not Paperclip. The standalone
+`Start Paperclip Server.bat` / `Stop Paperclip.bat` are untouched for when he wants it.
+
+**Rollback.** Original at `.exile/2026-09-13_201941/Start Agent OS.bat`, or re-add
+`start "Paperclip Server" "%~dp0Start Paperclip Server.bat"` after `set "PORT="`.
+
+## 2026-09-13 - Restart/stop scripts could not see a server launched by "Start Agent OS.bat"
+
+Owner asked for a restart. Nothing listened on 3737, yet the new server refused
+with "already running as PID 12324, up since 8:16 PM". That PID was a real
+`next start -H 0.0.0.0` from the foreground start bat: it held the lock and the
+CDP bridge on 3738 but never got 3737 (half-dead). `agentos-restart.ps1` and
+`agentos-stop.ps1` find non-listening servers with
+`CommandLine -match 'next.dist.bin.next start'`; the bat-launched command line is
+`...\next\dist\bin\next" start` — a quote between `next` and `start` — so the
+match failed and only port-holders were ever killed. Pattern is now
+`next.dist.bin.next"?\s+start` in both scripts. Stopped 12324 by hand, restart
+succeeded, `/api/rabbit/v1/models` answers through the gate.
+
+**Rollback.** Originals in `.exile/2026-09-13_205711/` (both .ps1).
 
 ## 2026-09-13 - Rabbit R1 bridge: the handheld talks to the claude CLI through Agent OS (v2.32.0)
 
