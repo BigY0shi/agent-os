@@ -48,13 +48,16 @@ survives on 3737; the batch file printed "Done" and closed after five seconds an
 Fixed the same day: it now pauses on a non-zero exit and says the old server is still up.
 
 **Remote access is Tailscale, and the microphone needs HTTPS.** The owner reaches the
-app from other devices at his tailnet address (100.88.224.75, MagicDNS
+app from other devices at his tailnet address (100.112.59.112 as of 2026-10-19, was
+100.88.224.75; MagicDNS
 `desktop.hair-halfmoon.ts.net`). Over plain http that is not a secure context, so
 browsers hide `navigator.mediaDevices` and every mic provider in the Jarvis gear reads
 "unavailable" while typed chat and spoken replies still work (owner report 2026-09-02).
 The fix is `tailscale serve --bg 3737` on the host, which fronts the app at
 `https://desktop.hair-halfmoon.ts.net` with a valid cert; it is a Tailscale config
-change and the owner runs it. Do not tell him to open a browser flag before that.
+change. Since 2026-10-19 Start and Restart Agent OS run `tailscale-serve.ps1`, which sets it
+if the root is free and reports (never takes over) a root pointing elsewhere; it was set live
+that day at the owner's request. Do not tell him to open a browser flag before that.
 
 **You cannot see the running app.** Routes behind the gate answer 307 with an
 Unauthorized JSON body. Signing in is the owner's job, and his credentials are never

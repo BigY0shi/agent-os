@@ -11,6 +11,7 @@ if %errorlevel% neq 0 (
   pause
   exit /b 1
 )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-serve.ps1"
 start http://localhost:3737
 echo.
 echo   Done. The server runs in the background - you can close this window.

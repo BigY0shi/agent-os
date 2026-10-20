@@ -12,6 +12,9 @@ $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
   Select-Object -Expand ProcessId)
 # Kokoro local TTS rides the same lifecycle — port-scoped so only OUR server dies.
 $ids += @(Get-NetTCPConnection -LocalPort 8880 -State Listen | Select-Object -Expand OwningProcess -Unique)
+# Parakeet local STT (8881) too - Restart already stops and relaunches it; Stop
+# used to leave it running alone (2026-10-19).
+$ids += @(Get-NetTCPConnection -LocalPort 8881 -State Listen | Select-Object -Expand OwningProcess -Unique)
 $ids = $ids | Sort-Object -Unique
 
 if ($ids) {

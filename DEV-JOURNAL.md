@@ -1,5 +1,25 @@
 # Agent OS — Dev Journal
 
+## 2026-10-19 - Launchers brought current; Tailscale HTTPS serves Agent OS (v2.63.4)
+
+Owner asked for the Start/Stop/Restart launchers to be current and for Tailscale to serve the app.
+- Tailscale was connected (this machine is now 100.112.59.112). `tailscale serve status` showed the
+  HTTPS root proxying `http://127.0.0.1:8766`, with nothing listening on 8766 and no note naming it.
+  Repointed with `tailscale serve --bg 3737`; `https://desktop.hair-halfmoon.ts.net/` then answered
+  307 to `/login`, the same as `http://127.0.0.1:3737/`.
+  Rollback: `tailscale serve --bg 8766` (old mapping) or `tailscale serve --https=443 off`.
+- New `tailscale-serve.ps1`: idempotent; no-op when Tailscale is missing or signed out (says so);
+  sets `serve --bg 3737` when the root is free; reports and leaves alone a root pointing elsewhere.
+  Called by Start (also on the already-running path) and Restart.
+- `Start Agent OS.bat`: refuses to start a second server when 3737 already listens (the 2026-08-29
+  split brain); opens the running one instead. Emoji replaced with ASCII (cp1252 console).
+- `Stop Agent OS.bat` / `agentos-stop.ps1`: also stop Parakeet STT on 8881. Restart already stopped
+  and relaunched it; Stop left it running.
+Verified: both .ps1 files parse with 0 errors; `tailscale-serve.ps1` run live reports "already on";
+its serve-config parsing tested offline against the old 8766 JSON and an empty config; the port
+guard expression returns "running" against the live server. The .bat files were not run end to end
+(Start would open a browser; Stop/Restart would take down the live server).
+
 ## 2026-10-18 - Restart/Stop Agent OS kill only THIS repo's Next server (v2.63.3)
 
 Follow-up to the "Open, not done" line in the entry below. The node sweep in `agentos-restart.ps1`
