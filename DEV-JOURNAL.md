@@ -1,5 +1,43 @@
 # Agent OS — Dev Journal
 
+## 2026-10-21 - Launcher review: nine findings fixed (v2.63.6)
+
+A code review of 6652cc2..216878e found nine issues in the 2026-10-19 launcher work. All fixed:
+- New `agentos-common.ps1`, dot-sourced by Start's preflight, Restart and Stop: one definition of
+  "ours". `Get-DashboardPids` (Stop/Restart: every 3737 listener plus this repo's booting `next
+  start`), `Get-DashboardState` (Start: Ours vs Foreign), `Get-VoiceServerPids` (ownership-checked).
+- Start no longer misses a still-booting server (its guard only saw a LISTENING socket) and no
+  longer calls any 3737 listener "Agent OS": a foreign holder is printed with its command line and
+  Start stops. Was: open a browser on whatever held the port.
+- New `agentos-start-preflight.ps1`: voice servers, Tailscale and the dashboard check in ONE
+  PowerShell process (was four), the check last and after first-run install/build, so the gap
+  before `npm start` is short. Exact exit codes 0/3/4; anything else, a PowerShell failure
+  included, means "do not start" (was: any non-zero read as "already running"). Whatever gap is
+  left is covered by the app's own `checkSingleInstance` (src/instrumentation.ts:11-22).
+- Voice servers: Kokoro and Parakeet listen through the base interpreter, so the listener's
+  command line has no install path; its parent (the venv `python.exe` under
+  `~/.agentic-os/<name>`) does. Stop and Restart now kill a voice-port listener only when it or its
+  parent names the install dir, and report others as "left alone". Stop's empty catch now says
+  when a kill fails.
+- `tailscale-serve.ps1`: refuses when the machine has no DNS name; treats ANY 443 root (any site
+  key, proxy/file/text) or a TCP 443 forward it does not recognise as taken. `serve --bg` runs with
+  a 20 s limit and its output is shown on failure or timeout (it waits for an "enable HTTPS" click
+  on tailnets where HTTPS is off, which froze Start silently).
+- AGENTS.md "Running it": launchers are the owner's; an agent runs one only after his OK (rule 21),
+  never in a harness session. It said "never by you", which contradicted rule 21.
+Verified (nothing live was started, stopped or changed): all five .ps1 parse clean; 21 checks on
+the helpers (6 command-line cases, live 3737/8880/8881 classified ours, a throwaway python
+listener on 39737 classified foreign and then closed by PID); 11 checks on the Tailscale decision
+(7 mocked configs, the timeout and exit-code mechanism) plus a live run ("already on"); the real
+preflight returns 3 against the running server; a stubbed copy of Start (no browser, no npm) took
+the right branch for preflight codes 0/3/4/1/5; a dry run of Stop's selection names exactly
+9200, 14576, 41684 (the three Agent OS listeners). Then, on the owner's OK, `Restart Agent OS.bat`
+ran end to end: killed exactly 9200/14576/41684, new dashboard PID 108896 online on 3737 at
+04:21:07 with Kokoro and Parakeet relaunched, Tailscale "already on"; http://127.0.0.1:3737/ and
+https://desktop.hair-halfmoon.ts.net/ both answer 307 to /login. Start and Stop .bat not yet run.
+Rollback: restore the copies in `.exile/2026-10-21_031557/` and exile the two new files
+(`agentos-common.ps1`, `agentos-start-preflight.ps1`).
+
 ## 2026-10-19 - Launchers brought current; Tailscale HTTPS serves Agent OS (v2.63.4)
 
 Owner asked for the Start/Stop/Restart launchers to be current and for Tailscale to serve the app.

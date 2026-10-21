@@ -38,7 +38,9 @@ has been. `npm run dev` does exist in package.json and binds 127.0.0.1, and that
 the trap: finding that bind and concluding the dev server is running is exactly how
 the wrong diagnosis got made. The port comes from the launcher, not from a `-p` flag.
 
-Launchers are `.bat` files in the repo root, run by the owner and never by you:
+Launchers are `.bat` files in the repo root, run by the owner. You run one (or the
+`.ps1` it calls) only after he says it is okay (rule 21), and never in a harness session.
+Their shared "is this Agent OS's process" logic lives in `agentos-common.ps1`. The launchers:
 `Start Agent OS.bat`, `Restart Agent OS.bat`, `Stop Agent OS.bat`, `Check My Setup.bat`,
 `Update Agent OS.bat`, plus the two Paperclip scripts. Per the owner on 2026-09-02, the
 restart script has been seen exiting silently. Read on 2026-09-02: BOTH the start and

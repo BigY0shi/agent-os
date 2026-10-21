@@ -15,38 +15,11 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-:: 1b - Already running? A second server on 3737 would share one database and one
-::      approvals file with the first and corrupt run state (2026-08-29), so this
-::      window opens the running one instead of launching another.
-powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort 3737 -State Listen -ErrorAction SilentlyContinue) { exit 1 }"
-if %errorlevel% neq 0 (
-  echo   Agent OS is already running on port 3737 - not starting a second copy.
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-serve.ps1"
-  echo   Use "Restart Agent OS.bat" to load a new build.
-  start http://localhost:3737
-  echo.
-  timeout /t 6 >nul
-  exit /b 0
-)
-
 :: 2 - Paperclip is NOT started here any more (owner's call, 2026-09-13). Run
 ::     "Start Paperclip Server.bat" yourself when you want it. The PORT clear stays:
 ::     `set PORT=3737` (below) survives in this cmd window, and a stale PORT has
 ::     already bitten a second launch from the same window once (2026-07-28).
 set "PORT="
-
-:: 2b - Start the local Kokoro TTS server (butler voice, free/offline) - no-op if
-::      it isn't installed or is already running.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0kokoro-start.ps1"
-
-:: 2c - Start the local Parakeet speech-to-text server (dictation, free/offline) - no-op if
-::      it isn't installed or is already running.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0parakeet-start.ps1"
-
-:: 2d - Tailscale HTTPS (https://<machine>.ts.net -> 3737) so phones and laptops on
-::      the tailnet get a secure context and the microphone works. No-op if
-::      Tailscale is missing, signed out, or already serving the dashboard.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tailscale-serve.ps1"
 
 :: 3 - Install Dependencies on First Run
 if not exist node_modules (
@@ -58,6 +31,34 @@ if not exist node_modules (
 if not exist .next (
   echo   First run - building the dashboard...
   call npm run build
+)
+
+:: 5 - Preflight, in one PowerShell process: local voice servers (Kokoro TTS 8880,
+::     Parakeet STT 8881), Tailscale HTTPS for the tailnet microphone, and LAST the
+::     already-running check, right before npm start. A second server on 3737 would
+::     share one database and one approvals file with the first and corrupt run state
+::     (2026-08-29). Exit codes are exact: 0 go, 3 ours is running or booting,
+::     4 something else holds 3737; anything else means the preflight failed.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0agentos-start-preflight.ps1"
+set "PREFLIGHT=%errorlevel%"
+if "%PREFLIGHT%"=="3" (
+  echo   Use "Restart Agent OS.bat" to load a new build.
+  start http://localhost:3737
+  echo.
+  timeout /t 6 >nul
+  exit /b 0
+)
+if "%PREFLIGHT%"=="4" (
+  echo.
+  pause
+  exit /b 1
+)
+if not "%PREFLIGHT%"=="0" (
+  echo.
+  echo   NOT STARTED - the start preflight failed with exit code %PREFLIGHT%.
+  echo   Read the message above; nothing was started.
+  pause
+  exit /b 1
 )
 
 echo   [OK] Dashboard ready

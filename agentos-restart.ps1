@@ -10,39 +10,23 @@
 # state. The kill is now verified, and the launch is abandoned if it failed.
 $ErrorActionPreference = 'SilentlyContinue'
 $dir = $PSScriptRoot
-# 2026-10-18: a "next start" counts as ours only if its command line names THIS
-# repo's node_modules. The bare pattern also matched other projects' Next servers.
-$repoNext = [regex]::Escape($dir) + '[\\/]node_modules[\\/]'
+# Get-DashboardPids (every 3737 listener plus this repo's booting `next start`) and
+# Get-VoiceServerPids live in agentos-common.ps1 (2026-10-21), shared with Stop and the
+# Start preflight so "is this ours" has one definition.
+. (Join-Path $dir 'agentos-common.ps1')
 $logDir = Join-Path $env:USERPROFILE '.agentic-os'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 
-function Get-DashboardPids {
-  # EVERY address family on 3737 - the 2026-08-29 split brain was one server on
-  # 0.0.0.0 and another on ::. Plus any next-start node process of this repo not
-  # yet listening (still booting), which would grab the port moments from now.
-  $ids = @()
-  $ids += @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Expand OwningProcess -Unique)
-  $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-    Where-Object { $_.CommandLine -match 'next.dist.bin.next"?\s+start' -and $_.CommandLine -match $repoNext } |
-    Select-Object -Expand ProcessId)
-  return @($ids | Where-Object { $_ } | Sort-Object -Unique)
-}
-
-function Get-KokoroPids {
-  # Local TTS - port-scoped, relaunched below. Deliberately NOT part of the
-  # abort check: a stuck voice server must not block the dashboard restart.
-  return @(Get-NetTCPConnection -LocalPort 8880 -State Listen |
-    Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
-}
-
-function Get-ParakeetPids {
-  # Local STT (Parakeet, port 8881) - same treatment as Kokoro.
-  return @(Get-NetTCPConnection -LocalPort 8881 -State Listen |
-    Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
-}
-
 Write-Host "  [1/3] Stopping the old server..."
-foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) + @(Get-ParakeetPids) | Sort-Object -Unique)) {
+# Local voice servers are stopped and relaunched below too - but only OUR Kokoro and
+# Parakeet (ownership checked), and deliberately NOT part of the abort check: a stuck
+# voice server must not block the dashboard restart.
+$kokoro   = Get-VoiceServerPids 8880 'kokoro-tts'
+$parakeet = Get-VoiceServerPids 8881 'parakeet-stt'
+foreach ($procId in (@($kokoro.Foreign) + @($parakeet.Foreign) | Where-Object { $_ } | Sort-Object -Unique)) {
+  Write-Host "        left alone: PID $procId on a voice port is not ours - $((Get-AgentOsProc $procId).CommandLine)" -ForegroundColor Yellow
+}
+foreach ($procId in (@(Get-DashboardPids) + @($kokoro.Ours) + @($parakeet.Ours) | Where-Object { $_ } | Sort-Object -Unique)) {
   try {
     Stop-Process -Id $procId -Force -ErrorAction Stop
     Write-Host "        killed PID $procId" -ForegroundColor Yellow
