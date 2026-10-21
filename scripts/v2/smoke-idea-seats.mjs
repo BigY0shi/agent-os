@@ -69,5 +69,19 @@ check("C2 the radar's clustering routes through runSeat and its chip names who d
 const ui = fs.readFileSync("src/components/IdeaEngineView.tsx", "utf8");
 check("D1 the gear has the four agent fields", ["sizingAgent", "clusterAgent", "killAgent", "fallbackAgent"].every((k) => ui.includes(`key: "${k}"`)));
 
+// ── E ─────────────────────────────────────────────────────────────────────────
+// Judge replies shaped like the 2026-10-21 failures: "verdict" nested inside "scores" and the
+// outer object one "}" short. Every one used to land as "judge:parse" with a defaulted verdict.
+const V = await import("../../src/lib/ideaValidation.ts");
+const score = '{"value":6,"scale":[1,10],"inputs":[{"name":"n","value":"a \\"quoted\\" {brace} in a string"}],"method":"m"}';
+const good = `{"scores":{"opportunity":${score},"pain":${score},"timing":${score},"feasibility":${score},"moat":${score}},"verdict":{"call":"pass","rationale":"r"}}`;
+const short = `{"scores":{"opportunity":${score},"pain":${score},"timing":${score},"feasibility":${score},"moat":${score},"verdict":{"call":"pass","rationale":"r"}}`;
+const g = V.parseJudgeOutput("preamble\n" + good);
+check("E1 a well-formed judge reply parses unchanged", g.verdict?.call === "pass" && g.scores?.moat?.value === 6 && !("verdict" in g.scores));
+let s = null; const sErr = await errOf(async () => { s = V.parseJudgeOutput(short); });
+check("E2 a reply one brace short, verdict nested in scores, is repaired and the verdict lifted", !sErr && s?.verdict?.call === "pass" && s?.verdict?.rationale === "r" && s?.scores?.feasibility?.value === 6 && !("verdict" in (s?.scores || {})), sErr || s);
+check("E3 text with no JSON object still fails loudly", (await errOf(async () => V.parseJudgeOutput("no json here"))) !== null);
+check("E4 a reply cut off inside a string is not guessed at", (await errOf(async () => V.parseJudgeOutput('{"verdict":{"call":"pa}'))) !== null);
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

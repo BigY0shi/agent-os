@@ -109,8 +109,11 @@ check("defaults: stt.parakeetUrl is loopback 8881", defaults.stt?.parakeetUrl ==
 check("gear shows Parakeet health + URL when selected (rule 16)", /provider === "parakeet"/.test(gear) && /\/api\/stt\/health/.test(gear) && /stt: \{ parakeetUrl/.test(gear));
 const startBat = fs.readFileSync("Start Agent OS.bat", "utf8");
 const restartPs = fs.readFileSync("agentos-restart.ps1", "utf8");
-check("Start launcher calls parakeet-start.ps1", /parakeet-start\.ps1/.test(startBat));
-check("Restart launcher stops 8881 and relaunches Parakeet", /LocalPort 8881/.test(restartPs) && /parakeet-start\.ps1/.test(restartPs));
+// Since v2.63.4 the .bat hands off to agentos-start-preflight.ps1, and the 8881 stop goes
+// through agentos-common.ps1's ownership-checked Get-VoiceServerPids.
+const startPre = fs.readFileSync("agentos-start-preflight.ps1", "utf8");
+check("Start launcher calls parakeet-start.ps1", /agentos-start-preflight\.ps1/.test(startBat) && /parakeet-start\.ps1/.test(startPre));
+check("Restart launcher stops 8881 and relaunches Parakeet", /Get-VoiceServerPids 8881/.test(restartPs) && /parakeet-start\.ps1/.test(restartPs));
 check("parakeet-start.ps1 exists and targets 8881", fs.existsSync("parakeet-start.ps1") && /8881/.test(fs.readFileSync("parakeet-start.ps1", "utf8")));
 
 console.log(failures ? `smoke-parakeet-stt: ${failures} FAILURES` : "smoke-parakeet-stt: all checks passed");

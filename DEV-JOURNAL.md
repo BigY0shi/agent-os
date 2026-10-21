@@ -1,5 +1,23 @@
 # Agent OS — Dev Journal
 
+## 2026-10-21 - Idea Engine: the judge's verdicts were being thrown away (v2.63.7)
+
+Morning Brief: "39 of 55 verdicts are defaults", every dossier since Oct 7 reading "judge seat
+degraded". The judge was not failing; its replies were. In `runs/*.jsonl` the judge seat is
+`ok: true`, but 5 of the last 6 replies fail `JSON.parse` at the last character: the model forgets
+to close `"scores"` before `"verdict"`, so the verdict lands inside `scores` and the outer object is
+one `}` short. The prompt template is balanced. Fix in `src/lib/ideaValidation.ts`: `extractJson`
+retries once with the missing closers appended (outside a string only, nothing removed), and the
+new `parseJudgeOutput` lifts a verdict nested in `scores`. Checked against every logged reply: 68
+judge replies, 18 parsed before, 67 now (49 repaired); the one left has no JSON at all and still
+fails loudly. Smoke `smoke-idea-seats` §E. Existing dossiers keep their defaulted verdicts; their
+raw replies are still in `runs/`, so a re-score is possible. painMiner's failures are a separate
+cause (480 s timeouts), not touched.
+Also: `smoke-parakeet-stt` (2 checks) and `smoke-restart-integrity` D5 still grepped for the
+pre-v2.63.4 launcher text (`LocalPort 8881` in the restart script, Parakeet in the .bat,
+`Get-KokoroPids`); updated to the preflight script and `Get-VoiceServerPids`. Same rules checked.
+Rollback: `git revert` this commit; no data, settings or migrations changed.
+
 ## 2026-10-21 - Launcher review: nine findings fixed (v2.63.6)
 
 A code review of 6652cc2..216878e found nine issues in the 2026-10-19 launcher work. All fixed:

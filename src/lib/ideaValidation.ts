@@ -80,8 +80,41 @@ async function claudeWeb(model: string, prompt: string, timeoutMs: number): Prom
 function extractJson<T>(raw: string): T {
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("no JSON object in output");
-  return JSON.parse(m[0]) as T;
+  try { return JSON.parse(m[0]) as T; } catch (e) {
+    const closed = closeOpenJson(m[0]);
+    if (closed === m[0]) throw e;
+    return JSON.parse(closed) as T;
+  }
 }
+
+// Long seat replies sometimes end with an object still open (2026-10-21: 5 of 6 judge replies
+// were one "}" short). Append the closers for whatever is open at the end, outside a string;
+// nothing is removed or invented.
+function closeOpenJson(text: string): string {
+  const open: string[] = [];
+  let inStr = false, esc = false;
+  for (const c of text) {
+    if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === "{") open.push("}");
+    else if (c === "[") open.push("]");
+    else if (c === "}" || c === "]") open.pop();
+  }
+  return inStr ? text : text + open.reverse().join("");
+}
+
+// The judge often forgets to close "scores" before "verdict", so the verdict lands inside it.
+export function parseJudgeOutput(raw: string): JudgeOut {
+  const j = extractJson<JudgeOut & { scores?: { verdict?: unknown } }>(raw);
+  const nested = j.scores?.verdict;
+  if (!j.verdict && nested && typeof nested === "object") {
+    j.verdict = nested as JudgeOut["verdict"];
+    delete j.scores!.verdict;
+  }
+  return j;
+}
+
+export interface JudgeOut { scores?: Record<string, Partial<import("./ideaEngineTypes").Score>>; verdict?: { call?: string; rationale?: string } }
 
 const EVIDENCE_RULES =
   "HARD RULES: Only claim what you can point to. Every URL must be one you actually loaded. " +
@@ -275,13 +308,12 @@ async function execute(runObj: ValidationRun): Promise<void> {
   if (!killCase) degraded.push("killPass");
 
   // Judge — claude, kill case in hand.
-  interface JudgeOut { scores?: Record<string, Partial<import("./ideaEngineTypes").Score>>; verdict?: { call?: string; rationale?: string } }
   let judge: JudgeOut = {};
   const judgeRaw = await seatWrap(runObj, "judge", () =>
     claudeWeb(m.research, judgePrompt(idea, evidencePack + `\n\nSIZING:\n${JSON.stringify(sizing)}`, killCase || "(kill seat failed — treat absence of a kill case as a WEAKNESS of this run, not strength of the idea)"), 300_000));
   seatsUsed.judge = m.research;
   if (!judgeRaw) degraded.push("judge");
-  try { if (judgeRaw) judge = extractJson<JudgeOut>(judgeRaw); } catch { degraded.push("judge:parse"); }
+  try { if (judgeRaw) judge = parseJudgeOutput(judgeRaw); } catch { degraded.push("judge:parse"); }
 
   if (runObj.status !== "running") return; // cancelled before the writer
 

@@ -203,7 +203,7 @@ check("D3 the abort comes BEFORE Start-Process",
 check("D4 Stop-Process failures are reported, not swallowed",
   /-ErrorAction Stop/.test(ps1) && /COULD NOT kill PID/.test(ps1));
 check("D5 Kokoro cannot abort a dashboard restart",
-  /Get-KokoroPids/.test(ps1) && !/\$survivors = @\(Get-KokoroPids\)/.test(ps1));
+  /Get-VoiceServerPids 8880/.test(ps1) && /\$survivors = @\(Get-DashboardPids\)/.test(ps1) && !/\$survivors = @\([^)]*(Kokoro|Voice|kokoro)/.test(ps1));
 
 // ── summary ──────────────────────────────────────────────────────────────────
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
