@@ -18,7 +18,7 @@ Counts verified 2026-08-31; treat them as orientation, not as a spec.
 |---|---|
 | `src/app/api/**/route.ts` | 359 API routes |
 | `src/lib/v2/<module>/` | 19 V2 module libraries (agents, memory, tasks, jarvis, webmcp, browser, newsletter, marketing, hermes3d, …) |
-| `src/lib/v2/dbSchema.ts` | 21 migrations, versions 1–63, sparse and grouped by phase (1–3 foundations, 20s memory, 30s tasks, 40s webmcp, 50s integrations, 60s newsletter) |
+| `src/lib/v2/dbSchema.ts` | 27 migrations (verified 2026-10-20), versions 1–63, sparse and grouped by the ranges reserved in `CONVENTIONS.md` §1.5: 1–19 foundations+memory, 20s tasks, 30s jarvis/webmcp, 40s integrations/home, 50s browser/agents, 60s notes/newsletter/marketing/3d |
 | `src/lib/settings.ts` | the runtime settings store — read/written per request, so a change takes effect with no rebuild and no restart |
 | `scripts/v2/smoke-*.mjs` | 66 smokes |
 | `_design/agentos-v2/ultraplan/` | the V2 specs, `CONVENTIONS.md` being the binding cross-spec contract |
@@ -65,10 +65,25 @@ yours to type into a form. When something needs confirming in the live UI, ask h
 look and report back.
 
 The mtime on `.next/BUILD_ID` is the honest answer to "is the running build current?".
-Compare it against the newest commit before claiming a change is live. Do not turn that
-into a nag to rebuild (rule 15), and never restart the server yourself (rule 12).
+Compare it against the newest commit before claiming a change is live. If a rebuild or
+restart is needed, tell him once and wait for his OK (rule 21).
 
 ## How work lands here
+
+**Recon before any module work.** Before implementing anything for a task, use an agent to
+introspect every source and document for each component the task will touch: its code
+(`src/lib/v2/<module>/`, its API routes, its settings gear and `src/lib/settings.ts` keys,
+its `MIGRATIONS` entries and tables), its smoke, its spec under `_design/agentos-v2/ultraplan/`,
+`docs/modules/`, `DEV-JOURNAL.md`, `agent-progress.md` and any other documentation that names
+it. List the exact function and export names, property and settings-key names, enum and
+union values (as the code spells them, plus the display names the UI shows), route paths,
+table and column names, and anything pertinent or possibly breaking (other callers, a
+shipped migration, a credential path, an open `CRITIC OPEN` or `AWAITING USER VERIFY`).
+Copy every name from the files; never type one from memory. Write the results to
+`docs/agent-notes/<task-id>.md` before implementing anything, and work from that list. A
+name that turns out wrong during the work gets corrected in that file the same session.
+(Added 2026-10-20 at the owner's request: guessed API and property names cost a debug
+cycle each in the autonomous loops.)
 
 **Every module gets a smoke.** `scripts/v2/smoke-<module>.mjs`, run with `npx tsx`. They must pass offline: no network, no dev server, no live credentials. A smoke that touches a config directory MUST redirect it to a temp dir first (`AGENTIC_OS_DB`, `AGENTIC_OS_SETTINGS`, `AGENTIC_OS_NEWSLETTER_DIR`, `AGENTIC_OS_AGENTMAIL_DIR`). This is not hypothetical: on 2026-08-31 a smoke read the real AgentMail config and listed the owner's actual inbox with his actual key.
 
@@ -84,8 +99,7 @@ into a nag to rebuild (rule 15), and never restart the server yourself (rule 12)
 
 ## Working with the owner
 
-- **Never restart the dev server** unless asked. He is usually using the live app and restarts at his own stopping point. (Rule 12)
-- **Never end a response telling him to run `npm run build`**, and never tally pending rebuilds. He rebuilds after every change. (Rule 15)
+- **Rebuilds and restarts: tell him once, then wait for his OK.** When a change needs a rebuild and/or a server restart to go live, say so explicitly, ONCE, naming which one (rebuild, restart, or both). He tells you when it is okay to do it; until then, do neither and do not repeat the reminder. If a change needs neither, say nothing. He is usually using the live app. (Rule 21, superseding 15 and refining 12)
 - **Stage explicit file lists.** This repo habitually carries 50+ dirty files of his in-progress work. `git add -A <dir>` has already swept ~30 unrelated files into a commit once. (Rule 22 in the global contract)
 - **Nothing critical is committed without his review.**
 
@@ -100,12 +114,22 @@ feature's `status`, `notes`, `model`), `agent-progress.md` (read first, update l
 **Session Initialization Ritual.** Read `agent-progress.md`; `git log --oneline -5`;
 `git status --short` (know which files are the owner's uncommitted work, and never stage or
 reformat them); read the feature's `description`, `acceptance_criteria` and every `sources`
-path; run `./init.sh`; read the real code before changing it.
+path; run `./init.sh`; read the real code before changing it; run the recon step (How work
+lands here) and write `docs/agent-notes/<feature_id>.md` before the first edit.
 
 **Working it.** The minimum that meets the acceptance criteria, additive and reversible,
 with a smoke that proves it (offline, credential dirs redirected, rule 19). Feat-loop
 discipline applies: recon with exit codes captured, evidence before diagnosis, 0 errors and
 0 warnings, then the commit.
+
+**Critic gate: re-judge before close-out.** Before marking this feature, re-run every critic
+whose objection you addressed in the last round. If any still fails after round 3, put
+`CRITIC OPEN: <one-line reason>` at the top of your final message and in `agent-progress.md`.
+A feature whose loop would end at `AWAITING USER VERIFY` with a critic still open, or with a
+last fix that no critic re-judged, gets that final re-judge round first; a feature with a
+`CRITIC OPEN` line is never flipped to `"passing"`. (Added 2026-10-20 at the owner's request:
+features were closing with an open objection or an unchecked fix, and the remaining work was
+not obvious.)
 
 **Close-Out Ritual, all of it.** `./test.sh` exits 0. `npm run version:bump -- minor` (feat)
 or `patch` (fix). Stage an explicit file list plus `features.json`, `DEV-JOURNAL.md`,
@@ -148,3 +172,4 @@ Append-only and referenced by number. Never delete one; supersede it with a new 
 18. [PROCESS] Every commit that ships a feature or a fix MUST carry a version bump. Run `npm run version:check` before committing (it fails when commits have landed since the newest tag but `package.json` has not moved) and `npm run version:bump` to apply it - feat -> minor, fix/perf/refactor/test/chore -> patch, `!` or a BREAKING CHANGE footer -> major. Tag and publish with `npm run version:release`, which prints the tag commands plus release notes grouped Added/Fixed/Internal. **The changelog is the GitHub RELEASE BODY, not `CHANGELOG.md`** - that file is inherited from upstream (member-facing notes, "Thanks Ridz") and is not ours to rewrite. Note the topology trap: releases are tagged on `local-main` (v2.0.0 sits on the PR #10 merge commit) while feature work continues on branches forked before that merge, so the newest tag is routinely NOT an ancestor of HEAD - `git describe` honestly answers `v1.0.0` and would compare against a release two versions stale. `scripts/version.mjs` therefore resolves the newest tag by `git tag --sort=-v:refname`, not by reachability. - Because on 2026-08-31 `package.json` still read 2.0.0 with seven shipped commits behind the v2.0.0 tag; a version that never moves actively asserts something false about the running build, which is the same class of problem as the fabricated BUILD tag already stripped out of MissionStripe.tsx.
 19. [PROCESS] Every smoke that reads a credential directory MUST redirect it to a temp dir before importing the module that reads it - `AGENTIC_OS_AGENTMAIL_DIR`, `AGENTIC_OS_NEWSLETTER_DIR`, `AGENTIC_OS_SETTINGS`, `AGENTIC_OS_DB`. `smoke-agentmail.mjs` §F greps every sibling smoke to enforce this. - Because on 2026-08-31 adding an AgentMail fallback to the newsletter sync made `smoke-newsletter.mjs` read the real `~/.agentic-os/agentmail/config.json` and list the owner's live inbox with his live key. Read-only and harmless that time; the next one might not be.
 20. [ARCH] A provider fallback is allowed ONLY when the owner chose it in that module's settings AND the response labels it (`provider` = who actually answered, `fellBackFrom`, `fallbackReason`); with no choice made, fail loudly. - Because on 2026-09-02 Yoshi asked for ElevenLabs to stay as the backup when Voicebox fails, while "Fail loudly" above bans the SILENT kind: the difference is that he picked it and the reply says which voice spoke and why. Reference: `voiceboxTts()` in `src/app/api/hermes/tts/route.ts`, `jarvis.voice.ttsFallback`.
+21. [PROCESS] When a change needs a rebuild and/or a server restart to go live, tell the owner explicitly, ONCE, naming which; then wait - he says when it is okay, and only then do it. Never repeat the reminder, and say nothing when neither is needed. SUPERSEDES rule 15 (which banned mentioning rebuilds at all) and refines rule 12 (his OK is the explicit ask). - Because on 2026-10-20 Yoshi asked to be told when a rebuild or restart is necessary rather than left to infer it, while keeping control of when it happens.
