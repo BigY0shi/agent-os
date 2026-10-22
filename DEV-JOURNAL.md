@@ -52,7 +52,10 @@ the right branch for preflight codes 0/3/4/1/5; a dry run of Stop's selection na
 9200, 14576, 41684 (the three Agent OS listeners). Then, on the owner's OK, `Restart Agent OS.bat`
 ran end to end: killed exactly 9200/14576/41684, new dashboard PID 108896 online on 3737 at
 04:21:07 with Kokoro and Parakeet relaunched, Tailscale "already on"; http://127.0.0.1:3737/ and
-https://desktop.hair-halfmoon.ts.net/ both answer 307 to /login. Start and Stop .bat not yet run.
+https://desktop.hair-halfmoon.ts.net/ both answer 307 to /login.
+COMPLETE 2026-10-22 - working and tested by the owner: Start Agent OS.bat set Tailscale HTTPS and
+started Kokoro, Parakeet and the dashboard; Stop Agent OS.bat killed three PIDs (dashboard plus
+both voice servers). All three launchers have now run end to end.
 Rollback: restore the copies in `.exile/2026-10-21_031557/` and exile the two new files
 (`agentos-common.ps1`, `agentos-start-preflight.ps1`).
 
