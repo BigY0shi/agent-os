@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   // that. Otherwise the client may pass an explicit `cwd: "/abs/path"`.
   // Final fallback: a default `freeclaude-default` project.
   let cwd: string | undefined;
-  if (typeof body.project === "string" && /^(?!.+$)[A-Za-z0-9_.-]+$/.test(body.project)) {
+  if (typeof body.project === "string" && /^(?!\.)[A-Za-z0-9_.-]+$/.test(body.project)) {
     cwd = (await ensureProject(body.project)) ?? undefined;
   } else if (typeof body.cwd === "string") {
     cwd = body.cwd;

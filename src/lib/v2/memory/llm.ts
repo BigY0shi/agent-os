@@ -1,6 +1,8 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { readSettings } from "../../settings";
 import { cliComplete, MINIMAX_CHAT } from "../../loopEngine";
+import { ollamaCloudHost, ollamaCloudKey, ollamaLocalUrl } from "../../ollamaCloud";
 import type { ChatMessage } from "./types";
 
 /**
@@ -31,11 +33,33 @@ export interface ModelCallOpts {
 const DEFAULT_TIMEOUT_MS = 240_000;
 
 interface Resolved {
-  provider: "ollama-cloud" | "ollama-local" | "cli" | "minimax";
+  provider: "ollama-cloud" | "ollama-local" | "cli" | "minimax" | "openai-compat";
   model: string;
 }
 
+/**
+ * S5 (legacy backfill): a caller may pin provider + model for the duration of
+ * one async call tree — the whole addEpisode() pipeline, Promise.all branches
+ * included — without touching settings. The override is async-local, so a
+ * concurrent ingest on the queue still resolves from settings. An optional
+ * signal rides along so STOP reaches every fetch the tree makes (modelCall
+ * opts.signal still wins when a caller passes one explicitly).
+ */
+export interface MemoryModelOverride {
+  provider: Resolved["provider"];
+  model: string;
+  signal?: AbortSignal;
+}
+
+const OVERRIDE = new AsyncLocalStorage<MemoryModelOverride>();
+
+export function withMemoryModel<T>(override: MemoryModelOverride, fn: () => Promise<T>): Promise<T> {
+  return OVERRIDE.run(override, fn);
+}
+
 function resolve(complexity: Complexity): Resolved {
+  const pinned = OVERRIDE.getStore();
+  if (pinned) return { provider: pinned.provider, model: pinned.model };
   const mem = readSettings().memory ?? {};
   const provider = mem.provider ?? "ollama-cloud";
   const model =
@@ -100,7 +124,10 @@ export function parseStructured<T>(raw: string, schema: z.ZodType<T>): T {
 // ---------------------------------------------------------------------------
 
 function signalFor(opts?: ModelCallOpts): AbortSignal {
-  return opts?.signal ?? AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  if (opts?.signal) return opts.signal;
+  const pinned = OVERRIDE.getStore()?.signal;
+  const timeout = AbortSignal.timeout(opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  return pinned ? AbortSignal.any([pinned, timeout]) : timeout;
 }
 
 async function ollamaChat(
@@ -110,11 +137,13 @@ async function ollamaChat(
   format: Record<string, unknown> | undefined,
   opts?: ModelCallOpts,
 ): Promise<string> {
+  // Host, local URL and key: settings.ollama (the Ollama page's gear), then the environment
+  // (lib/ollamaCloud.ts), read per call.
   const cloud = provider === "ollama-cloud";
-  const base = cloud ? "https://ollama.com" : process.env.OLLAMA_URL || "http://127.0.0.1:11434";
+  const base = cloud ? ollamaCloudHost() : ollamaLocalUrl();
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (cloud) {
-    const key = process.env.OLLAMA_API_KEY || "";
+    const key = ollamaCloudKey();
     if (key) headers.authorization = `Bearer ${key}`;
   }
   const body: Record<string, unknown> = { model, messages, stream: false };
@@ -165,6 +194,102 @@ async function minimaxChat(model: string, messages: ChatMessage[], opts?: ModelC
     throw new Error(j?.base_resp?.status_msg || j?.error?.message || `MiniMax ${res.status}`);
   }
   let c = String(j.choices[0].message?.content ?? "").trim();
+  c = c.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^[\s\S]*?<\/think>/i, "").trim();
+  return c;
+}
+
+/**
+ * OpenAI-compatible chat (LM Studio, llama.cpp server, vLLM, any /v1 shim).
+ *
+ * The reason this provider exists: models that need a llama.cpp fork - Bonsai
+ * 27B is the case in hand - cannot be served by Ollama at all, and LM Studio
+ * fronts them on the OpenAI wire format instead. This is a plain completion
+ * transport: messages in, text out, NO tool calls. Base URL comes from
+ * settings.memory.openaiCompatUrl (or OPENAI_COMPAT_URL), and must include the
+ * /v1 path segment; LM Studio's default is http://127.0.0.1:1234/v1.
+ *
+ * A key is read from the environment only (OPENAI_COMPAT_API_KEY) and never
+ * from settings, so no getter in this codebase can return key material. Local
+ * servers normally need none.
+ *
+ * `reasoning_effort` rides along when settings.memory.openaiCompatReasoningEffort
+ * is set (default "none"), because a thinking model otherwise spends ~25 s per
+ * call on a monologue this pipeline discards.
+ *
+ * Structured output is belt AND suspenders, same as the Ollama path: the JSON
+ * schema goes in `response_format` for servers that honour it, and the schema
+ * is ALSO spelled out in the prompt by the caller (withJsonInstruction). A
+ * reasoning model's <think> block is stripped, as on the MiniMax path.
+ */
+/**
+ * `reasoning_effort` for the openai-compat call, or "" to send nothing.
+ * Exported so a caller can say in its own log which value actually went out.
+ */
+export function openaiCompatReasoningEffort(): string {
+  const env = process.env.OPENAI_COMPAT_REASONING_EFFORT;
+  if (env !== undefined) return env.trim(); // set by the CLI --reasoning-effort flag
+  return (readSettings().memory?.openaiCompatReasoningEffort ?? "none").trim();
+}
+
+export function openaiCompatBase(): string {
+  const configured = readSettings().memory?.openaiCompatUrl || process.env.OPENAI_COMPAT_URL || "";
+  const base = (configured || "http://127.0.0.1:1234/v1").trim().replace(/\/+$/, "");
+  return base;
+}
+
+async function openaiCompatChat(
+  model: string,
+  messages: ChatMessage[],
+  schema: z.ZodType<unknown> | undefined,
+  opts?: ModelCallOpts,
+): Promise<string> {
+  const base = openaiCompatBase();
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const key = process.env.OPENAI_COMPAT_API_KEY || "";
+  if (key) headers.authorization = `Bearer ${key}`;
+
+  const body: Record<string, unknown> = { model, messages, stream: false };
+  if (opts?.temperature !== undefined) body.temperature = opts.temperature;
+  // A reasoning model left to itself burns most of its budget on a monologue
+  // the caller throws away (bonsai-27b: 1905 reasoning tokens for a 51-token
+  // answer, 26 s vs 1.2 s with "none", same facts). Sent only when chosen;
+  // servers that do not know the field ignore it.
+  const effort = openaiCompatReasoningEffort();
+  if (effort) body.reasoning_effort = effort;
+  if (schema) {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: { name: "memory_output", strict: false, schema: z.toJSONSchema(schema as z.ZodType) },
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: signalFor(opts),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `openai-compat chat could not reach ${base} (${msg}) model=${model}. ` +
+        `Start the server (LM Studio: Developer tab > Start Server) or set settings.memory.openaiCompatUrl. No fallback.`,
+    );
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`openai-compat chat failed (${res.status}) model=${model} at ${base}: ${text.slice(0, 300)}`);
+  }
+  const data = (await res.json().catch(() => null)) as {
+    choices?: { message?: { content?: string } }[];
+    error?: { message?: string };
+  } | null;
+  if (!data?.choices?.[0]) {
+    throw new Error(`openai-compat chat returned no choices (model=${model} at ${base}): ${data?.error?.message ?? "unknown"}`);
+  }
+  let c = String(data.choices[0].message?.content ?? "").trim();
   c = c.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^[\s\S]*?<\/think>/i, "").trim();
   return c;
 }
@@ -239,6 +364,11 @@ async function rawCall(
     case "minimax": {
       const msgs = schema ? withJsonInstruction(messages, schema) : messages;
       out = await minimaxChat(model, msgs, opts);
+      break;
+    }
+    case "openai-compat": {
+      const msgs = schema ? withJsonInstruction(messages, schema) : messages;
+      out = await openaiCompatChat(model, msgs, schema, opts);
       break;
     }
     default:

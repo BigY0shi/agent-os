@@ -1,7 +1,7 @@
 import { query, type Query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import os from "node:os";
 import { createHash } from "node:crypto";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { sanitizeSpawnEnv } from "@/lib/spawnEnv";
 import { cliComplete } from "@/lib/loopEngine";
 import { readSettings } from "@/lib/settings";
@@ -9,15 +9,17 @@ import { searchV2 } from "../memory/search";
 import { formatRecallAsMarkdown } from "../memory/search/formatter";
 import type { RecallResult } from "../memory/types";
 import { ingestFromModule } from "../memory/queue";
+import { getPersonaDocument } from "../memory/persona";
 import { ensureCoreActions } from "../mcp/actions";
 import { ensureTaskActions } from "../mcp/taskActions";
+import { sdkServers, isExternalMcpTool } from "./mcpServers";
 import {
   buildStableSystemPrompt,
   buildSystemPrompt,
   buildTurnContextBlock,
   type PageContextPayload,
 } from "./context";
-import { CLI_ANSWER_ONLY_NOTE, wrapRecalledMemory } from "./prompts/system";
+import { CLI_ANSWER_ONLY_NOTE, wrapRecalledMemory, type ReplySurfaceInput } from "./prompts/system";
 import {
   buildJarvisSdkServer,
   newTurnState,
@@ -29,10 +31,17 @@ import {
 } from "./tools";
 import {
   ensureConversation,
+  getConversation,
   appendJarvisMessage,
   listMessages,
+  setConversationEffort,
+  parseEffort,
   type JarvisConversation,
+  type JarvisOrigin,
+  type JarvisEffort,
+  type JarvisAttachmentRef,
 } from "./conversations";
+import { getAttachment, imageBlockFor } from "./attachments";
 
 /**
  * SPEC-C C3 — the Jarvis V2 brain. Two lanes (settings.jarvis.engine):
@@ -56,17 +65,28 @@ import {
 const SENTENCE_END = /(?<=[.!?])\s/;
 
 export type JarvisAskEvent =
-  | { type: "meta"; conversationId: string; engine: "sdk" | "cli"; note?: string }
+  | { type: "meta"; conversationId: string; engine: "sdk" | "cli"; note?: string; effort?: JarvisEffort | null }
   | { type: "sentence"; text: string }
   | JarvisToolEvent
-  | { type: "done"; costUsd?: number | null; turns?: number; durationMs: number }
+  | { type: "done"; costUsd?: number | null; turns?: number; sessionRebuilt?: string | null; durationMs: number }
   | { type: "error"; message: string };
 
 export interface JarvisAskInput {
+  uiRequest?: import("./tools").JarvisTurnState["uiRequest"];
   text: string;
   conversationId?: string;
   pageContext?: PageContextPayload | null;
   channel?: "overlay" | "page";
+  /** Per-request reply surface (G2 glasses) — shapes the answer, never persisted. */
+  surface?: ReplySurfaceInput | null;
+  /** Conversation origin stamped on CREATE only (migration 035) — "glasses". */
+  origin?: JarvisOrigin;
+  /** S34: the session's thinking level. undefined = leave the row as it is;
+   *  null = clear it (model default). Persisted on the conversation row. */
+  effort?: JarvisEffort | null;
+  /** S34: stored image refs (ids from POST /api/v2/jarvis/attachments). Each one
+   *  becomes an image content block on this turn's user message. sdk lane only. */
+  attachments?: JarvisAttachmentRef[];
 }
 
 type SessionState = {
@@ -77,7 +97,11 @@ type SessionState = {
   model: string;
   stableHash: string;
   toolsSig: string;
+  /** S34: the effort this session was booted with; a change rebuilds it. */
+  effort: JarvisEffort | null;
   conversationId: string;
+  /** The persona document this session was booted with, pinned for its lifetime. */
+  personaDoc: string | null;
   /** Session-sticky tool state (integration taint survives across turns). */
   toolState: JarvisTurnState;
   /** Per-turn emitter indirection — tools close over this ref, each ask swaps it. */
@@ -146,16 +170,41 @@ function cliFn(): JarvisCliFn {
   return (prompt, opts) => cliComplete(String(agent), prompt, { signal: opts.signal, timeoutMs: 180_000 });
 }
 
+// S34 sdk-lane seam: the smoke swaps the SDK's query() for a fake that reads the
+// streaming-input generator and answers with stream events, so "the image reached
+// the brain as an image block" is asserted offline on the real message the brain
+// pushes. Production never sets it.
+export type JarvisQueryFn = typeof query;
+let queryOverride: JarvisQueryFn | null = null;
+export function setJarvisQueryForTests(fn: JarvisQueryFn | null): void {
+  queryOverride = fn;
+}
+
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-function userMsg(text: string): SDKUserMessage {
+type ImageBlock = ReturnType<typeof imageBlockFor>;
+
+/** The user turn: image blocks first (S34), then the text. */
+export function composeUserMessage(text: string, images: ImageBlock[] = []): SDKUserMessage {
   return {
     type: "user",
-    message: { role: "user", content: [{ type: "text", text }] },
+    message: { role: "user", content: [...images, { type: "text", text }] },
     parent_tool_use_id: null,
   } as SDKUserMessage;
+}
+
+/** S34: resolve this turn's attachment refs to image blocks. THROWS (loudly) when
+ *  a ref is not on disk, rather than sending a text-only turn the user believes
+ *  carried a picture. */
+function imageBlocksFor(refs: JarvisAttachmentRef[] | undefined): ImageBlock[] {
+  return (refs ?? []).map((r) => imageBlockFor(r));
+}
+
+/** S34: a new conversation's effort when the caller did not say: the gear's default. */
+function defaultEffort(): JarvisEffort | null {
+  return parseEffort(readSettings().jarvis?.chat?.defaultEffort ?? "") ?? null;
 }
 
 function historyBlock(
@@ -176,7 +225,11 @@ function historyBlock(
   // restart/rebuild silently resets the write-gate (review finding 2026-08-27).
   const tainted = msgs.some((m) => m.tainted === true);
   if (msgs.length === 0) return { block: "", tainted };
-  const lines = msgs.map((m) => `${m.role === "user" ? "User" : "Jarvis"}: ${m.content.slice(0, 800)}`);
+  // S34: an earlier turn's image is not replayed (text history only); its name is.
+  const lines = msgs.map(
+    (m) =>
+      `${m.role === "user" ? "User" : "Jarvis"}: ${m.attachments?.length ? m.attachments.map((a) => `[image attached: ${a.name}] `).join("") : ""}${m.content.slice(0, 800)}`,
+  );
   return {
     block: `<conversation_history>\nEarlier turns of this conversation (resumed):\n${lines.join("\n")}\n</conversation_history>`,
     tainted,
@@ -189,6 +242,15 @@ function* splitSentences(buf: { text: string }): Generator<string> {
     const s = buf.text.slice(0, m.index + 1).trim();
     buf.text = buf.text.slice(m.index + 1);
     if (s) yield s;
+  }
+}
+
+function currentPersonaDoc(): string | null {
+  try {
+    return getPersonaDocument()?.content ?? null;
+  } catch (err) {
+    console.warn("[v2/jarvis] persona document unavailable (continuing without):", err instanceof Error ? err.message : err);
+    return null;
   }
 }
 
@@ -222,9 +284,12 @@ function ingestExchange(
 // SDK warm session
 // ---------------------------------------------------------------------------
 
-function bootSession(conversationId: string, stable: string, sig: string): SessionState {
+function bootSession(conversationId: string, stable: string, sig: string, personaDoc: string | null): SessionState {
   ensureCoreActions();
   ensureTaskActions();
+  // S34: the session's thinking level is the conversation row's (set before boot by
+  // askJarvisV2); it is a boot-time SDK option, so a change rebuilds the session.
+  const effort: JarvisEffort | null = getConversation(conversationId)?.effort ?? null;
 
   const queue: SDKUserMessage[] = [];
   let wake: (() => void) | null = null;
@@ -241,12 +306,18 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
   const toolState = newTurnState();
   const server = buildJarvisSdkServer({ emit: (ev) => emitRef.current(ev), state: toolState });
 
-  const model = CLAUDE_MODEL || "claude-sonnet-5";
-  const q = query({
+  const model = claudeModel();
+  // S16: the owner's own external MCP servers, enabled in the Jarvis MCP tab. An
+  // unreadable config throws here (named file), rather than silently dropping them.
+  const external = sdkServers();
+  const q = (queryOverride ?? query)({
     prompt: input,
     options: {
       cwd: os.homedir(),
       model,
+      // S34: the session's thinking level (jarvis_conversations.effort). Unset = the
+      // model's own default; the SDK downgrades a level the model lacks on its own.
+      ...(effort ? { effort } : {}),
       systemPrompt: { type: "preset", preset: "claude_code", append: stable },
       includePartialMessages: true,
       permissionMode: "bypassPermissions",
@@ -254,13 +325,35 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
       // preset's native Bash/Write/Edit would bypass every capability gate,
       // the Human-Gate, and the §9.4 taint rule (review finding 2026-08-27).
       // Belt and braces: allowlist the MCP server AND deny the native suite.
-      allowedTools: ["mcp__agentos"],
+      allowedTools: ["mcp__agentos", ...Object.keys(external).map((n) => `mcp__${n}`)],
       disallowedTools: [
         "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "Task",
         "WebFetch", "WebSearch", "Read", "Glob", "Grep", "TodoWrite",
         "KillShell", "BashOutput",
       ],
-      mcpServers: { agentos: server },
+      mcpServers: { agentos: server, ...external },
+      // S16 taint rule for external MCP tools (they bypass Jarvis's own gates):
+      // on a turn tainted by integration content they are denied, and anything an
+      // external tool returns is itself outside content, so it taints the turn and
+      // Jarvis's own writes are gated after it (the §9.4 rule, extended).
+      hooks: {
+        PreToolUse: [{
+          hooks: [async (hookInput) => {
+            const name = (hookInput as { tool_name?: string }).tool_name ?? "";
+            if (isExternalMcpTool(name) && toolState.integrationTainted) {
+              return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `${name} refused: this turn carries integration content, and external MCP tools are not allowed to act on it` } };
+            }
+            return {};
+          }],
+        }],
+        PostToolUse: [{
+          hooks: [async (hookInput) => {
+            const name = (hookInput as { tool_name?: string }).tool_name ?? "";
+            if (isExternalMcpTool(name)) toolState.integrationTainted = true;
+            return {};
+          }],
+        }],
+      },
       env: Object.fromEntries(
         Object.entries(sanitizeSpawnEnv({ ...process.env, NO_COLOR: "1" })).filter(
           ([k, v]) =>
@@ -282,6 +375,8 @@ function bootSession(conversationId: string, stable: string, sig: string): Sessi
     model,
     stableHash: stable,
     toolsSig: sig,
+    effort,
+    personaDoc,
     conversationId,
     toolState,
     emitRef,
@@ -295,29 +390,52 @@ async function askSdk(
   input: JarvisAskInput,
   onEvent: (ev: JarvisAskEvent) => void,
   signal?: AbortSignal,
-): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number }> {
-  const stable = buildStableSystemPrompt();
+): Promise<{ answer: string; toolCalls: JarvisTurnState["toolCalls"]; tainted: boolean; costUsd: number | null; turns: number; sessionRebuilt: string | null }> {
+  // The persona document is PINNED for the life of a warm session. Every turn is
+  // ingested into memory fire-and-forget, and a finished ingest can rewrite the
+  // persona (queue.ts post-COMPLETED personaTrigger: a full generation when none
+  // exists yet, incremental after). Read fresh each turn, that rewrite changed the
+  // stable prompt and threw the warm session away mid-conversation whenever the
+  // ingest happened to finish before the next message (smoke-jarvis-brain "turn 2
+  // reused the warm session", intermittent, 2026-09-28). A new conversation or any
+  // other rebuild picks up the current persona.
+  const prior = g.__jarvisBrainV2 ?? null;
+  const personaDoc = prior && prior.conversationId === conv.id ? prior.personaDoc : currentPersonaDoc();
+  const stable = buildStableSystemPrompt({ personaDocContent: personaDoc });
   const sig = toolsSignature();
 
-  let session = g.__jarvisBrainV2 ?? null;
-  const stale =
-    !session ||
-    session.stableHash !== stable ||
-    session.toolsSig !== sig ||
-    session.conversationId !== conv.id;
+  let session = prior;
+  // Why a warm session is rebuilt, reported on the done event (sessionRebuilt) so a
+  // turn that loses its warm session says which key moved instead of guessing.
+  const rebuildReason: string | null =
+    !session ? "no-session"
+    : session.conversationId !== conv.id ? "conversation"
+    : session.stableHash !== stable ? "system-prompt"
+    : session.toolsSig !== sig ? "tools"
+    : session.effort !== conv.effort ? "effort"
+    : null;
+  const stale = rebuildReason !== null;
   let resumed = false;
   if (stale) {
     if (session) {
       resumed = session.conversationId !== conv.id; // conversation switch/resume
       await resetJarvisBrain();
     }
-    session = bootSession(conv.id, stable, sig);
+    // A rebuild for another reason re-reads the persona so the new session starts current.
+    const freshPersona = rebuildReason === "conversation" || rebuildReason === "no-session" ? personaDoc : currentPersonaDoc();
+    const freshStable = freshPersona === personaDoc ? stable : buildStableSystemPrompt({ personaDocContent: freshPersona });
+    session = bootSession(conv.id, freshStable, sig, freshPersona);
     resumed = true; // fresh session — replay any prior history for this conversation
   }
   const b = session!;
 
+  // S34: resolve the attachments BEFORE anything is pushed, so a missing file fails
+  // the turn instead of sending a text-only message that claims to carry an image.
+  const images = imageBlocksFor(input.attachments);
+
   // Per-turn wiring: tool events flow straight into this turn's stream.
   b.toolState.toolCalls = [];
+  b.toolState.uiRequest = input.uiRequest;
   b.toolState.conversationId = conv.id; // Human-Gate approvals thread back to this conversation
   b.emitRef.current = (ev) => onEvent(ev);
 
@@ -330,7 +448,7 @@ async function askSdk(
   // Compose the turn message: per-turn context + (on resume) history + raw text.
   // The DB row for this turn is the RAW text only — pageContext never persists.
   const parts: string[] = [];
-  const turnCtx = buildTurnContextBlock({ pageContext: input.pageContext });
+  const turnCtx = buildTurnContextBlock({ pageContext: input.pageContext, surface: input.surface });
   if (turnCtx) parts.push(turnCtx);
   if (resumed) {
     // History EXCLUDES the just-persisted user turn (it rides as the live text).
@@ -339,7 +457,7 @@ async function askSdk(
     if (history.tainted) b.toolState.integrationTainted = true;
   }
   parts.push(input.text);
-  b.push(userMsg(parts.join("\n\n")));
+  b.push(composeUserMessage(parts.join("\n\n"), images));
 
   const buf = { text: "" };
   let cost: number | null = null;
@@ -350,7 +468,21 @@ async function askSdk(
   };
 
   try {
-    for await (const msg of b.q) {
+    // Explicit next(): a `break` out of `for await` calls the query's return(),
+    // which the SDK implements as cleanup() — it killed the warm session at the
+    // end of EVERY first turn, so turn two iterated a closed stream and came back
+    // "(no reply)" in 1 ms (11 such rows in jarvis_messages, 2026-09-08).
+    let sawMessage = false;
+    while (true) {
+      const step = await b.q.next();
+      if (step.done) {
+        g.__jarvisBrainV2 = null;
+        throw new Error(sawMessage
+          ? "Jarvis session ended before a result; ask again (session rebuilt)"
+          : "Jarvis session was already closed; ask again (session rebuilt)");
+      }
+      const msg = step.value;
+      sawMessage = true;
       if (msg.type === "stream_event") {
         const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };
         if (ev?.type === "content_block_delta" && ev.delta?.type === "text_delta") {
@@ -364,7 +496,12 @@ async function askSdk(
         }
       } else if (msg.type === "result") {
         cost = "total_cost_usd" in msg ? ((msg as { total_cost_usd?: number }).total_cost_usd ?? null) : null;
-        break;
+        const r = msg as { is_error?: boolean; subtype?: string; errors?: string[] };
+        if (r.is_error && sentences.length === 0 && !buf.text.trim()) {
+          // An error result with no text is a failure, not an empty answer.
+          throw new Error(`SDK ${r.subtype ?? "error"}${r.errors?.length ? `: ${r.errors.join("; ").slice(0, 200)}` : ""}`);
+        }
+        break; // out of the while — does NOT call q.return()
       }
     }
   } catch (err) {
@@ -385,6 +522,7 @@ async function askSdk(
     tainted: b.toolState.integrationTainted,
     costUsd: cost,
     turns: b.turns,
+    sessionRebuilt: rebuildReason,
   };
 }
 
@@ -425,7 +563,7 @@ async function askCli(
 
   const history = historyBlock(conv.id, input.text);
   const prompt = [
-    buildSystemPrompt({ pageContext: input.pageContext }),
+    buildSystemPrompt({ pageContext: input.pageContext, surface: input.surface }),
     CLI_ANSWER_ONLY_NOTE,
     history.block || null,
     recallBlock,
@@ -468,6 +606,17 @@ export async function askJarvisV2(
   if (!text) throw new Error("empty ask");
 
   const engine = (readSettings().jarvis?.engine as "sdk" | "cli" | undefined) ?? "sdk";
+  // S34: attachments ride the sdk lane only (cliComplete is a text prompt). Refuse
+  // before anything is persisted; a silent text-only send would fabricate "I sent
+  // the picture".
+  const attachments = (input.attachments ?? []).map((r) => {
+    const stored = getAttachment(r.id, r.name);
+    if (!stored) throw new Error(`attachment ${r.id} not found; attach it again`);
+    return stored;
+  });
+  if (attachments.length && engine === "cli") {
+    throw new Error("image attachments need the sdk engine; the cli engine is text-only (Jarvis gear > Brain engine)");
+  }
   const s = askState();
   if (s.busy && s.abort) {
     try {
@@ -477,10 +626,17 @@ export async function askJarvisV2(
     }
   }
 
-  const conv = ensureConversation(input.conversationId, {
+  let conv = ensureConversation(input.conversationId, {
     titleSeed: text,
     channel: input.channel ?? "overlay",
+    origin: input.origin,
+    effort: input.effort === undefined ? defaultEffort() : input.effort,
   });
+  // S34: a caller that names an effort sets it on the row (the overlay sends its
+  // select every turn); undefined leaves the session's own choice alone.
+  if (input.effort !== undefined && conv.effort !== input.effort) {
+    conv = setConversationEffort(conv.id, input.effort) ?? conv;
+  }
   s.busy = true;
   s.conversationId = conv.id;
 
@@ -489,17 +645,18 @@ export async function askJarvisV2(
     type: "meta",
     conversationId: conv.id,
     engine,
+    effort: conv.effort,
     ...(engine === "cli" ? { note: "answer-only mode — tools disabled on the cli engine" } : {}),
   });
 
-  // Persist the user turn FIRST (raw text only — never pageContext).
-  appendJarvisMessage({ conversationId: conv.id, role: "user", content: text });
+  // Persist the user turn FIRST (raw text only — never pageContext; S34: plus the image refs).
+  appendJarvisMessage({ conversationId: conv.id, role: "user", content: text, attachments: attachments.length ? attachments : null });
 
   try {
     const run =
       engine === "cli"
         ? await askCli(conv, { ...input, text }, onEvent, opts.signal)
-        : await askSdk(conv, { ...input, text }, onEvent, opts.signal);
+        : await askSdk(conv, { ...input, text, attachments }, onEvent, opts.signal);
 
     const answer = run.answer || "(no reply)";
     appendJarvisMessage({
@@ -511,14 +668,15 @@ export async function askJarvisV2(
     });
     ingestExchange(conv.id, text, answer, run.tainted);
 
-    const done: { type: "done"; costUsd?: number | null; turns?: number; durationMs: number } = {
+    const done: { type: "done"; costUsd?: number | null; turns?: number; sessionRebuilt?: string | null; durationMs: number } = {
       type: "done",
       durationMs: Date.now() - started,
     };
     if (engine === "sdk") {
-      const sdkRun = run as { costUsd?: number | null; turns?: number };
+      const sdkRun = run as { costUsd?: number | null; turns?: number; sessionRebuilt?: string | null };
       if (typeof sdkRun.costUsd === "number") done.costUsd = sdkRun.costUsd;
       if (typeof sdkRun.turns === "number") done.turns = sdkRun.turns;
+      done.sessionRebuilt = sdkRun.sessionRebuilt ?? null;
     }
     onEvent(done);
     return { conversationId: conv.id };

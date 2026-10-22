@@ -203,12 +203,17 @@ function isHomeCell(v: unknown): v is HomeCell {
 }
 
 /**
- * Resolve the persisted layout: a valid non-empty settings.home.cells wins,
- * anything else (unset, empty, malformed rows) falls back to
- * DEFAULT_HOME_CELLS. Always returned order-sorted.
+ * Resolve the persisted layout: a valid non-empty cells array wins, anything
+ * else (unset, empty, malformed rows) falls back to `fallback`, which is
+ * DEFAULT_HOME_CELLS for Mission Control. The Today page (S32) passes an
+ * empty fallback: its panel starts empty and says so, rather than cloning the
+ * Overview. Always returned order-sorted.
  */
-export function resolveHomeCells(cells: unknown): HomeCell[] {
+export function resolveHomeCells(cells: unknown, fallback: readonly HomeCell[] = DEFAULT_HOME_CELLS): HomeCell[] {
   const valid = Array.isArray(cells) ? cells.filter(isHomeCell) : [];
-  const chosen = valid.length > 0 ? valid : [...DEFAULT_HOME_CELLS];
+  const chosen = valid.length > 0 ? valid : [...fallback];
   return [...chosen].sort((a, b) => a.order - b.order);
 }
+
+/** Where a grid's cells live under settings.home (S32: Today has its own list). */
+export type HomeCellsKey = "cells" | "todayCells";

@@ -1,4 +1,5 @@
-import { startBriefBatch, briefBatchStatus } from "@/lib/briefBatch";
+import { planBriefBatch, runBriefBatch, briefBatchStatus } from "@/lib/briefBatch";
+import { startModuleRun } from "@/lib/moduleRuns";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,14 +16,27 @@ export function GET() {
 }
 
 // POST { source?: "remoteok" | "wwr" | "upwork", limit?: number, target?: number }
+//
+// The pass is registered as a module run (roadmap S2 backlog) so the tray shows
+// it with a lead counter and STOP ends it (ctx.signal reaches every claude
+// child through generateBrief). The response is still immediate: this route
+// never awaited the pass, so it does not start now; runId is the only new field.
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({})) as { source?: string; limit?: number; target?: number };
-  const r = await startBriefBatch(body);
-  if (!r.started && r.reason === "already running") {
-    return Response.json(
-      { ...briefBatchStatus(), ok: false, error: "A brief pass is already running." },
-      { status: 409 },
-    );
+  const plan = await planBriefBatch(body);
+  if (!plan.ok) {
+    if (plan.reason === "already running") {
+      return Response.json(
+        { ...briefBatchStatus(), ok: false, error: "A brief pass is already running." },
+        { status: 409 },
+      );
+    }
+    return Response.json({ ...briefBatchStatus(), started: false, total: plan.total, reason: plan.reason, ok: true });
   }
-  return Response.json({ ...briefBatchStatus(), ...r, ok: true });
+  const run = startModuleRun(
+    { module: "deals", label: `Brief pass: ${plan.targets.length} leads${body.source ? ` (${body.source})` : ""}`, href: "/deals" },
+    (ctx) => runBriefBatch(plan.targets, { target: body.target, runId: ctx.id, signal: ctx.signal, onProgress: ctx.progress, log: ctx.log }),
+    { summarize: () => { const s = briefBatchStatus(); return { succeeded: s.succeeded, failed: s.failed, total: s.total }; } },
+  );
+  return Response.json({ ...briefBatchStatus(), started: true, total: plan.targets.length, runId: run.id, ok: true });
 }

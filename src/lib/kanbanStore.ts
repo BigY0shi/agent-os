@@ -1,7 +1,8 @@
 // Durable workspace for the Agent Kanban — every build the local team makes is
 // saved here so it survives reloads + reboots (unlike /tmp). One HTML file per
 // build + a manifest with the metadata the workspace gallery shows.
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { exileFile } from "@/lib/exileFile";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -41,5 +42,6 @@ export async function listBuilds(): Promise<BuildRec[]> {
 export async function deleteBuild(id: string): Promise<void> {
   const m = await readManifest();
   await writeManifest(m.filter((r) => r.id !== id));
-  try { await unlink(buildPath(id)); } catch { /* already gone */ }
+  // Exiled, never deleted: the build moves to agent-kanban/.exile/<stamp>/.
+  await exileFile(buildPath(id), ROOT);
 }

@@ -28,6 +28,9 @@ export default function ThumbnailStudio() {
   const [drag, setDrag] = useState(false);
   const [elapsed, setElapsed] = useState(0);          // live seconds while generating
   const [lastTime, setLastTime] = useState<number | null>(null); // final time of last run
+  // What the last/current run really used and where it really saved (from the route's reply).
+  const [runLabel, setRunLabel] = useState("");
+  const [savedTo, setSavedTo] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -52,7 +55,7 @@ export default function ThumbnailStudio() {
   async function generate() {
     if (busy) return;
     if (!images.length && !instructions.trim()) { setError("Add a reference image or some instructions."); return; }
-    setBusy(true); setError(null); setResults([]); setLastTime(null); setElapsed(0);
+    setBusy(true); setError(null); setResults([]); setLastTime(null); setElapsed(0); setSavedTo(null);
     const start = Date.now();
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => setElapsed((Date.now() - start) / 1000), 200);
@@ -60,13 +63,14 @@ export default function ThumbnailStudio() {
       // CLI-agent image skill (default, no API key) vs OpenAI gpt-image-2.
       const useCli = (settings?.thumbnails?.backend ?? "cli") === "cli";
       const endpoint = useCli ? "/api/thumbnails/labs/generate" : "/api/thumbnails/generate";
+      setRunLabel(useCli ? `your ${settings?.thumbnails?.agent || "CLI"} agent` : "gpt-image-2");
       const r = await fetch(endpoint, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images, instructions, count, singleImage: single, vary, proMode: pro, agent: settings?.thumbnails?.agent }),
       });
       const j = await r.json();
       if (j.error) setError(j.error);
-      else { setResults(j.images || []); loadHistory(); }
+      else { setResults(j.images || []); setSavedTo(typeof j.savedTo === "string" ? j.savedTo : null); loadHistory(); }
     } catch (e) { setError(String(e)); }
     finally {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -173,21 +177,18 @@ export default function ThumbnailStudio() {
           {busy ? (
             <div className="h-full grid place-items-center py-14 text-center">
               <div>
-                <div className="text-[44px] font-bold tabular-nums leading-none" style={{ color: ACCENT, fontFamily: "'Bricolage Grotesque', sans-serif" }}>{fmtTime(elapsed)}</div>
+                <div className="text-[44px] font-bold tabular-nums leading-none" style={{ color: ACCENT, fontFamily: "var(--font-display), sans-serif" }}>{fmtTime(elapsed)}</div>
                 <div className="text-[13px] mt-2 flex items-center justify-center gap-1.5" style={{ color: "var(--fg-dim)" }}>
-                  <Loader2 size={13} className="animate-spin" /> Making {count} version{count > 1 ? "s" : ""} with gpt-image-2…
+                  <Loader2 size={13} className="animate-spin" /> Making {count} version{count > 1 ? "s" : ""} with {runLabel}…
                 </div>
-                <div className="text-[11px] mt-1" style={{ color: "var(--fg-dimmer)" }}>usually ~2 min · saving to your Obsidian Thumbnails folder</div>
-                <div className="mt-3 mx-auto w-[200px] h-[4px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                  <div className="h-full rounded-full" style={{ width: `${Math.min(95, (elapsed / 150) * 100)}%`, background: ACCENT, transition: "width 0.3s linear" }} />
-                </div>
+                <div className="text-[11px] mt-1" style={{ color: "var(--fg-dimmer)" }}>usually ~2 min · the images appear when the run finishes</div>
               </div>
             </div>
           ) : results.length ? (
             <>
             {lastTime != null && (
               <div className="text-[11.5px] mb-3" style={{ color: "var(--fg-dim)" }}>
-                <span style={{ color: ACCENT }}>✓ Done in {fmtTime(lastTime)}</span> · {results.length} version{results.length > 1 ? "s" : ""} · saved to your vault
+                <span style={{ color: ACCENT }}>✓ Done in {fmtTime(lastTime)}</span> · {results.length} version{results.length > 1 ? "s" : ""} · {savedTo ? `saved to your vault (${savedTo})` : "not saved to your vault"}
               </div>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

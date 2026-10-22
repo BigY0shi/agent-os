@@ -1,8 +1,10 @@
 import { getHireLead, addHireAnswer, LEADS_DIR } from "@/lib/hireDesk";
+import { recordDeskQA, hireSubject } from "@/lib/deskMemory";
 import { machineFor } from "@/lib/hireMachines";
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { claudeBuilderArgs } from "@/lib/agentPowers";
+import { withSkills } from "@/lib/platformSkills";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,12 +36,13 @@ export async function POST(req: Request) {
   try {
     // `--model` is required (a bare `claude -p` resolves a "default" alias that
     // errors), and the prompt goes over stdin since it embeds the job description.
-    const r = await run("claude", ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: prompt, cwd: LEADS_DIR });
+    const r = await run("claude", ["-p", "--model", claudeModel(), "--output-format", "text", ...claudeBuilderArgs()], { timeoutMs: 120_000, input: withSkills(prompt, "hire"), cwd: LEADS_DIR });
     if (!r.ok || !r.stdout.trim()) {
       return Response.json({ ok: false, error: r.stderr || "agent returned nothing" }, { status: 502 });
     }
     const answer = r.stdout.trim();
     await addHireAnswer(id, question.trim(), answer);
+    void recordDeskQA("hire-engine", hireSubject(lead), question.trim(), answer);
     return Response.json({ ok: true, answer });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });

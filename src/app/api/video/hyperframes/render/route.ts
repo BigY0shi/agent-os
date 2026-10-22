@@ -23,7 +23,7 @@ const HYPERFRAMES_BIN = path.join(os.homedir(), "local", "node", "bin", "hyperfr
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const slug = String(body.slug ?? "").trim();
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(slug)) {
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(slug)) {
     return NextResponse.json({ error: "invalid slug" }, { status: 400 });
   }
   const cwd = path.join(VIDEO_ROOT, slug);

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ensureV2 } from "@/lib/v2/boot";
-import { listAuditRows } from "@/lib/v2/browser/audit";
+import { listAuditRows, auditHealth } from "@/lib/v2/browser/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,5 +18,7 @@ export async function GET(req: NextRequest) {
     limit: Number.isFinite(limitRaw) ? limitRaw : 100,
     session,
   });
-  return NextResponse.json({ rows }, noStore);
+  // Rows alone would present a truncated history as a complete one whenever a
+  // write has failed. The reader needs to know the log has gaps.
+  return NextResponse.json({ rows, audit: auditHealth() }, noStore);
 }

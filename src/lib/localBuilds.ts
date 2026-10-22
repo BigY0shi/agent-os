@@ -2,7 +2,8 @@
 // clears, reloads, server restarts) AND so builds made server-side (the generator,
 // scripts) show up in the same Workspace the UI reads. Lives in a hidden dir, never
 // a surfaced workspace folder.
-import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { exileFile } from "@/lib/exileFile";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -52,7 +53,8 @@ export async function readBuildHtml(id: string): Promise<string | null> {
 
 export async function deleteBuild(id: string): Promise<boolean> {
   if (!safeId(id)) return false;
-  try { const p = path.join(ROOT, id + ".html"); if (existsSync(p)) await unlink(p); } catch {}
+  // Exiled, never deleted: the build moves to local-builds/.exile/<stamp>/.
+  await exileFile(path.join(ROOT, id + ".html"), ROOT);
   await writeManifest((await listBuilds()).filter((b) => b.id !== id));
   return true;
 }

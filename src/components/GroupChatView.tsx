@@ -83,7 +83,8 @@ export default function GroupChatView() {
     try { const c = JSON.parse(localStorage.getItem(CONVOS_KEY) || "[]"); if (Array.isArray(c)) setConvos(c); } catch {}
     // durable: vault-backed history (survives browser clears + shows on any device)
     fetch("/api/room/history").then((r) => r.json()).then((j) => {
-      const server: Convo[] = j.conversations || [];
+      // S25: one-on-one specialist threads (dm-<agent>) live in the same store but belong to the Mastermind rail, not this list.
+      const server: Convo[] = (j.conversations || []).filter((c: Convo) => !String(c.id).startsWith("dm-"));
       setConvos((local) => {
         const byId = new Map<string, Convo>();
         [...server, ...local].forEach((c) => { const e = byId.get(c.id); if (!e || (c.ts || 0) > (e.ts || 0)) byId.set(c.id, c); });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Bot, Play, Loader2, Brain, Wrench, CheckCircle2, MessageSquare, AlertTriangle, ChevronDown } from "lucide-react";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#d97757";
 type Agent = { id: string; name: string; description?: string; model?: string; system?: string };
@@ -93,7 +94,7 @@ export default function AntAgents() {
             <div className="flex gap-2 items-end">
               <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={2}
                 onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runAgent(); } }}
-                placeholder={`Give ${sel.name} a task…  (⌘+Enter)`}
+                placeholder={`Give ${sel.name} a task…  (${MOD}+Enter)`}
                 className="flex-1 bg-[rgba(0,0,0,.25)] border rounded-xl px-3 py-2.5 text-[13.5px] outline-none resize-none focus:border-[var(--panel-border-hot)]" style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }} />
               <button onClick={runAgent} disabled={running || !prompt.trim()} className="px-4 h-[46px] rounded-xl flex items-center gap-2 text-sm font-medium transition disabled:opacity-40" style={{ background: `${ACCENT}24`, border: `1px solid ${ACCENT}55`, color: ACCENT }}>
                 {running ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}{running ? "Running" : "Run"}

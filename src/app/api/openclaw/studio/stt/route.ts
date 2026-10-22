@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 //
 // Browser MediaRecorder defaults to webm/opus — but xai/grok-stt only accepts
 // mp3 (silently fails on webm). So we convert via ffmpeg first, then try
-// Grok, then fall back to OpenRouter Whisper if Grok struggles.
+// Grok (xai/grok-stt through OpenClaw). No other provider is tried.
 
 const FFMPEG = existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg"
               : existsSync("/usr/local/bin/ffmpeg") ? "/usr/local/bin/ffmpeg"
@@ -116,32 +116,14 @@ export async function POST(req: Request) {
       });
     }
 
-    // ─── Step 3: Fall back to OpenRouter Whisper ─────────────────────────
-    // grok-stt sometimes returns no transcript for short/noisy audio.
-    // Whisper handles edge cases better and we already have an OpenRouter key.
-    const whisperAttempt = await transcribeWith(
-      "openrouter/openai/whisper-large-v3-turbo",
-      audioForSTT,
-      60_000
-    );
-    if (whisperAttempt.text) {
-      return NextResponse.json({
-        ok: true,
-        provider: "openrouter",
-        model: "whisper-large-v3-turbo",
-        fallback: true,
-        text: whisperAttempt.text,
-        durationMs: grokAttempt.durationMs + whisperAttempt.durationMs,
-        note: "grok-stt returned no transcript — used Whisper fallback",
-      });
-    }
-
-    // Both failed — return the more informative error.
+    // No fallback: provider routing is CLI/local only (owner, 2026-09-29), and the old
+    // OpenRouter Whisper step was a provider switch nobody chose (AGENTS.md rule 20).
     return NextResponse.json({
       ok: false,
-      error: "Both grok-stt and Whisper returned no transcript. Try speaking louder, longer, or check your mic.",
+      provider: "xai",
+      model: "grok-stt",
+      error: "grok-stt returned no transcript. Try speaking a little longer or louder, or check your mic.",
       grokStderr: grokAttempt.stderr,
-      whisperStderr: whisperAttempt.stderr,
     }, { status: 200 });
 
   } finally {

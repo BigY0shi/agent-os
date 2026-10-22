@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { BLOG_POST_SKILL, readTranscript, getSites } from "@/lib/seoPipeline";
 import { startSession, appendArticle, finishSession, type ArticleWritten } from "@/lib/seoHistory";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { readSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
     case "cursor": spawnArgs = ["-p", prompt, "--output-format", "text", "--force", "--trust"]; break;
     case "pi":     spawnArgs = ["-p", prompt, "--mode", "text", "--no-session", "--no-context-files"]; break;
     case "hermes": spawnArgs = ["-z", prompt, "--yolo", "--accept-hooks"]; break;
-    default:       spawnArgs = ["-p", "--model", CLAUDE_MODEL, "--output-format=stream-json", "--include-partial-messages", "--verbose", "--dangerously-skip-permissions"]; spawnInput = prompt;
+    default:       spawnArgs = ["-p", "--model", claudeModel(), "--output-format=stream-json", "--include-partial-messages", "--verbose", "--dangerously-skip-permissions"]; spawnInput = prompt;
   }
   const child = spawnStream(agentId as Parameters<typeof spawnStream>[0], spawnArgs, spawnInput !== undefined ? { input: spawnInput } : {});
 

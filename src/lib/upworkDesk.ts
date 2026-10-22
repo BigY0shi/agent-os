@@ -9,10 +9,12 @@
 // lives in ~/.agentic-os/upwork-desk.json, keyed by the stable job UID — so it
 // survives re-scrapes and persists across runs.
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
+import { deriveVerdict, partitionByAge, type Verdict, type ScreenResult, type Dossier } from "./dealDeskControl";
 
 // Where the scraper pipeline writes its artifacts. Override with UPWORK_LEADS_DIR.
 export const LEADS_DIR =
@@ -21,8 +23,16 @@ const BOARD_FILE = path.join(LEADS_DIR, "board.json");
 const PITCHES_FILE = path.join(LEADS_DIR, "pitches.json");
 const FEEDS_FILE = path.join(LEADS_DIR, "feeds.json");
 
-const AOS = path.join(os.homedir(), ".agentic-os");
-const STATE_FILE = path.join(AOS, "upwork-desk.json");
+// Per-deal state. Override with AGENTIC_OS_DESK - a smoke MUST redirect this to a
+// temp dir before importing this module (project rule 19), or it reads and then
+// rewrites the operator's live board.
+const STATE_FILE =
+  process.env.AGENTIC_OS_DESK || path.join(os.homedir(), ".agentic-os", "upwork-desk.json");
+const AOS = path.dirname(STATE_FILE);
+// The retired generation, and the prefix for a not-yet-promoted one. The rotation
+// itself is documented at writeState.
+const PREV_FILE = path.join(AOS, `${path.parse(STATE_FILE).name}_prev.json`);
+const GEN_PREFIX = `${path.parse(STATE_FILE).name}_gen_`;
 
 // ── Columns (pipeline stages, left → right) ────────────────────────────────────
 export type DealStatus = "new" | "reviewing" | "approved" | "ready" | "sent" | "parked" | "denied" | "dismissed";
@@ -65,6 +75,64 @@ export interface DealState {
    * looked second-class. Generating a brief fills them for ANY source.
    */
   brief?: Brief;
+  /**
+   * The quick pass/not check. Cheaper than a brief and run over EVERY lead, so a
+   * card that no brief reached still leads with a real call instead of a band
+   * invented from the feed's keyword fit.
+   */
+  screen?: ScreenResult;
+  /**
+   * The settled account of this listing: the client's asks and our answers,
+   * reconciled once so the proposal writer is not re-deriving them mid-draft.
+   */
+  dossier?: Dossier;
+  /**
+   * S4 (d): enrichment (or intake) hit Upwork's login wall on this card. Set by
+   * the gated runner, cleared by a fresh cookie or a later successful visit.
+   */
+  needsLogin?: boolean;
+  loginWallAt?: number;
+  /** S4 (e): the research pass "More info needed" fires, and how it went. */
+  research?: Research;
+  /**
+   * The lead record itself, copied here the first time the owner touches this card.
+   *
+   * The desk used to hold only a POINTER into board.json / feeds.json, and those are
+   * pipeline output: score_board.mjs ends with a wholesale
+   * `writeFileSync(board.json, scored)`, so every scrape replaces the file outright.
+   * A lead the new run did not re-find lost its record, and the state row here - the
+   * owner's approval, his notes, a finished proposal - was left pointing at nothing
+   * and vanished off the board. That happened on 2026-09-04: 12 rows orphaned, 8 of
+   * them carrying submit-ready proposals.
+   *
+   * The owner's expectation, in his words, was that a card is "immutable until I
+   * explicitly and manually drop them off the board". This is what makes that true.
+   * Once the desk has committed to a lead it owns a copy, and no pipeline rewrite can
+   * take it away again.
+   */
+  lead?: LeadSnapshot;
+}
+
+/**
+ * A captured lead record. `at` and `from` are provenance, not decoration: a recovered
+ * card needs to be able to say where its fields came from rather than implying the
+ * scraper vouched for them.
+ */
+export interface LeadSnapshot extends Partial<BoardRecord> {
+  id: string;
+  title: string;
+  url: string;
+  at: number;
+  /** "board" / "feeds" when captured live; "pitches" when rebuilt after the record was lost. */
+  from: "board" | "feeds" | "pitches";
+}
+export interface Research {
+  status: "running" | "done" | "error" | "stopped";
+  at: number;
+  runId?: string;
+  /** Which steps ran / were skipped, in words, for the card. */
+  note?: string;
+  steps?: string[];
 }
 export interface Brief {
   summary?: string; why?: string; approach?: string; crashCourse?: string; at?: number;
@@ -83,6 +151,23 @@ export interface Deal extends BoardRecord {
   notes: string; needsInfo: boolean; editedPitch: string | null;
   answers: Answer[]; enrichment: Enrichment | null; updatedAt: number | null;
   effectiveFit: number;
+  /** S4 (c): the evaluator's pass/pursue call, pulled to the front of the card. */
+  verdict: Verdict;
+  /** S4 (d): the last visit to this listing hit the login wall. */
+  needsLogin: boolean;
+  loginWallAt: number | null;
+  /** S4 (e): the last research pass on this card, or null if none ran. */
+  research: Research | null;
+  /** The quick pass/not check's result, or null if it has not run or did not stick. */
+  screen: ScreenResult | null;
+  /** The dossier, or null if none has been built for this card. */
+  dossier: Dossier | null;
+  /**
+   * This card is being served from the desk's own snapshot because the pipeline no
+   * longer has its record. The scores the scraper owned are not knowable for a card
+   * rebuilt from pitches.json, so the UI shows them as NA rather than as zero.
+   */
+  recovered?: boolean;
 }
 
 // Labor/staffing titles are never a systems-build fit — mirror the board renderer's backstop.
@@ -151,10 +236,114 @@ export function formatDescription(raw: string | null): string | null {
 async function readJson<T>(file: string, fallback: T): Promise<T> {
   try { return JSON.parse(await readFile(file, "utf8")) as T; } catch { return fallback; }
 }
-async function readState(): Promise<StateStore> { return readJson<StateStore>(STATE_FILE, {}); }
+// -- State store: generation rotation ------------------------------------------
+//
+// The live file's body is never written in place. A write creates a brand-new
+// file, renames the current live file aside as the previous generation, then
+// renames the new file into the live name:
+//
+//   1. write   upwork-desk_gen_<nonce>.json          a fresh body, written once
+//   2. rename  upwork-desk.json  ->  upwork-desk_prev.json
+//   3. rename  upwork-desk_gen_<nonce>.json  ->  upwork-desk.json
+//
+// Every body is therefore write-once, _prev's included: retiring a generation is
+// a rename, which swaps the directory entry and unlinks the old inode rather
+// than editing bytes. Two files sit at rest, the live one and the last good one.
+//
+// What this replaces: a plain writeFile over the canonical path, which rewrote
+// all 121 KB of a 145-deal board on every status change and every saved
+// proposal. A crash or a power cut mid-write left the file truncated, and the
+// reader swallowed the parse error and returned {} - the whole board, every note
+// and every drafted proposal, reported as empty rather than as broken.
+function stagingFile(): string {
+  return path.join(AOS, `${GEN_PREFIX}${Date.now().toString(36)}${randomBytes(4).toString("hex")}.json`);
+}
+
+async function parseStore(file: string): Promise<StateStore | null> {
+  try {
+    const v = JSON.parse(await readFile(file, "utf8"));
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as StateStore) : null;
+  } catch { return null; }
+}
+
+// The newest staging file that never got promoted. A crash between steps 2 and 3
+// leaves one, and it holds the NEWEST state, not a stale copy - it is the write
+// that was interrupted after the rotation but before the promotion.
+async function newestOrphan(): Promise<{ store: StateStore; mtime: number } | null> {
+  try {
+    const names = (await readdir(AOS)).filter((n) => n.startsWith(GEN_PREFIX) && n.endsWith(".json"));
+    const stamped = (await Promise.all(names.map(async (n) => {
+      const f = path.join(AOS, n);
+      try { return { f, mtime: (await stat(f)).mtimeMs }; } catch { return null; }
+    }))).filter((x): x is { f: string; mtime: number } => !!x);
+    const newest = stamped.sort((a, b) => b.mtime - a.mtime)[0];
+    if (!newest) return null;
+    const store = await parseStore(newest.f);
+    return store ? { store, mtime: newest.mtime } : null;
+  } catch { return null; }
+}
+
+// Fall back through the surviving generations rather than reporting an unreadable
+// board as an empty one. A missing live file on a first run is not a fault and
+// stays quiet; a live file that exists but will not parse is always logged.
+async function readState(): Promise<StateStore> {
+  const live = await parseStore(STATE_FILE);
+  if (live) return live;
+
+  const liveExists = existsSync(STATE_FILE);
+  if (!liveExists && !existsSync(PREV_FILE)) return {}; // first run, genuinely empty
+
+  console.error(`[deal-desk] live state ${liveExists ? "did not parse" : "is missing"} at ${STATE_FILE} - trying an earlier generation`);
+  // An orphan wins only if it is genuinely newer than _prev. A staging file left
+  // by a crash months ago is older data, not an interrupted write, and preferring
+  // it on age alone would quietly roll the board back.
+  const orphan = await newestOrphan();
+  const prevMtime = existsSync(PREV_FILE) ? await stat(PREV_FILE).then((s) => s.mtimeMs, () => -1) : -1;
+  const useOrphan = !!orphan && orphan.mtime > prevMtime;
+  const recovered = useOrphan ? orphan.store : await parseStore(PREV_FILE);
+  if (recovered) {
+    console.error(`[deal-desk] recovered ${Object.keys(recovered).length} deals from ${useOrphan ? "an interrupted write" : PREV_FILE}`);
+    return recovered;
+  }
+  console.error("[deal-desk] no readable generation - the board will render empty");
+  return {};
+}
+
+// In-process write mutex, same shape as hermesGoals.ts. Rotation makes a single
+// write crash-safe; it does not make two concurrent read-modify-writes safe.
+// Without this, approving one card while another saves a proposal has both reads
+// see the same store and the slower write drop the other's change.
+let writeLock: Promise<void> = Promise.resolve();
+function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  const next = writeLock.then(() => fn(), () => fn());
+  writeLock = next.then(() => undefined, () => undefined);
+  return next;
+}
+
 async function writeState(s: StateStore): Promise<void> {
   if (!existsSync(AOS)) await mkdir(AOS, { recursive: true });
-  await writeFile(STATE_FILE, JSON.stringify(s, null, 2), "utf8");
+  const staged = stagingFile();
+  await writeFile(staged, JSON.stringify(s, null, 2), "utf8");
+  // Retire the current generation. Absent on a first run, which is not a fault.
+  //
+  // A live file that does not parse must NOT be retired into _prev: this write is
+  // very likely the recovery write that just restored the board FROM _prev, and
+  // moving the damaged file over it would destroy the only good copy at the exact
+  // moment it is the only good copy. Park it beside them instead, never deleted,
+  // so the damage can be inspected. Re-parsing costs one read of a file readState
+  // just read, which is not worth threading a flag through the call for.
+  if (existsSync(STATE_FILE)) {
+    const healthy = (await parseStore(STATE_FILE)) !== null;
+    if (healthy) {
+      await rename(STATE_FILE, PREV_FILE);
+    } else {
+      const parked = path.join(AOS, `${path.parse(STATE_FILE).name}_corrupt_${Date.now().toString(36)}.json`);
+      await rename(STATE_FILE, parked);
+      console.error(`[deal-desk] the damaged live file was parked at ${parked}; ${PREV_FILE} was left intact`);
+    }
+  }
+  // Promote. If this throws, the staged file survives and readState finds it.
+  await rename(staged, STATE_FILE);
 }
 
 // ── Merge board + pitches + state → Deal[] ──────────────────────────────────────
@@ -205,6 +394,26 @@ export function resolvePostedAt(rec: Partial<BoardRecord>): number | null {
   return anchor - off;
 }
 
+// -- (f) Age gate at landing time ----------------------------------------------
+// board.json / shortlist.json (after a scrape) and feeds.json (after a pull) are
+// pipeline outputs, but they are the owner's data too, so a prune never discards:
+// the dropped records are written beside the file as <name>.dropped-<stamp>.json.
+export type LeadsFile = "board" | "shortlist" | "feeds";
+const LEADS_FILES: Record<LeadsFile, string> = { board: BOARD_FILE, shortlist: path.join(LEADS_DIR, "shortlist.json"), feeds: FEEDS_FILE };
+
+export async function pruneLeadsFileByAge(which: LeadsFile, maxAgeDays: number, now = Date.now()): Promise<{ kept: number; dropped: number; unknown: number; droppedFile: string | null }> {
+  const file = LEADS_FILES[which];
+  const rows = await readJson<Partial<BoardRecord>[]>(file, []);
+  if (!Array.isArray(rows) || !rows.length) return { kept: 0, dropped: 0, unknown: 0, droppedFile: null };
+  const part = partitionByAge(rows, (r) => resolvePostedAt(r), maxAgeDays, now);
+  if (!part.dropped.length) return { kept: part.kept.length, dropped: 0, unknown: part.unknown.length, droppedFile: null };
+  const droppedFile = path.join(LEADS_DIR, `${which}.dropped-${new Date(now).toISOString().slice(0, 10)}.json`);
+  const prior = await readJson<Partial<BoardRecord>[]>(droppedFile, []);
+  await writeFile(droppedFile, JSON.stringify([...prior, ...part.dropped], null, 2), "utf8");
+  await writeFile(file, JSON.stringify(part.kept, null, 2), "utf8");
+  return { kept: part.kept.length, dropped: part.dropped.length, unknown: part.unknown.length, droppedFile };
+}
+
 export async function listDeals(): Promise<Deal[]> {
   const [board, pitches, state] = await Promise.all([
     readJson<BoardRecord[]>(BOARD_FILE, []),
@@ -215,6 +424,9 @@ export async function listDeals(): Promise<Deal[]> {
 
   // Only surface the pitched shortlist — those are the reviewable deals.
   const deals: Deal[] = [];
+  // What the pipeline files still know about, so the snapshot pass below can tell
+  // "already shown" from "the record is gone and only our copy remains".
+  const emitted = new Set<string>();
   for (const b of board) {
     const p = pitchByUrl.get(b.url);
     if (!p) continue;
@@ -224,6 +436,9 @@ export async function listDeals(): Promise<Deal[]> {
     if (STAFFING.test(b.title || "")) effectiveFit = Math.min(effectiveFit, 2);
     const composite = +(0.4 * b.easiness + 0.4 * b.winnability + 0.2 * effectiveFit).toFixed(2);
     const defaultStatus: DealStatus = effectiveFit <= 3 ? "parked" : "new";
+    // A generated brief is newer than the offline pitch pass, so it wins.
+    const summary = st.brief?.summary ?? p.summary ?? null;
+    const why = st.brief?.why ?? p.why ?? null;
     deals.push({
       ...b,
       description: formatDescription(b.description),
@@ -231,9 +446,12 @@ export async function listDeals(): Promise<Deal[]> {
       composite,
       effectiveFit,
       status: st.status || defaultStatus,
-      // A generated brief is newer than the offline pitch pass, so it wins.
-      summary: st.brief?.summary ?? p.summary ?? null,
-      why: st.brief?.why ?? p.why ?? null,
+      summary,
+      why,
+      // The verdict reads the evaluator's OWN opener, never the operator's edit.
+      verdict: deriveVerdict({ why, summary, pitch: p.pitch ?? null, screen: st.screen ?? null, effectiveFit }),
+      screen: st.screen ?? null,
+      dossier: st.dossier ?? null,
       pitch: st.editedPitch ?? p.pitch ?? null,
       approach: st.brief?.approach ?? p.approach ?? null,
       crashCourse: st.brief?.crashCourse ?? p.crashCourse ?? null,
@@ -243,7 +461,11 @@ export async function listDeals(): Promise<Deal[]> {
       answers: st.answers ?? [],
       enrichment: st.enrichment ?? null,
       updatedAt: st.updatedAt ?? null,
+      needsLogin: st.needsLogin ?? false,
+      loginWallAt: st.loginWallAt ?? null,
+      research: st.research ?? null,
     });
+    emitted.add(b.id);
   }
 
   // Remote freelance feeds (RemoteOK / WWR / Reddit) — source-tagged; no pre-pitch, proposal
@@ -264,11 +486,58 @@ export async function listDeals(): Promise<Deal[]> {
       // on-demand brief if one has been generated — previously hardcoded to null,
       // which is why RemoteOK/WWR cards never showed the analysis Upwork cards did.
       summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
+      verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, screen: st.screen ?? null, effectiveFit }),
+      screen: st.screen ?? null,
+      dossier: st.dossier ?? null,
       pitch: st.editedPitch ?? null,
       approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
       notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
       answers: st.answers ?? [], enrichment: st.enrichment ?? null, updatedAt: st.updatedAt ?? null,
+      needsLogin: st.needsLogin ?? false, loginWallAt: st.loginWallAt ?? null,
+      research: st.research ?? null,
     });
+    emitted.add(f.id);
+  }
+
+  // Anything the owner has touched whose record the pipeline has since dropped. This
+  // is the half of the fix that does the work: the capture in patch() is worthless if
+  // the read still insists on finding a row in a file that no longer has one.
+  for (const [id, st] of Object.entries(state)) {
+    if (emitted.has(id) || !st.lead || st.status === "dismissed") continue;
+    const L = st.lead;
+    const effectiveFit = L.fit ?? 0;
+    const easiness = L.easiness ?? 0;
+    const winnability = L.winnability ?? 0;
+    deals.push({
+      id, subId: L.subId, title: L.title, url: L.url,
+      budget: L.budget ?? null, jobType: L.jobType ?? null, experienceLevel: L.experienceLevel ?? null,
+      duration: L.duration ?? null, posted: L.posted ?? null,
+      description: formatDescription(L.description ?? null),
+      datePosted: L.datePosted ?? null, _scrapedAt: L._scrapedAt ?? null,
+      tags: L.tags ?? [], clientCountry: L.clientCountry ?? null,
+      clientTotalSpent: L.clientTotalSpent ?? null, clientRating: L.clientRating ?? null,
+      clientHires: L.clientHires ?? null, clientMemberSince: L.clientMemberSince ?? null,
+      easiness, winnability, fit: L.fit ?? 0,
+      composite: L.composite ?? +(0.4 * easiness + 0.4 * winnability + 0.2 * effectiveFit).toFixed(2),
+      source: (L as { source?: string }).source,
+      postedAt: resolvePostedAt(L),
+      status: st.status || "new",
+      effectiveFit,
+      summary: st.brief?.summary ?? null, why: st.brief?.why ?? null,
+      verdict: deriveVerdict({ why: st.brief?.why ?? null, summary: st.brief?.summary ?? null, pitch: null, screen: st.screen ?? null, effectiveFit }),
+      screen: st.screen ?? null,
+      dossier: st.dossier ?? null,
+      pitch: st.editedPitch ?? null,
+      approach: st.brief?.approach ?? null, crashCourse: st.brief?.crashCourse ?? null,
+      notes: st.notes ?? "", needsInfo: st.needsInfo ?? false, editedPitch: st.editedPitch ?? null,
+      answers: st.answers ?? [], enrichment: st.enrichment ?? null, updatedAt: st.updatedAt ?? null,
+      needsLogin: st.needsLogin ?? false, loginWallAt: st.loginWallAt ?? null,
+      research: st.research ?? null,
+      // Only a pitches.json rebuild is missing the scraper's own scores; a snapshot
+      // captured live off board.json carries them and is not flagged.
+      recovered: L.from === "pitches",
+    });
+    emitted.add(id);
   }
 
   deals.sort((a, b) => b.composite - a.composite);
@@ -280,18 +549,69 @@ export async function getDeal(id: string): Promise<Deal | null> {
 }
 
 // ── Mutations (all merge into the state store) ──────────────────────────────────
+/**
+ * Find a lead's record in the files the pipeline owns, so the desk can keep its own
+ * copy. Returns null when the record is already gone - nothing to capture, and a
+ * fabricated stub would be worse than an honest miss.
+ */
+async function findLeadRecord(id: string): Promise<LeadSnapshot | null> {
+  const [board, feeds] = await Promise.all([
+    readJson<BoardRecord[]>(BOARD_FILE, []),
+    readJson<(BoardRecord & { source?: string })[]>(FEEDS_FILE, []),
+  ]);
+  const hit = board.find((r) => r.id === id);
+  if (hit) return { ...hit, at: Date.now(), from: "board" };
+  const fed = feeds.find((r) => r.id === id);
+  if (fed) return { ...fed, at: Date.now(), from: "feeds" };
+  return null;
+}
+
+/**
+ * Every state mutation funnels through here, which is exactly why the snapshot is
+ * taken here: touching a card in ANY way (a status, a note, a brief, a proposal, a
+ * dossier answer) is the owner committing to it, and from that moment the desk keeps
+ * its own copy of the lead. One capture, never refreshed - a later scrape re-finding
+ * the lead is welcome to supply fresher fields via the normal board path, but it can
+ * no longer take the card away.
+ */
 async function patch(id: string, fn: (s: DealState) => DealState): Promise<DealState> {
-  const store = await readState();
-  const next = fn(store[id] || {});
-  next.updatedAt = Date.now();
-  store[id] = next;
-  await writeState(store);
-  return next;
+  // Read outside the lock: findLeadRecord touches only pipeline files, and holding the
+  // state lock across two more file reads would serialise every desk click behind them.
+  const snapshotNeeded = !(await readState())[id]?.lead;
+  const captured = snapshotNeeded ? await findLeadRecord(id) : null;
+  return withLock(async () => {
+    const store = await readState();
+    const next = fn(store[id] || {});
+    next.updatedAt = Date.now();
+    if (!next.lead && captured) next.lead = captured;
+    store[id] = next;
+    await writeState(store);
+    return next;
+  });
 }
 
 export async function setStatus(id: string, status: DealStatus): Promise<DealState> {
   if (!VALID_STATUS.includes(status)) throw new Error(`Invalid status: ${status}`);
   return patch(id, (s) => ({ ...s, status }));
+}
+
+/**
+ * S4 (b): one status for many cards in ONE generation. Bulk deny from the board
+ * face is the caller; looping setStatus would rotate the store once per card
+ * (twenty renames for twenty cards) and let a crash land between two of them.
+ * Returns the ids actually written (duplicates and blanks dropped).
+ */
+export async function setStatusBulk(ids: string[], status: DealStatus): Promise<string[]> {
+  if (!VALID_STATUS.includes(status)) throw new Error(`Invalid status: ${status}`);
+  const unique = [...new Set(ids.map((x) => String(x ?? "").trim()).filter(Boolean))];
+  if (!unique.length) return [];
+  return withLock(async () => {
+    const store = await readState();
+    const now = Date.now();
+    for (const id of unique) store[id] = { ...(store[id] || {}), status, updatedAt: now };
+    await writeState(store);
+    return unique;
+  });
 }
 export async function setNotes(id: string, notes: string): Promise<DealState> {
   return patch(id, (s) => ({ ...s, notes: String(notes).slice(0, 5000) }));
@@ -311,6 +631,49 @@ export async function setEnrichment(id: string, e: Enrichment): Promise<DealStat
 
 export async function setBrief(id: string, b: Brief): Promise<DealState> {
   return patch(id, (s) => ({ ...s, brief: { ...b, at: Date.now() } }));
+}
+
+/**
+ * Persist a quick pass/not check. A failed check writes NOTHING: the lead stays
+ * unscreened and reads NA, which is the honest state. Never store a band the
+ * checker did not actually return.
+ */
+export async function setScreen(id: string, r: Omit<ScreenResult, "at">): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, screen: { ...r, at: Date.now() } }));
+}
+
+/**
+ * Persist a dossier. Like a screen, a failed build writes nothing: the card simply
+ * has no dossier, which the proposal path treats as "build one" rather than as an
+ * empty account it can proceed from.
+ */
+export async function setDossier(id: string, d: Dossier): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, dossier: d }));
+}
+
+/** S4 (e): the research pass writes its state as it goes; the card reads it. */
+export async function setResearch(id: string, r: Omit<Research, "at"> & { at?: number }): Promise<DealState> {
+  return patch(id, (s) => ({ ...s, research: { ...r, at: r.at ?? Date.now() } }));
+}
+
+/**
+ * S4 (d): flag (or clear) the login wall on many cards in one write. `on: false`
+ * with an empty list clears EVERY flagged card - that is what a fresh cookie means.
+ */
+export async function setNeedsLogin(ids: string[], on: boolean): Promise<string[]> {
+  return withLock(async () => {
+    const store = await readState();
+    const now = Date.now();
+    const targets = ids.length ? [...new Set(ids.filter(Boolean))] : (on ? [] : Object.keys(store).filter((id) => store[id]?.needsLogin));
+    for (const id of targets) {
+      const s = store[id] || {};
+      store[id] = on
+        ? { ...s, needsLogin: true, loginWallAt: now, updatedAt: now }
+        : { ...s, needsLogin: false, updatedAt: now };
+    }
+    if (targets.length) await writeState(store);
+    return targets;
+  });
 }
 
 // Plan a "clear passed & refill" pass. Goal: keep the NEW column topped up to `target`.

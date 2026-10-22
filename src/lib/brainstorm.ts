@@ -14,6 +14,8 @@ import { readFile, writeFile, readdir, mkdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { cliComplete } from "./loopEngine";
+import { ollamaCloudHost, ollamaCloudKey } from "./ollamaCloud";
+import { readSettings } from "./settings";
 
 export type CouncilSeat = "claude" | "codex" | "kimi";
 export const COUNCIL_SEATS: CouncilSeat[] = ["claude", "codex", "kimi"];
@@ -70,10 +72,9 @@ export async function listSessions(): Promise<Pick<BrainstormSession, "id" | "to
 
 // ── Kimi seat (Ollama Cloud) ────────────────────────────────────────────────────
 
-const OLLAMA_HOST = process.env.OLLAMA_CLOUD_HOST || "https://ollama.com";
-function ollamaKey(): string | null {
-  return process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY || null;
-}
+// Host and key: settings.ollama (the Ollama page's gear), then the environment, read per call
+// (lib/ollamaCloud.ts).
+const ollamaKey = ollamaCloudKey;
 
 let kimiCache: { key: string; model: string; at: number } | null = null;
 
@@ -90,8 +91,8 @@ export async function resolveKimiModel(preferred?: string): Promise<string> {
   const cacheKey = preferred || "_default";
   if (kimiCache && kimiCache.key === cacheKey && Date.now() - kimiCache.at < 10 * 60_000) return kimiCache.model;
   const key = ollamaKey();
-  if (!key) throw new Error("No Ollama Cloud key (set OLLAMA_API_KEY in .env.local)");
-  const r = await fetch(`${OLLAMA_HOST}/api/tags`, {
+  if (!key) throw new Error("No Ollama Cloud key (add it in the Ollama page's gear, or set OLLAMA_API_KEY in .env.local)");
+  const r = await fetch(`${ollamaCloudHost()}/api/tags`, {
     headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000),
   });
   if (!r.ok) throw new Error(`Ollama Cloud /api/tags ${r.status}`);
@@ -114,10 +115,27 @@ export async function resolveKimiModel(preferred?: string): Promise<string> {
   throw new Error("No Kimi model found on Ollama Cloud");
 }
 
-async function kimiComplete(prompt: string, model: string): Promise<string> {
+/** Per-seat call options (S3): STOP's signal and the launch drawer's timeout. */
+export interface SeatOpts { signal?: AbortSignal; timeoutMs?: number }
+
+/** The council's time limits (S30): settings.brainstorm.seatTimeoutSec / kimiTimeoutSec, read per
+ *  call; the old 240 s / 180 s literals are the defaults. A per-run timeout (launch drawer) wins. */
+export function brainstormTimeouts(): { seatMs: number; kimiMs: number } {
+  const b = (readSettings().brainstorm ?? {}) as { seatTimeoutSec?: unknown; kimiTimeoutSec?: unknown };
+  const sec = (v: unknown, d: number) => { const n = Number(v); return (Number.isFinite(n) && n > 0 ? Math.round(n) : d) * 1000; };
+  return { seatMs: sec(b.seatTimeoutSec, 240), kimiMs: sec(b.kimiTimeoutSec, 180) };
+}
+
+/** The caller's STOP signal joined with a hard timeout; either one aborts the fetch. */
+function seatSignal(opts: SeatOpts | undefined, defaultMs: number): AbortSignal {
+  const t = AbortSignal.timeout(opts?.timeoutMs ?? defaultMs);
+  return opts?.signal ? AbortSignal.any([opts.signal, t]) : t;
+}
+
+async function kimiComplete(prompt: string, model: string, opts?: SeatOpts): Promise<string> {
   const key = ollamaKey();
   if (!key) throw new Error("No Ollama Cloud key");
-  const r = await fetch(`${OLLAMA_HOST}/api/chat`, {
+  const r = await fetch(`${ollamaCloudHost()}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
     body: JSON.stringify({
@@ -125,7 +143,7 @@ async function kimiComplete(prompt: string, model: string): Promise<string> {
       messages: [{ role: "user", content: prompt }],
       options: { num_predict: 1000 },
     }),
-    signal: AbortSignal.timeout(180_000),
+    signal: seatSignal(opts, brainstormTimeouts().kimiMs),
   });
   if (!r.ok) throw new Error(`Ollama Cloud chat ${r.status}: ${(await r.text()).slice(0, 160)}`);
   const j = await r.json() as { message?: { content?: string } };
@@ -136,10 +154,11 @@ async function kimiComplete(prompt: string, model: string): Promise<string> {
 
 // ── Seat dispatch ───────────────────────────────────────────────────────────────
 
-export async function seatComplete(seat: CouncilSeat, prompt: string, kimiModel: string): Promise<string> {
-  if (seat === "kimi") return kimiComplete(prompt, kimiModel);
+export async function seatComplete(seat: CouncilSeat, prompt: string, kimiModel: string, opts?: SeatOpts): Promise<string> {
+  if (seat === "kimi") return kimiComplete(prompt, kimiModel, opts);
   // claude + codex go through the shared CLI helper (subscription auth, no keys).
-  const text = await cliComplete(seat, prompt, { timeoutMs: 240_000 });
+  // opts.signal is STOP (moduleRuns ctx.signal): runner.ts kills the child tree on abort.
+  const text = await cliComplete(seat, prompt, { timeoutMs: opts?.timeoutMs ?? brainstormTimeouts().seatMs, signal: opts?.signal, module: "brainstorm" });
   const t = text.trim();
   if (!t) throw new Error(`${seat} returned nothing`);
   return t;

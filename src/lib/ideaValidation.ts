@@ -15,11 +15,10 @@
 
 import { randomUUID } from "node:crypto";
 import { run } from "./runner";
-import { cliComplete } from "./loopEngine";
-import { seatComplete, resolveKimiModel } from "./brainstorm";
+import { ideaAgents, runSeat } from "./ideaSeats";
 import { claudeBuilderArgs } from "./agentPowers";
 import { readSettings } from "./settings";
-import { CLAUDE_MODEL } from "./config";
+import { claudeModel } from "./claudeModel";
 import {
   IDEA_SCHEMA_VERSION, type IdeaDossier, type PainEvidence, type Competitor,
   type Sourced, type ValidationRun, type SeatName,
@@ -60,8 +59,9 @@ function models() {
   const s = readSettings().ideaEngine;
   return {
     research: (s.researchModel || "").trim() || "claude-sonnet-5",
-    writer: (s.writerModel || "").trim() || CLAUDE_MODEL,
+    writer: (s.writerModel || "").trim() || claudeModel(),
     kimi: (s.kimiModel || "").trim() || undefined,
+    agents: ideaAgents(s),
   };
 }
 
@@ -251,28 +251,27 @@ async function execute(runObj: ValidationRun): Promise<void> {
   const evidencePack =
     `PAIN EVIDENCE:\n${JSON.stringify(pain, null, 1)}\n\nMARKET MAP:\n${JSON.stringify(market, null, 1)}`;
 
-  // Sizing — kimi, evidence-only. Falls back to codex if Ollama is unreachable.
+  // Sizing — evidence-only, no web. The agent and its fallback are the owner's settings
+  // (default Claude, fallback Codex); seatsUsed records who really answered.
   interface SizingOut { size_estimates?: Sourced[]; sizing_read?: string }
   let sizing: SizingOut = {};
   const sizingRaw = await seatWrap(runObj, "sizingAnalyst", async () => {
-    try {
-      const kimiModel = await resolveKimiModel(m.kimi);
-      seatsUsed.sizingAnalyst = kimiModel;
-      return await seatComplete("kimi", sizingPrompt(idea, evidencePack), kimiModel);
-    } catch {
-      seatsUsed.sizingAnalyst = "codex (kimi unreachable)";
-      return await cliComplete("codex", sizingPrompt(idea, evidencePack), { timeoutMs: 240_000 });
-    }
+    const r = await runSeat(m.agents.sizing, m.agents.fallback, sizingPrompt(idea, evidencePack), { timeoutMs: 240_000, kimiModel: m.kimi });
+    seatsUsed.sizingAnalyst = r.used;
+    return r.text;
   });
   if (!sizingRaw) degraded.push("sizingAnalyst");
   try { if (sizingRaw) sizing = extractJson<SizingOut>(sizingRaw); } catch { degraded.push("sizingAnalyst:parse"); }
 
   if (runObj.status !== "running") return; // cancelled during sizing
 
-  // Kill pass — codex, MUST be a different lineage (spec invariant #5).
-  const killCase = await seatWrap(runObj, "killPass", () =>
-    cliComplete("codex", killPrompt(idea, evidencePack + `\n\nSIZING:\n${JSON.stringify(sizing)}`), { timeoutMs: 300_000 }));
-  seatsUsed.killPass = "codex";
+  // Kill pass — MUST be a different lineage from the claude research seats (spec invariant
+  // #5), so its default is codex; the agent and fallback are the owner's settings.
+  const killCase = await seatWrap(runObj, "killPass", async () => {
+    const r = await runSeat(m.agents.kill, m.agents.fallback, killPrompt(idea, evidencePack + `\n\nSIZING:\n${JSON.stringify(sizing)}`), { timeoutMs: 300_000, kimiModel: m.kimi });
+    seatsUsed.killPass = r.used;
+    return r.text;
+  });
   if (!killCase) degraded.push("killPass");
 
   // Judge — claude, kill case in hand.

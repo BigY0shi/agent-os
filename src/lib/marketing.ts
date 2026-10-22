@@ -26,7 +26,8 @@ import { readSettings } from "@/lib/settings";
 import { extractJsonObj } from "@/lib/v2/json";
 import { colorFor } from "@/lib/v2/marketing/palette";
 
-const MARKETING_DIR = path.join(os.homedir(), ".agentic-os", "marketing");
+// AGENTIC_OS_MARKETING_DIR: smokes redirect the store to a temp dir (rule 19).
+const MARKETING_DIR = process.env.AGENTIC_OS_MARKETING_DIR?.trim() || path.join(os.homedir(), ".agentic-os", "marketing");
 const CAMPAIGNS_DIR = path.join(MARKETING_DIR, "campaigns");
 const PERSONAS_DIR = path.join(MARKETING_DIR, "personas");
 
@@ -57,6 +58,8 @@ export interface ContentItem {
   status: ItemStatus;
   scheduledFor?: string;  // ISO date the plan suggests
   publishedUrl?: string;
+  /** ISO timestamp of the manual "Mark published" (S32; items published before it have none). */
+  publishedAt?: string;
   updated?: string;
 }
 
@@ -393,6 +396,7 @@ export async function setItemStatus(slug: string, itemId: string, action: "appro
   } else if (action === "published") {
     if (item.status !== "approved" && item.status !== "scheduled") throw new Error("Only approved items can be marked published.");
     item.status = "published";
+    item.publishedAt = new Date().toISOString();
     if (extra?.publishedUrl) item.publishedUrl = String(extra.publishedUrl).slice(0, 400);
     if (c.items.every((i) => i.status === "published")) c.status = "done";
     else c.status = "live";

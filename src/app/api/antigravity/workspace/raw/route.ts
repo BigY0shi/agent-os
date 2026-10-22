@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   const project = url.searchParams.get("project") ?? "";
   const rel = url.searchParams.get("path") ?? "";
   if (!kind || !project || !rel) return new Response("kind, project, path required", { status: 400 });
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(project)) return new Response("invalid project", { status: 400 });
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(project)) return new Response("invalid project", { status: 400 });
 
   const root = kind === "brain" ? BRAIN_ROOT : SCRATCH_ROOT;
   const base = path.join(root, project);

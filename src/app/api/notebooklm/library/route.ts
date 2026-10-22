@@ -3,11 +3,28 @@ import { readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { AGENTIC_DIR } from "@/lib/vaultWriter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ASSETS_DIR = path.join(os.homedir(), "Documents", "Obsidian Vault", "Agentic OS", "Notebooks", "_assets");
+
+/**
+ * Notebooks live under the CONFIGURED vault, not a guessed one.
+ *
+ * This used to hardcode ~/Documents/Obsidian Vault, which does not exist on
+ * every machine - so mkdir -p happily created a phantom folder nobody opens and
+ * every write landed there instead of the real vault. Falls back to
+ * ~/.agentic-os/notebooks when no vault is configured, because a relative path
+ * (what path.join("") yields) would write into the server's cwd.
+ */
+function notebooksDir(): string {
+  return AGENTIC_DIR
+    ? path.join(AGENTIC_DIR, "Notebooks")
+    : path.join(os.homedir(), ".agentic-os", "notebooks");
+}
+
+const ASSETS_DIR = path.join(notebooksDir(), "_assets");
 
 interface SavedAsset {
   name: string; path: string; relPath: string;

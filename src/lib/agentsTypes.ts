@@ -7,8 +7,8 @@
  *  ALL modes — even bypass can't send/post/pay/delete without approval. */
 export type AgentPermissionMode = "bypass" | "gated" | "ask";
 
-/** Model dial: fast = cheap sonnet-tier, standard = sonnet, deep = the pinned
- *  opus-tier CLAUDE_MODEL. Resolution happens server-side. */
+/** Model dial: fast = cheap sonnet-tier, standard = sonnet, deep = the Claude model
+ *  setting (lib/claudeModel.ts, opus-tier by default). Resolution happens server-side. */
 export type AgentIntelligence = "fast" | "standard" | "deep";
 
 export type AgentTrigger =
@@ -103,6 +103,12 @@ export interface RunMeta {
   /** Final result text (from the SDK result message). */
   result?: string;
   costUsd?: number;
+  /** Total tokens (input + output + both cache buckets) for the run. The SDK
+   *  reports this on every result message; it used to be discarded. */
+  tokens?: number;
+  /** Set when a guard ended the run rather than the agent finishing. Absent
+   *  means the run ended on its own terms. */
+  stoppedBy?: "spend-cap";
   numTurns?: number;
   error?: string;
 }

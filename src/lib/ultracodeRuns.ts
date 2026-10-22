@@ -23,6 +23,7 @@ import { readdir, readFile, writeFile, mkdir, rename, stat } from "node:fs/promi
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { exileFile } from "./exileFile";
 
 export const ULTRACODE_RUNS_ROOT = process.env.AGENTIC_OS_ULTRACODE_RUNS
   ?? path.join(os.homedir(), ".agentic-os", "ultracode-runs");
@@ -60,6 +61,9 @@ export interface UltracodeRun {
   project?: string;        // claude scratch project it ran in
   model: string;
   ultracode: boolean;      // was --effort xhigh on
+  effort?: string;         // the --effort level the run used (settings.ultracode / the tab)
+  targetDir?: string;      // what it worked on (--add-dir), when a folder or repo was given
+  targetLabel?: string;    // the folder path or repo URL as the owner typed it
   sessionId?: string;      // Claude session id — lets us --resume to reply
   turns: RunTurn[];        // every user prompt (turn 1 = the mission, then replies)
   startedAt: number;       // epoch ms
@@ -207,7 +211,7 @@ export function applyEvent(run: UltracodeRun, raw: unknown): UltracodeRun {
 
 export async function saveRun(run: UltracodeRun): Promise<void> {
   if (!existsSync(ULTRACODE_RUNS_ROOT)) await mkdir(ULTRACODE_RUNS_ROOT, { recursive: true });
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(run.id)) return;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(run.id)) return;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${run.id}.json`);
   const tmp = `${file}.tmp-${Date.now()}`;
   await writeFile(tmp, JSON.stringify(run, null, 2), "utf8");
@@ -252,7 +256,7 @@ export async function listRuns(limit = 50): Promise<RunSummary[]> {
 }
 
 export async function getRun(id: string): Promise<UltracodeRun | null> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return null;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return null;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${id}.json`);
   if (!existsSync(file)) return null;
   try { return JSON.parse(await readFile(file, "utf8")) as UltracodeRun; }
@@ -260,14 +264,11 @@ export async function getRun(id: string): Promise<UltracodeRun | null> {
 }
 
 export async function deleteRun(id: string): Promise<boolean> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(id)) return false;
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(id)) return false;
   const file = path.join(ULTRACODE_RUNS_ROOT, `${id}.json`);
   if (!existsSync(file)) return false;
-  try {
-    const { unlink } = await import("node:fs/promises");
-    await unlink(file);
-    return true;
-  } catch { return false; }
+  // Exiled, never deleted: the run's replay moves to <runs>/.exile/<stamp>/.
+  try { return !!(await exileFile(file, ULTRACODE_RUNS_ROOT)); } catch { return false; }
 }
 
 // Tiny helper so the route can stamp a run id.

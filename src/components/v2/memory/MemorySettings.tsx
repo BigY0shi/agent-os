@@ -10,8 +10,9 @@ import { MEMORY_ACCENT, fmtDate, inputStyle } from "./shared";
 // ── MemorySettings (SPEC-A A8.6 + F3.4 + System section) ─────────────────────
 // Rendered as ConfigMenu children. Every knob maps to settings.memory /
 // settings.capability / settings.mcp via /api/settings deep-merge (rule 16 —
-// nothing is config-file-only). The MCP secret is NEVER rendered: it shows as
-// "configured ✓" and the copy button fetches the value only on click.
+// nothing is config-file-only). The MCP secret is never rendered in full: /api/settings
+// returns its mask (first 5 characters + "********") and the copy button fetches the
+// whole value on click from the cookie-only /api/v2/memory/mcp-secret/reveal.
 
 interface MemoryDraft {
   provider: string;
@@ -21,6 +22,11 @@ interface MemoryDraft {
   embedModel: string;
   tokenBudget: string;
   labelRouterThreshold: string;
+  backfillLimit: string;
+  backfillModel: string;
+  backfillProvider: string;
+  openaiCompatUrl: string;
+  openaiCompatReasoningEffort: string;
 }
 
 interface FolderRow { path: string; scopes: ("files" | "coding" | "exec")[] }
@@ -42,9 +48,23 @@ interface JobRowClient {
   enabled: number;
 }
 
-const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax"] as const;
+const PROVIDERS = ["ollama-cloud", "ollama-local", "cli", "minimax", "openai-compat"] as const;
+// S5 backfill: which LOCAL server derives. 'openai-compat' is LM Studio and
+// friends, for models Ollama cannot serve (Bonsai 27B needs a llama.cpp fork).
+const BACKFILL_PROVIDERS = ["ollama-local", "openai-compat"] as const;
+const DEFAULT_COMPAT_URL = "http://127.0.0.1:1234/v1";
+// How hard a thinking model may deliberate. Measured on bonsai-27b 2026-09-03:
+// unset it burns ~1900 reasoning tokens (26 s) per call for a 51-token answer;
+// "none" returns the same facts in 1.2 s. "" sends nothing at all.
+const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", ""] as const;
 const EMBED_PROVIDERS = ["ollama-local", "ollama-cloud"] as const;
 const SCOPES = ["files", "coding", "exec"] as const;
+
+function backfillLimitOf(d: { backfillLimit: string }): number {
+  const n = parseInt(d.backfillLimit, 10);
+  if (!Number.isFinite(n) || n < 1) return 20;
+  return Math.min(n, 500);
+}
 
 // A9.3 — legacy migration sources (POST /api/v2/memory/migrate)
 const MIGRATION_SOURCES = [
@@ -63,6 +83,11 @@ interface MigrateRowResult {
   full: boolean;
   error?: string;
 }
+
+// S5 — legacy backfill (POST /api/v2/memory/backfill). Dry-run answers inline;
+// a real run is a module run the tray carries (module "memory").
+interface BackfillCandidateClient { uuid: string; source: string; validAt: string; chars: number; preview: string }
+interface BackfillDryClient { remaining: number; candidates: BackfillCandidateClient[]; model: string }
 
 function Toggle({
   label, hint, checked, disabled, onChange,
@@ -99,6 +124,11 @@ export default function MemorySettings() {
   const [jobs, setJobs] = useState<JobRowClient[] | null>(null);
   const [migrating, setMigrating] = useState<string | null>(null); // "<source>:<dry|import>"
   const [migrateResults, setMigrateResults] = useState<Record<string, MigrateRowResult>>({});
+  const [backfillBusy, setBackfillBusy] = useState<"dry" | "run" | null>(null);
+  const [backfillDry, setBackfillDry] = useState<BackfillDryClient | null>(null);
+  const [backfillRun, setBackfillRun] = useState<{ runId: string; limit: number; model: string } | null>(null);
+  const [backfillErr, setBackfillErr] = useState<string | null>(null);
+  const [backfillRemaining, setBackfillRemaining] = useState<number | null>(null);
 
   const memory = (settings?.memory ?? {}) as Record<string, unknown>;
   const capability = (settings?.capability ?? {}) as Record<string, unknown>;
@@ -116,6 +146,11 @@ export default function MemorySettings() {
       embedModel: String(memory.embedModel ?? ""),
       tokenBudget: String(memory.tokenBudget ?? 10000),
       labelRouterThreshold: String(memory.labelRouterThreshold ?? 0.7),
+      backfillLimit: String(memory.backfillLimit ?? 20),
+      backfillModel: String(memory.backfillModel ?? "bonsai:27b"),
+      backfillProvider: String(memory.backfillProvider ?? "ollama-local"),
+      openaiCompatUrl: String(memory.openaiCompatUrl ?? DEFAULT_COMPAT_URL),
+      openaiCompatReasoningEffort: String(memory.openaiCompatReasoningEffort ?? "none"),
     });
     setCapDraft({
       folders: Array.isArray(capability.folders) ? (capability.folders as FolderRow[]).map((f) => ({ path: f.path, scopes: [...(f.scopes ?? [])] })) : [],
@@ -139,6 +174,11 @@ export default function MemorySettings() {
         embedModel: draft.embedModel.trim(),
         tokenBudget: Number.isFinite(tokenBudget) ? tokenBudget : 10000,
         labelRouterThreshold: Number.isFinite(threshold) ? threshold : 0.7,
+        backfillLimit: backfillLimitOf(draft),
+        backfillModel: draft.backfillModel.trim() || "bonsai:27b",
+        backfillProvider: draft.backfillProvider,
+        openaiCompatUrl: draft.openaiCompatUrl.trim() || DEFAULT_COMPAT_URL,
+        openaiCompatReasoningEffort: draft.openaiCompatReasoningEffort as "" | "none" | "minimal" | "low" | "medium" | "high",
       },
       capability: {
         ...capability,
@@ -158,9 +198,10 @@ export default function MemorySettings() {
   async function copySecret() {
     setSecretErr(false);
     try {
-      const r = await fetch("/api/settings", { cache: "no-store" });
+      // GET /api/settings masks secrets; this cookie-only route is the one door out.
+      const r = await fetch("/api/v2/memory/mcp-secret/reveal", { method: "POST", cache: "no-store" });
       const j = await r.json();
-      const secret = j?.settings?.mcp?.secret;
+      const secret = r.ok ? j?.secret : null;
       if (typeof secret !== "string" || !secret) { setSecretErr(true); return; }
       await navigator.clipboard.writeText(secret);
       setSecretCopied(true);
@@ -203,6 +244,68 @@ export default function MemorySettings() {
       }));
     } finally {
       setMigrating(null);
+    }
+  }
+
+  // How many undrived legacy episodes exist right now (reads only).
+  const refreshBackfill = useCallback(async () => {
+    try {
+      const r = await fetch("/api/v2/memory/backfill?limit=1", { cache: "no-store" });
+      const j = await r.json();
+      if (typeof j?.remaining === "number") setBackfillRemaining(j.remaining);
+      if (typeof j?.runId === "string") setBackfillRun((prev) => prev ?? { runId: j.runId, limit: 0, model: "" });
+    } catch { /* offline */ }
+  }, []);
+  useEffect(() => { void refreshBackfill(); }, [refreshBackfill]);
+
+  /** Dry-run lists candidates and writes nothing; a real run persists the two
+   *  knobs first (rule 16) and then hands the work to a module run. */
+  async function runBackfill(dryRun: boolean) {
+    if (!draft) return;
+    const limit = backfillLimitOf(draft);
+    const model = draft.backfillModel.trim() || "bonsai:27b";
+    const provider = draft.backfillProvider;
+    const compatUrl = draft.openaiCompatUrl.trim() || DEFAULT_COMPAT_URL;
+    const effort = draft.openaiCompatReasoningEffort;
+    setBackfillErr(null);
+    setBackfillBusy(dryRun ? "dry" : "run");
+    try {
+      if (!dryRun) {
+        setBackfillDry(null);
+        // The URL is persisted too: the server reads it from settings, so a run
+        // started here must not depend on an unsaved field (rule 16).
+        await save({
+          memory: {
+            ...memory,
+            backfillLimit: limit,
+            backfillModel: model,
+            backfillProvider: provider,
+            openaiCompatUrl: compatUrl,
+            openaiCompatReasoningEffort: effort as "" | "none" | "minimal" | "low" | "medium" | "high",
+          },
+        });
+      }
+      const r = await fetch("/api/v2/memory/backfill", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ limit, model, provider, dryRun }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setBackfillErr(String(j?.error ?? `HTTP ${r.status}`));
+        if (typeof j?.runId === "string") setBackfillRun({ runId: j.runId, limit, model });
+        return;
+      }
+      if (dryRun) {
+        setBackfillDry({ remaining: j.remaining ?? 0, candidates: Array.isArray(j.candidates) ? j.candidates : [], model: String(j.model ?? model) });
+        setBackfillRemaining(typeof j?.remaining === "number" ? j.remaining : null);
+      } else {
+        setBackfillRun({ runId: String(j.runId ?? ""), limit, model });
+      }
+    } catch (err) {
+      setBackfillErr(err instanceof Error ? err.message : "request failed");
+    } finally {
+      setBackfillBusy(null);
     }
   }
 
@@ -281,6 +384,7 @@ export default function MemorySettings() {
             <span className="inline-flex items-center gap-1.5 text-[12px] font-medium" style={{ color: "#34d399" }}>
               <Check size={13} /> configured ✓
             </span>
+            <code className="font-mono text-[11.5px]" style={{ color: "var(--fg-dim, #9aa)" }} title="First characters only; Copy secret copies the whole value">{mcp.secret}</code>
             <button onClick={copySecret}
               className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-md text-[11.5px] font-medium"
               style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
@@ -295,7 +399,7 @@ export default function MemorySettings() {
         )}
       </div>
       <p className="text-[10.5px] leading-relaxed mb-1" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
-        The secret is never displayed. Agents connect with header <code className="font-mono">x-agentos-mcp-secret</code> at{" "}
+        Only its first characters are shown; Copy secret copies the whole value. Agents connect with header <code className="font-mono">x-agentos-mcp-secret</code> at{" "}
         <code className="font-mono">/api/mcp?source=&lt;name&gt;</code>.
         {secretErr && <span style={{ color: "#f87171" }}> Couldn&apos;t copy — clipboard unavailable.</span>}
       </p>
@@ -400,6 +504,100 @@ export default function MemorySettings() {
           </div>
         );
       })}
+      <div className="mb-3" />
+
+      {/* ── Legacy backfill (S5) ── */}
+      <SectionTitle>Legacy backfill</SectionTitle>
+      <p className="text-[10.5px] leading-relaxed mb-2" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+        Imported legacy episodes carry no aspect (Identity / Event / Relationship…) because the import
+        wrote them verbatim. This derives them in place through the normal pipeline (6–8 LLM calls each)
+        on a <strong>local model</strong>, never a hosted one; the server down or the model absent
+        stops the run with the reason. Existing rows are updated, nothing is re-imported, dedup is untouched.
+        Embeddings always run on Ollama, so an LM Studio run needs Ollama up as well.
+        {backfillRemaining !== null && (
+          <span className="block mt-1" style={{ color: "var(--fg-dim, #9aa)" }}>
+            {backfillRemaining === 0 ? "No legacy episodes are waiting for derivation." : `${backfillRemaining} legacy episode${backfillRemaining === 1 ? "" : "s"} still lack derivation.`}
+          </span>
+        )}
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Episodes per run" hint="Start with ~20 and look at the rows before the full set.">
+          <TextInput type="number" min="1" max="500" value={draft.backfillLimit}
+            onChange={(e) => setDraft({ ...draft, backfillLimit: e.target.value })} />
+        </Field>
+        <Field label="Served by" hint="Ollama, or an OpenAI-compatible server such as LM Studio.">
+          <select value={draft.backfillProvider} onChange={(e) => setDraft({ ...draft, backfillProvider: e.target.value })}
+            className="w-full h-8 rounded-md px-2 text-[12.5px] outline-none" style={inputStyle}>
+            {BACKFILL_PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field
+          label="Chat model"
+          hint={draft.backfillProvider === "openai-compat"
+            ? "The server's API identifier, verbatim (LM Studio shows it in the Developer tab), e.g. bonsai-27b."
+            : "Must be pulled on the local Ollama (ollama pull …), e.g. bonsai:27b."}
+        >
+          <TextInput value={draft.backfillModel} onChange={(e) => setDraft({ ...draft, backfillModel: e.target.value })}
+            placeholder={draft.backfillProvider === "openai-compat" ? "bonsai-27b" : "bonsai:27b"} />
+        </Field>
+        {draft.backfillProvider === "openai-compat" ? (
+          <Field label="Server URL" hint="Include the /v1 segment. A key, if needed, comes from OPENAI_COMPAT_API_KEY in the environment.">
+            <TextInput value={draft.openaiCompatUrl} onChange={(e) => setDraft({ ...draft, openaiCompatUrl: e.target.value })}
+              placeholder={DEFAULT_COMPAT_URL} />
+          </Field>
+        ) : <div />}
+      </div>
+      {draft.backfillProvider === "openai-compat" && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Thinking budget" hint="A reasoning model can spend 25 s per call deliberating for a one-line answer. 'none' measured 22x faster on bonsai-27b with the same facts.">
+            <select value={draft.openaiCompatReasoningEffort} onChange={(e) => setDraft({ ...draft, openaiCompatReasoningEffort: e.target.value })}
+              className="w-full h-8 rounded-md px-2 text-[12.5px] outline-none" style={inputStyle}>
+              {REASONING_EFFORTS.map((p) => <option key={p || "unset"} value={p}>{p || "(send nothing, server decides)"}</option>)}
+            </select>
+          </Field>
+          <div />
+        </div>
+      )}
+      <div className="flex items-center gap-2 mb-2">
+        <button onClick={() => void runBackfill(true)} disabled={backfillBusy !== null || saving}
+          className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
+          style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #9aa)" }}>
+          {backfillBusy === "dry" && <Loader2 size={10} className="animate-spin" />}
+          Dry-run
+        </button>
+        <button onClick={() => void runBackfill(false)} disabled={backfillBusy !== null || saving}
+          className="inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[10.5px] font-medium shrink-0 disabled:opacity-50"
+          style={{ border: `1px solid ${MEMORY_ACCENT}44`, color: MEMORY_ACCENT }}>
+          {backfillBusy === "run" && <Loader2 size={10} className="animate-spin" />}
+          Run backfill
+        </button>
+        {backfillRun && (
+          <span className="text-[10.5px]" style={{ color: "var(--fg-dim, #9aa)" }}>
+            running as a module run — progress is in the runs tray
+            <span className="font-mono"> ({backfillRun.runId.slice(0, 8)})</span>
+          </span>
+        )}
+      </div>
+      {backfillErr && (
+        <div className="text-[10.5px] mb-2" style={{ color: "#f87171" }}>error: {backfillErr}</div>
+      )}
+      {backfillDry && (
+        <div className="mb-2">
+          <div className="text-[10.5px] mb-1" style={{ color: "var(--fg-dim, #9aa)" }}>
+            dry-run · {backfillDry.candidates.length} of {backfillDry.remaining} would be derived with <span className="font-mono">{backfillDry.model}</span> · nothing written
+          </div>
+          {backfillDry.candidates.slice(0, 20).map((c) => (
+            <div key={c.uuid} className="py-1" style={{ borderBottom: "1px solid var(--panel-border, #2a2436)" }}>
+              <div className="font-mono text-[9.5px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                {c.uuid.slice(0, 8)} · {c.validAt.slice(0, 10)} · {c.source} · {c.chars} ch
+              </div>
+              <div className="text-[10.5px] truncate" style={{ color: "var(--fg, #e8e2f0)" }}>{c.preview}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mb-3" />
 
       {/* ── System ── */}

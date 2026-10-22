@@ -47,10 +47,19 @@ for f in "$HOME"/.hermes/profiles/*/.env "$HOME/.fcc/.env"; do
   [ -f "$f" ] && chmod 600 "$f" 2>/dev/null
 done
 
-# 5 · Start (the dashboard only answers YOUR computer — localhost, never the network)
+# 5 · Start. `npm start` is `next start -H 0.0.0.0`, so this listens on EVERY
+#     interface, not just localhost. Anything on your network can reach it. The
+#     password gate in src/proxy.ts is what stands between them and your agents,
+#     and it fails closed when AGENTOS_PASSWORD is unset. The previous version of
+#     this file claimed the opposite ("localhost, never the network"), which was
+#     the most reassuring thing it could have said and also untrue.
 echo ""
 echo "  ✅ Opening http://localhost:3737 — keep this window open while you use it."
 echo "     (To stop: close this window or press Ctrl+C.)"
+echo ""
+echo "  🌐 Listening on ALL interfaces (0.0.0.0), so other devices on your network"
+echo "      can reach this. Set AGENTOS_PASSWORD before starting; without it the"
+echo "      gate refuses every request rather than letting anyone in."
 echo ""
 echo "  ⚖️  Use at your own risk — by using the Agent OS you accept DISCLAIMER.md"
 echo "      (no warranty; you're responsible for your own keys, costs + what your agents do)."

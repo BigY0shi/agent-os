@@ -25,6 +25,46 @@ Counts verified 2026-08-31; treat them as orientation, not as a spec.
 
 Migrations are **contributed to the `MIGRATIONS` array**, never edited in place once shipped. Pick the next free number in the right phase band.
 
+## Running it
+
+The app listens on **port 3737**. Not 3000, not 3001: two other projects on this
+machine hold those, so a listener there belongs to something else and says nothing
+about whether Agent OS is up. Confirmed by the owner on 2026-09-02, after a session
+spent diagnosing a port that was never his.
+
+Production only. `npm start` is `next start -H 0.0.0.0`, which serves the prebuilt
+`.next` output and does not compile on demand. There is no dev build here and never
+has been. `npm run dev` does exist in package.json and binds 127.0.0.1, and that is
+the trap: finding that bind and concluding the dev server is running is exactly how
+the wrong diagnosis got made. The port comes from the launcher, not from a `-p` flag.
+
+Launchers are `.bat` files in the repo root, run by the owner and never by you:
+`Start Agent OS.bat`, `Restart Agent OS.bat`, `Stop Agent OS.bat`, `Check My Setup.bat`,
+`Update Agent OS.bat`, plus the two Paperclip scripts. Per the owner on 2026-09-02, the
+restart script has been seen exiting silently. Read on 2026-09-02: BOTH the start and
+restart scripts call `kokoro-start.ps1`. The silent exit was `Restart Agent OS.bat`
+ignoring the exit code of `agentos-restart.ps1`, which aborts (correctly) when a process
+survives on 3737; the batch file printed "Done" and closed after five seconds anyway.
+Fixed the same day: it now pauses on a non-zero exit and says the old server is still up.
+
+**Remote access is Tailscale, and the microphone needs HTTPS.** The owner reaches the
+app from other devices at his tailnet address (100.88.224.75, MagicDNS
+`desktop.hair-halfmoon.ts.net`). Over plain http that is not a secure context, so
+browsers hide `navigator.mediaDevices` and every mic provider in the Jarvis gear reads
+"unavailable" while typed chat and spoken replies still work (owner report 2026-09-02).
+The fix is `tailscale serve --bg 3737` on the host, which fronts the app at
+`https://desktop.hair-halfmoon.ts.net` with a valid cert; it is a Tailscale config
+change and the owner runs it. Do not tell him to open a browser flag before that.
+
+**You cannot see the running app.** Routes behind the gate answer 307 with an
+Unauthorized JSON body. Signing in is the owner's job, and his credentials are never
+yours to type into a form. When something needs confirming in the live UI, ask him to
+look and report back.
+
+The mtime on `.next/BUILD_ID` is the honest answer to "is the running build current?".
+Compare it against the newest commit before claiming a change is live. Do not turn that
+into a nag to rebuild (rule 15), and never restart the server yourself (rule 12).
+
 ## How work lands here
 
 **Every module gets a smoke.** `scripts/v2/smoke-<module>.mjs`, run with `npx tsx`. They must pass offline: no network, no dev server, no live credentials. A smoke that touches a config directory MUST redirect it to a temp dir first (`AGENTIC_OS_DB`, `AGENTIC_OS_SETTINGS`, `AGENTIC_OS_NEWSLETTER_DIR`, `AGENTIC_OS_AGENTMAIL_DIR`). This is not hypothetical: on 2026-08-31 a smoke read the real AgentMail config and listed the owner's actual inbox with his actual key.
@@ -45,6 +85,43 @@ Migrations are **contributed to the `MIGRATIONS` array**, never edited in place 
 - **Never end a response telling him to run `npm run build`**, and never tally pending rebuilds. He rebuilds after every change. (Rule 15)
 - **Stage explicit file lists.** This repo habitually carries 50+ dirty files of his in-progress work. `git add -A <dir>` has already swept ~30 unrelated files into a commit once. (Rule 22 in the global contract)
 - **Nothing critical is committed without his review.**
+
+## Harness (autonomous sessions)
+
+`scripts/harness/ralph-loop.sh` spawns fresh headless `claude -p` sessions, one
+`"failing"` feature from `features.json` each, gated on `./test.sh` (a clean `tsc` plus every
+offline smoke). State lives in files: `features.json` (a session may change ONLY its own
+feature's `status`, `notes`, `model`), `agent-progress.md` (read first, update last),
+`DEV-JOURNAL.md` and `ROADMAP.md`. Cycle logs land in `.harness-logs/` (gitignored).
+
+**Session Initialization Ritual.** Read `agent-progress.md`; `git log --oneline -5`;
+`git status --short` (know which files are the owner's uncommitted work, and never stage or
+reformat them); read the feature's `description`, `acceptance_criteria` and every `sources`
+path; run `./init.sh`; read the real code before changing it.
+
+**Working it.** The minimum that meets the acceptance criteria, additive and reversible,
+with a smoke that proves it (offline, credential dirs redirected, rule 19). Feat-loop
+discipline applies: recon with exit codes captured, evidence before diagnosis, 0 errors and
+0 warnings, then the commit.
+
+**Close-Out Ritual, all of it.** `./test.sh` exits 0. `npm run version:bump -- minor` (feat)
+or `patch` (fix). Stage an explicit file list plus `features.json`, `DEV-JOURNAL.md`,
+`ROADMAP.md`, `package.json`, `package-lock.json`; commit as `feat(<feature_id>): <desc>`
+with the trailer `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`; `git push`.
+Flip `status` to `"passing"` only when every criterion is met and the gate is green, with
+concrete evidence in `notes`. Update `agent-progress.md`. Tick the slice in `ROADMAP.md` and
+run `node scripts/roadmap-page.mjs`.
+
+**Stopping early.** `BLOCKED: <reason>` or `AWAITING USER VERIFY` + a numbered checklist in
+`agent-progress.md` pauses the loop (exit 2). Use `AWAITING USER VERIFY` only for things
+that genuinely need the owner (a live-app check, a decision); retire the marker by retitling
+it when resolved, because the grep is whole-file. A feature you cannot finish is left
+`failing` with `SKIP <date>: <reason>` appended to `notes` so the operator can reorder; do
+not stop the loop for it.
+
+**Never in a harness session:** start, stop or restart the server on 3737; `git add -A`;
+edit another feature's row or any `acceptance_criteria`; publish Artifacts; delete anything
+(exile to `.exile/<timestamp>/`).
 
 ## Assets
 
@@ -67,3 +144,4 @@ Append-only and referenced by number. Never delete one; supersede it with a new 
 17. [ARCH] Writing personas/voices must be MODEL-AGNOSTIC editable data: plain persona records (voice rules, audience, banned phrases, CTA style) stored as data and edited in-app, injected at draft time into whichever agent/provider is selected - never baked into agent-specific prompt code (stated 2026-08-16).
 18. [PROCESS] Every commit that ships a feature or a fix MUST carry a version bump. Run `npm run version:check` before committing (it fails when commits have landed since the newest tag but `package.json` has not moved) and `npm run version:bump` to apply it - feat -> minor, fix/perf/refactor/test/chore -> patch, `!` or a BREAKING CHANGE footer -> major. Tag and publish with `npm run version:release`, which prints the tag commands plus release notes grouped Added/Fixed/Internal. **The changelog is the GitHub RELEASE BODY, not `CHANGELOG.md`** - that file is inherited from upstream (member-facing notes, "Thanks Ridz") and is not ours to rewrite. Note the topology trap: releases are tagged on `local-main` (v2.0.0 sits on the PR #10 merge commit) while feature work continues on branches forked before that merge, so the newest tag is routinely NOT an ancestor of HEAD - `git describe` honestly answers `v1.0.0` and would compare against a release two versions stale. `scripts/version.mjs` therefore resolves the newest tag by `git tag --sort=-v:refname`, not by reachability. - Because on 2026-08-31 `package.json` still read 2.0.0 with seven shipped commits behind the v2.0.0 tag; a version that never moves actively asserts something false about the running build, which is the same class of problem as the fabricated BUILD tag already stripped out of MissionStripe.tsx.
 19. [PROCESS] Every smoke that reads a credential directory MUST redirect it to a temp dir before importing the module that reads it - `AGENTIC_OS_AGENTMAIL_DIR`, `AGENTIC_OS_NEWSLETTER_DIR`, `AGENTIC_OS_SETTINGS`, `AGENTIC_OS_DB`. `smoke-agentmail.mjs` §F greps every sibling smoke to enforce this. - Because on 2026-08-31 adding an AgentMail fallback to the newsletter sync made `smoke-newsletter.mjs` read the real `~/.agentic-os/agentmail/config.json` and list the owner's live inbox with his live key. Read-only and harmless that time; the next one might not be.
+20. [ARCH] A provider fallback is allowed ONLY when the owner chose it in that module's settings AND the response labels it (`provider` = who actually answered, `fellBackFrom`, `fallbackReason`); with no choice made, fail loudly. - Because on 2026-09-02 Yoshi asked for ElevenLabs to stay as the backup when Voicebox fails, while "Fail loudly" above bans the SILENT kind: the difference is that he picked it and the reply says which voice spoke and why. Reference: `voiceboxTts()` in `src/app/api/hermes/tts/route.ts`, `jarvis.voice.ttsFallback`.

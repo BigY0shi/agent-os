@@ -11,7 +11,12 @@
 //
 // Job state lives on globalThis for the same reason the terminal's and the scrape's
 // do — route handlers are stateless, this work is not.
-import { listDeals, setBrief } from "@/lib/upworkDesk";
+//
+// Two halves (roadmap S2 backlog): planBriefBatch() picks the targets and
+// runBriefBatch() works them, so a route can put the work inside
+// startModuleRun() and hand it the run's signal / progress / log. startBriefBatch()
+// is the original one-call form the feed pull and "refill" still use.
+import { listDeals, setBrief, type Deal } from "@/lib/upworkDesk";
 import { generateBrief, pool } from "@/lib/dealBrief";
 
 // ~15s per lead. 4 at a time keeps a batch of 20 around 75s without spawning 20
@@ -35,6 +40,8 @@ export interface BriefJob {
   error: string | null;
   /** The top-up target this pass was started with, if any (for status reporting). */
   target?: number;
+  /** The module run this pass is registered under, when a route registered one. */
+  runId?: string;
 }
 
 const g = globalThis as unknown as { __agentosBrief?: BriefJob };
@@ -47,12 +54,7 @@ export function briefBatchStatus(): BriefJob {
   return { ...job };
 }
 
-/**
- * Start a brief pass over unanalysed leads, best-scoring first.
- * Returns immediately — callers poll briefBatchStatus(). Never throws for "nothing to
- * do"; that is a normal outcome when every lead already has a brief.
- */
-export async function startBriefBatch(opts?: {
+export interface BriefBatchOpts {
   source?: string;
   limit?: number;
   /**
@@ -61,8 +63,19 @@ export async function startBriefBatch(opts?: {
    * 5 more, not another full batch of 20 on top of the ones already waiting.
    */
   target?: number;
-}): Promise<{ started: boolean; total: number; reason?: string }> {
-  if (job.running) return { started: false, total: job.total, reason: "already running" };
+}
+
+export type BriefBatchPlan =
+  | { ok: true; targets: Deal[] }
+  | { ok: false; total: number; reason: "already running" | "queue already full" | "nothing to brief" };
+
+/**
+ * Pick the leads a pass would brief, best-scoring first. Pure selection: nothing
+ * starts here. Never throws for "nothing to do"; that is a normal outcome when
+ * every lead already has a brief.
+ */
+export async function planBriefBatch(opts?: BriefBatchOpts): Promise<BriefBatchPlan> {
+  if (job.running) return { ok: false, total: job.total, reason: "already running" };
 
   const all = await listDeals();
   const feedOnly = (d: { source?: string }) => (opts?.source ? (d.source || "upwork") === opts.source : true);
@@ -73,7 +86,7 @@ export async function startBriefBatch(opts?: {
     // Only count cards in the live review queue — approved/sent leads have left it.
     const analysedInNew = pool0.filter((d) => d.status === "new" && d.summary).length;
     limit = Math.max(0, opts.target - analysedInNew);
-    if (limit === 0) return { started: false, total: 0, reason: "queue already full" };
+    if (limit === 0) return { ok: false, total: 0, reason: "queue already full" };
   } else {
     limit = Math.max(1, Math.min(100, opts?.limit ?? DEFAULT_LIMIT));
   }
@@ -85,35 +98,67 @@ export async function startBriefBatch(opts?: {
     .sort((a, b) => b.composite - a.composite)
     .slice(0, limit);
 
-  if (!targets.length) return { started: false, total: 0, reason: "nothing to brief" };
+  if (!targets.length) return { ok: false, total: 0, reason: "nothing to brief" };
+  return { ok: true, targets };
+}
 
+/**
+ * Work a planned pass to the end. Owns the job state for its whole life. The
+ * signal ends the pass early: leads not yet started are left un-briefed (they
+ * are picked up by the next pass), the claude children in flight are killed
+ * through generateBrief, and the job records "stopped".
+ */
+export async function runBriefBatch(targets: Deal[], opts: {
+  target?: number;
+  runId?: string;
+  signal?: AbortSignal;
+  onProgress?: (done: number, total: number) => void;
+  log?: (text: string) => void;
+} = {}): Promise<void> {
+  // planBriefBatch checked this, but two POSTs can plan in the same tick.
+  if (job.running) throw new Error("A brief pass is already running.");
   Object.assign(job, {
     running: true, total: targets.length, done: 0, succeeded: 0, failed: 0,
-    startedAt: Date.now(), finishedAt: null, error: null, target: opts?.target,
+    startedAt: Date.now(), finishedAt: null, error: null, target: opts.target, runId: opts.runId,
   });
-
-  // Deliberately not awaited.
-  void (async () => {
-    try {
-      await pool(targets, CONCURRENCY, async (deal) => {
-        try {
-          const brief = await generateBrief(deal);
-          if (brief) { await setBrief(deal.id, brief); job.succeeded++; }
-          else job.failed++;
-        } catch {
-          // One bad lead must not abort the pass.
-          job.failed++;
-        } finally {
-          job.done++;
-        }
-      });
-    } catch (e) {
-      job.error = e instanceof Error ? e.message : String(e);
-    } finally {
-      job.running = false;
-      job.finishedAt = Date.now();
+  opts.log?.(`briefing ${targets.length} leads, ${CONCURRENCY} at a time`);
+  try {
+    await pool(targets, CONCURRENCY, async (deal) => {
+      if (opts.signal?.aborted) return; // do not start another lead after STOP
+      try {
+        const brief = await generateBrief(deal, opts.signal);
+        if (brief) { await setBrief(deal.id, brief); job.succeeded++; opts.log?.(`briefed: ${deal.title}`); }
+        else { job.failed++; opts.log?.(`no usable brief: ${deal.title}`); }
+      } catch {
+        // One bad lead must not abort the pass.
+        job.failed++;
+      } finally {
+        job.done++;
+        opts.onProgress?.(job.done, job.total);
+      }
+    });
+    if (opts.signal?.aborted) {
+      job.error = "stopped";
+      throw opts.signal.reason instanceof Error ? opts.signal.reason : new Error("stopped");
     }
-  })();
+  } catch (e) {
+    if (!job.error) job.error = e instanceof Error ? e.message : String(e);
+    throw e;
+  } finally {
+    job.running = false;
+    job.finishedAt = Date.now();
+  }
+}
 
-  return { started: true, total: targets.length };
+/**
+ * Start a brief pass over unanalysed leads, best-scoring first.
+ * Returns immediately — callers poll briefBatchStatus(). Never throws for "nothing to
+ * do"; that is a normal outcome when every lead already has a brief.
+ */
+export async function startBriefBatch(opts?: BriefBatchOpts): Promise<{ started: boolean; total: number; reason?: string }> {
+  const plan = await planBriefBatch(opts);
+  if (!plan.ok) return { started: false, total: plan.total, reason: plan.reason };
+  // Deliberately not awaited; the job state carries the outcome.
+  void runBriefBatch(plan.targets, { target: opts?.target }).catch(() => {});
+  return { started: true, total: plan.targets.length };
 }

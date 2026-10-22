@@ -11,7 +11,7 @@
 // instead of hand-rolling it again.
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, accessSync, constants as fsConstants, readFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
@@ -109,3 +109,73 @@ export function augmentPath(extraDirs: string[] = [], base = process.env.PATH ??
 export const POSIX_TOOL_DIRS = IS_WIN
   ? []
   : ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", path.join(os.homedir(), ".local", "bin")];
+
+/**
+ * Every match for `name` on a PATH, in PATH order, honouring PATHEXT on Windows.
+ * A plain scan rather than `where` / `command -v`: those are themselves subprocesses
+ * that need a PATH to be found on, which a caller handing us a custom PATH (a deploy
+ * env, a smoke's temp bin) may not have.
+ */
+export function whichAll(name: string, envPath: string = process.env.PATH ?? ""): string[] {
+  const sep = IS_WIN ? ";" : ":";
+  const dirs = envPath.split(sep).map((d) => d.trim()).filter(Boolean);
+  const exts = IS_WIN
+    ? ["", ...((process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").map((e) => e.trim()).filter(Boolean))]
+    : [""];
+  const out: string[] = [];
+  for (const dir of dirs) {
+    for (const ext of exts) {
+      const p = path.join(dir, name + ext);
+      if (!existsSync(p)) continue;
+      if (!IS_WIN) { try { accessSync(p, fsConstants.X_OK); } catch { continue; } }
+      if (!out.includes(p)) out.push(p);
+    }
+  }
+  return out;
+}
+
+export interface ResolvedCli {
+  /** What to hand to spawn(): a native exe (or node.exe for an npm shim). */
+  cmd: string;
+  /** Leading args spawn() needs before the caller's own (the shim's JS entry, or nothing). */
+  pre: string[];
+  /** The PATH entry that was found (the shim or exe), for logs. */
+  found: string;
+}
+
+/**
+ * Resolve a CLI name into something Node's spawn() can run WITHOUT a shell.
+ *
+ * On Windows an npm-installed CLI (netlify, npx, eleventy, ...) is a `.cmd` shim, and
+ * `spawn("netlify", args)` fails instantly with ENOENT because CreateProcess only runs
+ * .exe files; routing the call through a shell instead would mean string-concatenating
+ * the args (global CLAUDE.md: never invoke a bare .CMD/.BAT from a subprocess). So, in
+ * PATH order: a real `.exe` is used as is; a `.cmd` shim is read for the
+ * `node_modules/.../*.js` entry it launches and we run `node <entry> ...args` ourselves
+ * with a clean arg array (the same trick lib/runner.ts uses for the agent CLIs). Anything
+ * else is an error that says what was found, never a silent fallback.
+ * On macOS / Linux the first executable match is returned unchanged.
+ * Re-resolved on every call (cheap), so an install or update is picked up without a restart.
+ */
+export function resolveCli(name: string, envPath: string = process.env.PATH ?? ""): ResolvedCli | { error: string } {
+  const found = whichAll(name, envPath);
+  if (!found.length) return { error: `${name} is not on PATH` };
+  if (!IS_WIN) return { cmd: found[0], pre: [], found: found[0] };
+  const exe = found.find((p) => /\.exe$/i.test(p));
+  if (exe) return { cmd: exe, pre: [], found: exe };
+  const shim = found.find((p) => /\.cmd$/i.test(p));
+  if (!shim) return { error: `${name} was found only as ${found[0]}, which Node cannot run on Windows (no .exe or .cmd)` };
+  let txt: string;
+  try { txt = readFileSync(shim, "utf8"); } catch (e) { return { error: `could not read ${shim}: ${String(e)}` }; }
+  // The same entry pattern lib/runner.ts reads out of the agent CLIs' shims. A shim can
+  // name more than one script (Node's own npx.cmd runs npm-prefix.js first to locate
+  // npx-cli.js); the CLI's entry is the last one that exists and is not that helper.
+  const refs = [...txt.matchAll(/node_modules[\\/][^"%\r\n]+\.(?:mjs|cjs|js)/gi)].map((m) => m[0]);
+  const entries = [...new Set(refs)]
+    .filter((r) => !/npm-prefix\.js$/i.test(r))
+    .map((r) => path.join(path.dirname(shim), r))
+    .filter((p) => existsSync(p));
+  if (!refs.length) return { error: `${shim} is a .cmd shim whose Node entry could not be found; Node cannot run .cmd files without a shell` };
+  if (!entries.length) return { error: `${shim} points at ${refs.join(", ")}, which does not exist beside it` };
+  return { cmd: process.execPath, pre: [entries[entries.length - 1]], found: shim };
+}

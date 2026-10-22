@@ -1,13 +1,16 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { readSettings } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Proxy Open Design's project list into the dashboard (the daemon on :7455 sends no
-// CORS headers, so the browser can't hit it directly). Powers the Workspace gallery.
-const DAEMON = "http://127.0.0.1:7455";
+// Proxy Open Design's project list into the dashboard (the daemon sends no CORS headers,
+// so the browser can't hit it directly). Powers the Workspace gallery. The daemon is the
+// one set in the Open Design gear (settings.opendesign.daemonUrl), read per request exactly
+// like the status route; it used to be a fixed :7455 here, ignoring that setting.
+const daemon = () => (readSettings().opendesign?.daemonUrl || "http://127.0.0.1:7455").replace(/\/+$/, "");
 // Open Design renders designs to ~/open-design/.od/projects/<id>/index.html — we flag
 // which projects have a rendered file so the gallery can show a live preview vs "building".
 const PROJECTS_DIR = path.join(os.homedir(), "open-design", ".od", "projects");
@@ -25,7 +28,7 @@ export async function DELETE(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id || !/^[A-Za-z0-9_-]{1,80}$/.test(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
   try {
-    const r = await fetch(`${DAEMON}/api/projects/${encodeURIComponent(id)}`, { method: "DELETE", signal: AbortSignal.timeout(6000) });
+    const r = await fetch(`${daemon()}/api/projects/${encodeURIComponent(id)}`, { method: "DELETE", signal: AbortSignal.timeout(6000) });
     return Response.json({ ok: r.ok }, { status: r.ok ? 200 : 502, headers: { "cache-control": "no-store" } });
   } catch {
     return Response.json({ ok: false, error: "Open Design isn't running" }, { status: 503 });
@@ -34,7 +37,7 @@ export async function DELETE(req: Request) {
 
 export async function GET() {
   try {
-    const r = await fetch(`${DAEMON}/api/projects`, { cache: "no-store", signal: AbortSignal.timeout(4000) });
+    const r = await fetch(`${daemon()}/api/projects`, { cache: "no-store", signal: AbortSignal.timeout(4000) });
     if (!r.ok) return Response.json({ projects: [], error: `daemon HTTP ${r.status}` }, { headers: { "cache-control": "no-store" } });
     const j = await r.json();
     const projects = (j.projects ?? []).map((p: ODProject) => ({

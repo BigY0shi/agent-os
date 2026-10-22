@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Inbox, Sparkles, ShieldCheck, Cpu, CheckCircle2, Send, Loader2, X, Check, Ban, ArrowRight, FileText, Play, ExternalLink, Square, Star, LayoutGrid, Columns3, Wand2, StickyNote, ChevronDown, Plus } from "lucide-react";
+import { Inbox, Sparkles, ShieldCheck, Cpu, CheckCircle2, Send, Loader2, X, Check, Ban, ArrowRight, FileText, Play, ExternalLink, Square, Star, LayoutGrid, Columns3, Wand2, StickyNote, ChevronDown, Plus, Archive } from "lucide-react";
 import PipelineSettings from "./PipelineSettings";
 import AgentPicker from "./AgentPicker";
+import { MOD } from "@/lib/modKey";
 
 type Stage = "inbox" | "review" | "building" | "shipped" | "rejected";
 type RouteKind = "project" | "action" | "idea" | "reference" | "escalate";
@@ -99,6 +100,17 @@ export default function PipelineView() {
     setCapturing(true);
     try { await fetch("/api/pipeline/capture", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(fields) }); await refresh(); } catch {}
     setCapturing(false);
+  }
+  async function remove(slug: string) {
+    // Exile, never delete — the file moves to Pipeline/.exile/<timestamp>/ in the vault.
+    if (!window.confirm("Remove this item from the board? Its file is exiled to Pipeline/.exile (recoverable), never deleted.")) return;
+    try {
+      const r = await fetch("/api/pipeline/delete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug }) });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) { setErr(j.error || "Couldn't remove that item."); return; }
+      setSelected(null);
+    } catch { setErr("Couldn't reach the server."); }
+    await refresh();
   }
   async function shape(slug: string) {
     setBusy((b) => ({ ...b, [slug]: "shape" })); setErr(null);
@@ -256,7 +268,7 @@ export default function PipelineView() {
 
       {/* Detail drawer */}
       <AnimatePresence>
-        {selected && <Drawer it={selected} busy={busy[selected.slug]} onClose={() => setSelected(null)} onShape={() => shape(selected.slug)} onDecide={(a) => decide(selected.slug, a)} onBuild={() => build(selected.slug)} onStop={() => stop(selected.slug)} onRevise={(fb, ag) => revise(selected.slug, fb, ag)} onSaveNote={(n) => saveNote(selected.slug, n)} />}
+        {selected && <Drawer it={selected} busy={busy[selected.slug]} onClose={() => setSelected(null)} onShape={() => shape(selected.slug)} onDecide={(a) => decide(selected.slug, a)} onBuild={() => build(selected.slug)} onStop={() => stop(selected.slug)} onRevise={(fb, ag) => revise(selected.slug, fb, ag)} onSaveNote={(n) => saveNote(selected.slug, n)} onRemove={() => remove(selected.slug)} />}
       </AnimatePresence>
       </div>
     </div>
@@ -354,7 +366,7 @@ function Card({ it, busy, onOpen, onShape, onDecide, onBuild, onStop, onPin }: {
   );
 }
 
-function Drawer({ it, busy, onClose, onShape, onDecide, onBuild, onStop, onRevise, onSaveNote }: { it: Item; busy?: string; onClose: () => void; onShape: () => void; onDecide: (a: boolean) => void; onBuild: () => void; onStop: () => void; onRevise: (feedback: string, agent: string) => void; onSaveNote: (notes: string) => void }) {
+function Drawer({ it, busy, onClose, onShape, onDecide, onBuild, onStop, onRevise, onSaveNote, onRemove }: { it: Item; busy?: string; onClose: () => void; onShape: () => void; onDecide: (a: boolean) => void; onBuild: () => void; onStop: () => void; onRevise: (feedback: string, agent: string) => void; onSaveNote: (notes: string) => void; onRemove: () => void }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
@@ -365,7 +377,10 @@ function Drawer({ it, busy, onClose, onShape, onDecide, onBuild, onStop, onRevis
             <div className="flex items-center gap-2"><RouteBadge route={it.route} confidence={it.confidence} /><span className="text-[10px] font-mono text-[var(--fg-dimmer)]">{it.stage}</span></div>
             <h2 className="text-[19px] font-semibold mt-1 text-[var(--fg)]">{it.title}</h2>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--bg-mid)] text-[var(--fg-dim)]"><X size={16} /></button>
+          <div className="flex items-center gap-1">
+            <button onClick={onRemove} title="Remove from board — the file is exiled to Pipeline/.exile in your vault (recoverable), never deleted" className="p-1.5 rounded-lg hover:bg-[var(--bg-mid)] text-[var(--fg-dimmer)] hover:text-[#fb7185]"><Archive size={15} /></button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--bg-mid)] text-[var(--fg-dim)]"><X size={16} /></button>
+          </div>
         </div>
 
         {it.vaultPath && <div className="text-[10.5px] font-mono text-[var(--fg-dimmer)] mb-4 flex items-center gap-1.5"><FileText size={11} /> {it.vaultPath}</div>}
@@ -452,7 +467,7 @@ function CaptureForm({ onCapture, capturing }: { onCapture: (f: { idea: string; 
         <Sparkles size={16} style={{ color: "#22d3ee" }} className="shrink-0 mt-1.5" />
         <textarea value={idea} onChange={(e) => setIdea(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit(); }} rows={2}
-          placeholder="What's the idea? A project, a thought, a link…  (⌘/Ctrl+Enter to capture)"
+          placeholder={`What's the idea? A project, a thought, a link…  (${MOD}+Enter to capture)`}
           className="flex-1 bg-transparent text-[14px] outline-none resize-none text-[var(--fg)] placeholder:text-[var(--fg-dimmer)] pt-1" />
         <button onClick={submit} disabled={!idea.trim() || capturing}
           className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[13px] font-semibold disabled:opacity-40 shrink-0" style={{ background: "#22d3ee", color: "#04181c" }}>

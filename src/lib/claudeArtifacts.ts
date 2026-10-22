@@ -3,12 +3,14 @@
 // share at a link.) Publishing deploys to a DEDICATED Netlify site so it never
 // touches the guides / SEO sites.
 
-import { readFile, writeFile, mkdir, readdir, stat, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat, rename } from "node:fs/promises";
+import { exileFile } from "@/lib/exileFile";
 import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import os from "node:os";
-import { augmentPath, POSIX_TOOL_DIRS } from "@/lib/platform";
+import { augmentPath, POSIX_TOOL_DIRS, resolveCli } from "@/lib/platform";
+import { readSettings } from "@/lib/settings";
 
 const HOME = os.homedir();
 export const PUBLISHED_DIR = path.join(HOME, ".agentic-os", "published");
@@ -18,11 +20,31 @@ const CLAUDE_PROJECTS = path.join(HOME, ".agentic-os", "claude-projects");
 
 // netlify CLI needs a real PATH when the dev server was launched detached.
 // Platform-correct PATH extension — the old ":"-join corrupted Windows' ";"-delimited PATH.
-const DEPLOY_PATH = augmentPath(POSIX_TOOL_DIRS);
+// Read per deploy, not at import, so the CLI is looked up on the PATH of the moment.
+const deployPath = () => augmentPath(POSIX_TOOL_DIRS);
 
-export interface ArtifactSite { siteId: string; name: string; baseUrl: string }
+// BACK-COMPAT FALLBACK ONLY. The site used to live in this file; since 2026-10-01 it is
+// `settings.artifacts`, set from the gear on the Artifacts tab (rule 16). The file is read
+// when that siteId is blank and is never written by the app.
+export const LEGACY_SITE_FILE = path.join(HOME, ".agentic-os", "artifacts-site.json");
+
+export const SITE_MISSING = "Artifacts site not configured: open Configure (the gear) on the Artifacts tab and enter the Netlify site ID and base URL.";
+export const SITE_URL_MISSING = "Artifacts site has no base URL: open Configure (the gear) on the Artifacts tab and enter the site's https address.";
+export const NETLIFY_INSTALL_HINT = 'Install it with "npm install -g netlify-cli", then run "netlify login" once in your own terminal.';
+
+export interface ArtifactSite { siteId: string; name: string; baseUrl: string; source: "settings" | "file" }
+function normalizeSite(raw: unknown, source: ArtifactSite["source"]): ArtifactSite | null {
+  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const siteId = String(r.siteId ?? "").trim();
+  if (!siteId) return null;
+  const baseUrl = String(r.baseUrl ?? "").trim().replace(/\/+$/, "");
+  return { siteId, name: String(r.name ?? "").trim() || siteId, baseUrl, source };
+}
+/** The site publishes go to: settings.artifacts first, the legacy file only when that is blank. */
 export function artifactSite(): ArtifactSite | null {
-  try { return JSON.parse(readFileSync(path.join(HOME, ".agentic-os", "artifacts-site.json"), "utf8")); } catch { return null; }
+  const fromSettings = normalizeSite(readSettings().artifacts, "settings");
+  if (fromSettings) return fromSettings;
+  try { return normalizeSite(JSON.parse(readFileSync(LEGACY_SITE_FILE, "utf8")), "file"); } catch { return null; }
 }
 
 export interface PublishedItem { slug: string; title: string; source: string; url: string; publishedAt: number; bytes: number }
@@ -126,10 +148,18 @@ ${cards || '<p style="color:#6e6353">Nothing published yet.</p>'}
 function deploy(): Promise<{ ok: boolean; log: string }> {
   const site = artifactSite();
   return new Promise((resolve) => {
-    if (!site) return resolve({ ok: false, log: "no artifacts site configured" });
-    const child = spawn("netlify", ["deploy", "--prod", "--dir", PUBLISHED_DIR, "--site", site.siteId, "--no-build"],
-      { env: { ...process.env, PATH: DEPLOY_PATH }, stdio: ["ignore", "pipe", "pipe"] });
-    let log = "";
+    if (!site) return resolve({ ok: false, log: SITE_MISSING });
+    // On Windows the npm-installed netlify CLI is a .cmd shim, which spawn() cannot run
+    // without a shell (ENOENT, so no publish ever reached Netlify from this machine).
+    // resolveCli turns it into `node <netlify entry>` with a clean arg array, or says
+    // exactly what is missing; the args are never joined into a shell string.
+    const PATH = deployPath();
+    const cli = resolveCli("netlify", PATH);
+    if ("error" in cli) return resolve({ ok: false, log: `netlify CLI not found (${cli.error}). ${NETLIFY_INSTALL_HINT}` });
+    const args = [...cli.pre, "deploy", "--prod", "--dir", PUBLISHED_DIR, "--site", site.siteId, "--no-build"];
+    const child = spawn(cli.cmd, args,
+      { env: { ...process.env, PATH, NO_COLOR: "1", CI: "1" }, stdio: ["ignore", "pipe", "pipe"] });
+    let log = `$ ${cli.found} ${args.slice(cli.pre.length).join(" ")}\n`;
     const timer = setTimeout(() => { try { child.kill("SIGKILL"); } catch {} resolve({ ok: false, log: log + "\n[deploy timeout]" }); }, 180_000);
     child.stdout.on("data", (d) => { log += String(d); });
     child.stderr.on("data", (d) => { log += String(d); });
@@ -141,7 +171,8 @@ function deploy(): Promise<{ ok: boolean; log: string }> {
 // Publish a source artifact (by id) → returns the public URL.
 export async function publish(id: string, customTitle?: string): Promise<{ ok: boolean; item?: PublishedItem; error?: string }> {
   const site = artifactSite();
-  if (!site) return { ok: false, error: "Artifacts site not configured (~/.agentic-os/artifacts-site.json)." };
+  if (!site) return { ok: false, error: SITE_MISSING };
+  if (!/^https?:\/\//i.test(site.baseUrl)) return { ok: false, error: SITE_URL_MISSING };
   const src = resolveSource(id);
   if (!src) return { ok: false, error: "source not found" };
   const html = await readFile(src, "utf8").catch(() => null);
@@ -155,8 +186,12 @@ export async function publish(id: string, customTitle?: string): Promise<{ ok: b
   if (existing && existing.source !== id) slug = `${slug}-${Date.now().toString(36).slice(-4)}`;
 
   const dir = path.join(PUBLISHED_DIR, slug);
+  const pagePath = path.join(dir, "index.html");
+  // What was live for this slug before (an update re-publishes the same slug), so a failed
+  // deploy can put it back instead of leaving the new copy queued for the next deploy.
+  const prevHtml = await readFile(pagePath, "utf8").catch(() => null);
   await mkdir(dir, { recursive: true });
-  await writeFile(path.join(dir, "index.html"), html, "utf8");
+  await writeFile(pagePath, html, "utf8");
 
   const item: PublishedItem = { slug, title, source: id, url: `${site.baseUrl}/${slug}/`, publishedAt: Date.now(), bytes: Buffer.byteLength(html) };
   const next = [item, ...items.filter((i) => i.slug !== slug)];
@@ -164,16 +199,35 @@ export async function publish(id: string, customTitle?: string): Promise<{ ok: b
   await writeManifest(next);
 
   const d = await deploy();
-  if (!d.ok) return { ok: false, error: `Deploy failed: ${d.log.slice(-300)}` };
+  if (!d.ok) {
+    // Nothing went live, so nothing may say it did: put the gallery and manifest back, and
+    // either restore the slug's previous page or move the new copy out of the published
+    // folder (exiled beside it, never deleted) so the next deploy cannot ship it unseen.
+    await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(items), "utf8");
+    await writeManifest(items);
+    if (prevHtml !== null) await writeFile(pagePath, prevHtml, "utf8");
+    else await exileFile(dir, path.dirname(PUBLISHED_DIR)).catch(() => null);
+    return { ok: false, error: `Deploy failed, so nothing was published: ${d.log.slice(-300)}` };
+  }
   return { ok: true, item };
 }
 
 export async function unpublish(slug: string): Promise<{ ok: boolean; error?: string }> {
-  if (!/^(?!.+$)[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
-  const items = (await readManifest()).filter((i) => i.slug !== slug);
-  try { await rm(path.join(PUBLISHED_DIR, slug), { recursive: true, force: true }); } catch {}
+  if (!/^(?!\.)[A-Za-z0-9_.-]+$/.test(slug)) return { ok: false, error: "bad slug" };
+  if (!artifactSite()) return { ok: false, error: SITE_MISSING };
+  const all = await readManifest();
+  const items = all.filter((i) => i.slug !== slug);
+  // Exiled, never deleted, and OUTSIDE the published folder (that whole folder is deployed,
+  // so an .exile inside it would go public): ~/.agentic-os/.exile/<stamp>/published/<slug>.
+  const dir = path.join(PUBLISHED_DIR, slug);
+  const moved = await exileFile(dir, path.dirname(PUBLISHED_DIR)).catch(() => null);
   await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(items), "utf8");
   await writeManifest(items);
   const d = await deploy();
-  return d.ok ? { ok: true } : { ok: false, error: d.log.slice(-200) };
+  if (d.ok) return { ok: true };
+  // The page is still live, so put it back where it was and keep listing it.
+  if (moved) await rename(moved, dir).catch(() => {});
+  await writeFile(path.join(PUBLISHED_DIR, "index.html"), galleryHtml(all), "utf8");
+  await writeManifest(all);
+  return { ok: false, error: `Unpublish deploy failed, so it is still live: ${d.log.slice(-200)}` };
 }

@@ -7,7 +7,8 @@
 // listMusic() reads the sidecars so the gallery shows full history with metadata.
 // "Save" is a starred/favourite flag on the sidecar (toggle), per the spec.
 
-import { readFile, writeFile, mkdir, readdir, stat, unlink } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, stat } from "node:fs/promises";
+import { exileFile, exileStamp } from "./exileFile";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -148,15 +149,17 @@ export async function renameTrack(id: string, title: string): Promise<boolean> {
   return true;
 }
 
-// Delete a track (audio + cover + sidecar).
+// Remove a track (audio + cover + sidecar). Exiled, never deleted: all three move
+// together to music/.exile/<stamp>/.
 export async function deleteTrack(id: string): Promise<boolean> {
   const all = await readSidecars();
   const hit = all.find((s) => s.data.id === id);
   if (!hit) return false;
   const { audioFile, coverFile } = hit.data;
+  const stamp = exileStamp();
   for (const f of [audioFile, coverFile, hit.file]) {
     if (!f) continue;
-    try { await unlink(path.join(MUSIC_ROOT, f)); } catch { /* already gone */ }
+    await exileFile(path.join(MUSIC_ROOT, f), MUSIC_ROOT, stamp);
   }
   return true;
 }

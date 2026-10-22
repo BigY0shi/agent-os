@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Agent OS System Map",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      660
+    ],
+    "views": [
+      {
+        "id": "request-path",
+        "label": "Owner to app",
+        "focus": [
+          "owner",
+          "gate",
+          "ui",
+          "api",
+          "v2core"
+        ],
+        "note": "Everything enters through one password gate on port 3737 and lands in V1 routes or V2 CORE."
+      },
+      {
+        "id": "providers",
+        "label": "Where intelligence runs",
+        "focus": [
+          "api",
+          "cli",
+          "ollama",
+          "voicebox",
+          "hosted"
+        ],
+        "note": "CLI subscriptions and local models do the thinking; hosted APIs only where a key is chosen."
+      },
+      {
+        "id": "state-and-actions",
+        "label": "State and actions",
+        "focus": [
+          "v2core",
+          "sqlite",
+          "mcp",
+          "browser"
+        ],
+        "note": "One SQLite file plus JSON stores hold state; MCP action sets expose what agents may do."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "owner",
+      "type": "external",
+      "label": "Owner's browser",
+      "sublabel": "Opera, LAN",
+      "pos": [
+        30,
+        300
+      ],
+      "size": [
+        130,
+        62
+      ]
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "Password gate",
+      "sublabel": "proxy.ts, :3737",
+      "pos": [
+        250,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "next start -H 0.0.0.0"
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "Next.js UI",
+      "sublabel": "48 modules, V1+V2",
+      "pos": [
+        470,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "src/components"
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API routes",
+      "sublabel": "360 routes, V1",
+      "pos": [
+        690,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "src/app/api"
+    },
+    {
+      "id": "v2core",
+      "type": "backend",
+      "label": "V2 CORE",
+      "sublabel": "agents, memory, jarvis",
+      "pos": [
+        910,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "src/lib/v2"
+    },
+    {
+      "id": "mcp",
+      "type": "messagebus",
+      "label": "MCP server",
+      "sublabel": "action sets, WebMCP",
+      "pos": [
+        910,
+        110
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "/api/mcp"
+    },
+    {
+      "id": "sqlite",
+      "type": "database",
+      "label": "SQLite + JSON stores",
+      "sublabel": "agentos.db + JSON",
+      "pos": [
+        1130,
+        300
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "~/.agentic-os"
+    },
+    {
+      "id": "browser",
+      "type": "backend",
+      "label": "Playwright browser",
+      "sublabel": "18 tools, view :3738",
+      "pos": [
+        1130,
+        110
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "capability slot"
+    },
+    {
+      "id": "cli",
+      "type": "external",
+      "label": "CLI agents",
+      "sublabel": "claude, codex, hermes",
+      "pos": [
+        250,
+        500
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "subscriptions"
+    },
+    {
+      "id": "ollama",
+      "type": "external",
+      "label": "Ollama",
+      "sublabel": "local + cloud models",
+      "pos": [
+        470,
+        500
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "glm, kimi, nomic"
+    },
+    {
+      "id": "voicebox",
+      "type": "external",
+      "label": "Voicebox studio",
+      "sublabel": "TTS + Whisper :17493",
+      "pos": [
+        690,
+        500
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "loopback only"
+    },
+    {
+      "id": "hosted",
+      "type": "external",
+      "label": "Hosted APIs",
+      "sublabel": "ElevenLabs, AgentMail",
+      "pos": [
+        1130,
+        500
+      ],
+      "size": [
+        136,
+        62
+      ],
+      "tag": "keys server-side"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Owner's Windows host: the app",
+      "wraps": [
+        "gate",
+        "ui",
+        "api",
+        "v2core",
+        "mcp",
+        "sqlite",
+        "browser"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "security-group",
+      "label": "behind the gate",
+      "wraps": [
+        "ui",
+        "api",
+        "v2core",
+        "mcp",
+        "sqlite",
+        "browser"
+      ],
+      "pad": 14
+    },
+    {
+      "kind": "region",
+      "label": "Owner's Windows host: local engines",
+      "wraps": [
+        "cli",
+        "ollama",
+        "voicebox"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "from": "owner",
+      "to": "gate",
+      "label": "HTTP, LAN",
+      "variant": "emphasis"
+    },
+    {
+      "from": "gate",
+      "to": "ui",
+      "label": "session cookie",
+      "variant": "security"
+    },
+    {
+      "from": "ui",
+      "to": "api",
+      "label": "fetch + SSE",
+      "variant": "emphasis"
+    },
+    {
+      "from": "api",
+      "to": "v2core",
+      "label": "V2 routes",
+      "variant": "emphasis"
+    },
+    {
+      "from": "v2core",
+      "to": "sqlite",
+      "label": "SQL"
+    },
+    {
+      "from": "v2core",
+      "to": "mcp",
+      "label": "registers actions",
+      "route": "straight"
+    },
+    {
+      "from": "mcp",
+      "to": "browser",
+      "label": "browser actions",
+      "route": "straight"
+    },
+    {
+      "from": "api",
+      "to": "cli",
+      "label": "spawn, prompt on stdin",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "api",
+      "to": "ollama",
+      "label": "HTTP",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "api",
+      "to": "voicebox",
+      "label": "REST, speak + transcribe",
+      "variant": "dashed",
+      "labelDy": 110
+    },
+    {
+      "from": "v2core",
+      "to": "hosted",
+      "label": "integrations, HTTPS",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Two generations, one app",
+      "items": [
+        "V1 modules: flat components + route folders, JSON stores per module (Deal Desk, Hire Engine, Loop)",
+        "V2 CORE on SQLite: agents runtime, memory, tasks, Jarvis brain, WebMCP, integrations",
+        "Both live at once by design; nothing is migrated because it looks old"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Trust boundaries",
+      "items": [
+        "One password gate on 3737; the owner signs in, agents never hold credentials",
+        "Keys leave through one door per module, server-side, host asserted in code",
+        "Voicebox and Ollama are loopback; a chosen, labelled fallback is the only fallback"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Open on the roadmap",
+      "items": [
+        "S2 runs survive navigation (registry + corner tray)",
+        "S3 pre-launch settings drawer + STOP; S4 Deal Desk control",
+        "S5 legacy memory backfill, S7 WebMCP wizard, S9 OpenMontage"
+      ]
+    }
+  ]
+}

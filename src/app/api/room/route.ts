@@ -1,4 +1,4 @@
-import { roomAgents, roomReply, roomContext, executeRoomActions, mentionedIds, getAgent, type RoomTurn } from "@/lib/agentRoom";
+import { roomAgents, roomReply, roomContext, executeRoomActions, mentionedIds, getAgent, markWorking, type RoomTurn } from "@/lib/agentRoom";
 import { config } from "@/lib/config";
 import { personaByName, type Persona } from "@/lib/personas";
 
@@ -64,8 +64,11 @@ export async function POST(req: Request) {
         if (req.signal.aborted) break;
         send({ t: "typing", id: agent.id, name: agent.name, color: agent.color });
         let raw = "";
+        // S25: the Mastermind rail shows "working now" from this count, released in finally.
+        markWorking(agent.id, 1);
         try { raw = await roomReply(agent, transcript, ctx.text, req.signal, personaByAgent[agent.id], incognito); }
         catch (e) { if (req.signal.aborted) break; raw = `(${agent.name} couldn't reply — ${String(e).slice(0, 80)})`; }
+        finally { markWorking(agent.id, -1); }
         if (!raw) raw = "…";
         // Run any NOTE:: / PIPELINE:: actions the agent emitted — but NEVER in
         // incognito: a clean-room round must not write to the user's vault or

@@ -9,7 +9,8 @@
 // digest instead of content "signals". Ollama can't browse, so it's only ever the MANAGER.
 
 import { run, type AgentName } from "@/lib/runner";
-import { config, CLAUDE_MODEL } from "@/lib/config";
+import { config } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 import { cliComplete } from "@/lib/loopEngine";
 import { ollamaModels } from "@/lib/pipeline";
 
@@ -28,7 +29,7 @@ export interface DigestResult { overview: string; items: DigestItem[]; scouts: s
 
 function researchArgs(agent: string, prompt: string): { args: string[]; input?: string } {
   switch (agent) {
-    case "claude": return { args: ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
+    case "claude": return { args: ["-p", "--model", claudeModel(), "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
     case "codex":  return { args: ["exec", "--full-auto", "--skip-git-repo-check", "--ignore-user-config", prompt] };
     case "cursor": return { args: ["-p", prompt, "--output-format", "text", "--force", "--trust"] };
     case "hermes": return { args: ["-z", prompt, "--yolo", "--accept-hooks"] };
@@ -168,7 +169,7 @@ export async function gatherDigest(topic: string, merger: string = "claude"): Pr
   const user = summaryUser(topic, stories, today);
   const raw = merger === "ollama"
     ? await ollamaMerge(SUMMARY_SYS, user)
-    : await cliComplete("claude", `${SUMMARY_SYS}\n\n${user}`, { timeoutMs: 150_000 });
+    : await cliComplete("claude", `${SUMMARY_SYS}\n\n${user}`, { timeoutMs: 150_000, module: "news-radar" });
 
   const parsed = parseObj(raw) || { overview: raw.slice(0, 1200), items: [] };
   // If the manager gave prose but no structured items, fall back to the scouts' raw stories.

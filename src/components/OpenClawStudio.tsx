@@ -9,7 +9,7 @@ import {
   MicOff,
 } from "lucide-react";
 
-// OpenClaw Studio — Grok 4.3's creative cockpit.
+// OpenClaw Studio — Grok's creative cockpit (the model is whatever OpenClaw is configured with).
 // Four sub-tools all backed by `openclaw infer` against the xAI plugin:
 //   Image  →  xai/grok-imagine-image
 //   Video  →  xai/grok-imagine-video
@@ -95,12 +95,13 @@ export default function OpenClawStudio() {
           <div>
             <div className="text-[10px] uppercase tracking-widest" style={{ color: ACCENT }}>OpenClaw · Studio</div>
             <div className="text-[15px] font-medium text-[var(--cream)]">
-              Grok 4.3 creative cockpit
+              Grok creative cockpit
             </div>
           </div>
           <div className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-widest" style={{ color: "var(--cream-mute)" }}>
-            <Radio size={11} style={{ color: ACCENT }} className="animate-pulse" />
-            <span>xAI · live</span>
+            {/* A label, not a status: nothing here checks that xAI is reachable. */}
+            <Radio size={11} style={{ color: ACCENT }} />
+            <span>xAI tools via OpenClaw</span>
           </div>
         </div>
         <p className="text-[12px] text-[var(--cream-dim)] max-w-[640px]">

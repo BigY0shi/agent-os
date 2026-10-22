@@ -127,7 +127,7 @@ export default function ContentStudioView() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="heading-strip">
-            <h1 className="text-2xl font-semibold tracking-tight" style={{ fontFamily: "'Bricolage Grotesque',sans-serif" }}>
+            <h1 className="text-2xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display),sans-serif" }}>
               Content Studio
             </h1>
           </div>

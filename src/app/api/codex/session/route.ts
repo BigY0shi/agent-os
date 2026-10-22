@@ -1,3 +1,4 @@
+import os from "node:os";
 import { NextResponse } from "next/server";
 import { readSession } from "@/lib/codexWorkspace";
 
@@ -13,5 +14,7 @@ export async function GET(req: Request) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const session = await readSession(id);
   if (!session) return NextResponse.json({ error: "session not found" }, { status: 404 });
-  return NextResponse.json({ session });
+  // `home` lets the page turn absolute paths into /api/codex/session-file URLs on any OS
+  // (it used to guess it from /Users/<name>, which never matches a Windows path).
+  return NextResponse.json({ session, home: os.homedir() });
 }

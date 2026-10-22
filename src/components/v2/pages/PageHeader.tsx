@@ -5,7 +5,7 @@ import ConfigMenu from "@/components/ConfigMenu";
 import ScratchpadSettings from "./ScratchpadSettings";
 import { SCRATCHPAD_ACCENT, fmtDayTitle } from "./shared";
 
-// ── PageHeader (SPEC-B B5) — date navigation + Widgets placeholder + gear ────
+// ── PageHeader (SPEC-B B5) — date navigation + Widgets toggle (S32) + gear ──
 
 export default function PageHeader({
   date,
@@ -13,12 +13,17 @@ export default function PageHeader({
   onPrev,
   onNext,
   onToday,
+  widgetsOpen,
+  onToggleWidgets,
 }: {
   date: string | null;
   isToday: boolean;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
+  /** S32: whether the widgets panel is shown; null while settings load. */
+  widgetsOpen: boolean | null;
+  onToggleWidgets: () => void;
 }) {
   const navBtn = "grid h-8 w-8 place-items-center rounded-lg transition";
   const navStyle: React.CSSProperties = {
@@ -67,13 +72,20 @@ export default function PageHeader({
           <ChevronRight size={14} />
         </button>
 
-        {/* H-phase placeholder — widgets panel lands with the Homepage wave. */}
+        {/* S32: the Mission Control widget grid, hosted on Today with its own
+            cells list (settings.home.todayCells); open state is a setting too. */}
         <button
           type="button"
-          disabled
-          title="Widgets panel — coming with the Homepage phase"
-          className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[12px] font-medium opacity-40 cursor-not-allowed"
-          style={{ border: "1px solid var(--panel-border, #2a2436)", color: "var(--fg-dim, #a89fb8)" }}
+          onClick={onToggleWidgets}
+          disabled={widgetsOpen === null}
+          aria-pressed={widgetsOpen === true}
+          title={widgetsOpen ? "Hide the widgets panel" : "Show the widgets panel (same widgets as Mission Control, your own layout here)"}
+          className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[12px] font-medium transition disabled:opacity-40"
+          style={{
+            border: `1px solid ${widgetsOpen ? `${SCRATCHPAD_ACCENT}55` : "var(--panel-border, #2a2436)"}`,
+            color: widgetsOpen ? SCRATCHPAD_ACCENT : "var(--fg-dim, #a89fb8)",
+            background: "var(--panel, rgba(255,255,255,0.02))",
+          }}
         >
           <LayoutGrid size={13} /> Widgets
         </button>

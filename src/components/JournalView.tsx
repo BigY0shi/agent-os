@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, BookOpen, ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import VoiceButton from "./VoiceButton";
+import { MOD } from "@/lib/modKey";
 
 interface Entry { time: string; text: string; }
 
@@ -149,7 +150,7 @@ export default function JournalView() {
                   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); }
                 }}
                 rows={3}
-                placeholder="What happened? What's on your mind? (⌘+Enter to save)"
+                placeholder={`What happened? What's on your mind? (${MOD}+Enter to save)`}
                 className="flex-1 bg-[rgba(0,0,0,0.25)] border border-[var(--panel-border)] rounded-lg px-3 py-2 text-sm outline-none focus:border-[var(--panel-border-hot)] text-[var(--fg)] resize-none"
               />
               <button

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { appendMemory } from "@/lib/vaultWriter";
+import { appendMemory, VAULT_AVAILABLE } from "@/lib/vaultWriter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,16 +12,19 @@ export async function POST(req: Request) {
   const reply = body.reply ? String(body.reply).slice(0, 16000) : undefined;
   const text = body.text ? String(body.text).slice(0, 8000) : undefined;
 
-  const allowedAgents = new Set(["claude", "openclaw", "hermes", "user", "system"]);
+  const allowedAgents = new Set(["claude", "openclaw", "hermes", "antigravity", "user", "system"]);
   const allowedKinds = new Set(["chat", "goal", "journal", "note"]);
   if (!allowedAgents.has(agent) || !allowedKinds.has(kind)) {
     return NextResponse.json({ error: "bad agent/kind" }, { status: 400 });
   }
+  if (!VAULT_AVAILABLE) {
+    return NextResponse.json({ ok: false, error: "No Obsidian vault is configured, so nothing was logged." }, { status: 503 });
+  }
 
   const res = await appendMemory({
-    agent: agent as "claude" | "openclaw" | "hermes" | "user" | "system",
+    agent: agent as "claude" | "openclaw" | "hermes" | "antigravity" | "user" | "system",
     kind: kind as "chat" | "goal" | "journal" | "note",
     user, reply, text,
   });
-  return NextResponse.json(res);
+  return NextResponse.json(res, { status: res.ok ? 200 : 500 });
 }

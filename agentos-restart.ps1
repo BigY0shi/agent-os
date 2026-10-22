@@ -10,17 +10,20 @@
 # state. The kill is now verified, and the launch is abandoned if it failed.
 $ErrorActionPreference = 'SilentlyContinue'
 $dir = $PSScriptRoot
+# 2026-10-18: a "next start" counts as ours only if its command line names THIS
+# repo's node_modules. The bare pattern also matched other projects' Next servers.
+$repoNext = [regex]::Escape($dir) + '[\\/]node_modules[\\/]'
 $logDir = Join-Path $env:USERPROFILE '.agentic-os'
 if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
 
 function Get-DashboardPids {
   # EVERY address family on 3737 - the 2026-08-29 split brain was one server on
-  # 0.0.0.0 and another on ::. Plus any next-start node process not yet
-  # listening (still booting), which would grab the port moments from now.
+  # 0.0.0.0 and another on ::. Plus any next-start node process of this repo not
+  # yet listening (still booting), which would grab the port moments from now.
   $ids = @()
   $ids += @(Get-NetTCPConnection -LocalPort 3737 -State Listen | Select-Object -Expand OwningProcess -Unique)
   $ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-    Where-Object { $_.CommandLine -match 'next.dist.bin.next start' } |
+    Where-Object { $_.CommandLine -match 'next.dist.bin.next"?\s+start' -and $_.CommandLine -match $repoNext } |
     Select-Object -Expand ProcessId)
   return @($ids | Where-Object { $_ } | Sort-Object -Unique)
 }
@@ -32,8 +35,14 @@ function Get-KokoroPids {
     Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
 }
 
+function Get-ParakeetPids {
+  # Local STT (Parakeet, port 8881) - same treatment as Kokoro.
+  return @(Get-NetTCPConnection -LocalPort 8881 -State Listen |
+    Select-Object -Expand OwningProcess -Unique | Where-Object { $_ })
+}
+
 Write-Host "  [1/3] Stopping the old server..."
-foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) | Sort-Object -Unique)) {
+foreach ($procId in (@(Get-DashboardPids) + @(Get-KokoroPids) + @(Get-ParakeetPids) | Sort-Object -Unique)) {
   try {
     Stop-Process -Id $procId -Force -ErrorAction Stop
     Write-Host "        killed PID $procId" -ForegroundColor Yellow
@@ -63,13 +72,17 @@ if ($survivors.Count -gt 0) {
 }
 
 Write-Host "  [2/3] Starting a fresh server in the background..."
+# Absolute path so the sweep above can see the repo folder in the command line.
+# Quoted by hand: Start-Process joins -ArgumentList with spaces and quotes nothing.
+$nextBin = Join-Path $dir 'node_modules\next\dist\bin\next'
 Start-Process -WindowStyle Hidden -FilePath 'node' `
-  -ArgumentList @('node_modules\next\dist\bin\next','start','-H','0.0.0.0','-p','3737') `
+  -ArgumentList @(('"' + $nextBin + '"'),'start','-H','0.0.0.0','-p','3737') `
   -WorkingDirectory $dir `
   -RedirectStandardOutput (Join-Path $logDir 'agentos-server.log') `
   -RedirectStandardError  (Join-Path $logDir 'agentos-server.err.log')
 
 & (Join-Path $dir 'kokoro-start.ps1')
+& (Join-Path $dir 'parakeet-start.ps1')
 
 Write-Host "  [3/3] Waiting for it to come online..."
 $ok = $false
@@ -78,4 +91,17 @@ for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Seconds 1
 }
 if ($ok) { Write-Host "        online at http://localhost:3737" -ForegroundColor Green }
-else     { Write-Host "        still starting - see $logDir\agentos-server.err.log" -ForegroundColor Red }
+else {
+  # 2026-09-02: this used to print "still starting" and exit 0, so the batch
+  # file said "Done" while nothing listened. The usual reason is the new
+  # server refusing to start; its own words are in the err log, so show them.
+  Write-Host ""
+  Write-Host "  NOT ONLINE after 40 s. The server's last words:" -ForegroundColor Red
+  $errLog = Join-Path $logDir 'agentos-server.err.log'
+  if (Test-Path $errLog) { Get-Content $errLog -Tail 6 | ForEach-Object { Write-Host "        $_" -ForegroundColor Red } }
+  Write-Host ""
+  Write-Host "  If it says an old PID still holds the lock and that PID is gone, wait a" -ForegroundColor Yellow
+  Write-Host "  minute for the lock to go stale (or rebuild: the guard now checks the PID)" -ForegroundColor Yellow
+  Write-Host "  and run this again." -ForegroundColor Yellow
+  exit 1
+}

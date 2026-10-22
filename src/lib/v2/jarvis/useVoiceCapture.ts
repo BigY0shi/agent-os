@@ -17,9 +17,10 @@
 // disabled, see availability check).
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { transcribeRecording } from "./transcribeClient";
 
 export type VoiceCaptureStatus = "idle" | "recording" | "error";
-export type VoiceProviderId = "webspeech" | "kimi" | "openai-realtime" | "gemini-live";
+export type VoiceProviderId = "webspeech" | "kimi" | "openai-realtime" | "gemini-live" | "voicebox" | "parakeet";
 
 export interface VoiceProviderInfo {
   id: VoiceProviderId;
@@ -77,7 +78,35 @@ function webSpeechAvailability(): true | string {
   return true;
 }
 
+/**
+ * Voicebox capture needs only a microphone and MediaRecorder: the recording is
+ * posted to /api/voicebox/transcribe (Whisper in the local studio). No browser
+ * speech backend involved, so it is the path that works in Opera.
+ */
+function mediaRecorderAvailability(): true | string {
+  if (typeof window === "undefined") return "server render";
+  if (!navigator.mediaDevices?.getUserMedia) {
+    // The usual reason on this LAN: the app is open at http://<ip>:3737.
+    // Browsers only expose the microphone on https or on localhost. Say so,
+    // with the two ways out, instead of a generic "no microphone API".
+    const origin = window.location.origin;
+    const secure = window.isSecureContext;
+    if (!secure) {
+      return `Mic blocked on ${origin}: browsers only allow the microphone on https or localhost. On this PC open http://localhost:3737; from another device, in Opera/Chrome open opera://flags/#unsafely-treat-insecure-origin-as-secure (chrome://flags in Chrome), add ${origin}, enable, relaunch.`;
+    }
+    return "This browser exposes no microphone API.";
+  }
+  if (typeof (window as unknown as { MediaRecorder?: unknown }).MediaRecorder === "undefined") return "MediaRecorder is not available in this browser.";
+  return true;
+}
+
 export const VOICE_PROVIDERS: VoiceProviderInfo[] = [
+  // Local Parakeet-TDT (NVIDIA, ONNX Runtime) at 127.0.0.1:8881. Listed first
+  // because it is the default: works in the owner's browser (Opera), keeps audio
+  // on this machine, and does not depend on Voicebox (retired 2026-09-08).
+  { id: "parakeet", label: "Parakeet (local, port 8881)", isLocal: true, available: mediaRecorderAvailability },
+  // Local Whisper via Voicebox. Kept selectable; no longer the default.
+  { id: "voicebox", label: "Voicebox (local Whisper)", isLocal: true, available: mediaRecorderAvailability },
   { id: "webspeech", label: "Browser (Web Speech)", isLocal: false, available: webSpeechAvailability },
   // Kimi's existing capture plumbing (JarvisKimiVoice) is browser STT feeding
   // the Kimi brain — capture-wise it is the same recognizer.
@@ -101,8 +130,15 @@ export const VOICE_PROVIDERS: VoiceProviderInfo[] = [
   },
 ];
 
+/** Providers that record a clip with MediaRecorder and transcribe it through a local server. */
+export function usesRecorder(info: VoiceProviderInfo): boolean {
+  return info.id === "parakeet" || info.id === "voicebox";
+}
+
 export function providerInfo(id: string | undefined): VoiceProviderInfo {
-  return VOICE_PROVIDERS.find((p) => p.id === id) ?? VOICE_PROVIDERS[0];
+  // Unknown/unset falls back to Web Speech (the historical default), not to
+  // whatever sits first in the list.
+  return VOICE_PROVIDERS.find((p) => p.id === id) ?? VOICE_PROVIDERS.find((p) => p.id === "webspeech")!;
 }
 
 export interface UseVoiceCaptureOptions {
@@ -137,6 +173,10 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
   const recRef = useRef<SR | null>(null);
   const runningRef = useRef(false); // never-two-recognizers guard (JarvisView lifecycle)
   const cancelledRef = useRef(false);
+  // Voicebox (MediaRecorder) lane.
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   const onFinalChunkRef = useRef(opts.onFinalChunk);
   onFinalChunkRef.current = opts.onFinalChunk;
@@ -146,7 +186,18 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
     setAvailable(info.available());
   }, [info]);
 
+  const teardownRecorder = useCallback(() => {
+    const mr = recorderRef.current;
+    recorderRef.current = null;
+    if (mr) { mr.ondataavailable = null; mr.onstop = null; mr.onerror = null; try { if (mr.state !== "inactive") mr.stop(); } catch { /* already */ } }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    chunksRef.current = [];
+    runningRef.current = false;
+  }, []);
+
   const teardown = useCallback(() => {
+    teardownRecorder();
     const rec = recRef.current;
     recRef.current = null;
     runningRef.current = false;
@@ -165,6 +216,58 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
 
   useEffect(() => () => teardown(), [teardown]);
 
+  /** Recorder lanes (Parakeet, Voicebox): record, then transcribe on stop. The transcript is a FINAL chunk, never sent here. */
+  const startRecorder = useCallback(async () => {
+    if (runningRef.current) return;
+    cancelledRef.current = false;
+    setError(null);
+    setPartial("");
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      const name = (e as Error)?.name ?? "";
+      setError(name === "NotAllowedError" ? "Mic blocked — allow Microphone in the address bar, then try again." : "Mic error: " + ((e as Error)?.message ?? name));
+      setStatus("error");
+      return;
+    }
+    if (cancelledRef.current) { stream.getTracks().forEach((t) => t.stop()); return; }
+    const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m));
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    streamRef.current = stream;
+    recorderRef.current = mr;
+    chunksRef.current = [];
+    mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunksRef.current.push(ev.data); };
+    mr.onerror = () => { setError("Recorder error"); setStatus("error"); teardownRecorder(); };
+    mr.onstop = async () => {
+      const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+      const wasCancelled = cancelledRef.current;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      recorderRef.current = null;
+      chunksRef.current = [];
+      runningRef.current = false;
+      if (wasCancelled || !blob.size) { setPartial(""); setStatus("idle"); return; }
+      setPartial("(transcribing…)");
+      try {
+        // Transcription lives in transcribeClient.ts: this hook stays capture-only
+        // (its smoke asserts no fetch here). The text is a FINAL chunk for the
+        // caller; nothing is dispatched to the brain from this file.
+        const text = await transcribeRecording(blob, info.id);
+        setPartial("");
+        setStatus("idle");
+        if (text) onFinalChunkRef.current?.(text);
+      } catch (e) {
+        setPartial("");
+        setError(`${info.label} transcription failed: ` + ((e as Error)?.message ?? e));
+        setStatus("error");
+      }
+    };
+    mr.start(250);
+    runningRef.current = true;
+    setStatus("recording");
+  }, [teardownRecorder, info]);
+
   const start = useCallback(() => {
     const availability = info.available();
     if (availability !== true) {
@@ -174,6 +277,7 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
       return;
     }
     if (runningRef.current) return; // never two recognizers
+    if (usesRecorder(info)) { void startRecorder(); return; }
     const Ctor = getSRCtor();
     if (!Ctor) {
       setError("SpeechRecognition constructor vanished — cannot record.");
@@ -234,16 +338,23 @@ export function useVoiceCapture(opts: UseVoiceCaptureOptions = {}): UseVoiceCapt
     } catch {
       /* already running — the guard should have caught this */
     }
-  }, [info]);
+  }, [info, startRecorder]);
 
   const stop = useCallback(() => {
+    if (usesRecorder(info)) {
+      // The recorder's onstop posts the clip for transcription; the transcript
+      // arrives as one final chunk. Nothing is sent from here.
+      const mr = recorderRef.current;
+      try { if (mr && mr.state !== "inactive") mr.stop(); } catch { /* not running */ }
+      return;
+    }
     // stop() lets pending FINAL results flush through onresult before onend.
     try {
       recRef.current?.stop();
     } catch {
       /* not running */
     }
-  }, []);
+  }, [info]);
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;

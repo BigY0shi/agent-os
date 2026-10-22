@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WifiOff, Sparkles, Send, Loader2, Trash2, ExternalLink, Compass, Hammer, ShieldCheck, Play, LayoutDashboard, FolderOpen, RotateCw } from "lucide-react";
-import AgentPicker from "./AgentPicker";
+import RunLaunchDrawer from "./RunLaunchDrawer";
+import type { LaunchOptions } from "@/lib/launchOptions";
+
+// Agent Kanban — Planner / Builder / Reviewer on the owner's own seats. Plan and
+// Run go through the pre-launch drawer (RunLaunchDrawer, roadmap S3): the seat,
+// skills, guardrails (timeout, max cards, no external scripts) and instructions
+// are chosen BEFORE the run and sent in the POST body; every plan and every
+// card build is a module run in the tray, and Stop there is the only mid-run
+// control. A stopped build halts the team loop and leaves the rest queued.
 
 const LSK = "agentic-os/agent-kanban/v1";
 
@@ -14,25 +22,25 @@ type Tab = "board" | "workspace";
 
 const COLS: { key: Stage | "done"; label: string; accent: string; stages: Stage[] }[] = [
   { key: "queued", label: "Backlog", accent: "#a59783", stages: ["queued"] },
-  { key: "building", label: "Building", accent: "#d4a574", stages: ["building"] },
-  { key: "reviewing", label: "Review", accent: "#38bdf8", stages: ["reviewing"] },
+  // The review (real HTML back, no off-page scripts when that guardrail is on) runs inside
+  // the same build request, so building and checking are one column. "reviewing" is kept
+  // only so a board saved by an older version still renders its cards.
+  { key: "building", label: "Build + check", accent: "#d4a574", stages: ["building", "reviewing"] },
   { key: "done", label: "Done", accent: "#5ab896", stages: ["done", "rejected"] },
 ];
 
 const TEAM = [
   { key: "planner", name: "Planner", icon: Compass, accent: "#38bdf8", does: "breaks the goal into cards" },
   { key: "builder", name: "Builder", icon: Hammer, accent: "#d4a574", does: "builds each card" },
-  { key: "reviewer", name: "Reviewer", icon: ShieldCheck, accent: "#5ab896", does: "checks it's really built" },
+  { key: "reviewer", name: "Reviewer", icon: ShieldCheck, accent: "#5ab896", does: "checks each build in the same request" },
 ] as const;
-const KANBAN_CLI_AGENTS = ["claude", "codex", "cursor", "pi", "hermes"];
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function AgentKanban() {
   const [goal, setGoal] = useState("");
   const [cards, setCards] = useState<Card[]>([]);
   const [model, setModel] = useState<string | null>(null);
-  const [builderAgent, setBuilderAgent] = useState("local");
+  const [launchFor, setLaunchFor] = useState<null | "plan" | "run">(null);
   const [planning, setPlanning] = useState(false);
   const [running, setRunning] = useState(false);
   const [active, setActive] = useState<string | null>(null); // which team member is working
@@ -49,12 +57,11 @@ export default function AgentKanban() {
         setCards(d.cards ?? []);
         setGoal(d.goal ?? "");
         setModel(d.model ?? null);
-        setBuilderAgent(d.builderAgent ?? "local");
       }
     } catch {}
     hydrated.current = true;
   }, []);
-  useEffect(() => { if (hydrated.current) try { localStorage.setItem(LSK, JSON.stringify({ cards, goal, model, builderAgent })); } catch {} }, [cards, goal, model, builderAgent]);
+  useEffect(() => { if (hydrated.current) try { localStorage.setItem(LSK, JSON.stringify({ cards, goal, model })); } catch {} }, [cards, goal, model]);
 
   const loadWorkspace = useCallback(async () => {
     try { const r = await fetch("/api/agent-kanban/workspace", { cache: "no-store" }); const j = await r.json(); setWs(j.builds ?? []); } catch {}
@@ -62,47 +69,52 @@ export default function AgentKanban() {
   useEffect(() => { loadWorkspace(); }, [loadWorkspace]);
   async function delBuild(id: string) { setWs((w) => w.filter((b) => b.id !== id)); try { await fetch(`/api/agent-kanban/workspace?id=${id}`, { method: "DELETE" }); } catch {} }
   async function clearAllBuilds() {
-    if (!ws.length || !confirm(`Delete all ${ws.length} builds from the workspace? This can't be undone.`)) return;
+    if (!ws.length || !confirm(`Remove all ${ws.length} builds from the workspace? They are moved to agent-kanban/.exile, not deleted.`)) return;
     const ids = ws.map((b) => b.id); setWs([]);
     for (const id of ids) { try { await fetch(`/api/agent-kanban/workspace?id=${id}`, { method: "DELETE" }); } catch {} }
   }
 
   const setCard = (id: string, patch: Partial<Card>) => setCards((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
 
-  const plan = useCallback(async () => {
+  const plan = useCallback(async (launch: LaunchOptions) => {
     const g = goal.trim();
     if (!g || planning || running) return;
     setErr(null); setPlanning(true); setActive("planner"); setCards([]);
     try {
-      const r = await fetch("/api/agent-kanban/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ goal: g, agent: builderAgent }) });
+      const r = await fetch("/api/agent-kanban/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ goal: g, launch }) });
       const j = await r.json();
       if (j.cards?.length) { setModel(j.model); setCards(j.cards.map((c: Card) => ({ ...c, stage: "queued" as Stage }))); }
+      else if (j.stopped) setErr("planner stopped — the board is unchanged");
       else setErr(j.error || "the planner returned nothing");
     } catch (e) { setErr(`planner unreachable: ${String(e).slice(0, 120)}`); }
     setActive(null); setPlanning(false);
-  }, [goal, planning, running, builderAgent]);
+  }, [goal, planning, running]);
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (launch: LaunchOptions) => {
     if (running || planning) return;
     const queue = cards.filter((c) => c.stage === "queued" || c.stage === "rejected");
     if (!queue.length) return;
     setErr(null); setRunning(true);
     for (const card of queue) {
       setActive("builder"); setCard(card.id, { stage: "building", note: undefined });
-      let res: { ok?: boolean; bytes?: number; verdict?: string; note?: string; model?: string } = {};
+      let res: { ok?: boolean; bytes?: number; verdict?: string; note?: string; model?: string; stopped?: boolean } = {};
       try {
-        const r = await fetch("/api/agent-kanban/build", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: card.id, title: card.title, brief: card.brief, goal, agent: builderAgent }) });
+        const r = await fetch("/api/agent-kanban/build", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: card.id, title: card.title, brief: card.brief, goal, launch }) });
         res = await r.json();
         if (res.model) setModel(res.model);
       } catch (e) { res = { ok: false, note: String(e).slice(0, 120) }; }
-      // hand off to the Reviewer — let it visibly "check"
-      setActive("reviewer"); setCard(card.id, { stage: "reviewing" });
-      await sleep(950);
+      if (res.stopped) {
+        // STOP from the tray ends the whole team run; this card and the rest go back to the backlog.
+        setCard(card.id, { stage: "queued", note: undefined });
+        setErr("stopped from the runs tray — the remaining cards are still queued");
+        break;
+      }
+      // The build route already checked it (see COLS); show its verdict as soon as it lands.
       setCard(card.id, { stage: res.ok ? "done" : "rejected", bytes: res.bytes, note: res.note });
     }
     setActive(null); setRunning(false);
     loadWorkspace(); // new builds are now saved in the workspace
-  }, [cards, running, planning, goal, builderAgent, loadWorkspace]);
+  }, [cards, running, planning, goal, loadWorkspace]);
 
   function clearBoard() { if (confirm("Clear the board?")) { setCards([]); setModel(null); try { localStorage.removeItem(LSK); } catch {} } }
 
@@ -119,7 +131,7 @@ export default function AgentKanban() {
             Agent Kanban
             <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: "#38bdf81e", color: "#38bdf8", border: "1px solid #38bdf840" }}><WifiOff size={9} /> offline team</span>
           </div>
-          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A team of local agents plans, builds + reviews — live, on your Mac{model ? ` · ${model}` : ""}</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)] mt-1">A team of local agents plans, builds + reviews — live, on your machine{model ? ` · ${model}` : ""}</div>
         </div>
         {/* tabs */}
         <div className="ml-auto flex items-center gap-1 p-1 rounded-xl bg-[var(--bg-mid)] border border-[var(--line-soft)]">
@@ -154,16 +166,15 @@ export default function AgentKanban() {
       {tab === "board" && (<>
       {/* composer */}
       <div className="flex items-end gap-2 mb-3 shrink-0">
-        <input value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") plan(); }}
+        <input value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && goal.trim() && !planning && !running) setLaunchFor("plan"); }}
           placeholder="Give the team a goal — e.g. 'a set of fun neon web toys' or 'a tiny finance toolkit'"
           className="flex-1 bg-[var(--bg-mid)] border border-[var(--line-soft)] rounded-xl px-3.5 py-2.5 text-[13.5px] text-[var(--cream)] placeholder:text-[var(--cream-mute)] focus:outline-none" />
-        <AgentPicker value={builderAgent} onChange={setBuilderAgent} kinds={["cli"]} includeIds={KANBAN_CLI_AGENTS} extraOptions={[{ id: "local", label: "Local team (Ollama)" }]} accent="#38bdf8" label="Builder" />
-        <button onClick={plan} disabled={!goal.trim() || planning || running} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#38bdf8", color: "#04121f" }}>
-          {planning ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} Assemble board
+        <button onClick={() => setLaunchFor("plan")} disabled={!goal.trim() || planning || running} title="Opens the pre-launch drawer: seat, skills, guardrails, instructions" className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#38bdf8", color: "#04121f" }}>
+          {planning ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />} {planning ? "Planning… (Stop from the runs tray)" : "Assemble board…"}
         </button>
         {queuedLeft && !planning && (
-          <button onClick={run} disabled={running} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#5ab896", color: "#08130d" }}>
-            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} Run the team
+          <button onClick={() => setLaunchFor("run")} disabled={running} title="Opens the pre-launch drawer: seat, skills, guardrails, instructions" className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-40" style={{ background: "#5ab896", color: "#08130d" }}>
+            {running ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />} {running ? "Building… (Stop from the runs tray)" : "Run the team…"}
           </button>
         )}
         {cards.length > 0 && <button onClick={clearBoard} title="Clear board" className="p-2.5 rounded-xl text-[var(--cream-mute)] hover:text-[var(--plum)] border border-[var(--line-soft)]"><Trash2 size={14} /></button>}
@@ -224,7 +235,7 @@ export default function AgentKanban() {
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[var(--line-soft)] shrink-0">
             <FolderOpen size={14} style={{ color: "#7dd3fc" }} />
             <span className="text-[12.5px] text-[var(--cream)] font-medium">Workspace</span>
-            <span className="text-[10.5px] text-[var(--cream-mute)]">{ws.length} build{ws.length === 1 ? "" : "s"} · saved on your Mac</span>
+            <span className="text-[10.5px] text-[var(--cream-mute)]">{ws.length} build{ws.length === 1 ? "" : "s"} · saved on your machine</span>
             <div className="ml-auto flex items-center gap-1.5">
               {ws.length > 0 && <button onClick={clearAllBuilds} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-[var(--line-soft)] text-[var(--cream-mute)] hover:text-[var(--plum)] hover:border-[rgba(196,96,126,0.4)]"><Trash2 size={11} /> Clear all</button>}
               <button onClick={loadWorkspace} title="Refresh" className="p-1.5 rounded-lg border border-[var(--line-soft)] text-[var(--cream-mute)] hover:text-[var(--cream)]"><RotateCw size={12} /></button>
@@ -232,7 +243,7 @@ export default function AgentKanban() {
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto scroll p-3">
             {ws.length === 0 ? (
-              <div className="h-full grid place-items-center text-center"><div className="text-[11.5px] text-[var(--cream-mute)] max-w-[320px]">Nothing saved yet. Build a board and every card the team finishes lands here — kept on your Mac, ready to show off.</div></div>
+              <div className="h-full grid place-items-center text-center"><div className="text-[11.5px] text-[var(--cream-mute)] max-w-[320px]">Nothing saved yet. Build a board and every card the team finishes lands here — kept on your machine, ready to show off.</div></div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {ws.map((b) => (
@@ -254,6 +265,19 @@ export default function AgentKanban() {
           </div>
         </div>
       )}
+
+      <RunLaunchDrawer
+        module="agent-kanban"
+        open={launchFor !== null}
+        onClose={() => setLaunchFor(null)}
+        busy={planning || running}
+        launchLabel={launchFor === "run" ? "Run the team" : "Assemble board"}
+        accent="#38bdf8"
+        summary={launchFor === "run"
+          ? <span>Build <b>{cards.filter((c) => c.stage === "queued" || c.stage === "rejected").length}</b> queued card(s) for “{goal.trim() || "the board"}”. Each card is its own run in the tray.</span>
+          : <span>Plan a board for “<b>{goal.trim()}</b>”. The Planner replaces the current cards.</span>}
+        onLaunch={async (launch) => { const which = launchFor; setLaunchFor(null); if (which === "run") await run(launch); else await plan(launch); }}
+      />
     </div>
   );
 }

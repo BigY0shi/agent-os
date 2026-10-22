@@ -166,7 +166,9 @@ async function pipelineStatsData(config: Config): Promise<WidgetData> {
     };
   }
 
-  const res = await dealsListGET();
+  // The route reads its query string (?stale=1) now, so it needs a Request. The
+  // widget wants the board exactly as the desk shows it, which is the default.
+  const res = await dealsListGET(new Request("http://local/api/deals/list"));
   const j = (await res.json()) as {
     ok?: boolean;
     error?: string;

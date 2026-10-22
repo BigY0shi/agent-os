@@ -197,7 +197,7 @@ export default function OpenDesignView() {
               <button onClick={check} className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-[12.5px] border border-[var(--line-soft)] text-[var(--cream-mute)] hover:text-[var(--cream)]"><RotateCw size={13} /> Re-check</button>
             </div>
             {log && <div className="mt-3 text-[11px] text-[var(--plum)] bg-[rgba(196,96,126,0.08)] border border-[rgba(196,96,126,0.3)] rounded-lg px-3 py-2 mono whitespace-pre-wrap">{log}</div>}
-            <div className="mt-3 text-[10.5px] text-[var(--cream-mute)]">Runs on your Mac (Node 24, no Docker, no API keys). In <span style={{ color: ACCENT }}>Settings → Execution</span> it already sees your <b className="text-[var(--cream)]">Claude Code, Hermes, Codex</b> and more — pick one and it drives your real CLI.</div>
+            <div className="mt-3 text-[10.5px] text-[var(--cream-mute)]">Runs on your machine (Node 24, no Docker, no API keys). In <span style={{ color: ACCENT }}>Settings → Execution</span> it already sees your <b className="text-[var(--cream)]">Claude Code, Hermes, Codex</b> and more — pick one and it drives your real CLI.</div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
             {MAKES.map((m) => {

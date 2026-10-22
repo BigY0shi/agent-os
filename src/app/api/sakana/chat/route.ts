@@ -10,6 +10,9 @@ export const maxDuration = 300;
 // Direct competitor to OpenRouter Fusion: same panel idea, ~4× cheaper per call
 // on goldiebench. Streams deltas in the agent-view envelope:
 //   {"t":"d","c":"chunk"} · {"t":"done"} · {"t":"error","m":"…"}
+// plus one real milestone: {"t":"status","s":"accepted"} once Sakana has answered
+// 200 and the stream is open. Sakana reports nothing about which models sit on the
+// panel or how far along they are, so neither do we.
 const ENDPOINT = "https://api.sakana.ai/v1/chat/completions";
 const MODEL = "fugu-ultra-20260615";
 
@@ -64,6 +67,7 @@ export async function POST(req: Request) {
           send({ t: "error", m: `Sakana HTTP ${r.status}: ${t.slice(0, 240)}` });
           send({ t: "done" }); controller.close(); return;
         }
+        send({ t: "status", s: "accepted" });
         const reader = r.body.getReader();
         const dec = new TextDecoder();
         let buf = "";

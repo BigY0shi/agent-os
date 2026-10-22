@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { RotateCw, Square, Check, X, Loader2, Target, FlaskConical, Eye, Code2, ExternalLink, Download, FolderOpen, RefreshCw } from "lucide-react";
 import { useInstalledAgents } from "./AgentPicker";
-import { WORKERS, JUDGES, DEFAULT_WORKER, DEFAULT_JUDGE } from "@/lib/loopModels";
-
-// CLI agents wired into the loop engine (cli:<id>) — see lib/loopEngine.ts LOOP_CLI_AGENTS.
-const LOOP_CLI = ["claude", "codex", "cursor", "pi", "hermes"];
+import { WORKERS, JUDGES, DEFAULT_WORKER, DEFAULT_JUDGE, LOOP_CLI, normalizeJudge } from "@/lib/loopModels";
+import LoopSettings from "./LoopSettings";
+import { useSettings } from "./ConfigMenu";
 
 function fmtAgo(ms: number): string {
   if (!ms) return "";
@@ -49,24 +48,31 @@ export default function LoopView() {
   const [result, setResult] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const ctrl = useRef<AbortController | null>(null);
-  const [nous, setNous] = useState<{ loggedIn: boolean; models: string[] }>({ loggedIn: false, models: [] });
   const [builds, setBuilds] = useState<Build[]>([]);
   const [preview, setPreview] = useState<Build | null>(null);
   const { installed } = useInstalledAgents();
-  const cliAgents = installed.filter((a) => a.kind === "cli" && LOOP_CLI.includes(a.id));
+  // Start from the Loop gear's defaults (settings.loop) once they arrive; a pick made on the
+  // page before then is kept.
+  const { settings } = useSettings();
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!settings || seeded.current) return;
+    seeded.current = true;
+    const l = (settings.loop || {}) as { builder?: string; judge?: string; maxRounds?: number };
+    if (l.builder) setWorker((w) => (w === DEFAULT_WORKER ? l.builder! : w));
+    if (l.judge) setJudge((j) => (j === DEFAULT_JUDGE ? normalizeJudge(l.judge!) : j));
+    if (l.maxRounds) setMaxIters((m) => (m === 4 ? Math.max(2, Math.min(8, Number(l.maxRounds))) : m));
+  }, [settings]);
+  const cliAgents = installed.filter((a) => a.kind === "cli" && (LOOP_CLI as readonly string[]).includes(a.id));
+  // The static lists minus whatever already shows under "Your CLI agents", so no option appears twice.
+  const shown = new Set(cliAgents.map((a) => `cli:${a.id}`));
+  const otherWorkers = WORKERS.filter((w) => !shown.has(w.id));
+  const otherJudges = JUDGES.filter((j) => !shown.has(j.id));
 
   async function loadBuilds() {
     try { const j = await fetch("/api/loop/builds", { cache: "no-store" }).then((r) => r.json()); setBuilds(j.builds || []); } catch { /* offline */ }
   }
   useEffect(() => { loadBuilds(); }, []);
-
-  useEffect(() => {
-    fetch("/api/loop/nous-models").then((r) => r.json()).then((d) => {
-      setNous({ loggedIn: !!d.loggedIn, models: Array.isArray(d.models) ? d.models : [] });
-      // Builder defaults to the Claude CLI (DEFAULT_WORKER) — no key needed. Only
-      // Portal ":free"-tier models run without credits, so we never auto-pick models[0] (paid).
-    }).catch(() => { /* offline */ });
-  }, []);
 
   function pushStep(n: number, step: string, detail: string) {
     setIters((prev) => {
@@ -115,9 +121,10 @@ export default function LoopView() {
 
   return (
     <div className="max-w-[1000px] mx-auto w-full pb-16">
+      <div className="flex justify-end mb-2"><LoopSettings /></div>
       {/* intro */}
       <p className="text-[13.5px] leading-relaxed mb-4" style={{ color: "var(--fg-dim)" }}>
-        Stop being the loop. Define what <b style={{ color: "var(--fg)" }}>done</b> looks like, and the system runs the cycle itself — a builder acts, then a <b style={{ color: ACCENT }}>free judge</b> (N2 by default — no per-token cost) grades it adversarially out of 100. It keeps fixing until the judge passes or progress stalls. The builder never grades its own homework.
+        Stop being the loop. Define what <b style={{ color: "var(--fg)" }}>done</b> looks like, and the system runs the cycle itself — a builder acts, then a separate <b style={{ color: ACCENT }}>judge</b> (the Claude CLI by default) grades it adversarially out of 100. It keeps fixing until the judge passes or progress stalls. The builder never grades its own homework.
       </p>
 
       {/* the 5-step cycle */}
@@ -155,12 +162,9 @@ export default function LoopView() {
                   {cliAgents.map((a) => <option key={`cli:${a.id}`} value={`cli:${a.id}`}>{a.label}</option>)}
                 </optgroup>
               )}
-              <optgroup label="Free">
-                {WORKERS.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
-              </optgroup>
-              {nous.models.length > 0 && (
-                <optgroup label="Nous Portal · 300+ models (paid tiers need credits)">
-                  {nous.models.map((m) => <option key={`nous:${m}`} value={`nous:${m}`}>{m}</option>)}
+              {otherWorkers.length > 0 && (
+                <optgroup label={cliAgents.length > 0 ? "Other CLI agents" : "CLI agents"}>
+                  {otherWorkers.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}
                 </optgroup>
               )}
             </select>
@@ -179,12 +183,9 @@ export default function LoopView() {
                   {cliAgents.map((a) => <option key={`judge-cli:${a.id}`} value={`cli:${a.id}`}>{a.label}</option>)}
                 </optgroup>
               )}
-              <optgroup label="Free + paid">
-                {JUDGES.map((j) => <option key={j.id} value={j.id}>{j.label}</option>)}
-              </optgroup>
-              {nous.models.length > 0 && (
-                <optgroup label="Nous Portal · 300+ models (paid tiers need credits)">
-                  {nous.models.map((m) => <option key={`judge-nous:${m}`} value={`nous:${m}`}>{m}</option>)}
+              {otherJudges.length > 0 && (
+                <optgroup label={cliAgents.length > 0 ? "Other CLI agents + Ollama Cloud" : "CLI agents + Ollama Cloud"}>
+                  {otherJudges.map((j) => <option key={j.id} value={j.id}>{j.label}</option>)}
                 </optgroup>
               )}
             </select>
@@ -196,9 +197,7 @@ export default function LoopView() {
           </div>
         </div>
         <p className="text-[10.5px] mt-3" style={{ color: "var(--fg-dimmer)" }}>
-          Loops are token-hungry by design — so both the builder and the judge default to <b style={{ color: ACCENT }}>free</b> models (N2). {nous.loggedIn
-            ? <>Your <b style={{ color: ACCENT }}>Nous Portal</b> models are also free under your sub — pick one for the builder or judge.</>
-            : <>Connect <b style={{ color: ACCENT }}>Nous Portal</b> — run <span className="font-mono">hermes portal</span> — for more free models in both dropdowns.</>} If the free judge ever throttles, it falls back to your <b style={{ color: ACCENT }}>local</b> model. Results save to your vault under <span className="font-mono">Agentic OS/Loops</span>.
+          The Loop runs on your CLI agents (your subscriptions, no API keys); the judge can also be Ollama Cloud. Pick an independent judge (Codex) for a tougher critic. If a CLI judge returns nothing usable, the round fails with the reason, unless the Loop gear sets a <b style={{ color: ACCENT }}>judge fallback</b>, which then says so in the round. Results save to your vault under <span className="font-mono">Agentic OS/Loops</span>.
         </p>
       </div>
 
@@ -267,7 +266,7 @@ export default function LoopView() {
                 {["state", "act", "verify"].map((step) => {
                   const reached = it.steps.includes(step);
                   const isLast = it.steps[it.steps.length - 1] === step && running && !it.verdict;
-                  const lbl = step === "state" ? "check state" : step === "act" ? "build" : "Fusion verify";
+                  const lbl = step === "state" ? "check state" : step === "act" ? "build" : "verify";
                   return (
                     <span key={step} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded" style={{ background: reached ? "var(--bg)" : "transparent", color: reached ? "var(--fg-dim)" : "var(--fg-dimmer)", border: "1px solid var(--panel-border)" }}>
                       {isLast ? <Loader2 size={10} className="animate-spin" style={{ color: ACCENT }} /> : reached ? <Check size={10} style={{ color: ACCENT }} /> : null} {lbl}

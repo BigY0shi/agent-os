@@ -61,7 +61,27 @@ export function liveHolder(now = Date.now()): InstanceLock | null {
   if (!l) return null;
   if (l.pid === process.pid) return null;
   if (now - (l.heartbeat ?? 0) >= STALE_MS) return null;
+  // A fresh heartbeat from a PID that does not exist at all is a holder that
+  // was killed within the last minute (the restart launcher kills, waits
+  // 1.2 s, and starts the next server). This check is one-directional on
+  // purpose: a recycled PID still LOOKS alive and keeps the refusal, which is
+  // the failure the heartbeat design accepts; only the certain case, no such
+  // process, frees the lock early. 2026-09-02: the new server refused to
+  // start against PID 33256's still-warm lock and the owner had no server.
+  if (!pidExists(l.pid)) return null;
   return l;
+}
+
+/** True when a process with this id exists (signal 0 = existence probe). */
+export function pidExists(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM = exists but not ours; ESRCH = no such process.
+    return (e as NodeJS.ErrnoException)?.code === "EPERM";
+  }
 }
 
 function writeLock(startedAt: number): void {

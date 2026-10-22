@@ -40,18 +40,23 @@ export async function POST(req: Request) {
   const out = await run("openclaw", [
     "infer", "model", "run",
     "--gateway",                    // Reuse the hot gateway — saves 3s of CLI startup
-    // No --model override → uses agent's default (xai/grok-4.20-beta-latest-non-reasoning).
-    // Non-reasoning model is 5-6s instead of 10-13s for grok-4.3. Perfect for voice.
+    // No --model override → OpenClaw uses the agent's default model (a fast
+    // non-reasoning Grok suits voice). Which one is OpenClaw's config, not ours.
     "--prompt", prompt,
     "--json",
   ], { timeoutMs: 60_000 });
 
   const firstBrace = out.stdout.indexOf("{");
   let text = "";
+  // The model OpenClaw says it used, when its JSON names one; otherwise unknown (null),
+  // never a name written into this file.
+  let model: string | null = null;
   if (firstBrace !== -1) {
     try {
       const j = JSON.parse(out.stdout.slice(firstBrace));
       text = j.text ?? j.outputs?.[0]?.text ?? "";
+      const m = j.model ?? j.outputs?.[0]?.model;
+      if (typeof m === "string" && m.trim()) model = m.trim();
     } catch { /* fall through */ }
   }
   text = text.trim();
@@ -71,6 +76,6 @@ export async function POST(req: Request) {
     ok: true,
     text,
     durationMs: out.durationMs,
-    model: "xai/grok-4.20-beta-latest-non-reasoning",
+    model,
   });
 }

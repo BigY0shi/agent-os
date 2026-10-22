@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { getSites } from "@/lib/seoPipeline";
 import { startDeploy, finishDeploy } from "@/lib/seoHistory";
-import { augmentPath, POSIX_TOOL_DIRS } from "@/lib/platform";
+import { augmentPath, POSIX_TOOL_DIRS, resolveCli } from "@/lib/platform";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +17,10 @@ export const dynamic = "force-dynamic";
 // build + deploy commands always resolve, regardless of how the server was started.
 // augmentPath joins with the platform's own separator and skips POSIX dirs on Windows
 // (the old ":"-join corrupted the first entry of a ";"-delimited Windows PATH).
+// On Windows the PATH was never the whole story: `npx` and `netlify` are npm .cmd shims
+// there, which spawn() cannot run without a shell, so runStep resolves each command with
+// resolveCli (node + the shim's entry, clean arg array) and reports a missing CLI as a
+// failed step instead of an ENOENT.
 const DEPLOY_PATH = augmentPath([
   ...POSIX_TOOL_DIRS,
   path.join(os.homedir(), ".npm-global", "bin"),
@@ -87,8 +91,16 @@ export async function POST(req: Request) {
 
       async function runStep(label: string, cmd: string, args: string[]) {
         emit({ type: "step", label, cmd: `${cmd} ${args.join(" ")}` });
+        const cli = resolveCli(cmd, DEPLOY_PATH);
+        if ("error" in cli) {
+          const text = `${cmd} CLI not found (${cli.error}); nothing was run for this step.\n`;
+          stderrTail = (stderrTail + text).slice(-2000);
+          emit({ type: "stderr", label, text });
+          emit({ type: "step_end", label, code: 127 });
+          return 127;
+        }
         return new Promise<number>((resolve) => {
-          const p = spawn(cmd, args, { cwd: sitePath, env: { ...process.env, PATH: DEPLOY_PATH, NO_COLOR: "1", CI: "1" } });
+          const p = spawn(cli.cmd, [...cli.pre, ...args], { cwd: sitePath, env: { ...process.env, PATH: DEPLOY_PATH, NO_COLOR: "1", CI: "1" } });
           p.stdout.on("data", (b) => {
             const t = b.toString();
             allOutput += t;

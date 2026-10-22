@@ -11,7 +11,8 @@ const ANSI_STRIP = /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\]\d+;[^\x07\x1b]*(\x07|\x1b\\)/g
 const TIMEOUT_MS = 6 * 60 * 1000;
 const WORKSPACE = path.join(os.homedir(), ".hermes", "profiles", "local", "workspace");
 
-// Run the offline "local" Hermes agent (llama3.1:8b) with its cwd pinned to the
+// Run the offline "local" Hermes agent (its model is whatever the Hermes `local`
+// profile sets) with its cwd pinned to the
 // profile workspace, so everything it builds lands where the Engine's preview can
 // see it (the model otherwise picks its own path, e.g. ~/Sites).
 export async function POST(req: Request) {
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
     const timedOut = out.durationMs >= TIMEOUT_MS - 2_000;
     diagnostic = timedOut
       ? `⏱ The local agent ran past ${Math.round(TIMEOUT_MS / 60000)} min and was stopped. Try a smaller task.`
-      : `⚠ Finished in ${seconds}s with no output (exit ${out.code}).${stderrClean ? "\n\n" + stderrClean.slice(-1500) : "\n\nIs Ollama running with llama3.1:8b pulled?"}`;
+      : `⚠ Finished in ${seconds}s with no output (exit ${out.code}).${stderrClean ? "\n\n" + stderrClean.slice(-1500) : "\n\nIs Ollama running, with the model your Hermes local profile names pulled?"}`;
   }
 
   return NextResponse.json({

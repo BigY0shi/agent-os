@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ConfigMenu, { useSettings, Field, TextInput, SaveBar } from "./ConfigMenu";
+import { isMaskedSecret } from "@/lib/settingsRedact";
 
 const ACCENT = "#c084fc";
 
@@ -51,7 +52,7 @@ export default function MusicSettings() {
       {backend === "key" ? (
         <>
           <Field label="Suno API key" hint="From an unofficial Suno API (e.g. sunoapi.org). Used server-side.">
-            <TextInput type="password" placeholder="sk-…" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
+            <TextInput type={isMaskedSecret(apiKey) ? "text" : "password"} placeholder="sk-…" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
           </Field>
           <Field label="API base URL" hint="Defaults to https://api.sunoapi.org if blank.">
             <TextInput placeholder="https://api.sunoapi.org" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
@@ -59,7 +60,7 @@ export default function MusicSettings() {
         </>
       ) : (
         <Field label="Suno account cookie" hint="Your suno.com session cookie (self-host suno-api style). Scaffolded — not yet wired into generation.">
-          <TextInput type="password" placeholder="paste cookie…" value={cookie} onChange={(e) => setCookie(e.target.value)} />
+          <TextInput type={isMaskedSecret(cookie) ? "text" : "password"} placeholder="paste cookie…" value={cookie} onChange={(e) => setCookie(e.target.value)} />
         </Field>
       )}
 

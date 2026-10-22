@@ -5,6 +5,9 @@
 // header with its settings section + field list; values live in
 // ~/.agentic-os/settings.json via /api/settings and are read at REQUEST time —
 // changing a model here applies to the next call, no rebuild, no restart.
+//
+// S30: a field key may be dotted ("voice.geminiLiveModel") to reach a nested object inside
+// the section, and `type: "number"` saves a number (blank = the module default).
 
 import { useEffect, useState } from "react";
 import ConfigMenu, { Field, TextInput, SaveBar, useSettings } from "./ConfigMenu";
@@ -14,6 +17,20 @@ export interface ModelFieldDef {
   label: string;
   hint?: string;
   placeholder?: string;
+  /** "number" saves Number(value) (blank saves nothing, so the default applies); default text. */
+  type?: "text" | "number";
+}
+
+const getPath = (obj: unknown, p: string[]): unknown =>
+  p.reduce<unknown>((o, k) => (o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined), obj);
+function setPath(target: Record<string, unknown>, p: string[], v: unknown): void {
+  let o = target;
+  for (let i = 0; i < p.length - 1; i++) {
+    const k = p[i];
+    if (!o[k] || typeof o[k] !== "object") o[k] = {};
+    o = o[k] as Record<string, unknown>;
+  }
+  o[p[p.length - 1]] = v;
 }
 
 export default function ModelSettings({ section, title, accent, fields, buttonLabel = "Models" }: {
@@ -31,12 +48,19 @@ export default function ModelSettings({ section, title, accent, fields, buttonLa
   useEffect(() => {
     if (!settings) return;
     const sec = (settings[section] ?? {}) as Record<string, unknown>;
-    setVals(Object.fromEntries(fields.map((f) => [f.key, String(sec[f.key] ?? "")])));
+    setVals(Object.fromEntries(fields.map((f) => [f.key, String(getPath(sec, f.key.split(".")) ?? "")])));
     // `fields` is a stable module-level const in every caller.
   }, [settings, section]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function onSave() {
-    await save({ [section]: vals });
+    const patch: Record<string, unknown> = {};
+    for (const f of fields) {
+      const raw = (vals[f.key] ?? "").trim();
+      const v = f.type === "number" ? (raw === "" ? undefined : Number(raw)) : vals[f.key] ?? "";
+      if (f.type === "number" && v !== undefined && !Number.isFinite(v as number)) continue;
+      setPath(patch, f.key.split("."), v);
+    }
+    await save({ [section]: patch });
     setSaved(true);
     setTimeout(() => setSaved(false), 1600);
   }
@@ -46,6 +70,7 @@ export default function ModelSettings({ section, title, accent, fields, buttonLa
       {fields.map((f) => (
         <Field key={f.key} label={f.label} hint={f.hint}>
           <TextInput
+            type={f.type === "number" ? "number" : "text"}
             value={vals[f.key] ?? ""}
             placeholder={f.placeholder}
             onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}

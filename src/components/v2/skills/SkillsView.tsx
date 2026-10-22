@@ -4,8 +4,8 @@
 // Standing POLICY skills stored in v2_skills and injected into task-execution
 // prompts (B2) + the Jarvis context (C4) via skills/store.ts withSkills().
 // List (position order, active toggles, up/down reorder) → SkillEditor
-// slide-over → rule-16 gear (ConfigMenu; its auto-appended SkillsSection also
-// surfaces the FILE-based operating skills, so both systems are visible here).
+// slide-over → rule-16 gear (ConfigMenu). The FILE-based operating skills are managed
+// per module (each module's Skills & workflows button) and in Jarvis → Control Room.
 // V2 idiom: usePollWhileVisible + muted-neobrutalist atoms shared with
 // integrations/automations.
 
@@ -127,7 +127,9 @@ export default function SkillsView() {
             <p className="text-[11.5px] leading-relaxed mb-3" style={{ color: "var(--fg-dim, #9aa)" }}>
               Policy skills above are stored in the OS database and injected into V2 task
               execution and Jarvis prompts (active ones only, in list order, capped at ~8k
-              characters). The file-based operating skills below front the CLI-agent lanes.
+              characters). The file-based operating skills that front the CLI-agent lanes are
+              turned on per module from each module&rsquo;s Skills &amp; workflows button, or all at
+              once in Jarvis &rarr; Control Room &rarr; Skills &amp; workflows.
             </p>
           </ConfigMenu>
         </div>

@@ -3,18 +3,19 @@ export const dynamic = "force-dynamic";
 
 // Lists the Ollama Cloud models the account can run (GET /api/tags on ollama.com).
 // Feeds the model dropdown in the Ollama Cloud panel so we never hardcode tags.
-const HOST = (process.env.OLLAMA_CLOUD_HOST || "https://ollama.com").replace(/\/$/, "");
+// Key and host: settings.ollama (the page's gear), then the environment (lib/ollamaCloud.ts).
+import { ollamaCloudHost, ollamaCloudKey } from "@/lib/ollamaCloud";
 
 // Surfaced first in the dropdown — strongest coders, if present on the account.
 const PREFERRED = ["qwen3-coder:480b", "qwen3-coder-next", "kimi-k2.7-code", "deepseek-v4-pro", "glm-5.2", "gpt-oss:120b"];
 
 export async function GET() {
-  const key = (process.env.OLLAMA_API_KEY || process.env.OLLAMA_CLOUD_KEY || "").trim();
+  const key = ollamaCloudKey();
   if (!key) {
-    return Response.json({ ok: false, models: [], error: "No OLLAMA_API_KEY set." }, { status: 200 });
+    return Response.json({ ok: false, models: [], error: "No Ollama Cloud key: add it in the gear, or set OLLAMA_API_KEY." }, { status: 200 });
   }
   try {
-    const r = await fetch(`${HOST}/api/tags`, {
+    const r = await fetch(`${ollamaCloudHost()}/api/tags`, {
       headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
     });

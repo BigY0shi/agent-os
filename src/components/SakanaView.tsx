@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MessageSquare, Layers, Send, Square, Trash2, RefreshCw, FileCode,
-  ExternalLink, Sparkles, FolderTree, Network, Search, Gavel, Users,
+  ExternalLink, Sparkles, FolderTree, Network, Gavel,
 } from "lucide-react";
 
 const ACCENT = "#ff5f9e"; // Sakana plum
 const HISTORY_KEY = "agentic-os/sakana/history/v1";
 const BUCKET = "sakana-fugu"; // reuse the Hermes "Sakana Fugu ✦" workspace bucket
-const PANEL = ["Sakana panel", "+ vendor-agnostic"];
 
 type Tab = "chat" | "workspace";
 interface Msg { role: "user" | "assistant"; text: string; }
@@ -17,7 +16,6 @@ interface WsFile { name: string; relPath: string; bytes: number; mtime: number; 
 
 // The workflows that actually pay off — one tap drops a template into the box.
 const PRESETS: { name: string; q: string }[] = [
-  { name: "Ask the board", q: "" },
   { name: "SEO content council", q: "Act as an SEO content council. For the keyword \"[KEYWORD]\", search the web for what currently ranks, then synthesise: search intent, the angle competitors are all missing, a recommended H2 outline, and 3 questions every article forgets to answer." },
   { name: "Title + thumbnail brain", q: "I'm making a YouTube video about \"[TOPIC]\". Propose 10 titles under 50 characters (brand + dramatic verb), then rank the top 3 and explain why each wins the click. Flag any that overpromise." },
   { name: "Fact-check", q: "Fact-check this claim using live web search. Tell me clearly: true, partly true, or false — and where sources AGREE vs where they contradict. Claim: \"[CLAIM]\"" },
@@ -36,13 +34,14 @@ function clock(s: number): string {
   const m = Math.floor(s / 60), ss = s % 60;
   return `${m}:${String(ss).padStart(2, "0")}`;
 }
-// staged status text driven by elapsed seconds
-function stageFor(s: number): { icon: "users" | "search" | "gavel"; text: string } {
-  if (s < 8)  return { icon: "users",  text: "Sending your prompt to the panel…" };
-  if (s < 28) return { icon: "users",  text: "The panel is deliberating in parallel…" };
-  if (s < 55) return { icon: "search", text: "Running web searches + cross-checking sources…" };
-  return { icon: "gavel", text: "The judge is weighing it all + writing the verdict…" };
-}
+// The waiting line reflects only what the route has actually reported:
+// the request is out, Sakana accepted it, or text is streaming. Sakana does
+// not say which models are on the panel or how far along they are.
+type Phase = "sending" | "accepted";
+const PHASE_TEXT: Record<Phase, string> = {
+  sending: "Sending your question to Sakana…",
+  accepted: "Sakana accepted it. Waiting for the answer to start…",
+};
 
 export default function SakanaView() {
   const [tab, setTab] = useState<Tab>("chat");
@@ -54,6 +53,7 @@ export default function SakanaView() {
   const [partial, setPartial] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [phase, setPhase] = useState<Phase>("sending");
   const ctrlRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -85,7 +85,7 @@ export default function SakanaView() {
     if (!text || streaming) return;
     setErr(null);
     const next = [...msgs, { role: "user" as const, text }];
-    setMsgs(next); setInput(""); setStreaming(true); setPartial(""); setElapsed(0);
+    setMsgs(next); setInput(""); setStreaming(true); setPartial(""); setElapsed(0); setPhase("sending");
     const start = Date.now();
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 250);
@@ -106,7 +106,7 @@ export default function SakanaView() {
           const lines = buf.split("\n"); buf = lines.pop() ?? "";
           for (const line of lines) {
             if (!line.trim()) continue;
-            try { const j = JSON.parse(line); if (j.t === "d") { acc += j.c; setPartial(acc); } else if (j.t === "error") { errMsg = j.m; } } catch {}
+            try { const j = JSON.parse(line); if (j.t === "d") { acc += j.c; setPartial(acc); } else if (j.t === "status" && j.s === "accepted") { setPhase("accepted"); } else if (j.t === "error") { errMsg = j.m; } } catch {}
           }
         }
       }
@@ -118,7 +118,7 @@ export default function SakanaView() {
   }, [input, streaming, msgs]);
 
   function stop() { ctrlRef.current?.abort(); if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } setStreaming(false); setPartial(""); }
-  function clearChat() { if (confirm("Clear Fusion history?")) { setMsgs([]); try { localStorage.removeItem(HISTORY_KEY); } catch {} fetch("/api/sakana/history", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ msgs: [] }) }).catch(() => {}); } }
+  function clearChat() { if (confirm("Clear Sakana history?")) { setMsgs([]); try { localStorage.removeItem(HISTORY_KEY); } catch {} fetch("/api/sakana/history", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ msgs: [] }) }).catch(() => {}); } }
 
   // ── workspace (reuses the Hermes "fusion" bucket) ──
   const [files, setFiles] = useState<WsFile[]>([]);
@@ -139,8 +139,6 @@ export default function SakanaView() {
   }
   const previewUrl = openFile ? `/api/hermes/preview/${BUCKET}/${openFile.relPath.split("/").map(encodeURIComponent).join("/")}` : null;
   const isHtml = !!openFile && /\.html?$/i.test(openFile.relPath);
-
-  const stg = stageFor(elapsed);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -193,35 +191,22 @@ export default function SakanaView() {
                 <div className="max-w-[88%] w-full rounded-xl px-4 py-3.5" style={{ background: "var(--bg-card)", border: `1px solid ${ACCENT}40` }}>
                   {!partial ? (
                     <div>
-                      {/* status row */}
-                      <div className="flex items-center gap-2.5 mb-3">
+                      {/* status row: only what the route reported, plus the real elapsed time */}
+                      <div className="flex items-center gap-2.5 mb-2">
                         <span className="relative grid place-items-center w-6 h-6 shrink-0">
                           <span className="absolute inset-0 rounded-full animate-ping" style={{ background: `${ACCENT}55` }} />
-                          {stg.icon === "search" ? <Search size={14} style={{ color: ACCENT }} /> : stg.icon === "gavel" ? <Gavel size={14} style={{ color: ACCENT }} /> : <Users size={14} style={{ color: ACCENT }} />}
+                          <Network size={14} style={{ color: ACCENT }} />
                         </span>
-                        <span className="text-[13px] font-semibold" style={{ color: "var(--cream)" }}>{stg.text}</span>
+                        <span className="text-[13px] font-semibold" style={{ color: "var(--cream)" }}>{PHASE_TEXT[phase]}</span>
                         <span className="ml-auto text-[12px] mono tabular-nums" style={{ color: ACCENT }}>{clock(elapsed)}</span>
                       </div>
-                      {/* pulsing panel chips */}
-                      <div className="flex flex-wrap gap-1.5 mb-2.5">
-                        {PANEL.map((m, idx) => (
-                          <span key={m} className="text-[10.5px] font-medium px-2 py-1 rounded-full animate-pulse"
-                            style={{ color: "var(--cream-soft)", background: `${ACCENT}14`, border: `1px solid ${ACCENT}33`, animationDelay: `${idx * 0.18}s`, animationDuration: "1.4s" }}>
-                            {m}
-                          </span>
-                        ))}
-                      </div>
-                      {/* progress shimmer */}
-                      <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(243,235,218,0.06)" }}>
-                        <div className="h-full rounded-full fusion-shimmer" style={{ background: `linear-gradient(90deg, transparent, ${ACCENT}, transparent)`, width: "40%" }} />
-                      </div>
-                      <div className="text-[10.5px] text-[var(--cream-mute)] mt-2">Fusion runs every panel model, then a judge — answers stream in once the judge starts writing.</div>
+                      <div className="text-[10.5px] text-[var(--cream-mute)]">Sakana does not report which models are on the panel or how far along they are. The answer shows here as soon as it starts streaming.</div>
                     </div>
                   ) : (
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <Gavel size={13} style={{ color: ACCENT }} />
-                        <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>Judge writing the verdict</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: ACCENT }}>Answer streaming</span>
                         <span className="ml-auto text-[12px] mono tabular-nums" style={{ color: "var(--cream-mute)" }}>{clock(elapsed)}</span>
                       </div>
                       <div className="text-[13.5px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--cream-soft)" }}>{partial}<span className="fusion-caret">▋</span></div>
@@ -237,7 +222,7 @@ export default function SakanaView() {
           {/* presets */}
           <div className="flex flex-wrap gap-1.5 px-3 pt-3 shrink-0">
             {PRESETS.map((p) => (
-              <button key={p.name} onClick={() => { if (p.q) setInput(p.q); }}
+              <button key={p.name} onClick={() => setInput(p.q)}
                 className="text-[11px] font-medium px-2.5 py-1 rounded-full border transition hover:border-[var(--gold)]"
                 style={{ borderColor: "var(--line-soft)", color: "var(--cream-dim)", background: "transparent" }}>
                 {p.name}

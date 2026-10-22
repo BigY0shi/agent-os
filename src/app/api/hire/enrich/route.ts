@@ -1,5 +1,7 @@
 import { listHireLeads, setHireFirmo, sizeFit, type Firmo } from "@/lib/hireDesk";
 import { startHirePitchBatch } from "@/lib/hireBatch";
+import { startModuleRun } from "@/lib/moduleRuns";
+import { runErrorResponse } from "@/lib/runRoute";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -37,8 +39,9 @@ async function hunterKey(): Promise<string | null> {
   } catch { return null; }
 }
 
-async function getJson(url: string) {
-  const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+async function getJson(url: string, signal: AbortSignal) {
+  // The per-call timeout and the run's STOP both end the fetch.
+  const r = await fetch(url, { signal: AbortSignal.any([AbortSignal.timeout(20_000), signal]) });
   const j = await r.json().catch(() => ({}));
   return { ok: r.ok, status: r.status, j } as { ok: boolean; status: number; j: Record<string, unknown> };
 }
@@ -65,9 +68,9 @@ function nameMatches(asked: string, got: string | undefined, domain: string | un
   return { ok, weak: ok && a.length <= 4 };
 }
 
-async function lookup(company: string, key: string): Promise<Firmo> {
+async function lookup(company: string, key: string, signal: AbortSignal): Promise<Firmo> {
   // 1. name → domain
-  const ds = await getJson(`https://api.hunter.io/v2/domain-search?company=${encodeURIComponent(company)}&limit=1&api_key=${key}`);
+  const ds = await getJson(`https://api.hunter.io/v2/domain-search?company=${encodeURIComponent(company)}&limit=1&api_key=${key}`, signal);
   if (!ds.ok) {
     const err = (ds.j.errors as { details?: string }[] | undefined)?.[0]?.details;
     return { error: `domain lookup failed (${ds.status})${err ? `: ${err}` : ""}` };
@@ -87,7 +90,7 @@ async function lookup(company: string, key: string): Promise<Firmo> {
   }
 
   // 2. domain → firmographics
-  const cf = await getJson(`https://api.hunter.io/v2/companies/find?domain=${encodeURIComponent(d.domain)}&api_key=${key}`);
+  const cf = await getJson(`https://api.hunter.io/v2/companies/find?domain=${encodeURIComponent(d.domain)}&api_key=${key}`, signal);
   if (!cf.ok) {
     // Partial success is still useful — we at least resolved the domain.
     return { domain: d.domain, email, ...sizeFit({}), error: `firmographics failed (${cf.status})` };
@@ -126,37 +129,60 @@ export async function POST(req: Request) {
     }, { status: 400 });
   }
 
-  let done = 0, failed = 0;
-  const results: { id: string; company: string | null; fit?: string; employees?: string; error?: string }[] = [];
+  // Registered as a module run (roadmap S2 backlog): the tray shows a lead
+  // counter and STOP ends the Hunter calls through ctx.signal (leads not yet
+  // looked up stay un-enriched; a stopped lead is not written as "failed").
+  // The run log names companies and verdicts, never the key or the emails.
+  const run = startModuleRun(
+    { module: "hire", label: `Enrich: ${targets.length} approved lead${targets.length === 1 ? "" : "s"}`, href: "/hire" },
+    async (ctx) => {
+      let done = 0, failed = 0;
+      const results: { id: string; company: string | null; fit?: string; employees?: string; error?: string }[] = [];
 
-  // Small pool: Hunter rate-limits, and this is at most 10 leads.
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, async () => {
-    while (next < targets.length) {
-      const l = targets[next++];
-      try {
-        const firmo = await lookup(l.company as string, key);
-        await setHireFirmo(l.id, firmo);
-        if (firmo.error) failed++; else done++;
-        results.push({ id: l.id, company: l.company, fit: firmo.fit, employees: firmo.employees, error: firmo.error });
-      } catch (e) {
-        failed++;
-        const msg = e instanceof Error ? e.message : String(e);
-        await setHireFirmo(l.id, { error: msg });
-        results.push({ id: l.id, company: l.company, error: msg });
-      }
-    }
-  }));
+      // Small pool: Hunter rate-limits, and this is at most 10 leads.
+      let next = 0;
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, async () => {
+        while (next < targets.length && !ctx.signal.aborted) {
+          const l = targets[next++];
+          try {
+            const firmo = await lookup(l.company as string, key, ctx.signal);
+            await setHireFirmo(l.id, firmo);
+            if (firmo.error) failed++; else done++;
+            results.push({ id: l.id, company: l.company, fit: firmo.fit, employees: firmo.employees, error: firmo.error });
+            ctx.log(`${l.company}: ${firmo.error ?? firmo.fit ?? "resolved"}`);
+          } catch (e) {
+            if (ctx.signal.aborted) throw e; // a STOP is not a lookup failure; leave the lead untouched
+            failed++;
+            const msg = e instanceof Error ? e.message : String(e);
+            await setHireFirmo(l.id, { error: msg });
+            results.push({ id: l.id, company: l.company, error: msg });
+            ctx.log(`${l.company}: ${msg}`);
+          } finally {
+            ctx.progress(done + failed, targets.length);
+          }
+        }
+      }));
+      if (ctx.signal.aborted) throw new Error("enrichment stopped");
 
-  // Enrichment is exactly the input the pitch needs (size verdict decides the
-  // framing), so chain the outreach pass for what just landed — the approved
-  // column fills with pitches without another button.
-  const pitch = await startHirePitchBatch(targets.map((l) => l.id));
+      // Enrichment is exactly the input the pitch needs (size verdict decides the
+      // framing), so chain the outreach pass for what just landed — the approved
+      // column fills with pitches without another button.
+      const pitch = await startHirePitchBatch(targets.map((l) => l.id));
+      ctx.log(pitch.started ? `pitch pass started for ${pitch.total}` : `pitch pass not started: ${pitch.reason ?? "unknown"}`);
 
-  return Response.json({
-    ok: true, enriched: done, failed,
-    skipped: Math.max(0, pool.length - targets.length),
-    pitching: pitch.started ? pitch.total : 0,
-    results,
-  });
+      return {
+        enriched: done, failed,
+        skipped: Math.max(0, pool.length - targets.length),
+        pitching: pitch.started ? pitch.total : 0,
+        results,
+      };
+    },
+    { summarize: (r) => ({ enriched: r.enriched, failed: r.failed, pitching: r.pitching }) },
+  );
+  try {
+    const r = await run.promise;
+    return Response.json({ ok: true, ...r, runId: run.id });
+  } catch (e) {
+    return runErrorResponse(e, run.id);
+  }
 }

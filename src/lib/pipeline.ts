@@ -256,7 +256,7 @@ async function reason(system: string, user: string, maxTokens: number, signal?: 
   const p = pipelineProvider();
   // fullAccess but NOT orchestrate: this path also serves the classifier, and
   // fanning out a council to emit 200 tokens of JSON would cost minutes for nothing.
-  if (p.kind === "cli") return cliComplete(p.agent!, `${system}\n\n${user}`, { timeoutMs: 240_000, signal, fullAccess: true });
+  if (p.kind === "cli") return cliComplete(p.agent!, `${system}\n\n${user}`, { timeoutMs: 240_000, signal, fullAccess: true, module: "pipeline" });
   if (p.kind === "minimax") {
     const mm = await minimaxChat(system, user, maxTokens, signal);
     if (mm) return mm;
@@ -298,7 +298,7 @@ export async function revisePlan(item: PipelineItem, feedback: string, agent?: s
   const sys = "You are a senior project planner REVISING a proposed plan based on the user's feedback. Keep the SAME markdown structure and section headers (What it is / Approach / First milestones / Who builds it). Apply the requested changes and keep everything else that already works. Be concrete and concise. Output the FULL revised plan in markdown only — no preamble, no commentary.";
   const user = `PROJECT: ${item.title}\n\nORIGINAL IDEA:\n${(item.idea || "").slice(0, 1200)}\n\nCURRENT PROPOSED PLAN:\n${(item.plan || "(none yet)").slice(0, 2600)}\n\nTHE USER'S REQUESTED CHANGES:\n${feedback.slice(0, 1400)}\n\nReturn the full revised plan now.`;
   const out = (agent && PIPELINE_CLI.includes(agent))
-    ? await cliComplete(agent, `${sys}\n\n${user}`, { timeoutMs: 240_000, signal, fullAccess: true })
+    ? await cliComplete(agent, `${sys}\n\n${user}`, { timeoutMs: 240_000, signal, fullAccess: true, module: "pipeline" })
     : await reason(sys, user, 900, signal);
   return (out || "").trim() || (item.plan || "");
 }
@@ -374,7 +374,7 @@ async function buildCaller(p: Provider, signal?: AbortSignal): Promise<{ call: (
     if (!(config as unknown as Record<string, unknown>)[p.agent!]) throw new Error(`${p.agent} CLI isn't detected on this machine — pick another provider in Pipeline settings.`);
     // The actual build — a multi-part deliverable, and the one place where a lone
     // model genuinely tries to do everything. Delegation is on here.
-    return { maxTokens: 16000, call: (m, _t, s) => cliComplete(p.agent!, m.map((x) => x.content).join("\n\n"), { timeoutMs: 600_000, signal: s, fullAccess: true, orchestrate: true }).catch(() => "") };
+    return { maxTokens: 16000, call: (m, _t, s) => cliComplete(p.agent!, m.map((x) => x.content).join("\n\n"), { timeoutMs: 600_000, signal: s, fullAccess: true, orchestrate: true, module: "pipeline" }).catch(() => "") };
   }
   if (p.kind === "minimax") {
     if (!minimaxAuth()) throw new Error("MiniMax isn't connected — run `hermes auth add minimax-oauth`, or pick another provider in Pipeline settings.");

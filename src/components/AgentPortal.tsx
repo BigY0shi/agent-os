@@ -16,8 +16,8 @@ interface Props {
 }
 
 // AgentPortal — Mission Control "Agents" grid card.
-// Aubergine background + gold-tinted border + Bricolage Grotesque title,
-// Manrope tagline, JetBrains Mono metric values. Matches free-claude-code-elegant.html.
+// Aubergine background + gold-tinted border + display-face title (--font-display),
+// UI-face tagline, mono metric values (type system redesigned 2026-09-28). Matches free-claude-code-elegant.html.
 export default function AgentPortal({ href, title, tagline, icon, accent, metrics, status }: Props) {
   const statusLabel = status === "ok" ? "Online" : status === "warn" ? "Degraded" : "Offline";
 
@@ -67,7 +67,7 @@ export default function AgentPortal({ href, title, tagline, icon, accent, metric
           {metrics.map((m, i) => (
             <div key={i} className="rounded-md border px-3 py-2"
                  style={{ borderColor: "var(--line-soft)", background: "rgba(243,235,218,0.02)" }}>
-              <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--cream-mute)", fontFamily: "'Manrope', sans-serif", fontWeight: 700 }}>
+              <div className="text-[10px] uppercase tracking-[0.18em]" style={{ color: "var(--cream-mute)", fontFamily: "var(--font-sans), sans-serif", fontWeight: 700 }}>
                 {m.label}
               </div>
               <div className="text-[15px] metric mt-1 truncate" style={{ color: "var(--cream)" }}>

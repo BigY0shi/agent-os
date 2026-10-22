@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import VoiceButton from "./VoiceButton";
 import NotebookSettings from "./NotebookSettings";
+import { MOD } from "@/lib/modKey";
 
 type Tab = "library" | "research" | "chat" | "studio" | "assets";
 type ResearchSource = { title?: string; url?: string; source?: string; link?: string; type?: string; snippet?: string; description?: string; summary?: string; [k: string]: unknown };
@@ -118,7 +119,14 @@ export default function NotebookView() {
     const sp = new URLSearchParams(window.location.search);
     const t = sp.get("tab");
     if (t && ["library", "research", "chat", "studio", "assets"].includes(t)) setTab(t as Tab);
-    const nb = sp.get("nb"); if (nb) setActiveId(nb);
+    const nb = sp.get("nb");
+    if (nb) { setActiveId(nb); return; }
+    // No notebook in the URL: open the gear's Default notebook ID (settings.notebook.notebookId),
+    // which used to be saved and never read. Anything picked meanwhile wins.
+    fetch("/api/settings", { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      const def = String(j?.settings?.notebook?.notebookId ?? "").trim();
+      if (def) setActiveId((cur) => cur ?? def);
+    }).catch(() => { /* settings unreachable: no default, nothing selected */ });
   }, []);
 
   // Persist the Research tab: when a notebook is active, load its last research so the
@@ -577,7 +585,7 @@ export default function NotebookView() {
                   <VoiceButton onTranscript={(t, o) => { if (o.final) setQuestion((v) => (v ? v + " " : "") + t); }} size={38} />
                   <textarea value={question} onChange={(e) => setQuestion(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); ask(); } }}
-                    rows={2} placeholder="Ask anything about this notebook… (⌘+Enter)"
+                    rows={2} placeholder={`Ask anything about this notebook… (${MOD}+Enter)`}
                     className="flex-1 bg-transparent outline-none resize-none px-2 py-2 text-[14px] text-[var(--fg)] placeholder:text-[var(--fg-dimmer)]" />
                   <button onClick={ask} disabled={!question.trim() || thinking}
                     className="px-3 h-[38px] rounded-lg flex items-center gap-1.5 text-sm transition disabled:opacity-40"

@@ -8,6 +8,8 @@
 import { useEffect, useState } from "react";
 import { useSettings, Field, TextInput, SaveBar } from "@/components/ConfigMenu";
 import { AGENTS_ACCENT } from "./shared";
+import { FACE_DETAILS, FACE_DETAIL_LABEL, normalizeFaceDetail } from "@/lib/agentFaces";
+import { refreshAgentFaces } from "@/lib/agentFacesClient";
 
 export default function AgentsSettings() {
   const { settings, saving, save } = useSettings();
@@ -15,8 +17,13 @@ export default function AgentsSettings() {
   const agents = (settings?.agents ?? {}) as {
     requireTestRun?: boolean;
     askUser?: { enabled?: boolean; heuristic?: boolean; timeoutMin?: number };
+    spendCap?: { enabled?: boolean; maxUsd?: number; maxTokens?: number };
+    faces?: { detail?: string; seeds?: Record<string, number | null> };
   };
   const askUser = agents.askUser ?? {};
+  const faceDetail = normalizeFaceDetail(agents.faces?.detail);
+  const spendCap = agents.spendCap ?? {};
+  const capOn = spendCap.enabled !== false;
 
   const [pollDraft, setPollDraft] = useState<string | null>(null);
   const [askDraft, setAskDraft] = useState<string | null>(null);
@@ -66,6 +73,16 @@ export default function AgentsSettings() {
         </select>
       </Field>
 
+      <Field label="Mark detail" hint="How busy every generated agent mark is (the Rorschach shapes on agents without a hand-drawn mark). Default medium. Each agent's New shape / Reset shape live on its own page.">
+        <select
+          value={faceDetail}
+          onChange={(e) => { void save({ agents: { ...agents, faces: { ...(agents.faces ?? {}), detail: normalizeFaceDetail(e.target.value) } } }).then(() => refreshAgentFaces()); }}
+          className="w-full bg-black/30 border rounded-lg px-2.5 h-9 text-[12.5px] outline-none"
+          style={{ borderColor: "var(--panel-border)", color: "var(--fg)" }}>
+          {FACE_DETAILS.map((d) => <option key={d} value={d}>{FACE_DETAIL_LABEL[d]}</option>)}
+        </select>
+      </Field>
+
       <Field label="Deploy gate — require a test run"
         hint="ON: promoting to Deployed without a successful (done) run is blocked with a 409. OFF: the deploy succeeds but shows a warning banner. (CONVENTIONS §11 — flag for Yoshi: spec default is warning; current default is the hard gate.)">
         <label className="flex items-center gap-2 text-[12.5px] cursor-pointer" style={{ color: "var(--fg-dim)" }}>
@@ -76,6 +93,42 @@ export default function AgentsSettings() {
           />
           Hard-block deploys until a test run finishes done
         </label>
+      </Field>
+
+      <Field label="Per-run spend ceiling"
+        hint="Checked at every harness loop boundary, so a run that hits it STOPS holding the work it already produced instead of starting an iteration it cannot pay for. Iteration count was already capped at 50; this caps what those iterations are allowed to cost. Switch it off for a deliberately long-horizon run."
+      >
+        <label className="flex items-center gap-2 text-[12.5px] cursor-pointer" style={{ color: "var(--fg-dim)" }}>
+          <input
+            type="checkbox"
+            checked={capOn}
+            onChange={(e) => void save({ agents: { ...agents, spendCap: { ...spendCap, enabled: e.target.checked } } })}
+          />
+          Stop a run once it reaches the ceiling
+        </label>
+        <div className="mt-2 flex gap-2 items-center pl-5">
+          <span className="text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>Dollars</span>
+          <TextInput
+            value={String(spendCap.maxUsd ?? 5)}
+            disabled={!capOn}
+            onChange={(v) => {
+              const n = Number(v);
+              if (Number.isFinite(n)) void save({ agents: { ...agents, spendCap: { ...spendCap, maxUsd: n } } });
+            }}
+          />
+          <span className="text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>Tokens</span>
+          <TextInput
+            value={String(spendCap.maxTokens ?? 2000000)}
+            disabled={!capOn}
+            onChange={(v) => {
+              const n = Number(v);
+              if (Number.isFinite(n)) void save({ agents: { ...agents, spendCap: { ...spendCap, maxTokens: n } } });
+            }}
+          />
+        </div>
+        <p className="mt-1.5 pl-5 text-[11.5px]" style={{ color: "var(--fg-dimmer)" }}>
+          Either at 0 leaves that one unbounded. Tokens count input, output and both cache buckets, because cache reads are billed too.
+        </p>
       </Field>
 
       <Field label="Let a run ask you a question"

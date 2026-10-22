@@ -16,7 +16,7 @@ import os from "node:os";
 import type { Channel, ContentItem, EngineState } from "./contentEngineTypes";
 export { CHANNELS } from "./contentEngineTypes";
 export type { Channel, ContentItem, EngineState, ItemStatus, Metrics, Materials } from "./contentEngineTypes";
-import { seatComplete, type CouncilSeat } from "./brainstorm";
+import { seatComplete, type CouncilSeat, type SeatOpts } from "./brainstorm";
 
 // ── Multi-model mandate (per /multi-agent-mcp-orchestration) ────────────────────
 // Claude is the MANAGER (plans the calendar, owns the merge) but must not be the
@@ -39,18 +39,29 @@ export function seatForItem(id: string): CouncilSeat {
  * Returns the text and which seat ACTUALLY answered — never claim codex wrote
  * something Claude had to rescue.
  */
-export async function multiModelComplete(preferred: CouncilSeat, prompt: string): Promise<{ text: string; by: CouncilSeat }> {
+export async function multiModelComplete(
+  preferred: CouncilSeat,
+  prompt: string,
+  opts: SeatOpts & {
+    /** Launch guardrail "No fallback to Claude" (S3): a failed seat fails the run. */
+    noFallback?: boolean;
+  } = {},
+): Promise<{ text: string; by: CouncilSeat }> {
   // The Kimi seat honours the Content Engine's own settings dial (default
   // kimi-k2.6 — chat/agentic tier per the user's model policy).
   const { resolveKimiModel } = await import("./brainstorm");
   const { readSettings } = await import("./settings");
+  const seatOpts: SeatOpts = { signal: opts.signal, timeoutMs: opts.timeoutMs };
   try {
     const kimiModel = preferred === "kimi" ? await resolveKimiModel(readSettings().contentEngine.kimiModel) : "";
-    const text = await seatComplete(preferred, prompt, kimiModel);
+    const text = await seatComplete(preferred, prompt, kimiModel, seatOpts);
     return { text, by: preferred };
-  } catch {
-    if (preferred === "claude") throw new Error("claude seat failed");
-    const text = await seatComplete("claude", prompt, "");
+  } catch (e) {
+    // STOP is never something to recover from: the owner ended the run.
+    if (opts.signal?.aborted) throw e;
+    if (preferred === "claude") throw new Error(`claude seat failed: ${(e as Error).message}`);
+    if (opts.noFallback) throw new Error(`${preferred} seat failed and the launch said no fallback: ${(e as Error).message}`);
+    const text = await seatComplete("claude", prompt, "", seatOpts);
     return { text, by: "claude" };
   }
 }

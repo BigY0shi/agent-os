@@ -5,12 +5,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Share2, Loader2, ExternalLink, Copy, Check, Trash2, RefreshCw, Sparkles, Globe } from "lucide-react";
+import ArtifactsSettings from "./ArtifactsSettings";
 
 const ACCENT = "#d97757"; // Claude rust
 
 interface Publishable { id: string; title: string; source: string; mtime: number; bytes: number }
 interface Published { slug: string; title: string; source: string; url: string; publishedAt: number; bytes: number }
-interface Site { baseUrl: string; name: string }
+interface Site { siteId: string; baseUrl: string; name: string; source: "settings" | "file" }
 
 function fmtAgo(ms: number): string {
   const s = Math.floor((Date.now() - ms) / 1000);
@@ -70,13 +71,19 @@ export default function ClaudeArtifacts() {
           <div className="grid place-items-center w-9 h-9 rounded-lg" style={{ background: `${ACCENT}24`, color: ACCENT }}><Share2 size={16} /></div>
           <div className="flex-1">
             <div className="text-[15px] font-medium" style={{ color: "var(--fg)" }}>Artifacts</div>
-            <div className="text-[12px]" style={{ color: "var(--fg-dim)" }}>Publish anything your agents built to a shareable link — sent in seconds, no setup.</div>
+            <div className="text-[12px]" style={{ color: "var(--fg-dim)" }}>
+              {loading ? "Loading…"
+                : !site ? "No site configured yet: open Configure (the gear) and enter your Netlify site ID and base URL."
+                : !site.baseUrl ? <>Site <span className="mono">{site.name}</span> has no base URL: open Configure (the gear) and enter the site&apos;s https address.</>
+                : <>Publishes to <span className="mono">{site.name}</span>{site.source === "file" ? " (from the legacy artifacts-site.json file; open Configure and Save to move it into settings)" : ""}.</>}
+            </div>
           </div>
-          {site && (
+          {site && site.baseUrl && (
             <a href={site.baseUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[11.5px] px-3 py-1.5 rounded-full border" style={{ borderColor: "var(--panel-border)", color: "var(--fg-dim)" }}>
               <Globe size={12} /> Gallery
             </a>
           )}
+          <ArtifactsSettings site={site} onSaved={load} />
         </div>
       </div>
 

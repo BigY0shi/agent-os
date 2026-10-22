@@ -318,10 +318,16 @@ const EXPECTED_SLUGS = [
     "agentId" in wire && typeof wire.createdAt === "string", wire);
 
   const upcoming = await (await dataReq("tasks-upcoming", { scope: "upcoming" })).json();
+  // Order is judged among THIS smoke's tasks only: the boot-seeded tasks (Morning Brief
+  // and friends) carry real next-run times, so between 11:00 and 12:00 UTC the seeded
+  // Morning Brief (12:00 UTC) legitimately sorts ahead of "due in 1h" (gate flake,
+  // 2026-09-29, run at 11:05 UTC).
+  const mine = new Set([tNew1.id, tNew2.id, tScheduled.id, tDue.id, tWorking.id]);
+  const ours = upcoming.tasks.filter((t) => mine.has(t.id));
   check("scope=upcoming lists ONLY due/scheduled tasks, soonest first (run_at 1h beats the +3d pin)",
     upcoming.available === true &&
-    upcoming.tasks.length >= 2 &&
-    upcoming.tasks[0]?.id === tDue.id &&
+    ours.length >= 2 &&
+    ours[0]?.id === tDue.id &&
     upcoming.tasks.some((t) => t.id === tScheduled.id) &&
     !upcoming.tasks.some((t) => t.id === tNew1.id), upcoming);
 

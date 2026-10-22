@@ -99,7 +99,7 @@ export default function SpeakBuild() {
     if (!text || building) return;
     setBuilding(true);
     setLog("");
-    setStatus(engine === "n2" ? "Building it with Nex-N2-Pro…" : "Building it on your Mac…");
+    setStatus(engine === "n2" ? "Building it with Nex-N2-Pro…" : "Building it on your machine…");
 
     const ctrl = new AbortController(); ctrlRef.current = ctrl;
     let acc = "", builtFile: string | null = null, errMsg: string | null = null;
@@ -170,7 +170,7 @@ export default function SpeakBuild() {
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-[20px] font-semibold tracking-tight text-[var(--fg)]">Agent Factory</h2>
           <span className="text-[10.5px] px-2 py-0.5 rounded-full border" style={{ borderColor: `${accent}55`, color: accent, background: `${accent}14` }}>
-            {engine === "n2" ? "$0 · Nex-N2-Pro · free" : "$0 · runs on your Mac"}
+            {engine === "n2" ? "$0 · Nex-N2-Pro · free" : "$0 · runs on your machine"}
           </span>
         </div>
         <p className="text-[12px] text-[var(--fg-dim)] mb-3">Say it — your agent builds it. It runs on the right →</p>
@@ -277,7 +277,7 @@ export default function SpeakBuild() {
               <div className="flex items-center justify-center gap-1.5 mt-3 text-[12px] text-[var(--fg-dimmer)]">
                 <Play size={13} style={{ color: accent }} /> or tap a build in the gallery below to play it
               </div>
-              <div className="text-[11px] text-[var(--fg-dimmer)] mt-2">Previews stay paused until you start one — keeps your Mac cool.</div>
+              <div className="text-[11px] text-[var(--fg-dimmer)] mt-2">Previews stay paused until you start one — keeps your machine cool.</div>
             </div>
           )}
           <AnimatePresence>

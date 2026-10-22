@@ -6,7 +6,7 @@
 import { readSettings } from "@/lib/settings";
 import { modelChat, extractJson, type ICP, type Lead } from "@/lib/leads";
 import { run } from "@/lib/runner";
-import { CLAUDE_MODEL } from "@/lib/config";
+import { claudeModel } from "@/lib/claudeModel";
 
 export type DataProvider = "ai" | "agent" | "tavily" | "perplexity" | "firecrawl" | "apify";
 
@@ -28,7 +28,7 @@ function domainFrom(s: string): string {
 // (web search, browser/scraper MCPs, your custom tool) to research live leads. No API key. ──
 function autoArgs(agent: string, prompt: string): { args: string[]; input?: string } {
   switch (agent) {
-    case "claude":  return { args: ["-p", "--model", CLAUDE_MODEL, "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
+    case "claude":  return { args: ["-p", "--model", claudeModel(), "--output-format", "text", "--dangerously-skip-permissions"], input: prompt };
     case "codex":   return { args: ["exec", "--full-auto", "--skip-git-repo-check", "--ignore-user-config", prompt] };
     case "cursor":  return { args: ["-p", prompt, "--output-format", "text", "--force", "--trust"] };
     case "pi":      return { args: ["-p", prompt, "--mode", "text", "--no-session"] };

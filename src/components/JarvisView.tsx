@@ -1,14 +1,18 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { handleUiEvent } from "@/lib/v2/jarvis/uiClient";
+
 import { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mic, Send, Zap, Cpu, Radio, Maximize2, X, Newspaper, Target, ListChecks, Trophy, CheckCircle2, TrendingUp, Sparkles, FileText, Brain, Circle, Globe, History } from "lucide-react";
+import { Mic, Send, Square, Zap, Cpu, Radio, Maximize2, X, Newspaper, Target, ListChecks, Trophy, CheckCircle2, TrendingUp, Sparkles, FileText, Brain, Circle, Globe, History } from "lucide-react";
 import JarvisBuilds from "./JarvisBuilds";
 import { getEffectivePageContext } from "@/lib/v2/jarvis/pageContext";
 import JarvisRealtime from "./JarvisRealtime";
 import JarvisGeminiLive from "./JarvisGeminiLive";
 import JarvisKimiVoice from "./JarvisKimiVoice";
 import ModelSettings from "./ModelSettings";
+import { AgentFace, FACE_PALETTE, type FaceState } from "./faces/AgentFace";
 
 const CYAN = "#22d3ee";
 const TEAL = "#34d399";
@@ -45,7 +49,6 @@ function getSR(): { new (): SR } | null {
   return w.SpeechRecognition || w.webkitSpeechRecognition || null;
 }
 
-const phaseColor = (p: Phase) => (p === "thinking" ? AMBER : p === "listening" ? CYAN : p === "speaking" ? TEAL : CYAN);
 
 // ── Synthesized sound design (no audio files — pure Web Audio oscillators) ──
 // Sound effects disabled — Jarvis runs silent (no boot sound, no blips or chimes).
@@ -70,109 +73,6 @@ function looksLikeBuild(p: string): boolean {
 const BUILD_PROJECT = "free-claude-code"; // shared with the Agent Factory gallery
 function jPreviewUrl(file: string): string {
   return `/api/freeclaude/preview/${encodeURIComponent(BUILD_PROJECT)}/${file.split("/").map(encodeURIComponent).join("/")}`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ARC REACTOR — a self-contained, audio-reactive canvas core. Reads live phase
-// + level from refs so it never forces React re-renders (smooth 60fps).
-// ─────────────────────────────────────────────────────────────────────────────
-function ArcReactor({ phaseRef, levelRef, size }: { phaseRef: React.MutableRefObject<Phase>; levelRef: React.MutableRefObject<number>; size: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const cv = ref.current; if (!cv) return;
-    const ctx = cv.getContext("2d"); if (!ctx) return;
-    const dpr = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
-    cv.width = size * dpr; cv.height = size * dpr; ctx.scale(dpr, dpr);
-    let raf = 0; let t = 0;
-
-    const hexToRgb = (h: string) => { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
-
-    const draw = () => {
-      t += 0.016;
-      const phase = phaseRef.current;
-      const lvl = levelRef.current;
-      const c = phaseColor(phase);
-      const [r, g, b] = hexToRgb(c);
-      const rgba = (a: number) => `rgba(${r},${g},${b},${a})`;
-      const cx = size / 2, cy = size / 2;
-      const R = size * 0.34;
-
-      ctx.clearRect(0, 0, size, size);
-
-      // ambient radial glow
-      const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, size * 0.5);
-      bg.addColorStop(0, rgba(0.10 + lvl * 0.10));
-      bg.addColorStop(0.6, rgba(0.03));
-      bg.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
-
-      // outer tick ring (slow rotate)
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.15);
-      ctx.strokeStyle = rgba(0.5); ctx.lineWidth = 1;
-      for (let i = 0; i < 72; i++) {
-        const a = (i / 72) * Math.PI * 2;
-        const long = i % 6 === 0;
-        const r0 = R * 1.32, r1 = R * (long ? 1.42 : 1.37);
-        ctx.globalAlpha = long ? 0.7 : 0.3;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.stroke();
-      }
-      ctx.restore(); ctx.globalAlpha = 1;
-
-      // two HUD arcs counter-rotating
-      ctx.lineWidth = 2;
-      for (let k = 0; k < 2; k++) {
-        const dir = k === 0 ? 1 : -1;
-        const rr = R * (1.12 + k * 0.1);
-        const start = t * (0.6 + k * 0.5) * dir;
-        ctx.strokeStyle = rgba(0.55 - k * 0.2);
-        ctx.beginPath(); ctx.arc(cx, cy, rr, start, start + Math.PI * (0.6 - k * 0.15)); ctx.stroke();
-        ctx.beginPath(); ctx.arc(cx, cy, rr, start + Math.PI, start + Math.PI + Math.PI * (0.6 - k * 0.15)); ctx.stroke();
-      }
-
-      // reactive corona — spikes driven by level
-      const spikes = 96;
-      ctx.save(); ctx.translate(cx, cy);
-      ctx.shadowBlur = 12; ctx.shadowColor = rgba(0.6);
-      for (let i = 0; i < spikes; i++) {
-        const a = (i / spikes) * Math.PI * 2;
-        const n = 0.5 + 0.5 * Math.sin(i * 1.7 + t * 4);
-        const len = R * (0.06 + (lvl * 0.5 + 0.08) * n);
-        ctx.strokeStyle = rgba(0.25 + n * 0.5 * (0.3 + lvl));
-        ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R); ctx.lineTo(Math.cos(a) * (R + len), Math.sin(a) * (R + len)); ctx.stroke();
-      }
-      ctx.restore();
-
-      // core ring
-      ctx.shadowBlur = 18; ctx.shadowColor = rgba(0.7);
-      ctx.strokeStyle = rgba(0.85); ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(cx, cy, R * 0.62, 0, Math.PI * 2); ctx.stroke();
-      ctx.shadowBlur = 0;
-
-      // pulsing core
-      const coreR = R * (0.30 + lvl * 0.22 + 0.03 * Math.sin(t * 3));
-      const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-      cg.addColorStop(0, "rgba(255,255,255,0.95)");
-      cg.addColorStop(0.4, rgba(0.85));
-      cg.addColorStop(1, rgba(0));
-      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(cx, cy, coreR, 0, Math.PI * 2); ctx.fill();
-
-      // triangular reactor vanes inside the core ring
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(-t * 0.4);
-      ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1.5;
-      for (let i = 0; i < 6; i++) {
-        ctx.rotate(Math.PI / 3);
-        ctx.beginPath(); ctx.moveTo(0, -R * 0.34); ctx.lineTo(R * 0.10, -R * 0.50); ctx.lineTo(-R * 0.10, -R * 0.50); ctx.closePath(); ctx.stroke();
-      }
-      ctx.restore();
-
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-    return () => cancelAnimationFrame(raf);
-  }, [size, phaseRef, levelRef]);
-
-  return <canvas ref={ref} style={{ width: size, height: size }} />;
 }
 
 // Animated wall backdrop — drifting particle field, perspective floor grid, and a
@@ -339,7 +239,7 @@ function ShowPanel({ kind, onPlay }: { kind: ShowKind; onPlay: (f: string) => vo
     return (
       <div className="w-full text-center">
         <div className="text-[10px] font-mono tracking-[0.3em] mb-1" style={{ color: CYAN }}>» BUILD ACTIVITY · LAST 7 DAYS</div>
-        <div className="text-[40px] font-bold leading-none" style={{ color: TEAL, fontFamily: "'Bricolage Grotesque',sans-serif" }}>{week}<span className="text-[15px] font-normal" style={{ color: "var(--fg-dim)" }}> this week</span></div>
+        <div className="text-[40px] font-bold leading-none" style={{ color: TEAL, fontFamily: "var(--font-display),sans-serif" }}>{week}<span className="text-[15px] font-normal" style={{ color: "var(--fg-dim)" }}> this week</span></div>
         <div className="flex items-end justify-center gap-2.5 h-[150px] mt-3">
           {buckets.map((b, i) => (
             <div key={i} className="flex flex-col items-center justify-end h-full">
@@ -509,14 +409,14 @@ function BriefingPanel({ briefing, loading, range, history, showHistory, history
         <div className="p-4 space-y-3.5 max-h-[460px] overflow-y-auto">
           <div>
             <div className="text-[11px] font-mono mb-1" style={{ color: TEAL }}>{b.greeting}</div>
-            <div className="text-[16px] leading-snug" style={{ color: "var(--fg)", fontFamily: "'Bricolage Grotesque',sans-serif" }}>{b.headline}</div>
+            <div className="text-[16px] leading-snug" style={{ color: "var(--fg)", fontFamily: "var(--font-display),sans-serif" }}>{b.headline}</div>
           </div>
 
           {b.stats?.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {b.stats.map((s) => (
                 <div key={s.label} className="rounded-lg border p-2.5 text-center" style={{ borderColor: `${CYAN}26`, background: "rgba(34,211,238,0.05)" }}>
-                  <div className="text-[22px] font-bold leading-none" style={{ color: TEAL, fontFamily: "'Bricolage Grotesque',sans-serif" }}>{s.value}</div>
+                  <div className="text-[22px] font-bold leading-none" style={{ color: TEAL, fontFamily: "var(--font-display),sans-serif" }}>{s.value}</div>
                   <div className="text-[9.5px] mt-1" style={{ color: "var(--fg-dim)" }}>{s.label}</div>
                 </div>
               ))}
@@ -649,6 +549,7 @@ function BriefingPanel({ briefing, loading, range, history, showHistory, history
 }
 
 export default function JarvisView() {
+  const router = useRouter();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -674,8 +575,16 @@ export default function JarvisView() {
   // a deliberate choice made while the fetch was still in flight.
   const voiceTouchedRef = useRef(false);
   const [voices, setVoices] = useState(VOICES);
+  // Which backend speaks the reply (settings.jarvis.voice.ttsProvider). Default
+  // is the local Voicebox studio; the ref is what speak() reads.
+  const [ttsProvider, setTtsProvider] = useState<string>("voicebox");
+  const ttsProviderRef = useRef<string>("voicebox");
   const [mode, setMode] = useState<"auto" | "agent">("auto");
   const [input, setInput] = useState("");
+  // Messages typed while Jarvis is busy wait here and go out in order once he is idle
+  // (owner, 2026-10-08: "make sure queueing messages works").
+  const [queue, setQueue] = useState<{ id: number; text: string }[]>([]);
+  const queueIdRef = useRef(0);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [clock, setClock] = useState("");
   const [phaseState, setPhaseState] = useState<Phase>("idle");
@@ -689,7 +598,10 @@ export default function JarvisView() {
   const [briefHistory, setBriefHistory] = useState<Briefing[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [telem, setTelem] = useState({ throughput: 87, latency: 0.4, load: 32, signal: 98 });
+  // Wall-mode readouts are measured, never invented: the last reply time and the
+  // count of turns this page session (AGENTS.md "Never fabricate state").
+  const [lastReplySec, setLastReplySec] = useState<number | null>(null);
+  const [turnCount, setTurnCount] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const recRef = useRef<SR | null>(null);
@@ -713,11 +625,31 @@ export default function JarvisView() {
 
   const setPhase = useCallback((p: Phase) => { phaseRef.current = p; setPhaseState(p); }, []);
 
+  // Stop / interrupt (2026-10-08, owner: "once jarvis gets going, I cannot interrupt or even
+  // stop him"). The brain route already cancels a turn when its request is aborted or a new
+  // one arrives (api/v2/jarvis/ask); the page never aborted, dropped any message sent while
+  // busy, and had no way to pause the voice. askAbortRef is the running ask's controller;
+  // speakGenRef bumps on every stop so a reply whose audio arrives late never starts playing.
+  const askAbortRef = useRef<AbortController | null>(null);
+  const speakGenRef = useRef(0);
+  const stopJarvis = useCallback((why = "Stopped.") => {
+    const ask = askAbortRef.current;
+    askAbortRef.current = null;
+    ask?.abort();
+    speakGenRef.current++;
+    const a = audioRef.current;
+    if (a) { a.onended = null; try { a.pause(); } catch {} }
+    if (ask) { busyRef.current = false; setBusy(false); }
+    setPhase("idle");
+    setStatus(why);
+  }, [setPhase]);
+
   useEffect(() => { setSupported(!!getSR()); }, []);
 
   // Real ElevenLabs voices (same source the Oracle uses). Falls back to the
   // built-in default if ElevenLabs isn't reachable.
   useEffect(() => {
+    if (ttsProvider === "voicebox") return; // the studio's profiles fill the picker instead
     let alive = true;
     fetch("/api/video/voices", { cache: "no-store" })
       .then((r) => r.json())
@@ -727,7 +659,28 @@ export default function JarvisView() {
       })
       .catch(() => { /* keep the fallback list */ });
     return () => { alive = false; };
-  }, []);
+  }, [ttsProvider]);
+
+  // Voicebox: the picker lists the studio's profiles; the saved choice is
+  // settings.voicebox.profile. Down studio = empty picker with the reason.
+  useEffect(() => {
+    if (ttsProvider !== "voicebox") return;
+    let alive = true;
+    fetch("/api/voicebox/profiles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; error?: string; profiles?: { id: string; name: string }[]; defaultProfileId?: string | null }) => {
+        if (!alive) return;
+        if (!j?.ok || !Array.isArray(j.profiles) || !j.profiles.length) {
+          setVoices([{ id: "", label: j?.error ? `Voicebox: ${j.error.slice(0, 60)}` : "Voicebox: no profiles" }]);
+          setVoice("");
+          return;
+        }
+        setVoices(j.profiles.map((p) => ({ id: p.id, label: p.name })));
+        if (!voiceTouchedRef.current) setVoice(j.defaultProfileId || j.profiles[0].id);
+      })
+      .catch((e) => { if (alive) { setVoices([{ id: "", label: `Voicebox: ${String(e).slice(0, 60)}` }]); setVoice(""); } });
+    return () => { alive = false; };
+  }, [ttsProvider]);
 
   // Log every turn to disk + the Obsidian vault (fire-and-forget — never block).
   function logTurn(you: string, jarvis: string, kind: string) {
@@ -803,14 +756,17 @@ export default function JarvisView() {
   }
 
   async function speak(text: string) {
+    const gen = speakGenRef.current;
     try {
       const r = await fetch("/api/hermes/tts", {
         method: "POST", headers: { "Content-Type": "application/json" },
         // "auto": local Kokoro first (free, offline, ~/.agentic-os/kokoro-tts),
         // then ElevenLabs (the keyed hosted provider here), then OpenAI.
-        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: "auto" }),
+        body: JSON.stringify({ text: text.slice(0, 600), voiceId: voice, provider: ttsProviderRef.current }),
       });
       const j = await r.json();
+      if (j.fellBackFrom) console.warn(`[jarvis] ${j.provider} spoke because ${j.fellBackFrom} failed: ${j.fallbackReason}`);
+      if (gen !== speakGenRef.current) return; // stopped (or interrupted) while the voice was being made
       if (j.audio && audioRef.current) {
         ensureAnalyser(); audioCtxRef.current?.resume().catch(() => {});
         audioRef.current.src = j.audio;
@@ -836,7 +792,7 @@ export default function JarvisView() {
     try { wakeRef.current?.stop(); } catch {}
     const youId = ++idRef.current; const hermesId = ++idRef.current;
     setTurns((t) => [{ id: hermesId, who: "hermes", text: "Building it now, sir…", working: true }, { id: youId, who: "you", text: prompt }, ...t]);
-    setStatus("Building it on your Mac, sir…");
+    setStatus("Building it on your machine, sir…");
     let file: string | null = null, err: string | null = null;
     try {
       const r = await fetch("/api/freeclaude/build", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, project: BUILD_PROJECT }) });
@@ -906,10 +862,35 @@ export default function JarvisView() {
   // CR.1: chat lane repointed to the V2 brain (POST /api/v2/jarvis/ask, SSE).
   // The conversation id from the meta event threads follow-up turns.
   const v2ConversationRef = useRef<string | null>(null);
+  // S13: /jarvis?c=<id> resumes that conversation here (the Sessions tab links to it).
+  // The next ask carries the id, so the brain replays the thread's history.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("c");
+    if (!id) return;
+    let live = true;
+    (async () => {
+      try {
+        const r = await fetch(`/api/v2/jarvis/conversations/${encodeURIComponent(id)}`, { cache: "no-store" });
+        const j = await r.json().catch(() => ({}));
+        if (!live) return;
+        if (!r.ok) { setStatus(`Could not resume that session: ${j.error ?? r.status}`); return; }
+        v2ConversationRef.current = id;
+        const base = Date.now();
+        const msgs = (j.messages ?? []) as { role: string; content: string }[];
+        setTurns(msgs.filter((m) => m.role !== "system").map((m, i) => ({ id: base + i, who: m.role === "user" ? "you" : "hermes", text: m.content })));
+        setStatus(`Resumed "${j.conversation?.title || "untitled"}" (${msgs.length} messages). Your next message continues it.`);
+      } catch (e) { if (live) setStatus(`Could not resume that session: ${String(e)}`); }
+    })();
+    return () => { live = false; };
+  }, []);
 
   const ask = useCallback(async (prompt: string) => {
     const p = normalizeHeard((prompt || "").trim());
-    if (!p || busyRef.current) return;
+    if (!p) return;
+    // Steering: a new message while Jarvis is thinking or talking interrupts him and is sent
+    // (it used to be dropped). Builds and briefings have no cancel, so they still block.
+    if (askAbortRef.current || phaseRef.current === "speaking") stopJarvis("Interrupted.");
+    if (busyRef.current) return;
 
     // ── Voice memory: "remember …" / "what do you remember" ──
     const mem = detectMemory(p);
@@ -955,6 +936,8 @@ export default function JarvisView() {
     const youId = ++idRef.current; const hermesId = ++idRef.current;
     setTurns((t) => [{ id: hermesId, who: "hermes", text: mode === "agent" ? "On it, sir…" : "…", working: true }, { id: youId, who: "you", text: p }, ...t]);
     setStatus(mode === "agent" ? "JARVIS is acting…" : "JARVIS is thinking…");
+    const ac = new AbortController();
+    askAbortRef.current = ac;
     try {
       // CR.1: V2 brain SSE lane — sentence/done/error parse; meta threads the
       // conversation (server-side history — no client history payload needed);
@@ -962,11 +945,13 @@ export default function JarvisView() {
       const started = Date.now();
       const r = await fetch("/api/v2/jarvis/ask", {
         method: "POST",
+        signal: ac.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: p,
           conversationId: v2ConversationRef.current ?? undefined,
           pageContext: getEffectivePageContext() ?? undefined,
+          uiControl: true,
         }),
       });
       if (!r.ok || !r.body) throw new Error(`brain ${r.status}`);
@@ -990,6 +975,7 @@ export default function JarvisView() {
               type?: string; text?: string; message?: string; error?: string;
               conversationId?: string; name?: string; state?: string; summary?: string; route?: string;
             };
+            if (await handleUiEvent(ev, (route) => router.push(route))) continue;
             if (ev.type === "meta" && ev.conversationId) {
               v2ConversationRef.current = ev.conversationId;
             } else if (ev.type === "sentence" && ev.text) {
@@ -1009,13 +995,22 @@ export default function JarvisView() {
       const finalReply = reply || errText || "(no response)";
       setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: finalReply, working: false } : x));
       setStatus(errText ? `Brain error: ${errText}` : `Replied in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+      if (!errText) { setLastReplySec((Date.now() - started) / 1000); setTurnCount((n) => n + 1); }
       logTurn(p, finalReply, mode === "agent" ? "agent" : "chat");
+      if (ac.signal.aborted) throw new DOMException("stopped", "AbortError");
+      askAbortRef.current = null;
       if (!errText && reply) speak(finalReply); else { setPhase("idle"); if (wakeOnRef.current) restartWake(); }
-      if (navRoute) window.location.href = navRoute;
+      if (navRoute) router.push(navRoute);
     } catch (e) {
+      if (ac.signal.aborted) {
+        // Stopped by the owner: keep what he already heard, say plainly that it was cut off.
+        setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: (x.working && /^(On it, sir…|…)$/.test(x.text) ? "" : x.text + " ") + "(stopped)", working: false } : x));
+        return; // stopJarvis already reset busy; a newer ask may own it now
+      }
       setTurns((t) => t.map((x) => x.id === hermesId ? { ...x, text: "Error reaching Jarvis: " + String(e), working: false } : x));
       setStatus("Something went wrong reaching the agent."); setPhase("idle");
     }
+    if (askAbortRef.current === ac) askAbortRef.current = null;
     busyRef.current = false; setBusy(false);
   }, [mode, turns, voice]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1032,6 +1027,8 @@ export default function JarvisView() {
       .then((j) => {
         if (!alive) return;
         voiceAutoSendRef.current = !!(j?.settings?.jarvis?.voice?.autoSend);
+        const tp = j?.settings?.jarvis?.voice?.ttsProvider;
+        if (typeof tp === "string" && tp) { ttsProviderRef.current = tp; setTtsProvider(tp); }
         const saved = j?.settings?.jarvis?.voice?.ttsVoiceId;
         if (typeof saved === "string" && saved && !voiceTouchedRef.current) setVoice(saved);
       })
@@ -1061,6 +1058,8 @@ export default function JarvisView() {
 
   // ── manual push-to-talk ──
   function startListening() {
+    // Talking over Jarvis interrupts him (barge-in), whether he is thinking or speaking.
+    if (askAbortRef.current || phaseRef.current === "speaking") stopJarvis("Interrupted. Listening…");
     if (busyRef.current || listening) return;
     const C = getSR(); if (!C) { setStatus("Voice needs Chrome or Safari — type instead."); return; }
     if (wakeOnRef.current) { try { wakeRef.current?.stop(); } catch {} }   // never two recognizers at once
@@ -1136,27 +1135,42 @@ export default function JarvisView() {
 
   useEffect(() => () => { try { wakeRef.current?.stop(); recRef.current?.stop(); } catch {} }, []);
 
-  // Esc exits wall mode
+  // Esc stops Jarvis first (thinking or speaking); with nothing to stop, it exits wall mode.
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape" && wall) setWall(false); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (askAbortRef.current || phaseRef.current === "speaking") { holdQueue(); stopJarvis(); resumeAfterReply(); return; }
+      if (wall) setWall(false);
+    };
     window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h);
-  }, [wall]);
+  }, [wall, stopJarvis]);
 
-  // Live-looking telemetry (random-walk) — only ticks while wall mode is open.
+  // Drain the queue: the next message goes out once Jarvis is idle (not thinking, not
+  // speaking, not listening). One at a time; each reply finishes before the next is sent.
   useEffect(() => {
-    if (!wall) return;
-    const cl = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
-    const id = setInterval(() => setTelem((t) => ({
-      throughput: cl(t.throughput + (Math.random() * 6 - 3), 72, 99),
-      latency: cl(t.latency + (Math.random() * 0.12 - 0.06), 0.2, 0.9),
-      load: cl(t.load + (Math.random() * 10 - 5), 8, 74),
-      signal: cl(t.signal + (Math.random() * 3 - 1.5), 90, 100),
-    })), 1500);
-    return () => clearInterval(id);
-  }, [wall]);
+    if (!queue.length || busy || phaseState !== "idle" || listening) return;
+    const [next, ...rest] = queue;
+    setQueue(rest);
+    void ask(next.text);
+  }, [queue, busy, phaseState, listening]); // eslint-disable-line react-hooks/exhaustive-deps
 
+
+  const faceState: FaceState = status.startsWith("Brain error") ? "error"
+    : building ? "working" : busy ? (mode === "agent" ? "working" : "thinking")
+    : listening || armedRef.current ? "listening" : phaseState === "speaking" ? "speaking" : "idle";
   const phaseLabel = building ? "BUILDING" : busy ? (mode === "agent" ? "ACTING" : "THINKING") : listening || armedRef.current ? "LISTENING" : phaseState === "speaking" ? "SPEAKING" : "ONLINE";
-  const coreTap = () => { if (busy || realtime) return; listening ? stopListening() : startListening(); };
+  const canStop = (busy && !!askAbortRef.current) || phaseState === "speaking";
+  // Typed while Jarvis is busy (thinking, acting, building, briefing) or speaking: queue it.
+  const submitTyped = (raw: string) => {
+    const v = raw.trim(); if (!v) return;
+    if (busy || phaseState === "speaking" || queue.length) { setQueue((q) => [...q, { id: ++queueIdRef.current, text: v }]); setStatus(`Queued: "${v.slice(0, 60)}"`); return; }
+    ask(v);
+  };
+  // Stop keeps what was typed: queued messages go back into the input box, nothing is sent.
+  const holdQueue = () => {
+    setQueue((q) => { if (q.length) setInput((cur) => [cur, ...q.map((m) => m.text)].filter(Boolean).join(" ")); return []; });
+  };
+  const coreTap = () => { if (realtime || (busy && !canStop)) return; listening ? stopListening() : startListening(); };
 
   // shared controls row
   const controls = (
@@ -1192,7 +1206,7 @@ export default function JarvisView() {
       <select value={voice} onChange={(e) => { const v = e.target.value; voiceTouchedRef.current = true; setVoice(v);
           // Persist, so the choice survives navigating away and back.
           fetch("/api/settings", { method: "PATCH", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ jarvis: { voice: { ttsVoiceId: v } } }) }).catch(() => { /* offline: session-only */ });
+            body: JSON.stringify(ttsProviderRef.current === "voicebox" ? { voicebox: { profile: v } } : { jarvis: { voice: { ttsVoiceId: v } } }) }).catch(() => { /* offline: session-only */ });
         }} title="Reply voice"
         className="bg-[rgba(0,0,0,0.3)] border border-[var(--panel-border)] rounded-lg px-2 h-9 text-[12px] text-[var(--fg-dim)] outline-none">
         {voices.map((v) => <option key={v.id} value={v.id}>🔊 {v.label}</option>)}
@@ -1231,7 +1245,16 @@ export default function JarvisView() {
         <div className="flex items-center gap-2">
           <ModelSettings section="jarvis" title="Jarvis models" accent={CYAN}
             fields={[{ key: "kimiModel", label: "Kimi voice brain (Ollama Cloud)", placeholder: "kimi-k2.6",
-              hint: "The model behind the Kimi voice provider. Chat tier — policy default kimi-k2.6." }]} />
+              hint: "The model behind the Kimi voice provider. Chat tier — policy default kimi-k2.6." },
+              // S30: the hosted voice lanes' models (settings.jarvis.voice.*), blank = the lane's default.
+              { key: "voice.geminiLiveModel", label: "Gemini Live model", placeholder: "gemini-live-2.5-flash-preview",
+                hint: "The Gemini Live speech-to-speech lane. Blank = GEMINI_LIVE_MODEL from the environment, else the default." },
+              { key: "voice.openaiRealtimeModel", label: "GPT Realtime model", placeholder: "gpt-realtime",
+                hint: "The OpenAI speech-to-speech lane." },
+              { key: "voice.openaiTranscribeModel", label: "GPT Realtime transcription model", placeholder: "gpt-4o-mini-transcribe",
+                hint: "Transcribes your side of a Realtime session." },
+              { key: "voice.openaiTtsModel", label: "OpenAI reply voice model", placeholder: "gpt-4o-mini-tts",
+                hint: "Used when the reply voice provider is OpenAI." }]} />
           <button onClick={() => setWall(true)} title="Wall mode — fullscreen HUD"
             className="px-3 h-9 rounded-lg border border-[var(--panel-border)] hover:border-[var(--panel-border-hot)] text-[12px] text-[var(--fg-dim)] flex items-center gap-1.5 transition">
             <Maximize2 size={13} /> Wall mode
@@ -1250,8 +1273,8 @@ export default function JarvisView() {
         ))}
         <div className="relative flex flex-col items-center py-8">
           <button onClick={coreTap} disabled={supported === false} className="relative grid place-items-center disabled:opacity-50" title="Tap to talk" style={{ width: 300, height: 300 }}>
-            <ArcReactor phaseRef={phaseRef} levelRef={levelRef} size={300} />
-            <span className="absolute text-[10px] font-mono tracking-[0.3em]" style={{ color: phaseColor(phaseState), bottom: 26 }}>{phaseLabel}</span>
+            <AgentFace variant="constellation" state={faceState} getLevel={() => levelRef.current} label={`Jarvis, ${phaseLabel.toLowerCase()}`} style={{ width: 300, height: 300 }} />
+            <span className="absolute text-[10px] font-mono tracking-[0.3em]" style={{ color: FACE_PALETTE.constellation[faceState], bottom: 26 }}>{phaseLabel}</span>
           </button>
           {/* Don't claim the realtime link is live — it only reports the toggle, not
               the connection. When Realtime is on, its own panel below shows the real state. */}
@@ -1340,15 +1363,35 @@ export default function JarvisView() {
       {previewPanel && <div className="mt-4">{previewPanel}</div>}
 
       {/* Text input (legacy path — Realtime mode uses its own input in the panel above) */}
+      {!realtime && queue.length > 0 && (
+        <div className="mt-4 flex flex-col gap-1.5" aria-label="Queued messages">
+          {queue.map((m, i) => (
+            <div key={m.id} className="flex items-center gap-2 rounded-lg border border-[var(--panel-border)] bg-[rgba(0,0,0,0.25)] px-3 py-1.5 text-[12.5px] text-[var(--fg-dim)]">
+              <span className="shrink-0 text-[11px] uppercase tracking-wide text-[var(--fg-dimmer)]">{i === 0 ? "Next" : `Queued ${i + 1}`}</span>
+              <span className="min-w-0 flex-1 truncate" title={m.text}>{m.text}</span>
+              <button onClick={() => { setQueue((q) => q.filter((x) => x.id !== m.id)); void ask(m.text); }} disabled={busy && !canStop} title={busy && !canStop ? "A build or briefing is running and cannot be interrupted; this goes out when it ends" : "Interrupt Jarvis and send this now"}
+                className="shrink-0 rounded-md border border-[var(--panel-border)] px-2 py-0.5 text-[11.5px] hover:border-[var(--panel-border-hot)] disabled:opacity-30">Send now</button>
+              <button onClick={() => setQueue((q) => q.filter((x) => x.id !== m.id))} title="Remove from the queue" aria-label="Remove queued message"
+                className="shrink-0 rounded-md p-1 hover:bg-white/5"><X size={12} /></button>
+            </div>
+          ))}
+        </div>
+      )}
       {!realtime && (
       <div className="flex gap-2 my-5">
         <input value={input} onChange={(e) => setInput(e.target.value)}
           onFocus={() => { typingRef.current = true; if (liveRef.current) stopListening(); }}
           onBlur={() => { typingRef.current = false; if (liveRef.current && !busyRef.current && !listeningRef.current) startListening(); }}
-          onKeyDown={(e) => { if (e.key === "Enter") { const v = input; setInput(""); ask(v); } }}
+          onKeyDown={(e) => { if (e.key === "Enter") { const v = input; setInput(""); submitTyped(v); } }}
           placeholder="…or type any time — even mid-conversation — and press Enter"
           className="flex-1 bg-[rgba(0,0,0,0.3)] border border-[var(--panel-border)] rounded-lg px-3.5 h-11 text-sm outline-none focus:border-[var(--panel-border-hot)] text-[var(--fg)]" />
-        <button onClick={() => { const v = input; setInput(""); ask(v); }} disabled={busy || !input.trim()}
+        {canStop && (
+          <button onClick={() => { holdQueue(); stopJarvis(); resumeAfterReply(); }} title="Stop Jarvis (Esc)" aria-label="Stop Jarvis"
+            className="px-4 h-11 rounded-lg border border-red-400/50 hover:border-red-400 text-[13px] text-red-300 transition flex items-center gap-1.5">
+            <Square size={14} /> Stop
+          </button>
+        )}
+        <button onClick={() => { const v = input; setInput(""); submitTyped(v); }} disabled={!input.trim()}
           className="px-4 h-11 rounded-lg border border-[var(--panel-border)] hover:border-[var(--panel-border-hot)] text-[13px] text-[var(--fg-dim)] transition disabled:opacity-30 flex items-center gap-1.5">
           <Send size={14} /> Send
         </button>
@@ -1409,25 +1452,23 @@ export default function JarvisView() {
             <div className="relative flex-1 grid grid-cols-[1fr_auto_1fr] items-center px-8 min-h-0">
               {/* left readouts — live status + animated telemetry bars */}
               <div className="font-mono text-[11.5px] space-y-2.5 justify-self-start max-w-[280px] w-full">
-                {([["STATUS", phaseLabel], ["MODE", mode.toUpperCase()], ["WAKE WORD", wake ? "ARMED" : "OFF"], ["VOICE", "DANIEL · EN-GB"]] as [string, string][]).map(([k, v]) => (
+                {([
+                  ["STATUS", phaseLabel],
+                  ["MODE", mode.toUpperCase()],
+                  ["WAKE WORD", wake ? "ARMED" : "OFF"],
+                  ["VOICE", (ttsProviderRef.current || "unknown").toUpperCase()],
+                  ["LAST REPLY", lastReplySec == null ? "NONE YET" : `${lastReplySec.toFixed(1)}s`],
+                  ["TURNS THIS SESSION", String(turnCount)],
+                ] as [string, string][]).map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-6 border-b border-[var(--line-soft)] pb-1.5" style={{ color: "var(--fg-dim)" }}>
                     <span className="tracking-widest">{k}</span><span style={{ color: CYAN }}>{v}</span>
                   </div>
                 ))}
-                {([["NEURAL THROUGHPUT", telem.throughput, 99], ["CORE LOAD", telem.load, 100], ["SIGNAL", telem.signal, 100]] as [string, number, number][]).map(([k, v, max]) => (
-                  <div key={k}>
-                    <div className="flex justify-between mb-1" style={{ color: "var(--fg-dim)" }}><span className="tracking-widest">{k}</span><span style={{ color: CYAN }}>{v.toFixed(1)}%</span></div>
-                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--line-soft)" }}>
-                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${(v / max) * 100}%`, background: `linear-gradient(90deg, ${TEAL}, ${CYAN})` }} />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between gap-6 pt-1" style={{ color: "var(--fg-dim)" }}><span className="tracking-widest">LATENCY</span><span style={{ color: CYAN }}>{telem.latency.toFixed(2)}s</span></div>
               </div>
               {/* reactor */}
               <button onClick={coreTap} className="relative grid place-items-center justify-self-center" title="Tap to talk" style={{ width: 460, height: 460 }}>
-                <ArcReactor phaseRef={phaseRef} levelRef={levelRef} size={460} />
-                <span className="absolute text-[12px] font-mono tracking-[0.4em]" style={{ color: phaseColor(phaseState), bottom: 56 }}>{phaseLabel}</span>
+                <AgentFace variant="constellation" state={faceState} getLevel={() => levelRef.current} label={`Jarvis, ${phaseLabel.toLowerCase()}`} style={{ width: 460, height: 460 }} />
+                <span className="absolute text-[12px] font-mono tracking-[0.4em]" style={{ color: FACE_PALETTE.constellation[faceState], bottom: 56 }}>{phaseLabel}</span>
               </button>
               {/* right: live preview when there's a build, else transcript */}
               <div className="justify-self-end w-full max-w-[440px]">

@@ -1,1 +1,0 @@
-[   22772ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3100/api/heartbeat-runs/c3bce33c-2ebd-4678-99f7-eb029412d53d/log?offset=0&limitBytes=256000:0

@@ -9,18 +9,39 @@ import { useEffect, useState } from "react";
 import { KeyRound, ExternalLink } from "lucide-react";
 import type { Settings } from "@/components/ConfigMenu";
 import { VOICE_PROVIDERS } from "@/lib/v2/jarvis/useVoiceCapture";
+import GlassesSettings from "./GlassesSettings";
 
 const ACCENT = "#22d3ee";
 
 interface JarvisVoiceSettings {
   provider?: string;
+  ttsProvider?: string;
+  ttsFallback?: string;
   autoSend?: boolean;
   pushToTalk?: boolean;
 }
 interface JarvisHotkeySettings {
   key?: string;
   enabled?: boolean;
+  /** S38: "hold" = push-to-talk (default); "open" = a press only opens the chat. */
+  mode?: "hold" | "open";
+  /** S38: a hotkey release sends the transcript (default true). */
+  sendOnRelease?: boolean;
 }
+/** S34 chat upgrades: every knob in the gear (rule 16). */
+interface JarvisChatSettings {
+  defaultEffort?: string;
+  attachmentMaxMb?: number;
+  attachmentDir?: string;
+}
+export const EFFORT_OPTIONS: { id: string; label: string }[] = [
+  { id: "", label: "Model default" },
+  { id: "low", label: "Low: fastest, minimal thinking" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High: deep reasoning" },
+  { id: "xhigh", label: "Extra high" },
+  { id: "max", label: "Max" },
+];
 
 export default function JarvisSettings({
   settings,
@@ -36,9 +57,18 @@ export default function JarvisSettings({
     cliAgent?: string;
     voice?: JarvisVoiceSettings;
     hotkey?: JarvisHotkeySettings;
+    chat?: JarvisChatSettings;
   };
   const voice = jarvis.voice ?? {};
   const hotkey = jarvis.hotkey ?? {};
+  const chat = jarvis.chat ?? {};
+  const defaultEffort = chat.defaultEffort ?? "";
+  const attachmentMaxMb = typeof chat.attachmentMaxMb === "number" ? chat.attachmentMaxMb : 4;
+  const [maxMbDraft, setMaxMbDraft] = useState(String(attachmentMaxMb));
+  useEffect(() => setMaxMbDraft(String(attachmentMaxMb)), [attachmentMaxMb]);
+  const [attachDirDraft, setAttachDirDraft] = useState(chat.attachmentDir ?? "");
+  useEffect(() => setAttachDirDraft(chat.attachmentDir ?? ""), [chat.attachmentDir]);
+  const patchChat = (p: Partial<JarvisChatSettings>) => save({ jarvis: { chat: p } } as Partial<Settings>);
   const engine = jarvis.engine ?? "sdk";
   const cliAgent = jarvis.cliAgent ?? "claude";
   const provider = voice.provider ?? "webspeech";
@@ -46,9 +76,47 @@ export default function JarvisSettings({
   const pushToTalk = voice.pushToTalk ?? true;
   const hotkeyKey = hotkey.key ?? "F13";
   const hotkeyEnabled = hotkey.enabled ?? true;
+  const hotkeyMode: "hold" | "open" = hotkey.mode === "open" ? "open" : "hold";
+  const hotkeySendOnRelease = hotkey.sendOnRelease ?? true;
 
   const [keyDraft, setKeyDraft] = useState(hotkeyKey);
   useEffect(() => setKeyDraft(hotkeyKey), [hotkeyKey]);
+
+  // Reply voice (TTS) + Voicebox studio. The profile list comes from the studio
+  // itself; when it is down the select is empty and the reason is shown.
+  const vb = ((settings as unknown as { voicebox?: { url?: string; profile?: string } })?.voicebox) ?? {};
+  const ttsProvider = voice.ttsProvider ?? "voicebox";
+  const [vbProfiles, setVbProfiles] = useState<{ id: string; name: string; engine: string | null }[]>([]);
+  const [vbError, setVbError] = useState<string | null>(null);
+  const [vbHealth, setVbHealth] = useState<{ modelLoaded: boolean; gpu: boolean; backend: string | null } | null>(null);
+  // Parakeet (local STT). Health from /api/stt/health; the URL is loopback-only (lib/parakeet.ts).
+  const stt = ((settings as unknown as { stt?: { parakeetUrl?: string } })?.stt) ?? {};
+  const [pkHealth, setPkHealth] = useState<{ ok: boolean; loaded: boolean; model: string; provider: string } | { error: string } | null>(null);
+  const [pkUrlDraft, setPkUrlDraft] = useState(stt.parakeetUrl ?? "");
+  useEffect(() => { setPkUrlDraft(stt.parakeetUrl ?? ""); }, [stt.parakeetUrl]);
+  useEffect(() => {
+    if (provider !== "parakeet") return;
+    let live = true;
+    fetch("/api/stt/health", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live) setPkHealth(j?.ok ? { ok: true, loaded: !!j.loaded, model: String(j.model ?? ""), provider: String(j.provider ?? "") } : { error: String(j?.error ?? "Parakeet not answering") }); })
+      .catch((e) => { if (live) setPkHealth({ error: String(e) }); });
+    return () => { live = false; };
+  }, [provider, stt.parakeetUrl]);
+  const [vbUrlDraft, setVbUrlDraft] = useState(vb.url ?? "http://127.0.0.1:17493");
+  useEffect(() => setVbUrlDraft(vb.url ?? "http://127.0.0.1:17493"), [vb.url]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/voicebox/profiles", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j?.ok) { setVbProfiles(j.profiles ?? []); setVbHealth(j.health ?? null); setVbError(null); }
+        else { setVbProfiles([]); setVbError(j?.error || "Voicebox not answering"); }
+      })
+      .catch((e) => { if (alive) { setVbProfiles([]); setVbError(String(e)); } });
+    return () => { alive = false; };
+  }, [vb.url]);
 
   // Helper secret status ("configured ✓" only — the secret itself is never rendered).
   const [helper, setHelper] = useState<{ configured: boolean; lastFireAt: string | null } | null>(null);
@@ -134,6 +202,27 @@ export default function JarvisSettings({
             {String(selectedAvailability)}
           </div>
         )}
+        {provider === "parakeet" && (
+          <div className="mt-2 space-y-1.5">
+            {pkHealth && "error" in pkHealth ? (
+              <div className="text-[11px]" style={{ color: "#f87171" }}>Parakeet: {pkHealth.error}. Start it with parakeet-start.ps1 (the launchers do).</div>
+            ) : pkHealth ? (
+              <div className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                Parakeet {pkHealth.loaded ? "model loaded" : "model not loaded yet (first dictation loads it, ~15 s)"} · {pkHealth.model} · {pkHealth.provider}
+              </div>
+            ) : null}
+            <input
+              className={field}
+              value={pkUrlDraft}
+              onChange={(e) => setPkUrlDraft(e.target.value)}
+              onBlur={() => { if (pkUrlDraft !== (stt.parakeetUrl ?? "")) save({ stt: { parakeetUrl: pkUrlDraft } } as unknown as Partial<Settings>); }}
+              placeholder="http://127.0.0.1:8881"
+              spellCheck={false}
+              disabled={saving}
+              title="Parakeet STT server URL. Loopback only; a remote host is refused."
+            />
+          </div>
+        )}
       </div>
 
       <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -166,6 +255,112 @@ export default function JarvisSettings({
         </span>
       </label>
 
+      {/* ── Reply voice (what SPEAKS the answer) ── */}
+      <div className="pt-2 border-t" style={{ borderColor: "var(--panel-border, #2a2436)" }}>
+        <span className={label} style={{ color: ACCENT }}>Reply voice</span>
+        <select
+          className={field}
+          value={ttsProvider}
+          onChange={(e) => patchVoice({ ttsProvider: e.target.value })}
+          disabled={saving}
+        >
+          <option value="voicebox">Voicebox (local studio, cloned voices)</option>
+          <option value="local">Kokoro (local, port 8880)</option>
+          <option value="elevenlabs">ElevenLabs</option>
+          <option value="openai">OpenAI</option>
+          <option value="auto">Auto: Kokoro, then ElevenLabs, then OpenAI</option>
+        </select>
+        {ttsProvider === "voicebox" && (
+          <div className="mt-2 space-y-2">
+            <select
+              className={field}
+              value={vb.profile ?? ""}
+              onChange={(e) => save({ voicebox: { profile: e.target.value } } as unknown as Partial<Settings>)}
+              disabled={saving || !vbProfiles.length}
+            >
+              <option value="">{vbProfiles.length ? `Studio default (${vbProfiles[0].name})` : "No profiles"}</option>
+              {vbProfiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}{p.engine ? ` · ${p.engine}` : ""}</option>
+              ))}
+            </select>
+            {vbError ? (
+              <div className="text-[11.5px]" style={{ color: "#fbbf24" }}>{vbError}</div>
+            ) : vbHealth ? (
+              <div className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+                Studio {vbHealth.modelLoaded ? "model loaded" : "model not loaded yet (first speech loads it)"}
+                {vbHealth.backend ? ` · ${vbHealth.backend}` : ""}{vbHealth.gpu ? " · GPU" : " · CPU"}
+              </div>
+            ) : null}
+            <input
+              className={field}
+              value={vbUrlDraft}
+              onChange={(e) => setVbUrlDraft(e.target.value)}
+              onBlur={() => { if (vbUrlDraft !== (vb.url ?? "")) save({ voicebox: { url: vbUrlDraft } } as unknown as Partial<Settings>); }}
+              placeholder="http://127.0.0.1:17493"
+              spellCheck={false}
+              disabled={saving}
+              title="Voicebox studio URL. Loopback only; a remote host is refused."
+            />
+            <select
+              className={field}
+              value={voice.ttsFallback ?? "elevenlabs"}
+              onChange={(e) => patchVoice({ ttsFallback: e.target.value })}
+              disabled={saving}
+              title="What speaks if Voicebox fails. The reply is labelled with the provider that actually spoke."
+            >
+              <option value="elevenlabs">If Voicebox fails: use ElevenLabs (labelled)</option>
+              <option value="none">If Voicebox fails: report the error, stay silent</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      {/* ── Chat (S34: sessions, thinking, attachments) ── */}
+      <div className="pt-2 border-t" style={{ borderColor: "var(--panel-border, #2a2436)" }}>
+        <span className={label} style={{ color: ACCENT }}>Chat</span>
+        <select
+          className={field}
+          value={defaultEffort}
+          onChange={(e) => patchChat({ defaultEffort: e.target.value })}
+          disabled={saving}
+          title="Default thinking effort for a NEW conversation. Each session keeps its own choice (the select in the chat footer), saved on the session."
+        >
+          {EFFORT_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>Default thinking effort: {o.label}</option>
+          ))}
+        </select>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            className={field}
+            style={{ maxWidth: 110 }}
+            value={maxMbDraft}
+            inputMode="decimal"
+            disabled={saving}
+            onChange={(e) => setMaxMbDraft(e.target.value)}
+            onBlur={() => {
+              const n = Number(maxMbDraft);
+              if (!Number.isFinite(n) || n <= 0) { setMaxMbDraft(String(attachmentMaxMb)); return; }
+              if (n !== attachmentMaxMb) patchChat({ attachmentMaxMb: n });
+            }}
+            placeholder="4"
+            title="Attachment size cap in MB (default 4). Bigger images are refused with the reason."
+          />
+          <span className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+            Attachment size cap (MB). Images only: png, jpeg, webp, checked by file bytes.
+          </span>
+        </div>
+        <input
+          className={`${field} mt-2`}
+          value={attachDirDraft}
+          disabled={saving}
+          spellCheck={false}
+          onChange={(e) => setAttachDirDraft(e.target.value)}
+          onBlur={() => { if (attachDirDraft.trim() !== (chat.attachmentDir ?? "")) patchChat({ attachmentDir: attachDirDraft.trim() }); }}
+          placeholder="Attachment folder: blank = ~/.agentic-os/jarvis/attachments"
+          title="Where attached images are stored. They are read back only for the brain call and sent nowhere else."
+        />
+      </div>
+
       {/* ── Hotkey ── */}
       <div className="pt-2 border-t" style={{ borderColor: "var(--panel-border, #2a2436)" }}>
         <span className={label} style={{ color: ACCENT }}>
@@ -193,11 +388,43 @@ export default function JarvisSettings({
               if (k !== hotkeyKey) patchHotkey({ key: k });
             }}
             placeholder="F13"
+            title="The key, as KeyboardEvent.key and as an AutoHotkey key name: F13 to F24 (map a spare key on a mini USB keyboard to one of them), F9, CapsLock. The helper picks a change up within 30 s."
           />
           <span className="text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
-            KeyboardEvent.key value (F13…F24, F9, etc.)
+            Key: F13…F24 from a mini USB keyboard, or F9, CapsLock. The helper re-reads it within 30 s.
           </span>
         </div>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            className={field}
+            style={{ maxWidth: 220 }}
+            value={hotkeyMode}
+            disabled={saving}
+            onChange={(e) => patchHotkey({ mode: e.target.value === "open" ? "open" : "hold" })}
+            title="Hold to talk: holding the key opens the orb chat, fronts the page and records; releasing stops. Press to open: a press only opens the chat (the behaviour before push-to-talk)."
+          >
+            <option value="hold">Mode: hold to talk (push-to-talk)</option>
+            <option value="open">Mode: press to open the chat</option>
+          </select>
+        </div>
+        {hotkeyMode === "hold" && (
+          <label className="mt-2 flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={hotkeySendOnRelease}
+              disabled={saving}
+              onChange={(e) => patchHotkey({ sendOnRelease: e.target.checked })}
+            />
+            <span title="On: releasing the key sends what you said and the reply is read aloud. Off: releasing only stops the mic; Enter sends. The mouse mic button is not affected (it follows the auto-send toggle above).">
+              Send on release (the reply is read aloud); off = release only stops the mic
+            </span>
+          </label>
+        )}
+        <p className="mt-2 text-[11px]" style={{ color: "var(--fg-dimmer, #6b6478)" }}>
+          From another room: the helper fronts the browser window, but the Agent OS tab must be the active tab in it, and
+          the reply only plays if you have clicked in that tab since it loaded (browser autoplay rule). Mic permission
+          must already be granted for this site.
+        </p>
 
         <div className="mt-3 text-[12px]">
           {helper === null ? (
@@ -226,6 +453,7 @@ export default function JarvisSettings({
           </a>
         </div>
       </div>
+      <GlassesSettings settings={settings} save={save} saving={saving} />
     </div>
   );
 }

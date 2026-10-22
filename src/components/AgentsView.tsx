@@ -88,7 +88,7 @@ export default function AgentsView() {
             fields={[
               { key: "fast", label: "Fast tier", placeholder: "claude-haiku-4-5", hint: "Cheap triage/routing runs." },
               { key: "standard", label: "Standard tier", placeholder: "claude-sonnet-5", hint: "The default for most agents; also the curator." },
-              { key: "deep", label: "Deep tier", placeholder: "blank = pinned CLAUDE_MODEL", hint: "Research and judgment-heavy agents." },
+              { key: "deep", label: "Deep tier", placeholder: "blank = the Claude model (Claude page gear)", hint: "Research and judgment-heavy agents." },
             ]} />
           <button onClick={() => setCreating(true)}
             className="px-3.5 h-9 rounded-lg border text-[13px] flex items-center gap-1.5 transition hover:brightness-125"

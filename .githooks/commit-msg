@@ -1,0 +1,74 @@
+#!/bin/sh
+# Engineering docs must not fall four days and eight PRs behind the code.
+#
+# That is not hypothetical. On 2026-09-01, PROGRESS.md still presented Phase 0
+# as the frontier while the repo had shipped v2.0.0 through v2.4.0 and PRs #11
+# to #18. A stale plan does not decay into "slightly old", it becomes actively
+# misleading, because the next person to read it trusts it.
+#
+# This is a commit-msg hook rather than pre-commit ON PURPOSE: it needs the
+# message, so that a commit which genuinely does not warrant a doc change can
+# say so IN THE RECORD instead of reaching for --no-verify. Bypassing a hook
+# leaves no trace; a Docs: trailer leaves one.
+#
+# Installed via `git config core.hooksPath .githooks`, so it is tracked and
+# every clone gets it. See scripts/install-hooks.sh.
+
+MSG_FILE="$1"
+MSG="$(cat "$MSG_FILE")"
+
+# Merges, reverts, fixups and amends-in-progress carry no new intent to document.
+case "$MSG" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+[ -f "$(git rev-parse --git-dir)/MERGE_HEAD" ] && exit 0
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+[ -z "$STAGED" ] && exit 0
+
+# Only CODE obliges a doc. A commit that is already documentation, or only
+# touches config or assets, has nothing to explain that it is not explaining.
+CODE="$(printf '%s\n' "$STAGED" | grep -E '^(src|scripts)/' | grep -vE '\.md$')"
+[ -z "$CODE" ] && exit 0
+
+# The engineering doc set. Any ONE of these counts: a bug fix belongs in the
+# journal, a shipped phase belongs in PROGRESS, a changed contract belongs in
+# the spec. Requiring all of them every time would train people to touch them
+# meaninglessly, which is worse than leaving them alone.
+DOCS="$(printf '%s\n' "$STAGED" | grep -E '^(README\.md|DEV-JOURNAL\.md|ROADMAP\.md|AGENTS\.md|_design/.*\.md|_audit/.*\.md)$')"
+[ -n "$DOCS" ] && exit 0
+
+# The escape hatch, deliberately visible in the history.
+if printf '%s\n' "$MSG" | grep -qiE '^Docs:[[:space:]]*(n/?a|none|skip)\b'; then
+  if printf '%s\n' "$MSG" | grep -qiE '^Docs:[[:space:]]*(n/?a|none|skip)[[:space:]]*[-—:]?[[:space:]]*[A-Za-z0-9]'; then
+    exit 0
+  fi
+  echo "commit-msg: a 'Docs:' trailer needs a REASON, not just 'n/a'." >&2
+  echo "            e.g.  Docs: n/a - typo fix in a comment, no behaviour change" >&2
+  exit 1
+fi
+
+cat >&2 <<'EOF'
+
+  COMMIT BLOCKED - this commit changes code but no engineering doc.
+
+  Code under src/ or scripts/ changed, and none of these are staged:
+
+    DEV-JOURNAL.md          what changed, why, and what it cost you to find out
+    PROGRESS.md (_design/)  what is actually shipped vs what the plan claims
+    _design/**/SPEC-*.md    when the contract itself moved
+    ROADMAP.md              when what comes next changed
+    README.md               when the thing a stranger reads is now wrong
+    AGENTS.md               when a rule was learned the hard way
+
+  Update whichever is genuinely affected and stage it. Usually that is one
+  file, often just the journal.
+
+  If this commit really warrants no doc change, say so in the message:
+
+    Docs: n/a - <a real reason>
+
+  That leaves a record. --no-verify does not, which is the point.
+
+EOF
+exit 1

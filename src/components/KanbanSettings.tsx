@@ -33,7 +33,7 @@ export default function KanbanSettings() {
       <Field label="Default board" hint="The board slug the viewer opens on (blank = last viewed / default).">
         <TextInput placeholder="e.g. default" value={board} onChange={(e) => setBoard(e.target.value)} />
       </Field>
-      <Field label="Dispatch agent" hint="Which CLI agent picks up dispatched cards.">
+      <Field label="Dispatch agent" hint="Saved, not used yet: cards are picked up by workers the Hermes dispatcher spawns, whatever is chosen here.">
         <AgentPicker value={agent} onChange={setAgent} kinds={["cli"]} accent={ACCENT} />
       </Field>
       <SaveBar saving={saving} saved={saved} onSave={onSave} accent={ACCENT} />

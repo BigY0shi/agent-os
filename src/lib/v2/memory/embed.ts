@@ -1,5 +1,6 @@
 import { getDb } from "../db";
 import { readSettings } from "../../settings";
+import { ollamaCloudHost, ollamaCloudKey, ollamaLocalUrl } from "../../ollamaCloud";
 
 /**
  * F1.5 embeddings via Ollama (/api/embed). L2-normalized on the way out so
@@ -8,16 +9,18 @@ import { readSettings } from "../../settings";
  * (upstream localEmbeddings dim-guard, kept).
  */
 
+// Host, local URL and key: settings.ollama (the Ollama page's gear), then the environment
+// (lib/ollamaCloud.ts), read per call.
 function baseUrl(): { url: string; headers: Record<string, string> } {
   const provider = readSettings().memory?.embedProvider ?? "ollama-local";
   if (provider === "ollama-cloud") {
-    const key = process.env.OLLAMA_API_KEY || "";
+    const key = ollamaCloudKey();
     return {
-      url: "https://ollama.com",
+      url: ollamaCloudHost(),
       headers: key ? { authorization: `Bearer ${key}` } : {},
     };
   }
-  return { url: process.env.OLLAMA_URL || "http://127.0.0.1:11434", headers: {} };
+  return { url: ollamaLocalUrl(), headers: {} };
 }
 
 function expectedDim(): number {

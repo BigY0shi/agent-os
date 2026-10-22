@@ -10,7 +10,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Bot, Play, Loader2, ArrowLeft, Pause } from "lucide-react";
+import { Play, Loader2, ArrowLeft, Pause, Shuffle, Undo2 } from "lucide-react";
+import AgentAvatar from "@/components/AgentAvatar";
+import { useAgentFaces } from "@/lib/agentFacesClient";
 import type { AgentDef, ApprovalReq, BandStatus, RunMeta } from "@/lib/agentsTypes";
 import { MODE_META } from "@/lib/agentsTypes";
 import StatusBand, { STATUS_BAND_LABELS } from "@/components/v2/StatusBand";
@@ -38,6 +40,38 @@ export interface StatusEventRow {
   status: string;
   run_id: string | null;
   detail: string | null;
+}
+
+/** S35: re-roll the agent's generated mark, or go back to the id-derived one. The seed
+ *  is stored as data (settings.agents.faces.seeds) so it survives reloads and restarts. */
+function FaceControls({ id }: { id: string }) {
+  const faces = useAgentFaces();
+  const [busy, setBusy] = useState<"reroll" | "reset" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const hasOverride = typeof faces.seeds[id] === "number";
+  async function act(action: "reroll" | "reset") {
+    setBusy(action); setErr(null);
+    try { if (action === "reroll") await faces.reroll(id); else await faces.reset(id); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(null); }
+  }
+  return (
+    <span className="flex items-center gap-2" data-face-controls={id}>
+      <button onClick={() => void act("reroll")} disabled={busy !== null} title="Draw a new Rorschach mark for this agent (the old one is not kept)"
+        className="px-3 h-8 rounded-lg border text-[12px] flex items-center gap-1.5 disabled:opacity-40"
+        style={{ borderColor: "var(--panel-border)", color: "var(--fg-dim)" }}>
+        {busy === "reroll" ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} />} New shape
+      </button>
+      {hasOverride && (
+        <button onClick={() => void act("reset")} disabled={busy !== null} title="Back to the shape derived from this agent's id"
+          className="px-3 h-8 rounded-lg border text-[12px] flex items-center gap-1.5 disabled:opacity-40"
+          style={{ borderColor: "var(--panel-border)", color: "var(--fg-dim)" }}>
+          {busy === "reset" ? <Loader2 size={12} className="animate-spin" /> : <Undo2 size={12} />} Reset shape
+        </button>
+      )}
+      {err && <span role="alert" className="text-[11px] text-red-300">{err}</span>}
+    </span>
+  );
 }
 
 export default function AgentDetail({ id }: { id: string }) {
@@ -142,7 +176,7 @@ export default function AgentDetail({ id }: { id: string }) {
         <StatusBand status={band} />
         <div className="p-4 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5 min-w-0">
-            <Bot size={18} style={{ color: AGENTS_ACCENT }} />
+            <AgentAvatar agent={agent.id} name={agent.name} size={36} pulse={band === "running"} />
             <span className="text-[17px] font-medium truncate" style={{ color: "var(--fg)" }}>{agent.name}</span>
             <span className="text-[9.5px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
               style={{ borderColor: `${MODE_META[agent.permissionMode].color}55`, color: MODE_META[agent.permissionMode].color }}>
@@ -153,6 +187,7 @@ export default function AgentDetail({ id }: { id: string }) {
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <FaceControls id={agent.id} />
             <button onClick={() => void runNow()} disabled={active || !agent.enabled}
               className="px-3 h-8 rounded-lg border text-[12px] flex items-center gap-1.5 disabled:opacity-40 text-emerald-300"
               style={{ borderColor: "rgba(52,211,153,0.5)", background: "rgba(52,211,153,0.10)" }}>

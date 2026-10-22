@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import VoiceButton from "./VoiceButton";
 import VideoSettings from "./VideoSettings";
+import { MOD } from "@/lib/modKey";
 
 const ACCENT = "#ef4444";
 const RUN_KEY = "agentic-os/video/director/run/v1";
@@ -199,8 +200,9 @@ export default function VideoDirector() {
     const eng = provider ?? run.engine;
     setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "processing" } } }));
     // Eidolon (your LTX/WAN studio) + CLI+Higgsfield route to the labs endpoint; MiniMax/Grok
-    // keep the existing Hermes studio path. Only Grok auto-falls-back to MiniMax (it needs
-    // OpenClaw on PATH); the user's chosen labs backend is respected (its error is shown).
+    // keep the existing Hermes studio path. Every engine is respected: a failed clip shows
+    // its error on the tile (Grok used to be retried on MiniMax without saying so, which is
+    // a provider switch nobody chose; AGENTS.md rule 20).
     const labs = eng === "eidolon" || eng === "cli";
     fetch(labs ? "/api/video/labs/generate" : "/api/hermes/studio/generate", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -208,9 +210,8 @@ export default function VideoDirector() {
     }).then((r) => r.json()).then((j) => {
       if (j.ok && j.status === "done" && j.url) setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "done", url: j.url } } }));
       else if (j.ok && j.taskId) setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "processing", taskId: j.taskId, slug: j.slug } } }));
-      else if (eng === "grok") genBroll(i, prompt, "minimax");
-      else setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "failed", err: j.error || "broll failed" } } }));
-    }).catch((e) => { if (eng === "grok") genBroll(i, prompt, "minimax"); else setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "failed", err: String(e) } } })); });
+      else setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "failed", err: j.error || `${eng} b-roll failed` } } }));
+    }).catch((e) => { setRun((r) => ({ ...r, broll: { ...r.broll, [i]: { status: "failed", err: String(e) } } })); });
   }
 
   async function assembleAndRender() {
@@ -326,7 +327,7 @@ function BriefStage({ run, update, busy, onWrite, avatars, elevenVoices, hasExam
           <div className="absolute right-2 bottom-2"><VoiceButton size={32} onTranscript={(t, o) => { if (o.final) update({ topic: (run.topic ? run.topic + " " : "") + t }); }} /></div>
         </div>
         <div className="flex items-center justify-between">
-          <div className="text-[10.5px] text-[var(--cream-mute)]">⌘+Enter · the agent researches the topic, then writes a script you can edit</div>
+          <div className="text-[10.5px] text-[var(--cream-mute)]">{MOD}+Enter · the agent researches the topic, then writes a script you can edit</div>
           <button onClick={onWrite} disabled={!!busy || !run.topic.trim()}
             className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12.5px] font-medium transition"
             style={{ background: busy ? "rgba(239,68,68,0.15)" : ACCENT, color: busy ? ACCENT : "#1a0f20", border: `1px solid ${ACCENT}`, opacity: busy || !run.topic.trim() ? 0.6 : 1, boxShadow: busy ? undefined : `0 6px 22px -8px ${ACCENT}` }}>

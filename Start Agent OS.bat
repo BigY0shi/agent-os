@@ -14,17 +14,19 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-:: 2 · Start Paperclip in its own window (reuses the standalone bat — one source of truth)
-:: Clear PORT first: `set PORT=3737` (below) survives in this cmd window, so running
-:: this bat twice from the same window handed Paperclip the dashboard's port — an
-:: Express "Cannot GET /" squatting on 3737 while Next failed to bind (seen 2026-07-28).
+:: 2 · Paperclip is NOT started here any more (owner's call, 2026-09-13). Run
+::     "Start Paperclip Server.bat" yourself when you want it. The PORT clear stays:
+::     `set PORT=3737` (below) survives in this cmd window, and a stale PORT has
+::     already bitten a second launch from the same window once (2026-07-28).
 set "PORT="
-echo   📎 Launching Paperclip in a separate window...
-start "Paperclip Server" "%~dp0Start Paperclip Server.bat"
 
 :: 2b · Start the local Kokoro TTS server (butler voice, free/offline) — no-op if
 ::      it isn't installed or is already running.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0kokoro-start.ps1"
+
+:: 2c - Start the local Parakeet speech-to-text server (dictation, free/offline) - no-op if
+::      it isn't installed or is already running.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0parakeet-start.ps1"
 
 :: 3 · Install Dependencies on First Run
 if not exist node_modules (
@@ -42,7 +44,7 @@ echo   ✓ Dashboard ready
 echo.
 echo   ✅ Opening http://localhost:3737 in your browser.
 echo      Keep this window open while using the Agent OS.
-echo      (Paperclip runs in its own window — close that one to stop Paperclip.)
+echo      (Paperclip is not started by this script — use "Start Paperclip Server.bat" if you want it.)
 echo      To stop: Close this window or press Ctrl+C.
 echo.
 

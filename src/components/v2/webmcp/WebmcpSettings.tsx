@@ -18,6 +18,18 @@ export default function WebmcpSettings() {
     sandboxTimeoutMs?: number;
     allowJsHandlers?: boolean;
     llmGetActions?: boolean;
+    wizardAgent?: string;
+    wizardFallback?: string;
+  };
+  // S7 wizard seats. One-shot CLI agents (antigravity prints nothing to a pipe); the
+  // fallback is the owner's choice and every wizard reply says who answered (rule 20).
+  const WIZARD_AGENT_OPTIONS = ["claude", "codex", "cursor", "pi", "hermes"];
+  const wizardAgent = (webmcp.wizardAgent || "claude").toLowerCase();
+  const wizardFallback = (webmcp.wizardFallback || "codex").toLowerCase();
+  const selectStyle: React.CSSProperties = {
+    background: "var(--panel, rgba(255,255,255,0.03))",
+    border: "1px solid var(--panel-border, #2a2436)",
+    color: "var(--fg, #e8e2f0)",
   };
   const allowJs = webmcp.allowJsHandlers !== false;
   const llmGetActions = webmcp.llmGetActions !== false;
@@ -90,6 +102,17 @@ export default function WebmcpSettings() {
           </span>
         </span>
       </label>
+
+      <Field label="Wizard agent" hint="Digests the description, proposes the tool list, emits the JSON and proofreads. Default claude.">
+        <select value={wizardAgent} onChange={(e) => save({ webmcp: { ...webmcp, wizardAgent: e.target.value } })} className="w-full rounded-lg px-2.5 h-8 text-[12px] outline-none" style={selectStyle}>
+          {WIZARD_AGENT_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </Field>
+      <Field label="Wizard fallback" hint="Answers when the wizard agent fails; the reply says who answered and why. none = the step fails instead. Default codex.">
+        <select value={wizardFallback} onChange={(e) => save({ webmcp: { ...webmcp, wizardFallback: e.target.value } })} className="w-full rounded-lg px-2.5 h-8 text-[12px] outline-none" style={selectStyle}>
+          {[...WIZARD_AGENT_OPTIONS, "none"].map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+      </Field>
     </div>
   );
 }

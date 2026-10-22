@@ -1,12 +1,10 @@
-# Stop the Agent OS dashboard: kill whatever owns port 3100, plus any hung
-# "next start" node process that stopped listening (a true zombie). Scoped so it
-# never touches your CLI agents, Paperclip, or other node apps.
+# Stop Paperclip: kill whatever listens on 3100 (the server) and 54329/54330 (its
+# embedded Postgres). Port-scoped only. 2026-10-18: this was copied from
+# agentos-stop.ps1 and also killed every "next start" node process, which is the
+# Agent OS dashboard, never Paperclip (Paperclip is `npx paperclipai run`).
 $ErrorActionPreference = 'SilentlyContinue'
 
 $ids = @(Get-NetTCPConnection -LocalPort 3100,54329,54330 -State Listen | Select-Object -Expand OwningProcess -Unique)
-$ids += @(Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-  Where-Object { $_.CommandLine -match 'next.dist.bin.next start' } |
-  Select-Object -Expand ProcessId)
 $ids = $ids | Sort-Object -Unique
 
 if ($ids) {
